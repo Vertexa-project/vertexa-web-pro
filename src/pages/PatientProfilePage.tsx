@@ -1,5 +1,96 @@
-import { Placeholder } from "./Placeholder";
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+
+import { AnthropometryTab } from "@/components/patient/AnthropometryTab";
+import { NutritionTab } from "@/components/patient/NutritionTab";
+import { OverviewTab } from "@/components/patient/OverviewTab";
+import { ProfileHeader } from "@/components/patient/ProfileHeader";
+import { RecoveryTab } from "@/components/patient/RecoveryTab";
+import { TimelineTab } from "@/components/patient/TimelineTab";
+import { WorkoutTab } from "@/components/patient/WorkoutTab";
+import { ErrorState } from "@/components/feedback/ErrorState";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAdherenceSnapshot } from "@/hooks/useAdherenceSnapshot";
+import { usePatient } from "@/hooks/usePatients";
+
+const TABS = [
+  { value: "overview", label: "Visão geral" },
+  { value: "timeline", label: "Timeline" },
+  { value: "anthropometry", label: "Antropometria" },
+  { value: "nutrition", label: "Plano alimentar" },
+  { value: "workout", label: "Treino" },
+  { value: "recovery", label: "Recuperação" },
+];
+
+function ProfileSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-8 w-28" />
+      <Skeleton className="h-28 w-full" />
+      <Skeleton className="h-10 w-full max-w-xl" />
+      <Skeleton className="h-64 w-full" />
+    </div>
+  );
+}
 
 export function PatientProfilePage() {
-  return <Placeholder title="Prontuário" description="Perfil completo do paciente (timeline, antropometria, planos, recuperação)." />;
+  const navigate = useNavigate();
+  const { id = "" } = useParams();
+  const [tab, setTab] = useState("overview");
+
+  const patientQ = usePatient(id);
+  const snapshotQ = useAdherenceSnapshot(id);
+
+  if (patientQ.isLoading) return <ProfileSkeleton />;
+
+  if (patientQ.isError || !patientQ.data) {
+    return (
+      <ErrorState
+        title="Paciente não encontrado"
+        description="O paciente não existe ou não pôde ser carregado."
+        onRetry={() => navigate("/pacientes")}
+      />
+    );
+  }
+
+  const patient = patientQ.data;
+  const snapshot = snapshotQ.data ?? null;
+
+  return (
+    <div className="space-y-6">
+      <ProfileHeader patient={patient} snapshot={snapshot} />
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <div className="overflow-x-auto pb-1">
+          <TabsList className="w-max">
+            {TABS.map((t) => (
+              <TabsTrigger key={t.value} value={t.value}>
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+
+        <TabsContent value="overview">
+          <OverviewTab patient={patient} snapshot={snapshot} onGoToTab={setTab} />
+        </TabsContent>
+        <TabsContent value="timeline">
+          <TimelineTab patientId={patient.id} />
+        </TabsContent>
+        <TabsContent value="anthropometry">
+          <AnthropometryTab patient={patient} />
+        </TabsContent>
+        <TabsContent value="nutrition">
+          <NutritionTab patientId={patient.id} />
+        </TabsContent>
+        <TabsContent value="workout">
+          <WorkoutTab patientId={patient.id} />
+        </TabsContent>
+        <TabsContent value="recovery">
+          <RecoveryTab patientId={patient.id} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 }

@@ -31,3 +31,23 @@ export function muscleStatusLabel(status: MuscleStatus): string {
   };
   return labels[status];
 }
+
+/** Rótulo pt-BR para o grupo muscular (chaves vindas do app paciente). */
+export function muscleGroupLabel(key: string): string {
+  const labels: Record<string, string> = {
+    chest: "Peito",
+    biceps: "Bíceps",
+    triceps: "Tríceps",
+    lats: "Dorsais",
+    shoulders: "Ombros",
+    abs: "Abdômen",
+    forearms: "Antebraços",
+    quadriceps: "Quadríceps",
+    hamstrings: "Posteriores",
+    glutes: "Glúteos",
+    calves: "Panturrilhas",
+    traps: "Trapézio",
+    lower_back: "Lombar",
+  };
+  return labels[key.toLowerCase()] ?? key;
+}
