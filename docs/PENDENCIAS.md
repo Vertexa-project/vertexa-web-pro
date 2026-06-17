@@ -30,3 +30,17 @@
 
 10. **GIFs/vídeos de exercício.** Hoje o app usa URLs de terceiros (fitnessprogramer.com). Definir
     fonte própria/licenciada antes de publicar.
+
+## Pendências técnicas (segurança/infra — antes de dados reais)
+
+11. **RLS real (substituir policy temporária da sprint).** As tabelas estavam com RLS ligada e
+    ZERO policies (cliente lia 0 linhas). Adicionada migration `sprint_anon_read_policies` com
+    `sprint_read_all` = SELECT `using(true)` para `anon`+`authenticated` em todas as 17 tabelas —
+    **TEMPORÁRIA, só com dados fictícios/seed**. Antes de qualquer dado real de paciente: remover
+    `anon` do SELECT, trocar por RLS por papel/clínica (admin vê a clínica; profissional vê via
+    `professional_patient_links`; externo vê só o paciente vinculado via `is_external`). Não publicar
+    em domínio público enquanto estiver `using(true)` (vazamento de dados de saúde — LGPD).
+
+12. **Storage privado + URL assinada.** `progress_photos.photo_url` e `body_assessments.document_url`
+    são URLs cruas. Confirmar bucket privado e gerar `createSignedUrl` na camada `api/` antes de
+    publicar (já previsto no CLAUDE.md como pós-MVP).
