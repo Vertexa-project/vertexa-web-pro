@@ -1,0 +1,113 @@
+import { useNavigate } from "react-router-dom";
+import { Bell, CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun } from "lucide-react";
+
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MobileNav } from "./MobileNav";
+import { useAuth } from "@/providers/auth-context";
+import { useTheme } from "@/providers/theme-context";
+
+function getInitials(label: string): string {
+  const parts = label.trim().split(/\s+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return label.split("@")[0].slice(0, 2).toUpperCase();
+}
+
+export function Topbar() {
+  const navigate = useNavigate();
+  const { signOut, session, demoMode } = useAuth();
+  const { resolvedTheme, toggleTheme } = useTheme();
+
+  const userName = session?.user?.email ?? (demoMode ? "Modo demonstração" : "Profissional");
+  const initials = getInitials(userName);
+
+  async function handleSignOut() {
+    await signOut();
+    navigate("/login", { replace: true });
+  }
+
+  return (
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4 md:px-6">
+      <MobileNav />
+
+      <div className="relative hidden max-w-md flex-1 sm:block">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Input
+          type="search"
+          placeholder="Buscar pacientes, planos…"
+          className="pl-9"
+          aria-label="Busca global"
+        />
+      </div>
+
+      <div className="ml-auto flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground"
+          aria-label="WhatsApp (em breve)"
+          title="WhatsApp (em breve)"
+        >
+          <MessageCircle className="h-5 w-5" />
+        </Button>
+        <Button variant="ghost" size="icon" aria-label="Notificações" title="Notificações">
+          <Bell className="h-5 w-5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          aria-label="Alternar tema"
+          title="Alternar tema"
+        >
+          {resolvedTheme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="ml-1 gap-2 px-2" aria-label="Conta">
+              <Avatar>
+                <AvatarFallback>{initials}</AvatarFallback>
+              </Avatar>
+              <span className="hidden max-w-[12rem] truncate text-sm font-medium sm:inline">
+                {userName}
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Minha conta</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate("/configuracoes")}>
+              <Settings />
+              Configurações
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate("/configuracoes")}>
+              <CreditCard />
+              Assinatura
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={toggleTheme}>
+              {resolvedTheme === "dark" ? <Sun /> : <Moon />}
+              Modo {resolvedTheme === "dark" ? "claro" : "escuro"}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
+              <LogOut />
+              Sair
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </header>
+  );
+}

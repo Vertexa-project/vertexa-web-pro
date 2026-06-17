@@ -1,0 +1,30 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules
+dist
+dist-ssr
+*.local
+
+# Env (segredos — só anon key, mas não versionar)
+.env
+.env.*
+!.env.example
+
+# Artefatos de verificação (Playwright MCP / screenshots)
+.playwright-mcp/
+/fase*.png
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
