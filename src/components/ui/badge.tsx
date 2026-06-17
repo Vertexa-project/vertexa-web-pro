@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 // Tons baseados nos tokens de status. Usados em fundo suave (/10) + texto na cor cheia,
 // padrão sóbrio do produto. "primary" é o laranja-acento.
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none",
+  "inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none",
   {
     variants: {
       tone: {
