@@ -2,6 +2,8 @@
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+import type { ProfessionalType } from "@/types/db";
+
 function toDate(value: string | Date): Date {
   return typeof value === "string" ? parseISO(value) : value;
 }
@@ -33,4 +35,26 @@ export function greeting(hour: number): string {
   if (hour < 12) return "Bom dia";
   if (hour < 18) return "Boa tarde";
   return "Boa noite";
+}
+
+/** Iniciais a partir de um nome (até 2 letras). */
+export function initials(name: string | null | undefined): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+/** Rótulo pt-BR do tipo de profissional. */
+export function professionalTypeLabel(type: ProfessionalType): string {
+  const labels: Record<ProfessionalType, string> = {
+    doctor: "Médico(a)",
+    nutritionist: "Nutricionista",
+    physiotherapist: "Fisioterapeuta",
+    personal_trainer: "Personal trainer",
+    other: "Profissional",
+  };
+  return labels[type];
 }

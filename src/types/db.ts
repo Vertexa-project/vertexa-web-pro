@@ -195,3 +195,44 @@ export interface Campaign {
   is_active: boolean;
   created_at: string;
 }
+
+// ========== VIEW / COMPOSED TYPES (shapes retornados pela camada api/) ==========
+export interface ProfessionalSummary {
+  id: string;
+  type: ProfessionalType;
+  full_name: string | null;
+}
+
+export interface PatientListItem {
+  id: string;
+  goal: string | null;
+  current_weight: number | null;
+  start_date: string | null;
+  profile: Pick<Profile, "full_name" | "email" | "avatar_url"> | null;
+  snapshot:
+    | Pick<AdherenceSnapshot, "score" | "level" | "status" | "weekly_completion_rate" | "calculated_at">
+    | null;
+  professionals: ProfessionalSummary[];
+  lastActivityAt: string | null;
+}
+
+export interface PatientDetail extends Patient {
+  profile: Profile | null;
+  professionals: ProfessionalSummary[];
+}
+
+export interface WorkoutWithExercises extends Workout {
+  workout_exercises: WorkoutExercise[];
+}
+
+export interface WorkoutPlanFull extends WorkoutPlan {
+  workouts: WorkoutWithExercises[];
+}
+
+export interface NutritionPlanFull extends NutritionPlan {
+  meals: Meal[];
+}
+
+export interface MessageWithSender extends Message {
+  sender_name: string | null;
+}
