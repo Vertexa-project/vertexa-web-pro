@@ -48,4 +48,19 @@
 13. **Salvar plano não é transacional.** `saveWorkoutPlan`/`saveNutritionPlan` fazem DELETE do plano
     anterior e depois INSERT do novo (treinos/exercícios/refeições em vários passos). Se falhar no
     meio, o plano antigo já foi apagado e o novo fica parcial. Mover para uma RPC/transação (Postgres
-    function) antes de uso real, para o app paciente nunca ler um plano inconsistente.
+    function `SECURITY DEFINER`) antes de uso real, para o app paciente nunca ler um plano inconsistente.
+
+14. **Checklist de segurança ANTES de dados reais (produção) — BLOQUEANTE.** Hoje a sprint roda com
+    RLS permissiva (`using(true)`) + modo demo, só com seed fictício. Antes de qualquer paciente real:
+    - **Leitura por papel/clínica** (substituir `sprint_read_all`): admin vê a clínica; profissional vê
+      via `professional_patient_links`; externo (`is_external`) só o paciente vinculado. Hoje qualquer
+      anon lê tudo (a anon key é pública no bundle).
+    - **Escrita de planos restrita** (substituir `sprint_plan_write` `using(true)`): hoje qualquer anon
+      pode apagar/reescrever o plano de QUALQUER paciente (o `professionalId` é escolhido no client).
+      Validar o vínculo no servidor (RPC `SECURITY DEFINER` + `auth.uid()`), nunca confiar no client.
+    - **Modo demo** não pode usar a sessão anon contra o banco real quando a RLS fechar — isolar em
+      dataset fictício ou desabilitar em `import.meta.env.PROD`.
+    - **IDOR**: `getPatient(id)` lê qualquer UUID da URL; a barreira real é a RLS (acima) — tratar
+      0 linhas/erro como 403 na UI.
+    - **Storage privado + URL assinada** (ver #12). Confirmar que o app paciente também faz escaping
+      do conteúdo de planos/mensagens.

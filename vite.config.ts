@@ -15,4 +15,18 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Separa vendors grandes em chunks próprios (melhor cache; sai do bundle inicial monolítico).
+        manualChunks: {
+          react: ["react", "react-dom", "react-router-dom"],
+          supabase: ["@supabase/supabase-js"],
+          query: ["@tanstack/react-query"],
+          charts: ["recharts"],
+          dates: ["date-fns"],
+        },
+      },
+    },
+  },
 });
