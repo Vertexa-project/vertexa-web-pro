@@ -11,6 +11,14 @@ import { qk } from "@/lib/queryKeys";
 import { DEMO_PROFESSIONAL_PROFILE_ID } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
 
+// Sequência para tópicos de realtime ÚNICOS por montagem.
+// `RealtimeClient.channel(topic)` reusa o channel se o tópico já existir no
+// registro; como `removeChannel` é assíncrono, o double-invoke do StrictMode
+// (ou uma troca rápida de canal) reencontraria um channel já inscrito e o
+// `.on('postgres_changes')` lançaria "cannot add ... after subscribe()".
+// Um tópico único garante sempre um channel novo (state=closed) para o `.on()`.
+let realtimeSeq = 0;
+
 /**
  * Thread de chat de um paciente: resolve canal + histórico e assina o realtime.
  * Mensagens novas (inclusive enviadas pelo app paciente) chegam ao vivo via
@@ -28,8 +36,9 @@ export function useChatThread(patientId: string) {
 
   useEffect(() => {
     if (!channelId) return;
+    // Channel NOVO (tópico único) — .on() ANTES do .subscribe(); cleanup remove.
     const channel = supabase
-      .channel(`chat:${channelId}`)
+      .channel(`chat:${channelId}:${++realtimeSeq}`)
       .on(
         "postgres_changes",
         {
@@ -91,8 +100,9 @@ export function useUnreadMentions() {
 
   useEffect(() => {
     if (!profileId) return;
+    // Channel NOVO (tópico único) — .on() ANTES do .subscribe(); cleanup remove.
     const channel = supabase
-      .channel(`chat-mentions:${profileId}`)
+      .channel(`chat-mentions:${profileId}:${++realtimeSeq}`)
       .on(
         "postgres_changes",
         {
