@@ -98,10 +98,11 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - Modo sprint: RLS ligada com policies **permissivas** (`using(true)`) só com seed fictício.
   - Leitura (`sprint_read_all`, SELECT anon) em 17 tabelas → `migrations/20260617120000_sprint_anon_read_policies.sql`.
   - Chat (`sprint_chat_write`, ALL anon) nas 4 `chat_*` → `migrations/20260618120000_chat.sql`.
-  - `activity_events` (`sprint_activity_write`, INSERT anon) → **aplicada via MCP, ainda NÃO versionada** ⚠️.
-  - `muscle_recovery_states` (write anon, 4c-2) → a criar.
+  - `activity_events` (`sprint_activity_write`, INSERT anon) → `migrations/20260618130000_sprint_write_policies.sql` ✅.
+  - `muscle_recovery_states` (`sprint_muscle_write_insert` + `sprint_muscle_write_update`, anon) → `migrations/20260618130000_sprint_write_policies.sql` ✅.
+  - Planos (`sprint_plan_write`, ALL anon) nas 5 tabelas → `migrations/20260618130000_sprint_write_policies.sql` ✅ (gap fechado).
 - **Migrations = fonte única no repo web** (`vertexa-web-pro/supabase/migrations`). Toda policy aplicada
-  via MCP DEVE virar arquivo de migration aqui (não repetir o gap do `sprint_plan_write`).
+  via MCP DEVE virar arquivo de migration aqui — todas as policies de escrita sprint já versionadas (`24f28f3`).
 - **#11–#14 (BLOQUEANTE p/ dado real):** trocar tudo isso por RLS por papel/clínica/vínculo. Tabelas a
   travar: `chat_*`, `activity_events`, `muscle_recovery_states`, `adherence_snapshots`, planos, etc.
   O realtime (`postgres_changes`) respeita as policies → fechar a RLS também fecha o que vaza ao vivo.
@@ -118,6 +119,8 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - Etapa 2 — chat schema + backfill + realtime ✅ (`d18e6b3`)
 - Etapa 3 — chat repontado p/ `chat_*` + envio + realtime ✅ (`1979677`)
 - Etapa 3b — menções + não-lidos (badge) ✅ (`0f3a94a`)
+- Reconciliação — policies de escrita sprint versionadas em migration ✅ (`24f28f3`)
+- Fix — realtime com tópico único por montagem (StrictMode-safe) ✅ (`f2259ab`)
 
 **App (`vertexa-app-paciente`):**
 - 4a — fundação (client Supabase + camada api) ✅ (`74806f2`)
@@ -128,6 +131,6 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - 4c-3 — ler plano/treino reais (HomePage/Profile → "Mariana") ⏳ pendente
 
 **Banco:**
-- `chat_*` + realtime ✅ · read policies ✅ · `sprint_activity_write` aplicada via MCP (versionar ⚠️)
+- `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅ (`20260618130000_sprint_write_policies.sql`, `24f28f3`)
 
 **Teste ponta a ponta (4d):** ⏳ pendente — app `@Camila` → badge ao vivo na web + bater ponto → Timeline/recuperação.
