@@ -11,8 +11,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
 import { useListPatients } from "@/hooks/usePatients";
-import { formatDate, greeting, initials } from "@/lib/domain/format";
+import { formatDate, greeting, initials, shortName } from "@/lib/domain/format";
 import type { PatientListItem } from "@/types/db";
 
 function DashboardSkeleton() {
@@ -60,6 +61,8 @@ function FocusItem({ patient }: { patient: PatientListItem }) {
 export function DashboardPage() {
   const now = new Date();
   const { data, isLoading, isError, refetch } = useListPatients();
+  const { data: professionalName } = useCurrentProfessionalName();
+  const who = shortName(professionalName);
 
   const stats = useMemo(() => {
     const list = data ?? [];
@@ -75,7 +78,10 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={`${greeting(now.getHours())}!`} description={formatDate(now)} />
+      <PageHeader
+        title={who ? `${greeting(now.getHours())}, ${who}!` : `${greeting(now.getHours())}!`}
+        description={formatDate(now)}
+      />
 
       {isLoading ? (
         <DashboardSkeleton />

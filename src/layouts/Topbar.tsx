@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Bell, CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun } from "lucide-react";
+import { CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -45,9 +45,11 @@ export function Topbar() {
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input
           type="search"
-          placeholder="Buscar pacientes, planos…"
+          placeholder="Buscar (em breve)"
           className="pl-9"
-          aria-label="Busca global"
+          aria-label="Busca global (em breve)"
+          title="Busca global (em breve)"
+          disabled
         />
       </div>
 
@@ -60,9 +62,6 @@ export function Topbar() {
           title="WhatsApp (em breve)"
         >
           <MessageCircle className="h-5 w-5" />
-        </Button>
-        <Button variant="ghost" size="icon" aria-label="Notificações" title="Notificações">
-          <Bell className="h-5 w-5" />
         </Button>
         <Button
           variant="ghost"

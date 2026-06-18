@@ -37,6 +37,15 @@ export function greeting(hour: number): string {
   return "Boa noite";
 }
 
+/** Nome curto para saudação: mantém título (Dr./Dra.) + primeiro nome. Ex.: "Dra. Camila". */
+export function shortName(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return null;
+  if (/^dr/i.test(parts[0]) && parts[1]) return `${parts[0]} ${parts[1]}`;
+  return parts[0];
+}
+
 /** Iniciais a partir de um nome (até 2 letras). */
 export function initials(name: string | null | undefined): string {
   if (!name) return "?";

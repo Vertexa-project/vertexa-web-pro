@@ -120,11 +120,11 @@ function Thread({ patient }: { patient: PatientListItem }) {
           </Button>
         </div>
         {sendMessage.isError ? (
-          <p className="mt-2 text-[11px] text-destructive">
+          <p className="mt-2 text-xs text-destructive">
             Não foi possível enviar. Tente novamente.
           </p>
         ) : (
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             Você responde no lugar da clínica/profissional — sempre com um humano no controle.
           </p>
         )}
@@ -189,8 +189,12 @@ export function MessagesPage() {
                     </div>
                   </div>
                   {mentionCount > 0 ? (
-                    <Badge tone="primary" className="shrink-0">
-                      Mencionado{mentionCount > 1 ? ` · ${mentionCount}` : ""}
+                    <Badge
+                      tone="primary"
+                      className="h-5 min-w-5 shrink-0 justify-center px-1.5 tabular-nums"
+                      aria-hidden
+                    >
+                      {mentionCount > 99 ? "99+" : mentionCount}
                     </Badge>
                   ) : null}
                 </button>

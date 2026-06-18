@@ -11,6 +11,7 @@ export const qk = {
   adherenceSnapshot: (patientId: string) => ["patient", patientId, "adherenceSnapshot"] as const,
   chatThread: (patientId: string) => ["patient", patientId, "chat"] as const,
   unreadMentions: (profileId: string) => ["chat", "mentions", profileId] as const,
+  currentProfessional: (profileId: string) => ["currentProfessional", profileId] as const,
   campaigns: ["campaigns"] as const,
   allPlans: ["plans", "all"] as const,
 };

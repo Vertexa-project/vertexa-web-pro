@@ -42,7 +42,7 @@ export function PatientProfilePage() {
   const patientQ = usePatient(id);
   const snapshotQ = useAdherenceSnapshot(id);
 
-  if (patientQ.isLoading) return <ProfileSkeleton />;
+  if (patientQ.isLoading || snapshotQ.isLoading) return <ProfileSkeleton />;
 
   if (patientQ.isError || !patientQ.data) {
     return (
@@ -50,6 +50,18 @@ export function PatientProfilePage() {
         title="Paciente não encontrado"
         description="O paciente não existe ou não pôde ser carregado."
         onRetry={() => navigate("/pacientes")}
+      />
+    );
+  }
+
+  // O VRI/adesão vem de uma query própria — se ela falhar, mostramos erro com
+  // retry em vez de degradar em silêncio (VRI "—" + "Sinais recentes" vazio).
+  if (snapshotQ.isError) {
+    return (
+      <ErrorState
+        title="Não foi possível carregar a adesão (VRI)"
+        description="Os indicadores deste paciente não puderam ser carregados. Tente novamente."
+        onRetry={() => snapshotQ.refetch()}
       />
     );
   }
