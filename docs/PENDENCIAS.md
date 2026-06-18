@@ -69,3 +69,12 @@
       `using(true)`. Sob RLS real, só os **participantes do canal** (paciente dono + profissionais
       vinculados, via `chat_participants`) podem ler/escrever. O **realtime** (`postgres_changes`)
       respeita essas policies — portanto fechar a RLS aqui também controla o que vaza pelo realtime.
+
+15. **App paciente precisa repontar para `chat_messages` (contrato).** A web já lê/escreve no novo
+    schema `chat_*` (Etapa 3). O app paciente ainda insere na tabela legada `messages` — enquanto isso
+    não mudar, **mensagens novas do paciente NÃO aparecem na web** (a Etapa 2 só portou o histórico, não
+    espelha writes futuros). Sequência: web repontada ✅ → app paciente repontar (canal por paciente via
+    `chat_channels`, `sender_profile_id` = profile do paciente, `sender_role='patient'`) → só então
+    aposentar `messages`. Na demo, simular a mensagem do paciente inserindo direto em `chat_messages`.
+    O remetente da web em modo demo é o 1º participante `professional` do canal — sob auth real vira
+    `auth.uid()` (ver #14).

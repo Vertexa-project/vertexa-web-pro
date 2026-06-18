@@ -11,18 +11,33 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMessages } from "@/hooks/useMessages";
+import { useChatThread, useSendChatMessage } from "@/hooks/useChat";
 import { useListPatients } from "@/hooks/usePatients";
 import { formatRelative, initials } from "@/lib/domain/format";
 import { cn } from "@/lib/utils";
 import type { PatientListItem } from "@/types/db";
 
 function Thread({ patient }: { patient: PatientListItem }) {
-  const { data, isLoading, isError, refetch } = useMessages(patient.id);
+  const { data, isLoading, isError, refetch } = useChatThread(patient.id);
+  const sendMessage = useSendChatMessage(patient.id);
+  const [draft, setDraft] = useState("");
   const patientName = patient.profile?.full_name ?? "Paciente";
 
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState onRetry={() => refetch()} />;
+
+  const messages = data?.messages ?? [];
+  // Sem participante profissional no canal não há remetente válido em modo demo.
+  const canSend = Boolean(data?.actingProfileId);
+
+  const handleSend = () => {
+    const body = draft.trim();
+    if (!body || !data?.channelId || !data.actingProfileId || sendMessage.isPending) return;
+    sendMessage.mutate(
+      { channelId: data.channelId, senderProfileId: data.actingProfileId, body },
+      { onSuccess: () => setDraft("") },
+    );
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -32,12 +47,12 @@ function Thread({ patient }: { patient: PatientListItem }) {
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-5">
-        {!data || data.length === 0 ? (
+        {messages.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">
             Nenhuma mensagem nesta conversa ainda.
           </p>
         ) : (
-          data.map((m) => {
+          messages.map((m) => {
             const fromPatient = m.sender_role === "patient";
             // Remetente do profissional = nome da clínica/profissional, NUNCA "Vertexa".
             const author = fromPatient ? patientName : m.sender_name ?? "Profissional";
@@ -63,17 +78,40 @@ function Thread({ patient }: { patient: PatientListItem }) {
 
       <div className="border-t p-3">
         <div className="flex items-center gap-2">
-          <Input placeholder="Escreva uma mensagem…" disabled aria-label="Mensagem" />
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder={canSend ? "Escreva uma mensagem…" : "Sem profissional vinculado a esta conversa"}
+            disabled={!canSend || sendMessage.isPending}
+            aria-label="Mensagem"
+          />
           <Button variant="outline" size="icon" disabled title="Responder com IA (em breve)" aria-label="Responder com IA">
             <Bot className="h-4 w-4" />
           </Button>
-          <Button size="icon" disabled aria-label="Enviar">
+          <Button
+            size="icon"
+            onClick={handleSend}
+            disabled={!canSend || sendMessage.isPending || draft.trim().length === 0}
+            aria-label="Enviar"
+          >
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Envio de mensagens chega em breve. Você sempre poderá responder no lugar da IA.
-        </p>
+        {sendMessage.isError ? (
+          <p className="mt-2 text-[11px] text-destructive">
+            Não foi possível enviar. Tente novamente.
+          </p>
+        ) : (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Você responde no lugar da clínica/profissional — sempre com um humano no controle.
+          </p>
+        )}
       </div>
     </div>
   );

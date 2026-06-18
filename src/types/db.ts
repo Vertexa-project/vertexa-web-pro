@@ -177,11 +177,26 @@ export interface AdherenceSnapshot {
   calculated_at: string;
 }
 
-export interface Message {
+// Chat multiprofissional (novo schema — substitui a tabela legada `messages`).
+// Tabelas compartilhadas com o app paciente — NÃO renomear sem alinhar.
+export interface ChatChannel {
   id: string;
   patient_id: string | null;
+  created_at: string;
+}
+
+export interface ChatParticipant {
+  id: string;
+  channel_id: string | null;
+  profile_id: string | null;
+  role: UserRole;
+}
+
+export interface ChatMessage {
+  id: string;
+  channel_id: string | null;
+  sender_profile_id: string | null;
   sender_role: UserRole;
-  sender_professional_id: string | null;
   body: string;
   created_at: string;
 }
@@ -233,8 +248,17 @@ export interface NutritionPlanFull extends NutritionPlan {
   meals: Meal[];
 }
 
-export interface MessageWithSender extends Message {
+// Mensagem com o nome do remetente resolvido (clínica/profissional — NUNCA "Vertexa").
+export interface ChatMessageView extends ChatMessage {
   sender_name: string | null;
+}
+
+// Shape completo que a tela de Mensagens precisa: canal resolvido + profissional
+// atuante (remetente em modo demo) + histórico.
+export interface ChatThread {
+  channelId: string;
+  actingProfileId: string | null;
+  messages: ChatMessageView[];
 }
 
 export interface PlanListItem {

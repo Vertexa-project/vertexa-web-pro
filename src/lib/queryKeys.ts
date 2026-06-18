@@ -9,7 +9,7 @@ export const qk = {
   progressPhotos: (patientId: string) => ["patient", patientId, "progressPhotos"] as const,
   muscleRecovery: (patientId: string) => ["patient", patientId, "muscleRecovery"] as const,
   adherenceSnapshot: (patientId: string) => ["patient", patientId, "adherenceSnapshot"] as const,
-  messages: (patientId: string) => ["patient", patientId, "messages"] as const,
+  chatThread: (patientId: string) => ["patient", patientId, "chat"] as const,
   campaigns: ["campaigns"] as const,
   allPlans: ["plans", "all"] as const,
 };
