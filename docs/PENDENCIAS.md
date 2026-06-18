@@ -64,3 +64,8 @@
       0 linhas/erro como 403 na UI.
     - **Storage privado + URL assinada** (ver #12). Confirmar que o app paciente também faz escaping
       do conteúdo de planos/mensagens.
+    - **Chat (`chat_channels` / `chat_participants` / `chat_messages` / `chat_mentions`)**: hoje rodam
+      permissivas — `sprint_read_all` (SELECT) + `sprint_chat_write` (ALL), `anon`/`authenticated`
+      `using(true)`. Sob RLS real, só os **participantes do canal** (paciente dono + profissionais
+      vinculados, via `chat_participants`) podem ler/escrever. O **realtime** (`postgres_changes`)
+      respeita essas policies — portanto fechar a RLS aqui também controla o que vaza pelo realtime.
