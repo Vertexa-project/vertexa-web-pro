@@ -101,8 +101,9 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   - `activity_events` (`sprint_activity_write`, INSERT anon) → `migrations/20260618130000_sprint_write_policies.sql` ✅.
   - `muscle_recovery_states` (`sprint_muscle_write_insert` + `sprint_muscle_write_update`, anon) → `migrations/20260618130000_sprint_write_policies.sql` ✅.
   - Planos (`sprint_plan_write`, ALL anon) nas 5 tabelas → `migrations/20260618130000_sprint_write_policies.sql` ✅ (gap fechado).
+  - `adherence_snapshots` (`sprint_adherence_write`, INSERT anon) → `migrations/20260618140000_sprint_adherence_write_policy.sql` ✅.
 - **Migrations = fonte única no repo web** (`vertexa-web-pro/supabase/migrations`). Toda policy aplicada
-  via MCP DEVE virar arquivo de migration aqui — todas as policies de escrita sprint já versionadas (`24f28f3`).
+  via MCP DEVE virar arquivo de migration aqui — **todas** as policies de escrita sprint já versionadas.
 - **#11–#14 (BLOQUEANTE p/ dado real):** trocar tudo isso por RLS por papel/clínica/vínculo. Tabelas a
   travar: `chat_*`, `activity_events`, `muscle_recovery_states`, `adherence_snapshots`, planos, etc.
   O realtime (`postgres_changes`) respeita as policies → fechar a RLS também fecha o que vaza ao vivo.
@@ -112,6 +113,13 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - **#3** pesos do VRI (provisórios; web só lê snapshots). Mariana ≈ score **88 / alta** — não contradizer.
 - **#15** aposentar a tabela `messages` legada + migrar seed (não-bloqueante; web e app já no `chat_*`).
 - **GIFs** de exercício do app vêm de terceiros (fitnessprogramer.com) — licenciar antes de publicar.
+
+## Provisórios (combinados temporários — trocar quando indicado)
+- **`adherence_snapshots`**: o app **escreve** o VRI (4c-2b, policy `sprint_adherence_write`); a web só
+  **lê**. OK p/ demo. ✅
+- **GIFs de exercício**: resolvidos por **fallback de nome** (`workout_exercises.name` → catálogo de
+  terceiros) **até a web preencher `gif_url`**. PROVISÓRIO (ver licenciamento na pendência de GIFs acima).
+- **Aquecimento**: **estático** (hardcoded no app) **até existir tabela própria**. PROVISÓRIO.
 
 ## Log de status (atualizar a cada etapa)
 **Web (`vertexa-web-pro`):**
@@ -127,10 +135,11 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - 4b — chat real (`TeamChat` sobre `chat_*` + @ + realtime) ✅ (`624e3b8`)
 - 4c-1 — sink de eventos → `activity_events` ✅ (`ecba42f`)
 - 4c-2 — recuperação muscular (provisória) ⏳ PENDENTE
-- 4c-2b — VRI → `adherence_snapshots` ⏳ pendente
+- 4c-2b — VRI → `adherence_snapshots` ✅ (write `sprint_adherence_write`)
 - 4c-3 — ler plano/treino reais (HomePage/Profile → "Mariana") ⏳ pendente
 
 **Banco:**
-- `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅ (`20260618130000_sprint_write_policies.sql`, `24f28f3`)
+- `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
+  (`20260618130000` activity/muscle/plan + `20260618140000` adherence)
 
 **Teste ponta a ponta (4d):** ⏳ pendente — app `@Camila` → badge ao vivo na web + bater ponto → Timeline/recuperação.
