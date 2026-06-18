@@ -7,11 +7,17 @@ import { LoadingState } from "@/components/feedback/LoadingState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/status/StatusBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useChatThread, useSendChatMessage } from "@/hooks/useChat";
+import {
+  useChatThread,
+  useMarkMentionsRead,
+  useSendChatMessage,
+  useUnreadMentions,
+} from "@/hooks/useChat";
 import { useListPatients } from "@/hooks/usePatients";
 import { formatRelative, initials } from "@/lib/domain/format";
 import { cn } from "@/lib/utils";
@@ -20,14 +26,24 @@ import type { PatientListItem } from "@/types/db";
 function Thread({ patient }: { patient: PatientListItem }) {
   const { data, isLoading, isError, refetch } = useChatThread(patient.id);
   const sendMessage = useSendChatMessage(patient.id);
+  const { data: mentions } = useUnreadMentions();
+  const { mutate: markRead } = useMarkMentionsRead();
   const [draft, setDraft] = useState("");
   const patientName = patient.profile?.full_name ?? "Paciente";
+
+  const channelId = data?.channelId;
+  const unreadForPatient = mentions?.byPatient[patient.id] ?? 0;
+
+  // Ao abrir uma conversa com menções pendentes, marca como lidas (limpa o badge).
+  useEffect(() => {
+    if (channelId && unreadForPatient > 0) markRead(channelId);
+  }, [channelId, unreadForPatient, markRead]);
 
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState onRetry={() => refetch()} />;
 
   const messages = data?.messages ?? [];
-  // Sem participante profissional no canal não há remetente válido em modo demo.
+  // Sem profissional atuante configurado (env) não há remetente válido em modo demo.
   const canSend = Boolean(data?.actingProfileId);
 
   const handleSend = () => {
@@ -119,6 +135,7 @@ function Thread({ patient }: { patient: PatientListItem }) {
 
 export function MessagesPage() {
   const { data, isLoading, isError, refetch } = useListPatients();
+  const { data: mentions } = useUnreadMentions();
   const [selectedId, setSelectedId] = useState<string>("");
 
   useEffect(() => {
@@ -146,12 +163,17 @@ export function MessagesPage() {
           <div className="max-h-48 overflow-y-auto border-b lg:max-h-none lg:border-b-0 lg:border-r">
             {(data ?? []).map((p) => {
               const name = p.profile?.full_name ?? "Sem nome";
+              const mentionCount = mentions?.byPatient[p.id] ?? 0;
               return (
                 <button
                   key={p.id}
                   onClick={() => setSelectedId(p.id)}
                   aria-pressed={p.id === selectedId}
-                  aria-label={`Conversa com ${name}`}
+                  aria-label={
+                    mentionCount > 0
+                      ? `Conversa com ${name}, ${mentionCount} menção(ões) não lida(s)`
+                      : `Conversa com ${name}`
+                  }
                   className={cn(
                     "flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                     p.id === selectedId && "bg-muted/60",
@@ -166,6 +188,11 @@ export function MessagesPage() {
                       <StatusBadge status={p.snapshot?.status} score={p.snapshot?.score} />
                     </div>
                   </div>
+                  {mentionCount > 0 ? (
+                    <Badge tone="primary" className="shrink-0">
+                      Mencionado{mentionCount > 1 ? ` · ${mentionCount}` : ""}
+                    </Badge>
+                  ) : null}
                 </button>
               );
             })}

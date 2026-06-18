@@ -1,14 +1,17 @@
 import { NavLink } from "react-router-dom";
 
 import type { NavItem } from "@/app/routes";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface NavRowProps {
   item: NavItem;
   onNavigate?: () => void;
+  /** Contador opcional (ex.: menções não lidas) exibido como badge à direita. */
+  badgeCount?: number;
 }
 
-export function NavRow({ item, onNavigate }: NavRowProps) {
+export function NavRow({ item, onNavigate, badgeCount }: NavRowProps) {
   const Icon = item.icon;
   return (
     <NavLink
@@ -36,6 +39,15 @@ export function NavRow({ item, onNavigate }: NavRowProps) {
           />
           <Icon className={cn("h-[18px] w-[18px] shrink-0", isActive && "text-primary")} aria-hidden />
           <span>{item.label}</span>
+          {badgeCount && badgeCount > 0 ? (
+            <Badge
+              tone="primary"
+              className="ml-auto h-5 min-w-5 justify-center px-1.5 tabular-nums"
+              aria-label={`${badgeCount} não lidas`}
+            >
+              {badgeCount > 99 ? "99+" : badgeCount}
+            </Badge>
+          ) : null}
         </>
       )}
     </NavLink>

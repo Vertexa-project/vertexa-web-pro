@@ -70,11 +70,10 @@
       vinculados, via `chat_participants`) podem ler/escrever. O **realtime** (`postgres_changes`)
       respeita essas policies — portanto fechar a RLS aqui também controla o que vaza pelo realtime.
 
-15. **App paciente precisa repontar para `chat_messages` (contrato).** A web já lê/escreve no novo
-    schema `chat_*` (Etapa 3). O app paciente ainda insere na tabela legada `messages` — enquanto isso
-    não mudar, **mensagens novas do paciente NÃO aparecem na web** (a Etapa 2 só portou o histórico, não
-    espelha writes futuros). Sequência: web repontada ✅ → app paciente repontar (canal por paciente via
-    `chat_channels`, `sender_profile_id` = profile do paciente, `sender_role='patient'`) → só então
-    aposentar `messages`. Na demo, simular a mensagem do paciente inserindo direto em `chat_messages`.
-    O remetente da web em modo demo é o 1º participante `professional` do canal — sob auth real vira
-    `auth.uid()` (ver #14).
+15. **Aposentar a tabela legada `messages` (web e app já alinhados em `chat_*`).** Tanto a web (Etapa 3)
+    quanto o app paciente (TeamChat) leem/escrevem direto em `chat_messages`/`chat_mentions` com realtime
+    — o app NUNCA usou a `messages` legada (era 100% mock antes). Logo a `messages` só sobrevive por causa
+    do backfill da Etapa 2 e do `supabase/seed.sql` (que ainda insere 2 linhas nela). Pendência (não
+    bloqueante): migrar o seed para `chat_*` e dropar `messages` quando ninguém mais depender dela.
+    Remetente da web em modo demo = profile fixo da Dra. Camila via `VITE_DEMO_PROFESSIONAL_PROFILE_ID`;
+    sob auth real vira `auth.uid()` (ver #14).

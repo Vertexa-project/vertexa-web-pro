@@ -1,8 +1,14 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getChatThread, sendChatMessage } from "@/lib/api/chat";
+import {
+  getChatThread,
+  listUnreadMentionPatientIds,
+  markChannelMentionsRead,
+  sendChatMessage,
+} from "@/lib/api/chat";
 import { qk } from "@/lib/queryKeys";
+import { DEMO_PROFESSIONAL_PROFILE_ID } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -54,6 +60,74 @@ export function useSendChatMessage(patientId: string) {
       sendChatMessage(vars),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.chatThread(patientId) });
+    },
+  });
+}
+
+export interface UnreadMentions {
+  total: number;
+  byPatient: Record<string, number>;
+}
+
+/**
+ * Menções não lidas do profissional atuante (demo), agregadas por paciente +
+ * total. Assina o realtime de `chat_mentions` para acender/limpar ao vivo
+ * (o app paciente cria as menções; a web marca como lidas ao abrir a conversa).
+ */
+export function useUnreadMentions() {
+  const queryClient = useQueryClient();
+  const profileId = DEMO_PROFESSIONAL_PROFILE_ID;
+
+  const query = useQuery({
+    queryKey: qk.unreadMentions(profileId ?? "none"),
+    queryFn: async (): Promise<UnreadMentions> => {
+      const patientIds = await listUnreadMentionPatientIds(profileId as string);
+      const byPatient: Record<string, number> = {};
+      for (const id of patientIds) byPatient[id] = (byPatient[id] ?? 0) + 1;
+      return { total: patientIds.length, byPatient };
+    },
+    enabled: Boolean(profileId),
+  });
+
+  useEffect(() => {
+    if (!profileId) return;
+    const channel = supabase
+      .channel(`chat-mentions:${profileId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "chat_mentions",
+          filter: `mentioned_profile_id=eq.${profileId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: qk.unreadMentions(profileId) });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [profileId, queryClient]);
+
+  return query;
+}
+
+/** Marca as menções de um canal como lidas e revalida os contadores. */
+export function useMarkMentionsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (channelId: string) => {
+      if (!DEMO_PROFESSIONAL_PROFILE_ID) return Promise.resolve();
+      return markChannelMentionsRead(channelId, DEMO_PROFESSIONAL_PROFILE_ID);
+    },
+    onSuccess: () => {
+      if (!DEMO_PROFESSIONAL_PROFILE_ID) return;
+      queryClient.invalidateQueries({
+        queryKey: qk.unreadMentions(DEMO_PROFESSIONAL_PROFILE_ID),
+      });
     },
   });
 }

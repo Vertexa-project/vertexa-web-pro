@@ -10,11 +10,13 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { footerNav, mainNav } from "@/app/routes";
+import { useUnreadMentions } from "@/hooks/useChat";
 import { NavRow } from "./NavRow";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+  const { data: mentions } = useUnreadMentions();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -36,7 +38,12 @@ export function MobileNav() {
 
         <nav className="flex-1 space-y-1 px-3">
           {mainNav.map((item) => (
-            <NavRow key={item.path} item={item} onNavigate={close} />
+            <NavRow
+              key={item.path}
+              item={item}
+              onNavigate={close}
+              badgeCount={item.path === "/mensagens" ? mentions?.total : undefined}
+            />
           ))}
         </nav>
 

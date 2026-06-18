@@ -1,3 +1,4 @@
+import { DEMO_PROFESSIONAL_PROFILE_ID } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
 import type { ChatMessage, ChatMessageView, ChatThread } from "@/types/db";
 
@@ -29,23 +30,6 @@ export async function getOrCreateChannel(patientId: string): Promise<string> {
   return (created as { id: string }).id;
 }
 
-/**
- * Profissional atuante do canal = remetente das mensagens enviadas pela web em
- * modo demo (não há auth real). Pega o primeiro participante com role
- * 'professional'. Sob RLS real isto vira `auth.uid()` (ver PENDENCIAS #14).
- */
-async function getActingProfileId(channelId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("chat_participants")
-    .select("profile_id")
-    .eq("channel_id", channelId)
-    .eq("role", "professional")
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as { profile_id: string | null } | null)?.profile_id ?? null;
-}
-
 /** Histórico do canal, ordenado, com o nome do remetente já resolvido. */
 export async function listChatMessages(channelId: string): Promise<ChatMessageView[]> {
   const { data, error } = await supabase
@@ -65,11 +49,9 @@ export async function listChatMessages(channelId: string): Promise<ChatMessageVi
 /** Tudo que a tela de Mensagens precisa para um paciente em uma única query. */
 export async function getChatThread(patientId: string): Promise<ChatThread> {
   const channelId = await getOrCreateChannel(patientId);
-  const [messages, actingProfileId] = await Promise.all([
-    listChatMessages(channelId),
-    getActingProfileId(channelId),
-  ]);
-  return { channelId, actingProfileId, messages };
+  const messages = await listChatMessages(channelId);
+  // Remetente = profissional atuante em modo demo (Dra. Camila via env).
+  return { channelId, actingProfileId: DEMO_PROFESSIONAL_PROFILE_ID, messages };
 }
 
 export interface SendChatMessageInput {
@@ -92,4 +74,48 @@ export async function sendChatMessage(input: SendChatMessageInput): Promise<Chat
     .single();
   if (error) throw error;
   return data as ChatMessage;
+}
+
+// Linha de chat_mentions com o patient_id do canal resolvido pelos joins.
+interface RawMentionRow {
+  message: { channel: { patient_id: string | null } | null } | null;
+}
+
+/**
+ * Menções NÃO lidas do profissional, retornadas como lista de patient_ids (uma
+ * entrada por menção). Quem cria as menções é o app paciente (TeamChat). O
+ * chamador agrega em contadores por paciente / total.
+ */
+export async function listUnreadMentionPatientIds(profileId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("chat_mentions")
+    .select(`id, message:chat_messages!message_id ( channel:chat_channels!channel_id ( patient_id ) )`)
+    .eq("mentioned_profile_id", profileId)
+    .is("read_at", null);
+  if (error) throw error;
+
+  const rows = (data ?? []) as unknown as RawMentionRow[];
+  return rows
+    .map((r) => r.message?.channel?.patient_id ?? null)
+    .filter((id): id is string => Boolean(id));
+}
+
+/** Marca como lidas as menções do profissional num canal (ao abrir a conversa). */
+export async function markChannelMentionsRead(channelId: string, profileId: string): Promise<void> {
+  const { data: msgs, error: msgErr } = await supabase
+    .from("chat_messages")
+    .select("id")
+    .eq("channel_id", channelId);
+  if (msgErr) throw msgErr;
+
+  const ids = (msgs ?? []).map((m) => (m as { id: string }).id);
+  if (ids.length === 0) return;
+
+  const { error } = await supabase
+    .from("chat_mentions")
+    .update({ read_at: new Date().toISOString() })
+    .in("message_id", ids)
+    .eq("mentioned_profile_id", profileId)
+    .is("read_at", null);
+  if (error) throw error;
 }

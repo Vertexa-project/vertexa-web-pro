@@ -1,7 +1,9 @@
 import { footerNav, mainNav } from "@/app/routes";
+import { useUnreadMentions } from "@/hooks/useChat";
 import { NavRow } from "./NavRow";
 
 export function Sidebar() {
+  const { data: mentions } = useUnreadMentions();
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex h-16 items-center gap-2 px-6">
@@ -13,7 +15,11 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-1 px-3 py-2">
         {mainNav.map((item) => (
-          <NavRow key={item.path} item={item} />
+          <NavRow
+            key={item.path}
+            item={item}
+            badgeCount={item.path === "/mensagens" ? mentions?.total : undefined}
+          />
         ))}
       </nav>
 
