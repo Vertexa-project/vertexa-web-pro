@@ -58,6 +58,12 @@
     - **Escrita de planos restrita** (substituir `sprint_plan_write` `using(true)`): hoje qualquer anon
       pode apagar/reescrever o plano de QUALQUER paciente (o `professionalId` é escolhido no client).
       Validar o vínculo no servidor (RPC `SECURITY DEFINER` + `auth.uid()`), nunca confiar no client.
+    - **Escrita do app paciente restrita** (writes permissivos versionados em
+      `20260618130000_sprint_write_policies.sql`): `activity_events` (`sprint_activity_write`, INSERT) e
+      `muscle_recovery_states` (`sprint_muscle_write_insert` INSERT + `sprint_muscle_write_update` UPDATE)
+      hoje aceitam `with check (true)` de qualquer anon — ou seja, qualquer um pode injetar evento/estado
+      de recuperação para QUALQUER paciente. Sob RLS real, só o próprio paciente (`auth.uid()` → seu
+      `patient_id`) pode escrever os seus eventos/estados.
     - **Modo demo** não pode usar a sessão anon contra o banco real quando a RLS fechar — isolar em
       dataset fictício ou desabilitar em `import.meta.env.PROD`.
     - **IDOR**: `getPatient(id)` lê qualquer UUID da URL; a barreira real é a RLS (acima) — tratar
