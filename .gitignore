@@ -18,6 +18,9 @@ dist-ssr
 .playwright-mcp/
 /fase*.png
 
+# Artefatos repomix (pack do repo para LLM — gerado, não versionar)
+repomix-*.xml
+
 # Editor
 .vscode/*
 !.vscode/extensions.json
