@@ -1,31 +1,49 @@
-import { Dumbbell } from "lucide-react";
+import { useState } from "react";
+import { Dumbbell, Pencil, Plus } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
+import { WorkoutPlanEditor } from "./WorkoutPlanEditor";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWorkoutPlan } from "@/hooks/usePlans";
 import { formatWeight } from "@/lib/domain/format";
 import { muscleGroupLabel } from "@/lib/domain/muscleRecovery";
+import type { PatientDetail } from "@/types/db";
 
-export function WorkoutTab({ patientId }: { patientId: string }) {
-  const { data, isLoading, isError, refetch } = useWorkoutPlan(patientId);
+export function WorkoutTab({ patient }: { patient: PatientDetail }) {
+  const { data, isLoading, isError, refetch } = useWorkoutPlan(patient.id);
+  const [editing, setEditing] = useState(false);
 
   return (
-    <AsyncSection
-      isLoading={isLoading}
-      isError={isError}
-      isEmpty={!data}
-      onRetry={() => refetch()}
-      emptyIcon={Dumbbell}
-      emptyTitle="Nenhum plano de treino"
-      emptyDescription="Crie um treino para o paciente executar no app."
-    >
-      {data ? (
-        <div className="space-y-6">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-lg font-semibold text-foreground">{data.title}</h2>
-            {data.goal ? <span className="text-sm text-muted-foreground">{data.goal}</span> : null}
-          </div>
+    <>
+      <AsyncSection
+        isLoading={isLoading}
+        isError={isError}
+        isEmpty={!data}
+        onRetry={() => refetch()}
+        emptyIcon={Dumbbell}
+        emptyTitle="Nenhum plano de treino"
+        emptyDescription="Crie um treino para o paciente executar no app."
+        emptyAction={
+          <Button onClick={() => setEditing(true)}>
+            <Plus className="h-4 w-4" />
+            Criar plano
+          </Button>
+        }
+      >
+        {data ? (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">{data.title}</h2>
+                {data.goal ? <span className="text-sm text-muted-foreground">{data.goal}</span> : null}
+              </div>
+              <Button variant="outline" className="shrink-0" onClick={() => setEditing(true)}>
+                <Pencil className="h-4 w-4" />
+                Editar
+              </Button>
+            </div>
 
           {data.workouts.map((w) => (
             <Card key={w.id}>
@@ -81,6 +99,14 @@ export function WorkoutTab({ patientId }: { patientId: string }) {
           ))}
         </div>
       ) : null}
-    </AsyncSection>
+      </AsyncSection>
+
+      <WorkoutPlanEditor
+        patient={patient}
+        existing={data ?? null}
+        open={editing}
+        onOpenChange={setEditing}
+      />
+    </>
   );
 }

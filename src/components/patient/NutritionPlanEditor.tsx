@@ -1,0 +1,188 @@
+import { useEffect, useState } from "react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useSaveNutritionPlan } from "@/hooks/usePlanMutations";
+import type { SaveNutritionPlanInput } from "@/lib/api/planMutations";
+import type { NutritionPlanFull, PatientDetail } from "@/types/db";
+
+interface MealForm {
+  time: string;
+  name: string;
+  items: string;
+  calories: string;
+}
+interface PlanForm {
+  title: string;
+  meals: MealForm[];
+}
+
+const emptyMeal = (): MealForm => ({ time: "", name: "", items: "", calories: "" });
+
+function fromExisting(plan: NutritionPlanFull | null): PlanForm {
+  if (!plan) return { title: "", meals: [emptyMeal()] };
+  return {
+    title: plan.title,
+    meals: plan.meals.length
+      ? plan.meals.map((m) => ({
+          time: m.time ?? "",
+          name: m.name ?? "",
+          items: (m.items ?? []).join("\n"),
+          calories: m.calories?.toString() ?? "",
+        }))
+      : [emptyMeal()],
+  };
+}
+
+interface Props {
+  patient: PatientDetail;
+  existing: NutritionPlanFull | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: Props) {
+  const [form, setForm] = useState<PlanForm>(() => fromExisting(existing));
+  const [error, setError] = useState<string | null>(null);
+  const save = useSaveNutritionPlan(patient.id);
+
+  useEffect(() => {
+    if (open) {
+      setForm(fromExisting(existing));
+      setError(null);
+    }
+  }, [open, existing]);
+
+  function patchMeal(i: number, patch: Partial<MealForm>) {
+    setForm((f) => ({ ...f, meals: f.meals.map((m, idx) => (idx === i ? { ...m, ...patch } : m)) }));
+  }
+
+  function handleSave() {
+    if (!form.title.trim()) {
+      setError("Dê um título ao plano.");
+      return;
+    }
+    const meals = form.meals.filter((m) => m.name.trim() || m.items.trim());
+    if (meals.length === 0) {
+      setError("Adicione ao menos uma refeição.");
+      return;
+    }
+    const input: SaveNutritionPlanInput = {
+      patientId: patient.id,
+      professionalId: patient.professionals[0]?.id ?? null,
+      title: form.title.trim(),
+      meals: meals.map((m) => ({
+        time: m.time.trim() || null,
+        name: m.name.trim() || null,
+        items: m.items.split("\n").map((s) => s.trim()).filter(Boolean),
+        calories: m.calories ? Number(m.calories) : null,
+      })),
+    };
+    save.mutate(input, {
+      onSuccess: () => onOpenChange(false),
+      onError: () => setError("Não foi possível salvar o plano. Tente novamente."),
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{existing ? "Editar plano alimentar" : "Novo plano alimentar"}</DialogTitle>
+          <DialogDescription>Um item por linha em cada refeição. O paciente verá no app.</DialogDescription>
+        </DialogHeader>
+
+        <DialogBody className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="np-title">Título</Label>
+            <Input
+              id="np-title"
+              autoFocus
+              aria-invalid={Boolean(error) && !form.title.trim()}
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              placeholder="Ex.: Plano 1600 kcal"
+            />
+          </div>
+
+          {form.meals.map((m, i) => (
+            <div key={i} className="space-y-3 rounded-lg border p-4">
+              <div className="flex items-center gap-2">
+                <Input
+                  className="w-24"
+                  value={m.time}
+                  onChange={(e) => patchMeal(i, { time: e.target.value })}
+                  placeholder="07:00"
+                  aria-label="Horário"
+                />
+                <Input
+                  value={m.name}
+                  onChange={(e) => patchMeal(i, { name: e.target.value })}
+                  placeholder="Nome da refeição (ex.: Café da manhã)"
+                  aria-label="Nome da refeição"
+                />
+                <Input
+                  type="number"
+                  className="w-28"
+                  value={m.calories}
+                  onChange={(e) => patchMeal(i, { calories: e.target.value })}
+                  placeholder="kcal"
+                  aria-label="Calorias"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  aria-label="Remover refeição"
+                  disabled={form.meals.length === 1}
+                  onClick={() => setForm((f) => ({ ...f, meals: f.meals.filter((_, idx) => idx !== i) }))}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <Textarea
+                value={m.items}
+                onChange={(e) => patchMeal(i, { items: e.target.value })}
+                placeholder={"Itens (um por linha)\n2 ovos\n1 fatia de pão integral"}
+                aria-label="Itens da refeição"
+              />
+            </div>
+          ))}
+
+          <Button variant="outline" onClick={() => setForm((f) => ({ ...f, meals: [...f.meals, emptyMeal()] }))}>
+            <Plus className="h-4 w-4" />
+            Adicionar refeição
+          </Button>
+
+          {error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </DialogBody>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={save.isPending}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} disabled={save.isPending} aria-busy={save.isPending}>
+            {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+            {save.isPending ? "Salvando…" : "Salvar plano"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

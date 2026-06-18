@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getNutritionPlan, getWorkoutPlan } from "@/lib/api/plans";
+import { getNutritionPlan, getWorkoutPlan, listAllPlans } from "@/lib/api/plans";
 import { qk } from "@/lib/queryKeys";
+
+export const useAllPlans = () => useQuery({ queryKey: qk.allPlans, queryFn: listAllPlans });
 
 export const useWorkoutPlan = (patientId: string) =>
   useQuery({

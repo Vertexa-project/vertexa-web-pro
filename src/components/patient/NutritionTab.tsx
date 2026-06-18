@@ -1,30 +1,48 @@
-import { Utensils } from "lucide-react";
+import { useState } from "react";
+import { Pencil, Plus, Utensils } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
+import { NutritionPlanEditor } from "./NutritionPlanEditor";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNutritionPlan } from "@/hooks/usePlans";
+import type { PatientDetail } from "@/types/db";
 
-export function NutritionTab({ patientId }: { patientId: string }) {
-  const { data, isLoading, isError, refetch } = useNutritionPlan(patientId);
+export function NutritionTab({ patient }: { patient: PatientDetail }) {
+  const { data, isLoading, isError, refetch } = useNutritionPlan(patient.id);
+  const [editing, setEditing] = useState(false);
 
   const totalKcal = data?.meals.reduce((sum, m) => sum + (m.calories ?? 0), 0) ?? 0;
 
   return (
-    <AsyncSection
-      isLoading={isLoading}
-      isError={isError}
-      isEmpty={!data}
-      onRetry={() => refetch()}
-      emptyIcon={Utensils}
-      emptyTitle="Nenhum plano alimentar"
-      emptyDescription="Crie um plano alimentar para o paciente seguir no app."
-    >
-      {data ? (
-        <div className="space-y-6">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-lg font-semibold text-foreground">{data.title}</h2>
-            <span className="text-sm text-muted-foreground">{totalKcal} kcal/dia</span>
-          </div>
+    <>
+      <AsyncSection
+        isLoading={isLoading}
+        isError={isError}
+        isEmpty={!data}
+        onRetry={() => refetch()}
+        emptyIcon={Utensils}
+        emptyTitle="Nenhum plano alimentar"
+        emptyDescription="Crie um plano alimentar para o paciente seguir no app."
+        emptyAction={
+          <Button onClick={() => setEditing(true)}>
+            <Plus className="h-4 w-4" />
+            Criar plano
+          </Button>
+        }
+      >
+        {data ? (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">{data.title}</h2>
+                <span className="text-sm text-muted-foreground">{totalKcal} kcal/dia</span>
+              </div>
+              <Button variant="outline" className="shrink-0" onClick={() => setEditing(true)}>
+                <Pencil className="h-4 w-4" />
+                Editar
+              </Button>
+            </div>
 
           <div className="space-y-3">
             {data.meals.map((meal) => (
@@ -56,6 +74,14 @@ export function NutritionTab({ patientId }: { patientId: string }) {
           </div>
         </div>
       ) : null}
-    </AsyncSection>
+      </AsyncSection>
+
+      <NutritionPlanEditor
+        patient={patient}
+        existing={data ?? null}
+        open={editing}
+        onOpenChange={setEditing}
+      />
+    </>
   );
 }

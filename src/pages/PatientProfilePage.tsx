@@ -82,10 +82,10 @@ export function PatientProfilePage() {
           <AnthropometryTab patient={patient} />
         </TabsContent>
         <TabsContent value="nutrition">
-          <NutritionTab patientId={patient.id} />
+          <NutritionTab patient={patient} />
         </TabsContent>
         <TabsContent value="workout">
-          <WorkoutTab patientId={patient.id} />
+          <WorkoutTab patient={patient} />
         </TabsContent>
         <TabsContent value="recovery">
           <RecoveryTab patientId={patient.id} />

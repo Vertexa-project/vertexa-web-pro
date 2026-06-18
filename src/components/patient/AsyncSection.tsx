@@ -13,6 +13,7 @@ interface AsyncSectionProps {
   emptyTitle: string;
   emptyDescription?: string;
   emptyIcon?: LucideIcon;
+  emptyAction?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -25,10 +26,19 @@ export function AsyncSection({
   emptyTitle,
   emptyDescription,
   emptyIcon,
+  emptyAction,
   children,
 }: AsyncSectionProps) {
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState onRetry={onRetry} />;
-  if (isEmpty) return <EmptyState icon={emptyIcon} title={emptyTitle} description={emptyDescription} />;
+  if (isEmpty)
+    return (
+      <EmptyState
+        icon={emptyIcon}
+        title={emptyTitle}
+        description={emptyDescription}
+        action={emptyAction}
+      />
+    );
   return <>{children}</>;
 }

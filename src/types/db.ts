@@ -236,3 +236,12 @@ export interface NutritionPlanFull extends NutritionPlan {
 export interface MessageWithSender extends Message {
   sender_name: string | null;
 }
+
+export interface PlanListItem {
+  id: string;
+  type: "treino" | "alimentar";
+  title: string;
+  patientId: string;
+  patientName: string | null;
+  createdAt: string;
+}

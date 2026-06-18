@@ -44,3 +44,8 @@
 12. **Storage privado + URL assinada.** `progress_photos.photo_url` e `body_assessments.document_url`
     são URLs cruas. Confirmar bucket privado e gerar `createSignedUrl` na camada `api/` antes de
     publicar (já previsto no CLAUDE.md como pós-MVP).
+
+13. **Salvar plano não é transacional.** `saveWorkoutPlan`/`saveNutritionPlan` fazem DELETE do plano
+    anterior e depois INSERT do novo (treinos/exercícios/refeições em vários passos). Se falhar no
+    meio, o plano antigo já foi apagado e o novo fica parcial. Mover para uma RPC/transação (Postgres
+    function) antes de uso real, para o app paciente nunca ler um plano inconsistente.

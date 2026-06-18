@@ -11,4 +11,5 @@ export const qk = {
   adherenceSnapshot: (patientId: string) => ["patient", patientId, "adherenceSnapshot"] as const,
   messages: (patientId: string) => ["patient", patientId, "messages"] as const,
   campaigns: ["campaigns"] as const,
+  allPlans: ["plans", "all"] as const,
 };
