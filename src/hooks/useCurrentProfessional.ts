@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getCurrentProfessional, getProfileName } from "@/lib/api/profile";
+import { getCurrentProfessional, getProfileName, listClinicProfessionals } from "@/lib/api/profile";
 import { qk } from "@/lib/queryKeys";
 import { DEMO_PROFESSIONAL_PROFILE_ID } from "@/lib/session";
 
@@ -25,5 +25,14 @@ export const useCurrentProfessional = () =>
     queryKey: qk.currentProfessionalRecord(DEMO_PROFESSIONAL_PROFILE_ID ?? "none"),
     queryFn: () => getCurrentProfessional(DEMO_PROFESSIONAL_PROFILE_ID as string),
     enabled: Boolean(DEMO_PROFESSIONAL_PROFILE_ID),
+    staleTime: Infinity,
+  });
+
+/** Profissionais da clínica (para atribuir compromissos na agenda). */
+export const useClinicProfessionals = (clinicId: string | null | undefined) =>
+  useQuery({
+    queryKey: qk.clinicProfessionals(clinicId ?? "none"),
+    queryFn: () => listClinicProfessionals(clinicId as string),
+    enabled: Boolean(clinicId),
     staleTime: Infinity,
   });

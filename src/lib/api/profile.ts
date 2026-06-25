@@ -50,3 +50,24 @@ export async function getCurrentProfessional(profileId: string): Promise<Current
     type: row.type,
   };
 }
+
+/** Resumo de um profissional para selects (ex.: atribuir um compromisso da agenda). */
+export interface ClinicProfessional {
+  id: string;
+  fullName: string | null;
+  type: ProfessionalType;
+}
+
+/** Profissionais de uma clínica (para o select de compromisso). Escopado por clinic_id. */
+export async function listClinicProfessionals(clinicId: string): Promise<ClinicProfessional[]> {
+  const { data, error } = await supabase
+    .from("professionals")
+    .select("id, type, profile:profiles ( full_name )")
+    .eq("clinic_id", clinicId);
+  if (error) throw error;
+  return ((data ?? []) as unknown as RawProfessionalRow[]).map((r) => ({
+    id: r.id,
+    fullName: r.profile?.full_name ?? null,
+    type: r.type,
+  }));
+}

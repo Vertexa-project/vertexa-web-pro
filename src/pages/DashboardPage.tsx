@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Activity, AlertTriangle, ArrowRight, ClipboardList, Gauge, TrendingUp, Users } from "lucide-react";
 
 import { AdherenceChart } from "@/components/dashboard/AdherenceChart";
+import { AgendaCard } from "@/components/dashboard/AgendaCard";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RetentionPanel } from "@/components/retention/RetentionPanel";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -12,7 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
+import { useCurrentProfessional, useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
 import { useListPatients } from "@/hooks/usePatients";
 import { formatDate, greeting, initials, shortName } from "@/lib/domain/format";
 import { hasPendency } from "@/lib/domain/pendencies";
@@ -65,6 +66,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useListPatients();
   const { data: professionalName } = useCurrentProfessionalName();
+  const { data: professional } = useCurrentProfessional();
   const who = shortName(professionalName);
 
   const stats = useMemo(() => {
@@ -152,6 +154,13 @@ export function DashboardPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Agenda interna (Review §3): compromissos do dia/semana da clínica com CRUD real.
+              Escopada por clínica do profissional logado. "Conectar Google Agenda" = placeholder. */}
+          <AgendaCard
+            clinicId={professional?.clinicId ?? null}
+            defaultProfessionalId={professional?.id ?? null}
+          />
 
           {/* Retenção vive no Dashboard (centro do produto): coortes p/ reativar,
               pendências de registro e adesão por profissional. Mesmo painel da rota

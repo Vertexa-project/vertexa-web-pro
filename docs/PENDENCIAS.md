@@ -81,6 +81,15 @@
       admin/professional). Sob RLS real: derivar `clinic_id`/`professional_id` de `auth.uid()` no servidor
       (RPC `SECURITY DEFINER` que cruza `professionals.profile_id`), nunca confiar no que o client enviou —
       o isolamento por clínica hoje é **client-side** (vem do `DEMO_PROFESSIONAL_PROFILE_ID`).
+    - **Agenda interna (Sessão 6)** — `20260626090000_appointments_internal_agenda.sql`:
+      `appointments` roda permissiva — `sprint_appointment_read` (SELECT) + `sprint_appointment_write` (ALL),
+      `anon`/`authenticated` `using/with check (true)`. Qualquer anon lê/escreve compromissos de QUALQUER
+      clínica; o isolamento por `clinic_id` é **client-side** (vem do profissional logado). Sob RLS real:
+      admin vê a clínica, profissional vê só a sua, e `clinic_id` deriva de `auth.uid()` no servidor.
+      ⚠️ **`appointments.notes` é texto livre vinculado a paciente nominal → DADO SENSÍVEL**: não publicar
+      em domínio público enquanto o SELECT for `using(true)`; tratar `notes` como sensível na futura RLS e
+      nunca logar. O select de **paciente** no diálogo usa `useListPatients()` (não escopado por clínica,
+      igual ao resto do app) — fechar junto (criar `listClinicPatients`).
 
 15. **Aposentar a tabela legada `messages` (web e app já alinhados em `chat_*`).** Tanto a web (Etapa 3)
     quanto o app paciente (TeamChat) leem/escrevem direto em `chat_messages`/`chat_mentions` com realtime
@@ -107,3 +116,20 @@
     `document_url` num `<a href>` se passar pela allowlist `isSafeDocumentUrl()` (https:// ou
     `data:application/pdf;base64,`) — defesa contra `javascript:`/`data:text/html` gravado por anon
     (INSERT permissivo). A correção definitiva é a #12 (bucket privado + signed URL, sempre https).
+
+19. **Conectar Google Agenda (gancho da Sessão 6 — placeholder).** A agenda é 100% INTERNA nesta fase
+    (tabela `appointments`, CRUD na web). O botão "Conectar Google Agenda" no `AgendaCard` é gancho
+    desabilitado ("Em breve"). Quando vierem as credenciais: trocar a FONTE da agenda pela API do Google
+    (OAuth + escopos), mantendo o CRUD interno como fallback. **Google Meet NÃO entra.** Subdívidas da
+    agenda: (a) **RLS/isolamento** de `appointments` por papel/clínica no servidor (parte do #14, incl.
+    `notes` sensível); (b) **fuso**: a janela de leitura usa o fuso do NAVEGADOR (`startOfDay` local) e o
+    seed ancora em `America/Sao_Paulo` — coincidem no BR (premissa da demo), mas fora do fuso BR a aba
+    "Hoje" pode deslocar; robustez real = derivar/persistir o fuso da clínica e calcular a janela nele
+    (ex.: `date-fns-tz`); (c) **UX**: confirmação de exclusão usa `window.confirm` nativo (trocar por
+    AlertDialog do design system pós-MVP).
+
+20. **Financeiro por papel (Sessão 6 — diferido/stretch).** Não implementado nesta sessão. Forma proposta:
+    aba/rota `/financeiro` gated por papel (admin/gestor/financeiro) — com a RBAC mínima por `profiles.role`;
+    como a demo loga como Camila (`professional`), a aba ficaria corretamente OCULTA (só admin a veria).
+    Conteúdo inicial = placeholder de UI para fontes de import (CSV/PDF/planilha/extrato), **SEM** parser real
+    e **SEM** Open Finance. Retomar quando houver persona admin demonstrável ou auth real.

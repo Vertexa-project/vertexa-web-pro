@@ -231,6 +231,26 @@ export interface Campaign {
   created_at: string;
 }
 
+// Agenda interna do profissional (Sessão 6) — web-only (o app paciente NÃO usa).
+// NÃO renomear colunas sem alinhar no CONTRATO. patient_id = patients.id; professional_id = professionals.id.
+export interface Appointment {
+  id: string;
+  clinic_id: string; // NOT NULL no banco (isolamento por clínica)
+  patient_id: string | null;
+  professional_id: string | null;
+  title: string;
+  starts_at: string; // ISO timestamptz
+  ends_at: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+// Compromisso com nomes resolvidos (paciente/profissional) para a lista da agenda.
+export interface AppointmentView extends Appointment {
+  patient_name: string | null;
+  professional_name: string | null;
+}
+
 // ========== VIEW / COMPOSED TYPES (shapes retornados pela camada api/) ==========
 export interface ProfessionalSummary {
   id: string;

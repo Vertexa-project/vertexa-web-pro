@@ -19,8 +19,10 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 - **Sessão 4 (web):** Review do painel — tudo gira em torno do paciente. Navegação enxuta
   (Retenção/Planos fora da lateral), Retenção dentro do Dashboard, **cadastro real de paciente**,
   abas da ficha completas (incl. Evolução/Fotos e Documentos) e **mensagem do profissional enviando de verdade** (verificada).
-- **Sessão 5 (web — esta):** Review §6 — **redesign visual/identidade própria** (anti-template/Nutrio) +
+- **Sessão 5 (web):** Review §6 — **redesign visual/identidade própria** (anti-template/Nutrio) +
   correção de telas vazias. Só visual/UX: sem módulos/menus novos, sem mexer em dados/fluxos.
+- **Sessão 6 (web — esta):** Review §3 — **Agenda interna no Dashboard** (tabela `appointments` + CRUD real
+  + seed) com gancho-placeholder p/ Google Agenda. Financeiro (stretch) diferido (PENDENCIAS #20).
 - **Sessão 8 (dívida):** bucket de fotos privado + signed URL; RLS por papel/clínica (#11–#14).
 
 ## 3. Tracker
@@ -60,6 +62,14 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 | S5 | "Modelos" como roadmap (cadeado) | ✅ | Item de menu desabilitado com cadeado (`routes.ts` `locked` + `NavRow`); não navega, sem rota — sinaliza o que vem sem virar módulo (Review item 3). |
 | S5 | Revisão adversarial + correções | ✅ | Workflow 5 dimensões (identidade/a11y/regressão/escopo/vazios) + verificação lendo screenshots (25 agents). 10 achados confirmados, **todos corrigidos**: foco de teclado na nav (regressão WCAG 2.4.7), favicon antigo, contraste AA de "Modelos"/"MENU", override de `shadow-sm` (tab dark), ARIA do controle de tema (radiogroup→aria-pressed), `<div>` locked, alturas de KPI a 1280, mark duplicado no login (variant `onDark`), vão do card Aparência. |
 | S5 | typecheck + lint + build + Playwright | ✅ | tsc 0 · lint 0 (`--max-warnings 0`) · build 0 · Playwright (light+dark, 1440/1280): Dashboard, Pacientes, Ficha, Mensagens, Campanhas, Configurações — 0 erro de console. Screenshots antes/depois fora do repo (gitignored/scratchpad). |
+| S6 | Migration `appointments` (aditiva/reversível) + RLS sprint | ✅ | `20260626090000`: tabela (clinic_id NOT NULL→clinics, patient_id?/professional_id?, title, starts_at, ends_at, notes) + FKs + índice (clinic_id, starts_at) + `sprint_appointment_read`/`_write`. Aplicada+verificada via MCP. |
+| S6 | Camada de dados (api/ + react-query) | ✅ | `api/appointments.ts` (list por clínica+janela com joins de nome; create/update/delete), `useAppointments` (query + mutations + invalidação por clínica), `listClinicProfessionals`/`useClinicProfessionals`, types `Appointment`/`AppointmentView`, `qk.appointments`/`qk.clinicProfessionals`. Telas só via api/. |
+| S6 | Seed fictício (idempotente, fuso SP) | ✅ | `20260626093000`: 3 compromissos da clínica c1 (09:00/14:30 hoje + 10:00 amanhã, `AT TIME ZONE 'America/Sao_Paulo'`). Guarda idempotente alinhada ao rollback (`[seed-demo]`). |
+| S6 | AgendaCard no Dashboard + CRUD real | ✅ | Seção "Agenda" (toggle Hoje/Semana, lista com nomes, editar/excluir, "Novo compromisso" via `AppointmentDialog`), escopada por clínica do profissional logado. Delete com estado pending/erro; validação término≥início. "Conectar Google Agenda" = placeholder explícito (#19); Google Meet fora. |
+| S6 | Verificação E2E (Playwright + MCP) | ✅ | Criou "Consulta de verificação S6" 16:00 (Mariana/Camila) → apareceu → **reload persistiu** → confirmado no banco (clinic c1) → **excluído** → voltou aos 3 seeds. 0 erro de console. Isolamento por clínica confirmado. |
+| S6 | Revisão adversarial + correções | ✅ | Workflow 5 dimensões + verificação (33 agents). 12 achados confirmados; corrigidos: a11y do placeholder Google (texto no DOM, sem depender de tooltip), feedback de erro/pending no delete, validação término<início, `clinic_id` tipado NOT NULL, `qk.clinicProfessionals`, guarda do seed alinhada ao rollback. Documentados: RLS de `appointments` no #14, `notes` sensível, fuso, scope do select de paciente → PENDENCIAS #19/#20. |
+| S6 | Financeiro (stretch) — DIFERIDO | ⏭️ | Não implementado. Gating correto (admin/gestor) o ocultaria da persona da demo (Camila=professional); spec permite "só Calendar". Forma proposta registrada em PENDENCIAS #20. |
+| S6 | typecheck + lint + build | ✅ | tsc 0 · lint 0 (`--max-warnings 0`) · build 0 (pós-correções da revisão). 0 erro de console no Dashboard com a Agenda. |
 
 ## 4. Como rodar / verificar
 - `npm run dev` (precisa de `.env` — copie de `.env.example`). Sem `.env`: tela de configuração (não mais branca).

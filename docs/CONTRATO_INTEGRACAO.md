@@ -51,6 +51,7 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
 | `muscle_recovery_states` | **escreve** (provisório, 4c-2) | **lê** (BodyMap/Recuperação) | — |
 | `adherence_snapshots` | **escreve** (VRI, 4c-2b) | **lê** (VRI) | — |
 | `workout_plans` / `workouts` / `workout_exercises` / `nutrition_plans` / `meals` | lê (4c-3, futuro) | **escreve** (editores) | — |
+| `appointments` (agenda interna, Sessão 6) | — (não usa) | **escreve + lê** (CRUD da Agenda) | — |
 | `messages` (legada) | — | — (repontado) | — |
 
 Colunas-chave (verbatim do schema; **não renomear sem alinhar aqui**):
@@ -59,6 +60,7 @@ Colunas-chave (verbatim do schema; **não renomear sem alinhar aqui**):
 - `activity_events(id, patient_id, type, payload jsonb, created_at)` — `patient_id` = `patients.id`.
 - `weight_logs(id, patient_id, weight_kg numeric, measured_at timestamptz, source text, created_at)` — `patient_id` = `patients.id`. **NÃO renomear `weight_kg`/`measured_at`.**
 - `progress_photos(id, patient_id, photo_url text, captured_in_app bool, taken_at timestamptz)`.
+- `appointments(id, clinic_id NOT NULL→clinics, patient_id?→patients, professional_id?→professionals, title, starts_at timestamptz, ends_at, notes, created_at)` — **agenda interna, web-only** (o app paciente NÃO consome). `notes` = texto livre → tratar como sensível sob RLS real.
 
 ## Spine de dados: PESO / FOTO / ÁGUA (Sessão 1 — fonte inequívoca p/ a Sessão 2)
 > Contexto: hoje o app só dispara `activity_events` SEM valor confiável
@@ -144,6 +146,7 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
     mesma migration `20260625120000`. **Sem** policy de SELECT (público serve download por URL; evita listagem).
   - `progress_photos` (TABELA): `sprint_progress_photos_insert` (INSERT anon/auth) → `migrations/20260625170000_progress_photos_table_insert_policy.sql` ✅ (a tabela só tinha SELECT; o INSERT anon era NEGADO — gap simétrico ao bucket, fechado na Sessão 2 do app).
   - **Cadastro de paciente pela web (Sessão 4)** → `migrations/20260625180000_sprint_patient_create_write_policies.sql` ✅: INSERT em `patients` / `professional_patient_links` / `body_assessments` (`with check (true)`) + `profiles` (`with check (role = 'patient')` — restrito ao papel já na sprint, p/ não forjar admin/professional). Isolamento por clínica é client-side na sprint (vem do env da Dra. Camila); validar no servidor antes de dado real (#11–#14).
+  - **Agenda interna (Sessão 6)** → `migrations/20260626090000_appointments_internal_agenda.sql` ✅: `sprint_appointment_read` (SELECT) + `sprint_appointment_write` (ALL), anon/auth `using/with check (true)`. Isolamento por `clinic_id` é client-side; `notes` é dado sensível. Fechar por papel/clínica no servidor antes de dado real (PENDENCIAS #14/#19).
 - **Migrations = fonte única no repo web** (`vertexa-web-pro/supabase/migrations`). Toda policy aplicada
   via MCP DEVE virar arquivo de migration aqui — **todas** as policies de escrita sprint já versionadas.
 - **#11–#14 (BLOQUEANTE p/ dado real):** trocar tudo isso por RLS por papel/clínica/vínculo. Tabelas a
@@ -207,6 +210,11 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   `20260625190000`), e **mensagem do profissional verificada** (já escrevia em `chat_messages`
   `sender_role='professional'` + realtime; confirmado E2E + MCP). Contrato de DADOS inalterado (sem
   rename de coluna). ✅
+- Sessão 5 — **redesign visual/identidade** (só UI/UX): contrato de dados inalterado. ✅
+- Sessão 6 — **Agenda interna** (Review §3): nova tabela **`appointments`** (web-only) + CRUD real no
+  Dashboard (`AgendaCard`) escopado por clínica + seed fictício (3 compromissos da c1). Migrations
+  aditivas `20260626090000` (tabela+RLS sprint) e `20260626093000` (seed, fuso `America/Sao_Paulo`).
+  "Conectar Google Agenda" = placeholder (#19); Google Meet fora. Verificado E2E (criar→reload→excluir) + MCP. ✅
 
 **App (`vertexa-app-paciente`):**
 - 4a — fundação (client Supabase + camada api) ✅ (`74806f2`)
