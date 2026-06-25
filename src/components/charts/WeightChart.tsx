@@ -9,15 +9,41 @@ import {
 } from "recharts";
 
 import { formatDate } from "@/lib/domain/format";
-import type { BodyAssessment } from "@/types/db";
+import type { WeightPoint } from "@/types/db";
 
-export function WeightChart({ assessments }: { assessments: BodyAssessment[] }) {
-  const data = assessments
-    .filter((a) => a.weight != null && a.assessed_at)
-    .map((a) => ({
-      date: a.assessed_at as string,
-      label: formatDate(a.assessed_at as string),
-      peso: Number(a.weight),
+interface DotProps {
+  cx?: number;
+  cy?: number;
+  index?: number;
+  payload?: { source?: WeightPoint["source"] };
+}
+
+// Cor do ponto por origem: registro do app = laranja (primary); avaliação clínica = azul (info).
+function renderDot({ cx, cy, index, payload }: DotProps) {
+  const key = `weight-dot-${index ?? 0}`;
+  if (cx == null || cy == null) return <g key={key} />;
+  const fill = payload?.source === "app" ? "hsl(var(--primary))" : "hsl(var(--info))";
+  return (
+    <circle
+      key={key}
+      cx={cx}
+      cy={cy}
+      r={4}
+      fill={fill}
+      stroke="hsl(var(--card))"
+      strokeWidth={1.5}
+    />
+  );
+}
+
+export function WeightChart({ points }: { points: WeightPoint[] }) {
+  const data = points
+    .filter((p) => p.weight != null && p.date)
+    .map((p) => ({
+      date: p.date,
+      label: formatDate(p.date),
+      peso: Number(p.weight),
+      source: p.source,
     }));
 
   if (data.length === 0) return null;
@@ -27,7 +53,11 @@ export function WeightChart({ assessments }: { assessments: BodyAssessment[] }) 
   const max = Math.ceil(Math.max(...weights) + 2);
 
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <div
+      role="img"
+      aria-label="Gráfico de evolução de peso: avaliações clínicas (azul) e registros do app (laranja)"
+    >
+      <ResponsiveContainer width="100%" height={260}>
       <LineChart data={data} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
         <XAxis
@@ -62,10 +92,11 @@ export function WeightChart({ assessments }: { assessments: BodyAssessment[] }) 
           dataKey="peso"
           stroke="hsl(var(--primary))"
           strokeWidth={2.5}
-          dot={{ r: 4, fill: "hsl(var(--primary))" }}
+          dot={renderDot}
           activeDot={{ r: 6 }}
         />
       </LineChart>
-    </ResponsiveContainer>
+      </ResponsiveContainer>
+    </div>
   );
 }

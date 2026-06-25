@@ -44,7 +44,10 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
 | `chat_channels` / `chat_participants` | lê | lê | — |
 | `chat_messages` | **escreve** (sender_role=`patient`) + lê | **escreve** (sender_role=`professional`) + lê | sim |
 | `chat_mentions` | **escreve** (só o paciente menciona) + lê | lê + `read_at` (markRead) | sim |
-| `activity_events` | **escreve** (sink do eventTracker) | **lê** (Timeline) | — |
+| `activity_events` | **escreve** (sink do eventTracker) | **lê** (Timeline + água do dia) | — |
+| `weight_logs` | **escreve** (valor do peso; pendente no app) | **lê** (gráfico de peso) | — |
+| `progress_photos` | **escreve** (URL pós-upload; pendente no app) | **lê** (Fotos comparativas) | — |
+| Storage `progress-photos` | **upload** do binário (pendente no app) | **lê** via URL pública | — |
 | `muscle_recovery_states` | **escreve** (provisório, 4c-2) | **lê** (BodyMap/Recuperação) | — |
 | `adherence_snapshots` | **escreve** (VRI, 4c-2b) | **lê** (VRI) | — |
 | `workout_plans` / `workouts` / `workout_exercises` / `nutrition_plans` / `meals` | lê (4c-3, futuro) | **escreve** (editores) | — |
@@ -54,6 +57,40 @@ Colunas-chave (verbatim do schema; **não renomear sem alinhar aqui**):
 - `chat_messages(id, channel_id, sender_profile_id, sender_role, body, created_at)` — **sem** `sender_professional_id`.
 - `chat_mentions(id, message_id, mentioned_profile_id, read_at)` — `read_at IS NULL` = não lida (badge).
 - `activity_events(id, patient_id, type, payload jsonb, created_at)` — `patient_id` = `patients.id`.
+- `weight_logs(id, patient_id, weight_kg numeric, measured_at timestamptz, source text, created_at)` — `patient_id` = `patients.id`. **NÃO renomear `weight_kg`/`measured_at`.**
+- `progress_photos(id, patient_id, photo_url text, captured_in_app bool, taken_at timestamptz)`.
+
+## Spine de dados: PESO / FOTO / ÁGUA (Sessão 1 — fonte inequívoca p/ a Sessão 2)
+> Contexto: hoje o app só dispara `activity_events` SEM valor confiável
+> (`weight_logged` vem `{source:'records'}` ou `{weight:..}`; `progress_photo_uploaded` vem `{}`;
+> hidratação vem `{amount}` em `Habits.tsx`). Isto define ONDE o app grava o **valor** e COMO a web lê.
+
+### 1) PESO — tabela canônica `weight_logs`
+- **App grava** (Sessão 2, pendente): `insert into weight_logs (patient_id, weight_kg, measured_at, source)`
+  com `source='app'`, `weight_kg` = valor numérico, `measured_at` = momento do registro.
+  Em `Records.tsx`, o `weightVal` (hoje só `{source:'records'}`) deve virar este insert.
+- **Web lê**: `api/weight.ts → getWeightSeries(patientId)` faz **merge** de `body_assessments.weight`
+  (avaliações clínicas) **+** `weight_logs.weight_kg` (auto-reporte do app), ordenado por data →
+  `WeightChart` (aba Antropometria). "Peso atual" = última medição de qualquer origem.
+- `activity_events(type='weight_logged')` **permanece** só como MARCADOR de Timeline (sem valor).
+- **Visual (web):** no gráfico, ponto **laranja** (primary) = registro do app; **azul** (info) = avaliação clínica (com legenda). Padronizar essa leitura se o app vier a desenhar peso.
+
+### 2) FOTO — tabela `progress_photos` + bucket `progress-photos`
+- **App grava** (Sessão 2, pendente): faz **upload do binário** para o bucket **`progress-photos`**
+  (Storage) e insere `progress_photos (patient_id, photo_url, captured_in_app=true, taken_at)` com
+  `photo_url` = URL pública do objeto. Bucket é **público** na sprint (download via URL pública,
+  sem signed URL). **Dívida Sessão 8 (BLOQUEANTE p/ paciente real — foto corporal = dado de saúde/LGPD):**
+  bucket privado + signed URL + policy de INSERT escopada por paciente/pasta + limite de mime/tamanho.
+  Hoje só seed fictício deve subir ao bucket.
+- **Web lê**: `api/assessments.ts → getProgressPhotos(patientId)` → grade de `<img src=photo_url>`.
+- Seed de demo usa um **data URI** (placeholder) só para a web exibir algo até o app subir binários.
+
+### 3) ÁGUA — derivada de `activity_events` (SEM tabela)
+- **Regra**: "água de hoje" = **soma de `activity_events(type='hydration_logged')` do dia**, campo
+  **`payload.liters`** (número, em litros). **Chave canônica = `liters`.**
+- **Web lê**: `api/hydration.ts → getHydrationTodayLiters(patientId)` (filtra `created_at >= início do dia`).
+- ⚠️ **Drift a corrigir no app (Sessão 2):** `Habits.tsx` grava `{amount}` e `Records.tsx` grava
+  `{source:'records'}`. A web tolera `amount` como alias por ora, mas o app deve padronizar `liters`.
 
 ## Vocabulários (a maior fonte de ruído — ler antes de tocar em músculos)
 Existem **dois** vocabulários de músculo no sistema. Não confundir:
@@ -102,6 +139,9 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   - `muscle_recovery_states` (`sprint_muscle_write_insert` + `sprint_muscle_write_update`, anon) → `migrations/20260618130000_sprint_write_policies.sql` ✅.
   - Planos (`sprint_plan_write`, ALL anon) nas 5 tabelas → `migrations/20260618130000_sprint_write_policies.sql` ✅ (gap fechado).
   - `adherence_snapshots` (`sprint_adherence_write`, INSERT anon) → `migrations/20260618140000_sprint_adherence_write_policy.sql` ✅.
+  - `weight_logs` (`sprint_weight_read` SELECT + `sprint_weight_write` INSERT, anon/auth) → `migrations/20260625120000_weight_logs_and_progress_photos_storage.sql` ✅.
+  - Storage `progress-photos`: bucket público + `sprint_progress_photos_write` (INSERT anon/auth) →
+    mesma migration `20260625120000`. **Sem** policy de SELECT (público serve download por URL; evita listagem).
 - **Migrations = fonte única no repo web** (`vertexa-web-pro/supabase/migrations`). Toda policy aplicada
   via MCP DEVE virar arquivo de migration aqui — **todas** as policies de escrita sprint já versionadas.
 - **#11–#14 (BLOQUEANTE p/ dado real):** trocar tudo isso por RLS por papel/clínica/vínculo. Tabelas a
@@ -112,6 +152,9 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - **#1** esquema de recuperação muscular (provisório `recovered/weakened`; confirmar c/ Juliana).
 - **#3** pesos do VRI (provisórios; web só lê snapshots). Mariana ≈ score **88 / alta** — não contradizer.
 - **#15** aposentar a tabela `messages` legada + migrar seed (não-bloqueante; web e app já no `chat_*`).
+- **#16 (Sessão 2 — app):** gravar PESO real em `weight_logs` (hoje `Records.tsx` só dispara
+  `weight_logged {source:'records'}`); subir FOTO ao bucket `progress-photos` + inserir `progress_photos`
+  (hoje só `{}`); padronizar HIDRATAÇÃO em `payload.liters` (hoje `Habits.tsx` grava `{amount}`).
 - **GIFs** de exercício do app vêm de terceiros (fitnessprogramer.com) — licenciar antes de publicar.
 
 ## Provisórios (combinados temporários — trocar quando indicado)
@@ -129,6 +172,9 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - Etapa 3b — menções + não-lidos (badge) ✅ (`0f3a94a`)
 - Reconciliação — policies de escrita sprint versionadas em migration ✅ (`24f28f3`)
 - Fix — realtime com tópico único por montagem (StrictMode-safe) ✅ (`f2259ab`)
+- Sessão 1 — **fix de crash** (env ausente → tela de config + ErrorBoundary global, sem tela branca)
+  + **spine de dados**: `weight_logs` (gráfico lê merge clínico+app), bucket `progress-photos`,
+  regra de água (`activity_events.hydration_logged.payload.liters`). Migration `20260625120000`. ✅
 
 **App (`vertexa-app-paciente`):**
 - 4a — fundação (client Supabase + camada api) ✅ (`74806f2`)

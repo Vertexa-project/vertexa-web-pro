@@ -146,6 +146,26 @@ export interface ProgressPhoto {
   taken_at: string;
 }
 
+// Peso auto-reportado pelo paciente no app (tabela canônica do VALOR de peso).
+// Compartilhada com o app paciente — ver docs/CONTRATO_INTEGRACAO.md (spine de dados).
+export interface WeightLog {
+  id: string;
+  patient_id: string | null;
+  weight_kg: number;
+  measured_at: string;
+  source: string; // 'app' (paciente) | 'web' (profissional) | outros
+  created_at: string;
+}
+
+// Ponto unificado do gráfico de peso: avaliações clínicas (body_assessments) +
+// auto-reportes do app (weight_logs), normalizados num só formato.
+export interface WeightPoint {
+  date: string; // ISO — measured_at (app) | assessed_at (avaliação)
+  weight: number;
+  source: "assessment" | "app";
+  method: string | null; // método da avaliação clínica (null para registros do app)
+}
+
 export interface ActivityEvent {
   id: string;
   patient_id: string | null;

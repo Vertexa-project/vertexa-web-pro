@@ -24,6 +24,12 @@ export function formatWeight(kg: number | null | undefined): string {
   return `${kg.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`;
 }
 
+/** Ex.: "2,5 L". */
+export function formatLiters(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L`;
+}
+
 /** Ex.: "80%". */
 export function formatPercent(value: number | null | undefined): string {
   if (value == null) return "—";

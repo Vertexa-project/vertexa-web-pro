@@ -47,8 +47,11 @@ export function activityEventDescription(
       return typeof payload.workout === "string" ? payload.workout : null;
     case "weight_logged":
       return payload.weight != null ? `${payload.weight} kg` : null;
-    case "hydration_logged":
-      return payload.liters != null ? `${payload.liters} L` : null;
+    case "hydration_logged": {
+      // Chave canônica = `liters`; tolera o alias legado `amount` (ver CONTRATO_INTEGRACAO).
+      const liters = payload.liters ?? payload.amount;
+      return liters != null ? `${liters} L` : null;
+    }
     default:
       return null;
   }

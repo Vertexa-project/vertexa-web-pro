@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { ImageIcon, Ruler, Upload } from "lucide-react";
+import { Droplet, ImageIcon, Ruler, Upload } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
 import { WeightChart } from "@/components/charts/WeightChart";
 import { EmptyState } from "@/components/feedback/EmptyState";
+import { ErrorState } from "@/components/feedback/ErrorState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,8 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useBodyAssessments, useProgressPhotos } from "@/hooks/useBodyAssessments";
-import { formatWeight } from "@/lib/domain/format";
+import {
+  useBodyAssessments,
+  useProgressPhotos,
+  useWeightSeries,
+} from "@/hooks/useBodyAssessments";
+import { useHydrationToday } from "@/hooks/useHydration";
+import { formatDate, formatLiters, formatWeight } from "@/lib/domain/format";
 import type { PatientDetail } from "@/types/db";
 
 const METHOD_LABELS: Record<string, string> = {
@@ -42,37 +48,53 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 }
 
 export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
-  const { data, isLoading, isError, refetch } = useBodyAssessments(patient.id);
+  // Série unificada (avaliações clínicas + registros do app) → gráfico + "peso atual".
+  const series = useWeightSeries(patient.id);
+  // Avaliações clínicas: alimentam % de gordura e a lista de métodos do filtro.
+  const { data: assessments } = useBodyAssessments(patient.id);
   const photos = useProgressPhotos(patient.id);
+  const hydration = useHydrationToday(patient.id);
   const [method, setMethod] = useState<string>("all");
   const [notice, setNotice] = useState<string | null>(null);
 
+  const points = useMemo(() => series.data ?? [], [series.data]);
+  const assessmentList = useMemo(() => assessments ?? [], [assessments]);
+
   const methods = useMemo(() => {
     const set = new Set<string>();
-    (data ?? []).forEach((a) => a.method && set.add(a.method));
+    points.forEach((p) => {
+      if (p.source === "assessment" && p.method) set.add(p.method);
+    });
     return [...set];
-  }, [data]);
+  }, [points]);
 
-  const filtered = useMemo(
-    () => (method === "all" ? (data ?? []) : (data ?? []).filter((a) => a.method === method)),
-    [data, method],
+  // method="all" → série completa; método específico → só as avaliações clínicas daquele método.
+  const chartPoints = useMemo(
+    () =>
+      method === "all"
+        ? points
+        : points.filter((p) => p.source === "assessment" && p.method === method),
+    [points, method],
   );
 
-  const latest = data && data.length > 0 ? data[data.length - 1] : null;
-  const currentWeight = patient.current_weight ?? latest?.weight ?? null;
+  const latestPoint = points.length > 0 ? points[points.length - 1] : null;
+  const latestAssessment =
+    assessmentList.length > 0 ? assessmentList[assessmentList.length - 1] : null;
+  // "Peso atual" = última medição (qualquer origem); cai para o peso oficial do cadastro.
+  const currentWeight = latestPoint?.weight ?? patient.current_weight ?? null;
   const heightM = patient.height_cm ? patient.height_cm / 100 : null;
   const imc = currentWeight && heightM ? currentWeight / (heightM * heightM) : null;
-  const bodyFat = latest?.body_fat_pct ?? null;
+  const bodyFat = latestAssessment?.body_fat_pct ?? null;
 
   return (
     <AsyncSection
-      isLoading={isLoading}
-      isError={isError}
-      isEmpty={!data || data.length === 0}
-      onRetry={() => refetch()}
+      isLoading={series.isLoading}
+      isError={series.isError}
+      isEmpty={points.length === 0}
+      onRetry={() => series.refetch()}
       emptyIcon={Ruler}
-      emptyTitle="Sem avaliações corporais"
-      emptyDescription="Registre uma avaliação (peso, dobras, bioimpedância…) para acompanhar a evolução."
+      emptyTitle="Sem registros de peso"
+      emptyDescription="Avaliações clínicas e os pesos registrados pelo paciente no app aparecerão aqui."
     >
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -91,7 +113,7 @@ export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os métodos</SelectItem>
+                  <SelectItem value="all">Todos os registros</SelectItem>
                   {methods.map((m) => (
                     <SelectItem key={m} value={m}>
                       {methodLabel(m)}
@@ -102,12 +124,67 @@ export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
             ) : null}
           </CardHeader>
           <CardContent>
-            {filtered.length > 0 ? (
-              <WeightChart assessments={filtered} />
+            {chartPoints.length > 0 ? (
+              <>
+                <WeightChart points={chartPoints} />
+                <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-primary" aria-hidden />
+                    Registro do app
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-info" aria-hidden />
+                    Avaliação clínica
+                  </span>
+                </div>
+              </>
             ) : (
               <p className="py-12 text-center text-sm text-muted-foreground">
                 Sem registros para o método selecionado.
               </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle>Hidratação de hoje</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {hydration.isError ? (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Não foi possível carregar a hidratação de hoje.
+                </p>
+                <Button variant="outline" size="sm" onClick={() => hydration.refetch()}>
+                  Tentar novamente
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <span
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-info/10 text-info"
+                  aria-hidden
+                >
+                  <Droplet className="h-5 w-5" />
+                </span>
+                <div>
+                  {hydration.isLoading ? (
+                    <span
+                      className="block h-7 w-20 animate-pulse rounded bg-muted"
+                      role="status"
+                      aria-label="Carregando hidratação"
+                    />
+                  ) : (
+                    <p className="text-2xl font-semibold text-foreground">
+                      {formatLiters(hydration.data ?? 0)}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Soma dos registros de água do app hoje
+                  </p>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -126,18 +203,24 @@ export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
           </CardHeader>
           <CardContent>
             {notice ? (
-              <p className="mb-3 text-sm text-info" role="status" aria-live="polite">
+              <p className="mb-3 text-sm text-muted-foreground" role="status" aria-live="polite">
                 {notice}
               </p>
             ) : null}
-            {photos.data && photos.data.length > 0 ? (
+            {photos.isError ? (
+              <ErrorState
+                title="Não foi possível carregar as fotos"
+                onRetry={() => photos.refetch()}
+              />
+            ) : photos.data && photos.data.length > 0 ? (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                 {photos.data.map((p) => (
                   <img
                     key={p.id}
                     src={p.photo_url}
-                    alt="Foto de progresso"
-                    className="aspect-[3/4] w-full rounded-md object-cover"
+                    alt={`Foto de progresso de ${formatDate(p.taken_at)}`}
+                    loading="lazy"
+                    className="aspect-[3/4] w-full rounded-md bg-muted object-cover"
                   />
                 ))}
               </div>
