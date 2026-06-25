@@ -161,14 +161,32 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   permanecem como MARCADORES de Timeline. Pendências da Home derivadas de dados reais; treino concluído
   pelo `Records` carrega `workoutId` real → `muscle_recovery_states` + VRI. Migration aditiva
   `20260625170000` (INSERT em `progress_photos`). Verificado por E2E (Playwright) + MCP.
-- **GIFs** de exercício do app vêm de terceiros (fitnessprogramer.com) — licenciar antes de publicar.
+- **GIFs de exercício (Sessão 3 — app): ✅ RESOLVIDO p/ 28 de 30 exercícios.** O app agora usa os
+  **GIFs OFICIAIS da cliente** (bundle `src/assets/exercises/*` via `import.meta.glob`, resolvidos por
+  nome de arquivo normalizado). Não há mais URL `fitnessprogramer.com` nos exercícios oficiais.
+  **Pendência pontual:** ex-23 (Elevação pélvica) e ex-30 (Abdominal infra) seguem com a URL de
+  terceiros (sem asset oficial entregue) — substituir quando a cliente enviar. Os GIFs de
+  **aquecimento** (mobilidade) seguem de terceiros (provisional separado — ver Aquecimento).
+- **Origem/licença dos assets oficiais:** GIFs de exercício, telas de onboarding (`01..05`) e
+  silhuetas de corpo (`Body_front/Body_back`) são **material proprietário da cliente VERTEXA**
+  (entregues pela cliente). Substituem os placeholders/terceiros. Uso interno do produto.
 
 ## Provisórios (combinados temporários — trocar quando indicado)
 - **`adherence_snapshots`**: o app **escreve** o VRI (4c-2b, policy `sprint_adherence_write`); a web só
   **lê**. OK p/ demo. ✅
-- **GIFs de exercício**: resolvidos por **fallback de nome** (`workout_exercises.name` → catálogo de
-  terceiros) **até a web preencher `gif_url`**. PROVISÓRIO (ver licenciamento na pendência de GIFs acima).
-- **Aquecimento**: **estático** (hardcoded no app) **até existir tabela própria**. PROVISÓRIO.
+- **GIFs de exercício**: ✅ Sessão 3 — o app resolve por **fallback de nome** (`workout_exercises.name`
+  → `workoutData.ts`) para os **GIFs OFICIAIS bundlados** (não mais terceiros). Ainda PROVISÓRIO no
+  sentido de que a web pode preencher `gif_url` no banco no futuro (tem precedência sobre o fallback).
+  Aproximações (≈) anotadas — usam um asset oficial próximo: ex-8 Crucifixo→"Crucifixo Polia",
+  ex-11 Desenv. militar→"desenvolvimento com halter", ex-22 Mesa flexora→"Cadeira Flexora",
+  ex-29 Elev. lateral inclinado→"Elevação Lateral Cabo". ex-24 "Abdução de quadril" foi **renomeado para
+  "Cadeira adutora"** (asset disponível; muscleGroups→["Adutores"]).
+- **Aquecimento**: **estático** (hardcoded no app) e os GIFs de mobilidade **seguem de terceiros**
+  (não há asset oficial de aquecimento) **até existir tabela/assets próprios**. PROVISÓRIO.
+- **Body map do app** (`Progress.tsx` `PremiumBodyMap`): **SVG** que pinta grupos musculares por status de
+  recuperação (funciona). Os PNGs oficiais `Body_front/Body_back` foram entregues mas **NÃO** integrados
+  ainda — trocar o SVG por imagem estática perderia a pintura por região. **Melhoria futura:** usar o PNG
+  como base e sobrepor as regiões SVG alinhadas à anatomia da arte. PROVISÓRIO (mantido o SVG, não quebrar).
 
 ## Log de status (atualizar a cada etapa)
 **Web (`vertexa-web-pro`):**
@@ -195,6 +213,12 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   VRI de dados reais (engine lê `activity_events`; Home lê o último snapshot → consistente web↔app),
   anti-crash (boot tolerante a env + `ErrorBoundary`). Mariana reconciliada **88/alta**.
   Migration aditiva `20260625170000` (INSERT em `progress_photos`).
+- **Sessão 3 — assets oficiais da cliente: ✅** 28/30 GIFs de exercício trocados por assets oficiais
+  (`src/assets/exercises/*` via `import.meta.glob`; ex-23/ex-30 seguem fallback de terceiros como
+  pendência pontual; ex-24 renomeado p/ "Cadeira adutora"). Onboarding usa as 5 telas oficiais
+  (`src/assets/onboarding/01..05`), removendo os overlays duplicados (logo/headline/mockup) e mantendo
+  swipe/dots/CTA/tracker. Body map mantido em SVG (melhoria registrada). typecheck/lint/build/testes
+  verdes; verificado por Playwright (Onboarding + WorkoutGuide carregam os assets oficiais; 0 erro de console).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
