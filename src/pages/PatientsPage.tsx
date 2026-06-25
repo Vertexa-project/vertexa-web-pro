@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Download, Search, UserPlus, Users } from "lucide-react";
+import { Download, Eye, Search, UserPlus, Users } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
+import { PatientCreateDialog } from "@/components/patient/PatientCreateDialog";
 import { TableSkeleton } from "@/components/skeletons/TableSkeleton";
 import { StatusBadge } from "@/components/status/StatusBadge";
 import { DataTable, type Column } from "@/components/data-table/DataTable";
@@ -56,6 +57,7 @@ export function PatientsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | PatientStatus>("all");
   const [professionalFilter, setProfessionalFilter] = useState<string>("all");
   const [notice, setNotice] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const professionalOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -119,6 +121,28 @@ export function PatientsPage() {
         </span>
       ),
     },
+    {
+      key: "actions",
+      // Cabeçalho nomeado só para leitor de tela (coluna de ação, visualmente sem título).
+      header: <span className="sr-only">Ações</span>,
+      headerClassName: "text-right",
+      className: "text-right",
+      render: (p) => (
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={`Ver paciente ${p.profile?.full_name ?? ""}`.trim()}
+          onClick={(e) => {
+            // O <tr> inteiro também navega; evita o duplo disparo do row click.
+            e.stopPropagation();
+            navigate(`/pacientes/${p.id}`);
+          }}
+        >
+          <Eye className="h-4 w-4" />
+          Ver paciente
+        </Button>
+      ),
+    },
   ];
 
   return (
@@ -132,9 +156,9 @@ export function PatientsPage() {
               <Download className="h-4 w-4" />
               Exportar
             </Button>
-            <Button onClick={() => setNotice("Cadastro de paciente chega em breve (P2 da sprint).")}>
+            <Button onClick={() => setCreateOpen(true)}>
               <UserPlus className="h-4 w-4" />
-              Criar paciente
+              Cadastrar novo paciente
             </Button>
           </>
         }
@@ -206,6 +230,12 @@ export function PatientsPage() {
           icon={Users}
           title="Nenhum paciente ainda"
           description="Cadastre seu primeiro paciente para começar o acompanhamento."
+          action={
+            <Button onClick={() => setCreateOpen(true)}>
+              <UserPlus className="h-4 w-4" />
+              Cadastrar novo paciente
+            </Button>
+          }
         />
       ) : filtered.length === 0 ? (
         <EmptyState
@@ -222,6 +252,12 @@ export function PatientsPage() {
           ariaLabel="Lista de pacientes"
         />
       )}
+
+      <PatientCreateDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={(patientId) => navigate(`/pacientes/${patientId}`)}
+      />
     </div>
   );
 }

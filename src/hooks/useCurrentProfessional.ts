@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getProfileName } from "@/lib/api/profile";
+import { getCurrentProfessional, getProfileName } from "@/lib/api/profile";
 import { qk } from "@/lib/queryKeys";
 import { DEMO_PROFESSIONAL_PROFILE_ID } from "@/lib/session";
 
@@ -12,6 +12,18 @@ export const useCurrentProfessionalName = () =>
   useQuery({
     queryKey: qk.currentProfessional(DEMO_PROFESSIONAL_PROFILE_ID ?? "none"),
     queryFn: () => getProfileName(DEMO_PROFESSIONAL_PROFILE_ID as string),
+    enabled: Boolean(DEMO_PROFESSIONAL_PROFILE_ID),
+    staleTime: Infinity,
+  });
+
+/**
+ * Registro do profissional atuante (professionals.id + clinic_id) — usado no cadastro
+ * de paciente para isolar por clínica e vincular o profissional. Demo via env.
+ */
+export const useCurrentProfessional = () =>
+  useQuery({
+    queryKey: qk.currentProfessionalRecord(DEMO_PROFESSIONAL_PROFILE_ID ?? "none"),
+    queryFn: () => getCurrentProfessional(DEMO_PROFESSIONAL_PROFILE_ID as string),
     enabled: Boolean(DEMO_PROFESSIONAL_PROFILE_ID),
     staleTime: Infinity,
   });

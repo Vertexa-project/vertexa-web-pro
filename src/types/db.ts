@@ -249,6 +249,12 @@ export interface PatientListItem {
     | null;
   professionals: ProfessionalSummary[];
   lastActivityAt: string | null;
+  // Recência por tipo de registro — base para "pendências" (sem peso/foto/treino recente).
+  // Peso = weight_logs.measured_at (valor canônico); foto = progress_photos.taken_at;
+  // treino = activity_events(type='workout_checked').created_at. Ver lib/domain/pendencies.ts.
+  lastWeightAt: string | null;
+  lastPhotoAt: string | null;
+  lastWorkoutAt: string | null;
 }
 
 export interface PatientDetail extends Patient {

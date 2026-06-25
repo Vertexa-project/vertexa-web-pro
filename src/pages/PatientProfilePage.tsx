@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { AnthropometryTab } from "@/components/patient/AnthropometryTab";
+import { DocumentsTab } from "@/components/patient/DocumentsTab";
+import { EvolutionTab } from "@/components/patient/EvolutionTab";
 import { NutritionTab } from "@/components/patient/NutritionTab";
 import { OverviewTab } from "@/components/patient/OverviewTab";
 import { ProfileHeader } from "@/components/patient/ProfileHeader";
@@ -18,6 +20,8 @@ const TABS = [
   { value: "overview", label: "Visão geral" },
   { value: "timeline", label: "Timeline" },
   { value: "anthropometry", label: "Antropometria" },
+  { value: "evolution", label: "Evolução/Fotos" },
+  { value: "documents", label: "Documentos" },
   { value: "nutrition", label: "Plano alimentar" },
   { value: "workout", label: "Treino" },
   { value: "recovery", label: "Recuperação" },
@@ -92,6 +96,12 @@ export function PatientProfilePage() {
         </TabsContent>
         <TabsContent value="anthropometry">
           <AnthropometryTab patient={patient} />
+        </TabsContent>
+        <TabsContent value="evolution">
+          <EvolutionTab patient={patient} />
+        </TabsContent>
+        <TabsContent value="documents">
+          <DocumentsTab patientId={patient.id} />
         </TabsContent>
         <TabsContent value="nutrition">
           <NutritionTab patient={patient} />

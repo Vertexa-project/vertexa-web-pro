@@ -75,6 +75,12 @@
       `using(true)`. Sob RLS real, só os **participantes do canal** (paciente dono + profissionais
       vinculados, via `chat_participants`) podem ler/escrever. O **realtime** (`postgres_changes`)
       respeita essas policies — portanto fechar a RLS aqui também controla o que vaza pelo realtime.
+    - **Cadastro de paciente pela web (Sessão 4)** — `20260625180000_sprint_patient_create_write_policies.sql`:
+      INSERT permissivo em `patients` / `professional_patient_links` / `body_assessments` (`with check (true)`)
+      + `profiles` (`with check (role = 'patient')` — já restrito ao papel na sprint para não permitir forjar
+      admin/professional). Sob RLS real: derivar `clinic_id`/`professional_id` de `auth.uid()` no servidor
+      (RPC `SECURITY DEFINER` que cruza `professionals.profile_id`), nunca confiar no que o client enviou —
+      o isolamento por clínica hoje é **client-side** (vem do `DEMO_PROFESSIONAL_PROFILE_ID`).
 
 15. **Aposentar a tabela legada `messages` (web e app já alinhados em `chat_*`).** Tanto a web (Etapa 3)
     quanto o app paciente (TeamChat) leem/escrevem direto em `chat_messages`/`chat_mentions` com realtime
@@ -83,3 +89,21 @@
     bloqueante): migrar o seed para `chat_*` e dropar `messages` quando ninguém mais depender dela.
     Remetente da web em modo demo = profile fixo da Dra. Camila via `VITE_DEMO_PROFESSIONAL_PROFILE_ID`;
     sob auth real vira `auth.uid()` (ver #14).
+
+16. **`createPatient` não é transacional (Sessão 4).** O cadastro encadeia 4 inserts
+    (`profiles` → `patients` → `professional_patient_links` → `body_assessments`) sem transação. Um
+    erro no meio deixa um `profile` de paciente (dado pessoal) órfão, sem patient/vínculo e sem caminho
+    de UI para limpar (a web não tem DELETE). Igual à dívida #13 dos planos: mover para uma RPC/transação
+    (`SECURITY DEFINER`, begin/commit) antes de cadastro real — isso também resolve o isolamento (#14).
+    Hoje OK só com seed fictício.
+
+17. **`listPatients` lê embeds sem limite (perf pré-produção).** O `select` da listagem embute
+    `activity_events`, `weight_logs(measured_at)` e `progress_photos(taken_at)` SEM limite, só para
+    calcular a recência (`lastActivityAt`/`lastWeightAt`/`lastPhotoAt`) no client. Sem impacto com seed,
+    mas em produção um paciente com histórico longo traz centenas de linhas por acesso à lista. Mover o
+    cálculo para o banco (RPC/`view` com `max()` agrupado) antes de escala real.
+
+18. **Validar esquema de URL de documento no client (Sessão 4 — mitigado).** `DocumentsTab` só abre
+    `document_url` num `<a href>` se passar pela allowlist `isSafeDocumentUrl()` (https:// ou
+    `data:application/pdf;base64,`) — defesa contra `javascript:`/`data:text/html` gravado por anon
+    (INSERT permissivo). A correção definitiva é a #12 (bucket privado + signed URL, sempre https).

@@ -13,8 +13,12 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 **peso, foto e água de verdade** e a web LÊ-los. Demo via "modo demonstração" (sem auth real).
 
 ## 2. Sessões
-- **Sessão 1 (esta):** (A) eliminar o crash da Review; (B) preparar o banco p/ peso/foto/água + ligar a leitura da web.
+- **Sessão 1:** (A) eliminar o crash da Review; (B) preparar o banco p/ peso/foto/água + ligar a leitura da web.
 - **Sessão 2 (app):** app grava de fato em `weight_logs` / bucket `progress-photos` / `payload.liters` (ver CONTRATO #16).
+- **Sessão 3 (app):** assets oficiais da cliente (GIFs + onboarding).
+- **Sessão 4 (web — esta):** Review do painel — tudo gira em torno do paciente. Navegação enxuta
+  (Retenção/Planos fora da lateral), Retenção dentro do Dashboard, **cadastro real de paciente**,
+  abas da ficha completas (incl. Evolução/Fotos e Documentos) e **mensagem do profissional enviando de verdade** (verificada).
 - **Sessão 8 (dívida):** bucket de fotos privado + signed URL; RLS por papel/clínica (#11–#14).
 
 ## 3. Tracker
@@ -39,6 +43,15 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 | S3 | App: onboarding com telas oficiais (01..05) | ✅ | `Onboarding.tsx` mostra as 5 telas oficiais full-bleed; removidos overlays duplicados (logo/headline/mockup); mantidos swipe/dots/CTA/`tracker('onboarding_completed')`. |
 | S3 | App: body map mantido em SVG (não quebrar) | ✅ | `Progress.tsx PremiumBodyMap` (SVG por região/recuperação) preservado; PNGs `Body_front/back` registrados como melhoria futura. |
 | S3 | App: typecheck + lint + build + Playwright | ✅ | tsc 0 · lint 0 nos arquivos da S3 · build 0 (assets oficiais bundlados) · Playwright: Onboarding (5 telas) + WorkoutGuide (GIFs oficiais carregam) — 0 erro de console. |
+| S4 | Navegação enxuta (sidebar) | ✅ | `app/routes.ts`: "Retenção" e "Planos" fora da lateral (Diários/Questionários nunca estiveram). `/retencao` e `/planos` seguem montados em `router.tsx` (deep-link não quebra). Editores de plano vivem na ficha (WorkoutTab/NutritionTab). |
+| S4 | Retenção dentro do Dashboard | ✅ | `RetentionPanel` reutilizável (coortes: reativar/pendências/adesão por profissional) renderizado no Dashboard + na rota `/retencao`. Playwright: seção "Retenção & coortes" no Dashboard. |
+| S4 | Dashboard com indicadores úteis | ✅ | 5 KPIs (ativos, em risco, em atenção, adesão média, **pendências** via `lib/domain/pendencies`), Foco do dia (críticos) + adesão semanal. Skeleton alinhado a 5 cards. |
+| S4 | Cadastrar novo paciente (cria de verdade) | ✅ | `PatientCreateDialog` (identificação + objetivo/metas + anamnese) → `createPatient` (profiles `role='patient'` → patients → vínculo c/ profissional logado → body_assessments). Migration `20260625180000` (INSERT policies; `profiles` restrito a `role='patient'`). Playwright: criou paciente real (clinic_id=c1, vínculo e2, anamnese), navegou à ficha; verificado via MCP. |
+| S4 | Ficha: "Ver paciente" + 8 abas operáveis | ✅ | `PatientsPage` com "Ver paciente" por linha + CTA no empty-state. Ficha com Visão geral, Timeline, Antropometria, **Evolução/Fotos**, **Documentos**, Plano alimentar, Treino, Recuperação — dados reais (peso/foto/água/treino/recuperação/VRI/documentos). |
+| S4 | Aba Documentos (real) | ✅ | `DocumentsTab` lê `body_assessments` com `document_url` (allowlist `isSafeDocumentUrl`). Seed aditivo `20260625190000` (laudo fictício data:PDF p/ Mariana). Playwright: "Laudo · Bioimpedância" + "Abrir documento". |
+| S4 | Mensagem real do profissional | ✅ | `sendChatMessage` insere `chat_messages` (`sender_role='professional'`, remetente = Dra. Camila via env) + realtime; "Responder com IA" rotulado placeholder. Playwright: enviou → apareceu; MCP confirmou linha (role professional, sender a2, canal da Mariana). |
+| S4 | Revisão adversarial + correções | ✅ | Workflow 5 dimensões + verificação (33 agents). 11 achados confirmados; corrigidos: allowlist de URL de documento (XSS), `profiles` INSERT restrito a `role='patient'`, skeleton 5 cards, a11y do cadastro (required/aria/focus), `<th>` da ação nomeado (sr-only), emoji removido, CTA no empty-state. Diferidos (RPC transacional, isolamento server-side, embeds sem limite) → PENDENCIAS #16/#17. |
+| S4 | typecheck + lint + build + Playwright | ✅ | tsc 0 · lint 0 (`--max-warnings 0`) · build 0 · Playwright: Dashboard→paciente→8 abas, cadastro real, envio de mensagem — 0 erro de console. Seed restaurado (paciente/mensagem de teste removidos via MCP). |
 
 ## 4. Como rodar / verificar
 - `npm run dev` (precisa de `.env` — copie de `.env.example`). Sem `.env`: tela de configuração (não mais branca).
@@ -77,3 +90,34 @@ Detalhe canônico e inequívoco vive em `docs/CONTRATO_INTEGRACAO.md → "Spine 
   fictício p/ Mariana (3 pesos de app, 1 foto placeholder, 2 hidratações de hoje). Web religada:
   `api/weight.ts`, `api/hydration.ts`, hooks, `WeightChart`, `AnthropometryTab`.
 - **Testes:** typecheck/lint/build = 0; Playwright = 0 erros de console em todos os fluxos.
+
+## 8. Log da Sessão 4 (web — Review do painel)
+- **Foco:** tudo gira em torno do paciente; Dashboard como centro; mensagem do profissional enviando de verdade.
+- **Navegação:** `app/routes.ts` já sem "Retenção"/"Planos" na lateral (Diários/Questionários nunca estiveram).
+  `/retencao` e `/planos` seguem montados em `router.tsx` — deep-link não quebra. Editores de treino/alimentar
+  vivem na ficha (`WorkoutTab`/`NutritionTab`), não como módulo solto.
+- **Retenção no Dashboard:** `components/retention/RetentionPanel.tsx` (coortes reutilizáveis) renderizado no
+  Dashboard e na rota `/retencao`. Dashboard ganhou o 5º KPI "Com pendências" (`lib/domain/pendencies.ts`,
+  recência de peso/foto/treino).
+- **Cadastro real:** `PatientsPage` com "Cadastrar novo paciente" (`PatientCreateDialog`: identificação +
+  objetivo/metas + anamnese/pré-consulta) → `createPatient` encadeia profiles(`role='patient'`) → patients
+  (clinic_id do profissional logado) → vínculo → body_assessments. Migration aditiva
+  `20260625180000_sprint_patient_create_write_policies.sql` (INSERT policies; `profiles` restrito a
+  `role='patient'`). "Ver paciente" explícito por linha + CTA no empty-state.
+- **Ficha:** 8 abas (Visão geral, Timeline, Antropometria, **Evolução/Fotos**, **Documentos**, Plano alimentar,
+  Treino, Recuperação). Fotos comparativas movidas de Antropometria → Evolução/Fotos (+ resumo início/atual/meta).
+  `DocumentsTab` lê `body_assessments.document_url` com allowlist de esquema (`isSafeDocumentUrl`). Seed aditivo
+  `20260625190000_seed_demo_patient_document.sql` (laudo fictício data:PDF p/ Mariana).
+- **Mensagem real:** já implementada (Etapas 3/3b) — `sendChatMessage` → `chat_messages` (`sender_role='professional'`,
+  remetente = Dra. Camila via env) + realtime. **Verificada** ponta a ponta: envio pela web apareceu na thread e
+  a linha foi confirmada no banco via MCP (canal da Mariana, sender `a2`). "Responder com IA" segue placeholder rotulado.
+- **Revisão adversarial:** Workflow 5 dimensões + verificação (contrato, segurança/RLS/LGPD, correção, UI/a11y,
+  cobertura de aceite). 11 achados confirmados. Corrigidos nesta sessão: allowlist de URL de documento (XSS via
+  `javascript:`/`data:text/html` que o INSERT permissivo permitiria), `profiles` INSERT restrito a `role='patient'`,
+  `DashboardSkeleton` (5 cards), a11y do cadastro (required/aria-required/aria-invalid/aria-describedby + foco no erro),
+  `<th>` da coluna de ação nomeado (sr-only), emoji removido do painel de retenção (identidade sóbria), CTA no
+  empty-state de Pacientes. Diferidos para pré-produção: cadastro transacional via RPC, isolamento por clínica no
+  servidor, embeds de `listPatients` sem limite → `docs/PENDENCIAS.md #16/#17/#18`.
+- **Testes:** typecheck 0 · lint 0 (`--max-warnings 0`) · build 0. Playwright: Dashboard (sidebar sem Retenção/Planos,
+  5 KPIs, coortes) → ficha (8 abas, Documentos e Evolução com dado real) → cadastro real (criou + navegou) →
+  Mensagens (envio real). 0 erro de console. Paciente/mensagem de teste E2E removidos via MCP (seed pristino: 3 pacientes, 1 doc).

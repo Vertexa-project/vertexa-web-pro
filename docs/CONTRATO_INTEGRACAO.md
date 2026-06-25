@@ -143,6 +143,7 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   - Storage `progress-photos`: bucket público + `sprint_progress_photos_write` (INSERT anon/auth) →
     mesma migration `20260625120000`. **Sem** policy de SELECT (público serve download por URL; evita listagem).
   - `progress_photos` (TABELA): `sprint_progress_photos_insert` (INSERT anon/auth) → `migrations/20260625170000_progress_photos_table_insert_policy.sql` ✅ (a tabela só tinha SELECT; o INSERT anon era NEGADO — gap simétrico ao bucket, fechado na Sessão 2 do app).
+  - **Cadastro de paciente pela web (Sessão 4)** → `migrations/20260625180000_sprint_patient_create_write_policies.sql` ✅: INSERT em `patients` / `professional_patient_links` / `body_assessments` (`with check (true)`) + `profiles` (`with check (role = 'patient')` — restrito ao papel já na sprint, p/ não forjar admin/professional). Isolamento por clínica é client-side na sprint (vem do env da Dra. Camila); validar no servidor antes de dado real (#11–#14).
 - **Migrations = fonte única no repo web** (`vertexa-web-pro/supabase/migrations`). Toda policy aplicada
   via MCP DEVE virar arquivo de migration aqui — **todas** as policies de escrita sprint já versionadas.
 - **#11–#14 (BLOQUEANTE p/ dado real):** trocar tudo isso por RLS por papel/clínica/vínculo. Tabelas a
@@ -199,6 +200,13 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - Sessão 1 — **fix de crash** (env ausente → tela de config + ErrorBoundary global, sem tela branca)
   + **spine de dados**: `weight_logs` (gráfico lê merge clínico+app), bucket `progress-photos`,
   regra de água (`activity_events.hydration_logged.payload.liters`). Migration `20260625120000`. ✅
+- Sessão 4 — **Review do painel** (tudo gira em torno do paciente): navegação enxuta (Retenção/Planos
+  fora da lateral; deep-link mantido), **Retenção dentro do Dashboard** (`RetentionPanel`), **cadastro
+  real de paciente** (`createPatient`; migration `20260625180000`), ficha com 8 abas (inclui
+  **Evolução/Fotos** e **Documentos** — `body_assessments.document_url` com allowlist de esquema; seed
+  `20260625190000`), e **mensagem do profissional verificada** (já escrevia em `chat_messages`
+  `sender_role='professional'` + realtime; confirmado E2E + MCP). Contrato de DADOS inalterado (sem
+  rename de coluna). ✅
 
 **App (`vertexa-app-paciente`):**
 - 4a — fundação (client Supabase + camada api) ✅ (`74806f2`)

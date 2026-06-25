@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, AlertTriangle, Gauge, TrendingUp, Users } from "lucide-react";
+import { Activity, AlertTriangle, ClipboardList, Gauge, TrendingUp, Users } from "lucide-react";
 
 import { AdherenceChart } from "@/components/dashboard/AdherenceChart";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { RetentionPanel } from "@/components/retention/RetentionPanel";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/status/StatusBadge";
@@ -14,13 +15,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
 import { useListPatients } from "@/hooks/usePatients";
 import { formatDate, greeting, initials, shortName } from "@/lib/domain/format";
+import { hasPendency } from "@/lib/domain/pendencies";
 import type { PatientListItem } from "@/types/db";
 
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-24 w-full" />
         ))}
       </div>
@@ -60,6 +62,7 @@ function FocusItem({ patient }: { patient: PatientListItem }) {
 
 export function DashboardPage() {
   const now = new Date();
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useListPatients();
   const { data: professionalName } = useCurrentProfessionalName();
   const who = shortName(professionalName);
@@ -70,10 +73,14 @@ export function DashboardPage() {
     const atencao = list.filter((p) => p.snapshot?.status === "atencao").length;
     const rates = list.map((p) => p.snapshot?.weekly_completion_rate ?? 0);
     const adesaoMedia = rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length) : 0;
+    // Pendências = pacientes sem peso/foto/treino recente (regra pura compartilhada).
+    const pendencias = list.filter((p) =>
+      hasPendency({ lastWeightAt: p.lastWeightAt, lastPhotoAt: p.lastPhotoAt, lastWorkoutAt: p.lastWorkoutAt }),
+    ).length;
     const foco = [...list]
       .sort((a, b) => (a.snapshot?.score ?? 0) - (b.snapshot?.score ?? 0))
       .slice(0, 3);
-    return { total: list.length, emRisco, atencao, adesaoMedia, foco };
+    return { total: list.length, emRisco, atencao, adesaoMedia, pendencias, foco };
   }, [data]);
 
   return (
@@ -89,7 +96,7 @@ export function DashboardPage() {
         <ErrorState onRetry={() => refetch()} />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
             <StatCard icon={Users} label="Pacientes ativos" value={stats.total} tone="primary" />
             <StatCard icon={AlertTriangle} label="Em risco" value={stats.emRisco} tone="destructive" />
             <StatCard icon={Activity} label="Em atenção" value={stats.atencao} tone="warning" />
@@ -98,6 +105,13 @@ export function DashboardPage() {
               label="Adesão média"
               value={`${stats.adesaoMedia}%`}
               tone="success"
+            />
+            <StatCard
+              icon={ClipboardList}
+              label="Com pendências"
+              value={stats.pendencias}
+              hint="Sem peso, foto ou treino recente"
+              tone="warning"
             />
           </div>
 
@@ -129,6 +143,14 @@ export function DashboardPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Retenção vive no Dashboard (centro do produto): coortes p/ reativar,
+              pendências de registro e adesão por profissional. Mesmo painel da rota
+              /retencao (deep-link), agora sem item de menu lateral. */}
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold text-foreground">Retenção &amp; coortes</h2>
+            <RetentionPanel patients={data ?? []} onPatientClick={(patientId) => navigate(`/pacientes/${patientId}`)} />
+          </section>
         </>
       )}
     </div>

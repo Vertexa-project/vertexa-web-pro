@@ -1,10 +1,8 @@
 import { useMemo, useState } from "react";
-import { Droplet, ImageIcon, Ruler, Upload } from "lucide-react";
+import { Droplet, Ruler } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
 import { WeightChart } from "@/components/charts/WeightChart";
-import { EmptyState } from "@/components/feedback/EmptyState";
-import { ErrorState } from "@/components/feedback/ErrorState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -14,13 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  useBodyAssessments,
-  useProgressPhotos,
-  useWeightSeries,
-} from "@/hooks/useBodyAssessments";
+import { useBodyAssessments, useWeightSeries } from "@/hooks/useBodyAssessments";
 import { useHydrationToday } from "@/hooks/useHydration";
-import { formatDate, formatLiters, formatWeight } from "@/lib/domain/format";
+import { formatLiters, formatWeight } from "@/lib/domain/format";
 import type { PatientDetail } from "@/types/db";
 
 const METHOD_LABELS: Record<string, string> = {
@@ -52,10 +46,8 @@ export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
   const series = useWeightSeries(patient.id);
   // Avaliações clínicas: alimentam % de gordura e a lista de métodos do filtro.
   const { data: assessments } = useBodyAssessments(patient.id);
-  const photos = useProgressPhotos(patient.id);
   const hydration = useHydrationToday(patient.id);
   const [method, setMethod] = useState<string>("all");
-  const [notice, setNotice] = useState<string | null>(null);
 
   const points = useMemo(() => series.data ?? [], [series.data]);
   const assessmentList = useMemo(() => assessments ?? [], [assessments]);
@@ -185,51 +177,6 @@ export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
                   </p>
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle>Fotos comparativas</CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setNotice("Upload de foto/documento chega em breve.")}
-            >
-              <Upload className="h-4 w-4" />
-              Enviar documento
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {notice ? (
-              <p className="mb-3 text-sm text-muted-foreground" role="status" aria-live="polite">
-                {notice}
-              </p>
-            ) : null}
-            {photos.isError ? (
-              <ErrorState
-                title="Não foi possível carregar as fotos"
-                onRetry={() => photos.refetch()}
-              />
-            ) : photos.data && photos.data.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                {photos.data.map((p) => (
-                  <img
-                    key={p.id}
-                    src={p.photo_url}
-                    alt={`Foto de progresso de ${formatDate(p.taken_at)}`}
-                    loading="lazy"
-                    className="aspect-[3/4] w-full rounded-md bg-muted object-cover"
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                icon={ImageIcon}
-                title="Sem fotos de progresso"
-                description="As fotos enviadas pelo paciente no app aparecerão aqui, mês a mês."
-              />
             )}
           </CardContent>
         </Card>
