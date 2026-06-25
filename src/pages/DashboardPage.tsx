@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, AlertTriangle, ClipboardList, Gauge, TrendingUp, Users } from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, ClipboardList, Gauge, TrendingUp, Users } from "lucide-react";
 
 import { AdherenceChart } from "@/components/dashboard/AdherenceChart";
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -116,16 +116,25 @@ export function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <Card className="lg:col-span-1">
+            <Card className="flex flex-col lg:col-span-1">
               <CardHeader>
                 <CardTitle>Foco do dia</CardTitle>
+                <p className="text-sm text-muted-foreground">Quem mais precisa de você agora.</p>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="flex flex-1 flex-col space-y-4">
                 {stats.foco.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Sem pacientes para priorizar.</p>
                 ) : (
                   stats.foco.map((p) => <FocusItem key={p.id} patient={p} />)
                 )}
+                <Button
+                  variant="ghost"
+                  className="mt-auto w-full justify-center text-muted-foreground hover:text-foreground"
+                  onClick={() => navigate("/pacientes")}
+                >
+                  Ver todos os pacientes
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
               </CardContent>
             </Card>
 

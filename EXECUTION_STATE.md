@@ -16,9 +16,11 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 - **Sessão 1:** (A) eliminar o crash da Review; (B) preparar o banco p/ peso/foto/água + ligar a leitura da web.
 - **Sessão 2 (app):** app grava de fato em `weight_logs` / bucket `progress-photos` / `payload.liters` (ver CONTRATO #16).
 - **Sessão 3 (app):** assets oficiais da cliente (GIFs + onboarding).
-- **Sessão 4 (web — esta):** Review do painel — tudo gira em torno do paciente. Navegação enxuta
+- **Sessão 4 (web):** Review do painel — tudo gira em torno do paciente. Navegação enxuta
   (Retenção/Planos fora da lateral), Retenção dentro do Dashboard, **cadastro real de paciente**,
   abas da ficha completas (incl. Evolução/Fotos e Documentos) e **mensagem do profissional enviando de verdade** (verificada).
+- **Sessão 5 (web — esta):** Review §6 — **redesign visual/identidade própria** (anti-template/Nutrio) +
+  correção de telas vazias. Só visual/UX: sem módulos/menus novos, sem mexer em dados/fluxos.
 - **Sessão 8 (dívida):** bucket de fotos privado + signed URL; RLS por papel/clínica (#11–#14).
 
 ## 3. Tracker
@@ -52,6 +54,12 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 | S4 | Mensagem real do profissional | ✅ | `sendChatMessage` insere `chat_messages` (`sender_role='professional'`, remetente = Dra. Camila via env) + realtime; "Responder com IA" rotulado placeholder. Playwright: enviou → apareceu; MCP confirmou linha (role professional, sender a2, canal da Mariana). |
 | S4 | Revisão adversarial + correções | ✅ | Workflow 5 dimensões + verificação (33 agents). 11 achados confirmados; corrigidos: allowlist de URL de documento (XSS), `profiles` INSERT restrito a `role='patient'`, skeleton 5 cards, a11y do cadastro (required/aria/focus), `<th>` da ação nomeado (sr-only), emoji removido, CTA no empty-state. Diferidos (RPC transacional, isolamento server-side, embeds sem limite) → PENDENCIAS #16/#17. |
 | S4 | typecheck + lint + build + Playwright | ✅ | tsc 0 · lint 0 (`--max-warnings 0`) · build 0 · Playwright: Dashboard→paciente→8 abas, cadastro real, envio de mensagem — 0 erro de console. Seed restaurado (paciente/mensagem de teste removidos via MCP). |
+| S5 | Baseline + crítica honesta (template/vazio) | ✅ | Playwright 1440/1280 em todas as telas. Tells: neutros 0%-sat + laranja default (shadcn cru), logo "V" genérico, tudo em Inter, busca desabilitada dominando topbar, KPIs truncados; vazios: Configurações ("Em construção"), Campanhas (metade inferior), Foco do dia. |
+| S5 | Identidade própria (tokens + tipo + assinatura) | ✅ | Neutros com **tinta quente** (hue ~32–40) ligados ao acento; **Plus Jakarta Sans = display** (títulos/números/VRI/wordmark) + Inter corpo; marca do **"pico/vertex"** (`Brand.tsx`) na sidebar/mobile/topbar/login + **favicon** atualizado; **spine** laranja no título e menu ativo; elevação quente. Laranja só acento; **status colors inalterados** (hue = app). |
+| S5 | Telas vazias com utilidade real | ✅ | **Configurações**: 6 seções (conta, clínica, **aparência c/ troca de tema real**, plano, notificações, LGPD) no lugar do placeholder. **Campanhas**: faixa de KPIs reais + rodapé explicativo. **Dashboard**: "Foco do dia" com subtítulo + CTA "Ver todos os pacientes"; KPIs **não truncam** (1440/1280). Empty-states de Pacientes/Campanhas com CTA. |
+| S5 | "Modelos" como roadmap (cadeado) | ✅ | Item de menu desabilitado com cadeado (`routes.ts` `locked` + `NavRow`); não navega, sem rota — sinaliza o que vem sem virar módulo (Review item 3). |
+| S5 | Revisão adversarial + correções | ✅ | Workflow 5 dimensões (identidade/a11y/regressão/escopo/vazios) + verificação lendo screenshots (25 agents). 10 achados confirmados, **todos corrigidos**: foco de teclado na nav (regressão WCAG 2.4.7), favicon antigo, contraste AA de "Modelos"/"MENU", override de `shadow-sm` (tab dark), ARIA do controle de tema (radiogroup→aria-pressed), `<div>` locked, alturas de KPI a 1280, mark duplicado no login (variant `onDark`), vão do card Aparência. |
+| S5 | typecheck + lint + build + Playwright | ✅ | tsc 0 · lint 0 (`--max-warnings 0`) · build 0 · Playwright (light+dark, 1440/1280): Dashboard, Pacientes, Ficha, Mensagens, Campanhas, Configurações — 0 erro de console. Screenshots antes/depois fora do repo (gitignored/scratchpad). |
 
 ## 4. Como rodar / verificar
 - `npm run dev` (precisa de `.env` — copie de `.env.example`). Sem `.env`: tela de configuração (não mais branca).
@@ -121,3 +129,23 @@ Detalhe canônico e inequívoco vive em `docs/CONTRATO_INTEGRACAO.md → "Spine 
 - **Testes:** typecheck 0 · lint 0 (`--max-warnings 0`) · build 0. Playwright: Dashboard (sidebar sem Retenção/Planos,
   5 KPIs, coortes) → ficha (8 abas, Documentos e Evolução com dado real) → cadastro real (criou + navegou) →
   Mensagens (envio real). 0 erro de console. Paciente/mensagem de teste E2E removidos via MCP (seed pristino: 3 pacientes, 1 doc).
+
+## 9. Log da Sessão 5 (web — redesign visual/identidade)
+- **Escopo:** SÓ visual/UX (Review §6). Nenhuma mudança em `api/`, `hooks/`, `types/` ou rotas; status colors intactos.
+- **Baseline honesto (Playwright 1440/1280):** o painel tinha "cara de shadcn cru" — neutros 0%-saturação + laranja default,
+  logo "V" genérico, tudo em Inter (Plus Jakarta carregado e sem uso), busca desabilitada dominando a topbar, KPIs truncados;
+  e telas vazias (Configurações = "Em construção", Campanhas com metade inferior vazia, "Foco do dia" com vão).
+- **Identidade (frontend-design):** mantive as travas de marca (light/sóbrio, laranja `24 95% 53%` só acento, status = app) e
+  diferenciei nos eixos livres: **neutros com tinta quente** (hue ~32–40, baixa sat) que "pertencem" ao laranja; **pareamento
+  tipográfico** Plus Jakarta (display) + Inter (corpo); **marca do pico/vertex** (`src/components/Brand.tsx`, com variante
+  `onDark`) reusada na sidebar/mobile/topbar/login + **favicon** atualizado p/ o mesmo símbolo; **spine** laranja como
+  assinatura estrutural (título + menu ativo); elevação quente (`--shadow-card/elevated`).
+- **Telas vazias → utilidade:** `SettingsPage` reescrita (6 seções, troca de tema real via `useTheme.setTheme`);
+  `CampaignsPage` com KPIs reais + rodapé explicativo; Dashboard "Foco do dia" com CTA; empty-states com ação.
+  **Sem dado falso** — tudo deriva de dados reais ou é claramente "em breve".
+- **Bug de polish:** rótulos dos 5 KPIs deixaram de truncar (removido `truncate`; `min-h` p/ alinhar baseline a 1280).
+- **Roadmap:** item **Modelos** com cadeado (desabilitado, sem rota).
+- **Revisão adversarial (Workflow, 25 agents, lendo screenshots):** 10 achados, todos corrigidos — destaque p/ a
+  **regressão de foco de teclado na nav** (reintroduzido o ring), favicon antigo, contraste AA de rótulos `/70`,
+  override de `shadow-sm` (tab ativo pesado no dark), e ARIA do controle de tema.
+- **Verificação:** light + dark, 1440 + 1280, todas as telas — 0 erro de console. Antes/depois capturados (fora do repo).

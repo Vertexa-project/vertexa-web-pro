@@ -71,16 +71,16 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: [
-          "Inter",
-          "Plus Jakarta Sans",
-          "ui-sans-serif",
-          "system-ui",
-          "sans-serif",
-        ],
+        // Corpo/UI = Inter (neutra, legível). Display = Plus Jakarta Sans (títulos,
+        // números de métrica, wordmark) → personalidade tipográfica própria da marca.
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ['"Plus Jakarta Sans"', "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       boxShadow: {
-        card: "0 4px 24px -4px hsla(0, 0%, 0%, 0.08)",
+        // NÃO sobrescrever 'sm' — shadcn/ui (TabsTrigger ativo, etc.) usa shadow-sm e o
+        // token dark (--shadow-sm) é forte demais para um pill. Só nomes novos, sem colisão.
+        card: "var(--shadow-card)",
+        elevated: "var(--shadow-elevated)",
       },
       keyframes: {
         "accordion-down": {

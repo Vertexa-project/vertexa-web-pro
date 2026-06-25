@@ -2,31 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Identidade VERTEXA (web = clean/corporativa). Sessão 5 (visual):
+  - Neutros NÃO são cinza 0% (cara de template). Recebem uma tinta quente (hue ~32–40,
+    saturação baixa) para "pertencerem" ao laranja da marca → coesão de identidade.
+  - Canvas levemente off-white + cards brancos = profundidade sóbria.
+  - Laranja 24 95% 53% = ACENTO (inalterado). Status iguais ao app paciente (coerência de produto).
+  - Tipografia: display = Plus Jakarta Sans (títulos/números/logo), corpo = Inter.
+*/
+
 @layer base {
   :root {
-    /* Light — padrão do produto (sóbrio: branco/cinza-claro, texto quase-preto) */
-    --background: 0 0% 100%;
-    --foreground: 0 0% 12%;
+    /* Light — padrão do produto (sóbrio, off-white quente, texto quase-preto quente) */
+    --background: 40 33% 97%;
+    --foreground: 24 14% 13%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 12%;
+    --card-foreground: 24 14% 13%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 12%;
+    --popover-foreground: 24 14% 13%;
 
-    /* Laranja VERTEXA — só acento */
+    /* Laranja VERTEXA — só acento (inalterado) */
     --primary: 24 95% 53%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 12%;
+    --secondary: 36 22% 94%;
+    --secondary-foreground: 24 14% 18%;
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 40%;
+    --muted: 38 24% 95%;
+    --muted-foreground: 28 7% 42%;
 
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 12%;
+    --accent: 30 44% 93%;
+    --accent-foreground: 22 60% 30%;
 
+    /* Status — IDÊNTICOS ao app paciente (coerência de produto; não alterar). */
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
@@ -39,43 +49,49 @@
     --info: 207 90% 54%;
     --info-foreground: 0 0% 100%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
+    --border: 32 16% 89%;
+    --input: 32 16% 85%;
     --ring: 24 95% 53%;
 
     --radius: 0.875rem;
 
-    /* Sidebar branca, item ativo = primary */
+    /* Elevação quente, sutil (sombra com matiz da marca, não preto puro). */
+    --shadow-sm: 0 1px 2px 0 hsl(28 35% 12% / 0.05);
+    --shadow-card: 0 1px 3px 0 hsl(28 35% 12% / 0.06), 0 1px 2px -1px hsl(28 35% 12% / 0.05);
+    --shadow-elevated: 0 12px 28px -10px hsl(28 35% 12% / 0.16), 0 2px 6px -2px hsl(28 35% 12% / 0.08);
+
+    /* Sidebar = painel branco ancorado sobre o canvas quente; item ativo = primary */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 0 0% 25%;
+    --sidebar-foreground: 28 8% 34%;
     --sidebar-primary: 24 95% 53%;
-    --sidebar-accent: 0 0% 96%;
-    --sidebar-border: 0 0% 90%;
+    --sidebar-accent: 30 44% 94%;
+    --sidebar-border: 32 16% 90%;
   }
 
   .dark {
-    /* Dark — reutiliza tokens do app paciente */
-    --background: 0 0% 7%;
-    --foreground: 0 0% 96%;
+    /* Dark — neutros levemente quentes p/ coerência com o light; status iguais */
+    --background: 24 12% 8%;
+    --foreground: 36 16% 95%;
 
-    --card: 0 0% 11%;
-    --card-foreground: 0 0% 96%;
+    --card: 24 10% 12%;
+    --card-foreground: 36 16% 95%;
 
-    --popover: 0 0% 11%;
-    --popover-foreground: 0 0% 96%;
+    --popover: 24 10% 12%;
+    --popover-foreground: 36 16% 95%;
 
     --primary: 24 95% 53%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 96%;
+    --secondary: 26 8% 17%;
+    --secondary-foreground: 36 16% 95%;
 
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 64%;
+    --muted: 26 8% 17%;
+    --muted-foreground: 32 10% 64%;
 
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 96%;
+    --accent: 26 18% 20%;
+    --accent-foreground: 30 50% 80%;
 
+    /* Status — IDÊNTICOS ao app paciente (coerência de produto; não alterar). */
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
@@ -88,15 +104,19 @@
     --info: 207 90% 54%;
     --info-foreground: 0 0% 100%;
 
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
+    --border: 26 9% 20%;
+    --input: 26 9% 20%;
     --ring: 24 95% 53%;
 
-    --sidebar-background: 0 0% 9%;
-    --sidebar-foreground: 0 0% 75%;
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.4);
+    --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.5);
+    --shadow-elevated: 0 12px 28px -10px hsl(0 0% 0% / 0.6);
+
+    --sidebar-background: 24 11% 10%;
+    --sidebar-foreground: 32 10% 72%;
     --sidebar-primary: 24 95% 53%;
-    --sidebar-accent: 0 0% 15%;
-    --sidebar-border: 0 0% 18%;
+    --sidebar-accent: 26 14% 18%;
+    --sidebar-border: 26 9% 20%;
   }
 }
 
@@ -106,5 +126,15 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+  /* Seleção com a cor da marca (sutil). */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.18);
+  }
+  /* Números tabulares para métricas (KPIs, VRI, pesos) ficam alinhados. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
   }
 }

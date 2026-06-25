@@ -45,7 +45,7 @@ export function ProfileHeader({ patient, snapshot }: ProfileHeaderProps) {
               <AvatarFallback className="text-lg">{initials(name)}</AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground">{name}</h1>
+              <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">{name}</h1>
               {patient.goal ? <p className="text-sm text-muted-foreground">{patient.goal}</p> : null}
               {prof ? (
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -66,7 +66,7 @@ export function ProfileHeader({ patient, snapshot }: ProfileHeaderProps) {
               </p>
               <p
                 className={cn(
-                  "text-3xl font-bold leading-none",
+                  "tnum font-display text-3xl font-bold leading-none",
                   atRisk ? "text-destructive" : "text-foreground",
                 )}
                 aria-hidden

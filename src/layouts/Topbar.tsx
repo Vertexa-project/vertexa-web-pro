@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun } from "lucide-react";
 
+import { BrandMark } from "@/components/Brand";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,15 +39,20 @@ export function Topbar() {
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4 md:px-6">
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border/70 bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-6">
       <MobileNav />
 
-      <div className="relative hidden max-w-md flex-1 sm:block">
+      {/* Marca só no mobile (no desktop ela vive na sidebar). */}
+      <div className="md:hidden">
+        <BrandMark className="h-8 w-8" />
+      </div>
+
+      <div className="relative hidden max-w-xs flex-1 sm:block">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input
           type="search"
           placeholder="Buscar (em breve)"
-          className="pl-9"
+          className="bg-muted/50 pl-9"
           aria-label="Busca global (em breve)"
           title="Busca global (em breve)"
           disabled

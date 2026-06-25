@@ -1,4 +1,5 @@
 import { footerNav, mainNav } from "@/app/routes";
+import { Brand } from "@/components/Brand";
 import { useUnreadMentions } from "@/hooks/useChat";
 import { NavRow } from "./NavRow";
 
@@ -6,14 +7,14 @@ export function Sidebar() {
   const { data: mentions } = useUnreadMentions();
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
-      <div className="flex h-16 items-center gap-2 px-6">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <span className="text-sm font-bold">V</span>
-        </div>
-        <span className="text-lg font-semibold tracking-tight text-foreground">VERTEXA</span>
+      <div className="flex h-16 items-center px-5">
+        <Brand markClassName="h-8 w-8" />
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-2">
+      <nav className="flex-1 space-y-0.5 px-3 py-2" aria-label="Navegação principal">
+        <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Menu
+        </p>
         {mainNav.map((item) => (
           <NavRow
             key={item.path}
@@ -23,7 +24,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="space-y-1 border-t border-sidebar-border px-3 py-3">
+      <div className="space-y-0.5 border-t border-sidebar-border px-3 py-3">
         {footerNav.map((item) => (
           <NavRow key={item.path} item={item} />
         ))}

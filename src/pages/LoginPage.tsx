@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
+import { Brand, BrandMark } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,14 +64,12 @@ export function LoginPage() {
     <div className="grid min-h-screen lg:grid-cols-2">
       {/* Brand — gradiente laranja → preto */}
       <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-primary via-[hsl(20_90%_25%)] to-black p-12 text-white lg:flex">
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-white/15 backdrop-blur">
-            <span className="text-base font-bold">V</span>
-          </div>
-          <span className="text-xl font-semibold tracking-tight">VERTEXA</span>
+        <div className="flex items-center gap-2.5">
+          <BrandMark className="h-9 w-9" variant="onDark" />
+          <span className="font-display text-xl font-bold tracking-[-0.01em]">VERTEXA</span>
         </div>
         <div className="max-w-md">
-          <h1 className="text-3xl font-semibold leading-tight">Plataforma de retenção clínica</h1>
+          <h1 className="font-display text-3xl font-bold leading-tight">Plataforma de retenção clínica</h1>
           <p className="mt-4 text-white/80">
             Médicos, nutricionistas e personal trainers acompanham seus pacientes em um só lugar —
             e reduzem o abandono.
@@ -83,16 +82,11 @@ export function LoginPage() {
       <div className="flex items-center justify-center bg-background px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                <span className="text-base font-bold">V</span>
-              </div>
-              <span className="text-xl font-semibold tracking-tight">VERTEXA</span>
-            </div>
+            <Brand markClassName="h-9 w-9" wordmarkClassName="text-xl" />
             <p className="mt-3 text-sm text-muted-foreground">Plataforma de retenção clínica</p>
           </div>
 
-          <h2 className="text-2xl font-semibold tracking-tight">Acessar painel</h2>
+          <h2 className="font-display text-2xl font-bold tracking-tight">Acessar painel</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Entre com suas credenciais profissionais.
           </p>

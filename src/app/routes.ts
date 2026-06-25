@@ -1,5 +1,6 @@
 import {
   LayoutDashboard,
+  LayoutTemplate,
   Megaphone,
   MessageSquare,
   Settings,
@@ -11,6 +12,8 @@ export interface NavItem {
   path: string;
   label: string;
   icon: LucideIcon;
+  /** Item de roadmap: aparece com cadeado, desabilitado (não navega). */
+  locked?: boolean;
 }
 
 // Fonte única do sidebar (núcleo enxuto: tudo gira em torno do paciente).
@@ -24,6 +27,9 @@ export const mainNav: NavItem[] = [
   { path: "/pacientes", label: "Pacientes", icon: Users },
   { path: "/mensagens", label: "Mensagens", icon: MessageSquare },
   { path: "/campanhas", label: "Campanhas", icon: Megaphone },
+  // Roadmap (não implementado): modelos de plano/treino/mensagem reutilizáveis.
+  // Aparece com cadeado para sinalizar o que vem, sem virar módulo solto.
+  { path: "/modelos", label: "Modelos", icon: LayoutTemplate, locked: true },
 ];
 
 export const footerNav: NavItem[] = [
