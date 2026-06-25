@@ -142,6 +142,7 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   - `weight_logs` (`sprint_weight_read` SELECT + `sprint_weight_write` INSERT, anon/auth) → `migrations/20260625120000_weight_logs_and_progress_photos_storage.sql` ✅.
   - Storage `progress-photos`: bucket público + `sprint_progress_photos_write` (INSERT anon/auth) →
     mesma migration `20260625120000`. **Sem** policy de SELECT (público serve download por URL; evita listagem).
+  - `progress_photos` (TABELA): `sprint_progress_photos_insert` (INSERT anon/auth) → `migrations/20260625170000_progress_photos_table_insert_policy.sql` ✅ (a tabela só tinha SELECT; o INSERT anon era NEGADO — gap simétrico ao bucket, fechado na Sessão 2 do app).
 - **Migrations = fonte única no repo web** (`vertexa-web-pro/supabase/migrations`). Toda policy aplicada
   via MCP DEVE virar arquivo de migration aqui — **todas** as policies de escrita sprint já versionadas.
 - **#11–#14 (BLOQUEANTE p/ dado real):** trocar tudo isso por RLS por papel/clínica/vínculo. Tabelas a
@@ -152,9 +153,14 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - **#1** esquema de recuperação muscular (provisório `recovered/weakened`; confirmar c/ Juliana).
 - **#3** pesos do VRI (provisórios; web só lê snapshots). Mariana ≈ score **88 / alta** — não contradizer.
 - **#15** aposentar a tabela `messages` legada + migrar seed (não-bloqueante; web e app já no `chat_*`).
-- **#16 (Sessão 2 — app):** gravar PESO real em `weight_logs` (hoje `Records.tsx` só dispara
-  `weight_logged {source:'records'}`); subir FOTO ao bucket `progress-photos` + inserir `progress_photos`
-  (hoje só `{}`); padronizar HIDRATAÇÃO em `payload.liters` (hoje `Habits.tsx` grava `{amount}`).
+- **#16 (Sessão 2 — app): ✅ RESOLVIDO.** `Records.tsx` insere o VALOR do peso em `weight_logs`
+  (`source='app'`, via `api/weight.ts`); aba Foto com input real (câmera+galeria) sobe o binário ao
+  bucket `progress-photos` + insere `progress_photos` (`photo_url`=URL pública, via `api/photos.ts`);
+  HIDRATAÇÃO padronizada em `payload.liters` (INCREMENTOS; "água de hoje"=soma do dia, via
+  `api/hydration.ts`) tanto em `Habits.tsx` quanto em `Records.tsx`. `weight_logged`/`progress_photo_uploaded`
+  permanecem como MARCADORES de Timeline. Pendências da Home derivadas de dados reais; treino concluído
+  pelo `Records` carrega `workoutId` real → `muscle_recovery_states` + VRI. Migration aditiva
+  `20260625170000` (INSERT em `progress_photos`). Verificado por E2E (Playwright) + MCP.
 - **GIFs** de exercício do app vêm de terceiros (fitnessprogramer.com) — licenciar antes de publicar.
 
 ## Provisórios (combinados temporários — trocar quando indicado)
@@ -183,6 +189,12 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - 4c-2 — recuperação muscular (provisória) ⏳ PENDENTE
 - 4c-2b — VRI → `adherence_snapshots` ✅ (write `sprint_adherence_write`)
 - 4c-3 — ler plano/treino reais (HomePage/Profile → "Mariana") ⏳ pendente
+- **Sessão 2 — fluxos do paciente fora do mock (pendência #16): ✅** PESO real (`weight_logs`),
+  FOTO real (bucket `progress-photos` + `progress_photos`), ÁGUA `payload.liters` (incrementos/soma do dia),
+  pendências da Home derivadas de dados reais, treino do `Records` com `workoutId` real (recuperação + VRI),
+  VRI de dados reais (engine lê `activity_events`; Home lê o último snapshot → consistente web↔app),
+  anti-crash (boot tolerante a env + `ErrorBoundary`). Mariana reconciliada **88/alta**.
+  Migration aditiva `20260625170000` (INSERT em `progress_photos`).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅

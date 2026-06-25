@@ -29,7 +29,12 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 | S1-B | Web lê foto (`progress_photos`) | ✅ | seed renderiza "Foto demo" na aba Antropometria |
 | S1-B | Web lê água do dia (regra `activity_events`) | ✅ | `api/hydration.ts` → card "Hidratação de hoje: 1,8 L" |
 | S1 | typecheck + lint + build | ✅ | todos exit 0 |
-| S2 | App grava peso/foto/água reais | ⏳ | depende da §5 + CONTRATO #16 |
+| S2 | App grava peso/foto/água reais | ✅ | `vertexa-app-paciente` Sessão 2: peso→`weight_logs`(source='app'), foto→bucket `progress-photos`+`progress_photos`, água→`activity_events.hydration_logged.payload.liters` (incrementos). E2E Playwright + verificação via MCP nas tabelas canônicas. |
+| S2 | App: pendências reais + VRI de dados reais | ✅ | Home deriva pendências (foto/peso/treino) de dados reais; engine lê `activity_events`; Home lê o ÚLTIMO `adherence_snapshot` → consistente web↔app. Mariana reconciliada 88/alta. |
+| S2 | App: treino do Records → recuperação + VRI | ✅ | `Records.tsx` conclui treino com workoutId REAL → `muscle_recovery_states` (lats/biceps `fatigued`) + snapshot VRI. |
+| S2 | App: anti-crash (boot tolerante a env + ErrorBoundary) | ✅ | `lib/supabase.ts`/`currentPatient.ts` sem throw de módulo; gate em `main.tsx`; `app/ErrorBoundary.tsx`. Espelha o fix da web. |
+| S2 | Migration aditiva: INSERT em `progress_photos` (tabela) | ✅ | `migrations/20260625170000_progress_photos_table_insert_policy.sql` (gap simétrico ao bucket; aplicada via MCP). |
+| S2 | App: vitest + typecheck + lint + build | ✅ | 25 testes (hydrationMath/pendingLogic/adherenceEngine/welcomeMessages) + tsc 0 + build 0. Lint: 0 problema nos arquivos da S2 (4 erros pré-existentes em arquivos não tocados). |
 
 ## 4. Como rodar / verificar
 - `npm run dev` (precisa de `.env` — copie de `.env.example`). Sem `.env`: tela de configuração (não mais branca).
@@ -45,10 +50,10 @@ Detalhe canônico e inequívoco vive em `docs/CONTRATO_INTEGRACAO.md → "Spine 
 | **Foto** | upload p/ bucket **`progress-photos`** + insert `progress_photos (patient_id, photo_url, taken_at)` | `getProgressPhotos()` → `<img src=photo_url>` |
 | **Água (hoje)** | `activity_events (type='hydration_logged', payload.liters)` — **sem tabela** | `getHydrationTodayLiters()` soma `payload.liters` do dia |
 
-⚠️ **Drifts do app a corrigir (Sessão 2 / CONTRATO #16):**
-- `Records.tsx` salva peso como `weight_logged {source:'records'}` → deve inserir em `weight_logs`.
-- `Records.tsx` foto = `{}` → deve subir binário + inserir `progress_photos`.
-- `Habits.tsx` hidratação = `{amount}` → padronizar `{liters}` (web tolera `amount` como alias por ora).
+✅ **Drifts do app — RESOLVIDOS na Sessão 2 (CONTRATO #16):**
+- `Records.tsx` agora insere o VALOR em `weight_logs` (`source='app'`) via `api/weight.ts` (o `weight_logged` permanece só como MARCADOR de Timeline).
+- `Records.tsx` aba Foto: input real de arquivo (câmera+galeria) → upload do binário ao bucket `progress-photos` + insert em `progress_photos` (`photo_url` = URL pública) via `api/photos.ts`.
+- `Habits.tsx` + `Records.tsx` gravam HIDRATAÇÃO em `payload.liters` (INCREMENTOS; "água de hoje" = soma do dia) via `api/hydration.ts`. (A web mantém a tolerância ao alias `amount` na leitura.)
 
 ## 6. Riscos e pendências
 - **RLS permissiva (sprint):** `weight_logs`/bucket usam policies `*_write` always-true (igual aos demais
@@ -57,7 +62,7 @@ Detalhe canônico e inequívoco vive em `docs/CONTRATO_INTEGRACAO.md → "Spine 
   escopo de paciente/pasta nem limite de mime/tamanho. **BLOQUEANTE antes de paciente real** (Sessão 8 +
   #11–#14): privado + signed URL + INSERT escopado. Hoje só seed fictício sobe ao bucket.
 - **Seed de foto** é um data URI placeholder (não há binário no bucket ainda) — some quando o app subir fotos reais.
-- **VRI da Mariana = 100** na web (snapshot mais recente). CONTRATO #3 cita ~88/alta — divergência de seed, não bloqueante.
+- **VRI da Mariana** — RECONCILIADO na Sessão 2 (app): snapshot mais recente = **88/alta** (CONTRATO #3), consistente entre web e app (ambos leem o último snapshot). Ações reais (ex.: concluir treino) recomputam o VRI de dados reais e sobem o valor (demonstra "VRI muda com ação real"); o engine satura no topo p/ paciente muito ativo (pesos do VRI provisórios, #3).
 
 ## 7. Log da Sessão 1
 - **Crash:** raiz = `lib/supabase.ts` lançava no carregamento do módulo quando faltava env
