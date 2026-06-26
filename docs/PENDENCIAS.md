@@ -81,12 +81,10 @@
       admin/professional). Sob RLS real: derivar `clinic_id`/`professional_id` de `auth.uid()` no servidor
       (RPC `SECURITY DEFINER` que cruza `professionals.profile_id`), nunca confiar no que o client enviou —
       o isolamento por clínica hoje é **client-side** (vem do `DEMO_PROFESSIONAL_PROFILE_ID`).
-    - **Ledger de migrations (Sessão 7)** — `20260626120000_schema_migration_log.sql`: `miglog_read`
-      (SELECT) está aberto a **anon** (necessário p/ a demo anon ler a seção admin de Configurações).
-      É metadado de schema (não dado de paciente), mas as descrições citam a postura permissiva
-      (`using(true)`, INSERT permissivo, etc.) — um mapa de dívida legível por anônimo. Antes de domínio
-      público: restringir `miglog_read` a `authenticated`/`role='admin'` (alinhar à barreira real, já que
-      o gate "só admin vê a seção" na UI é cosmético sob a policy anon). Sem write anon (alimentado só por migration).
+    - **Ledger técnico interno (Sessão 7 corrigida)** — `20260626120000_schema_migration_log.sql` criou
+      `schema_migration_log`; `20260626123000_schema_migration_log_internal_only.sql` remove `miglog_read`,
+      revoga privilégios de `anon`/`authenticated` e mantém RLS ligada. O ledger não aparece no portal,
+      não possui API client/hook/rota/card e deve ser inspecionado somente por MCP, SQL administrativo ou migrations.
     - **Agenda interna (Sessão 6)** — `20260626090000_appointments_internal_agenda.sql`:
       `appointments` roda permissiva — `sprint_appointment_read` (SELECT) + `sprint_appointment_write` (ALL),
       `anon`/`authenticated` `using/with check (true)`. Qualquer anon lê/escreve compromissos de QUALQUER

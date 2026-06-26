@@ -9,7 +9,7 @@ import type { ProfessionalType, UserRole } from "@/types/db";
 export type Role = "admin" | "doctor" | "nutritionist" | "trainer" | "physio" | "other";
 
 export interface RolePermissions {
-  /** Itens de gestão da clínica (Migrations, Financeiro futuro) + navegação admin. */
+  /** Gestão administrativa da clínica, como Financeiro futuro. */
   isAdmin: boolean;
   /** Edita o Plano alimentar (nutricionista). */
   canEditNutrition: boolean;
