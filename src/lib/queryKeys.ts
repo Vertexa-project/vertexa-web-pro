@@ -21,4 +21,6 @@ export const qk = {
   allPlans: ["plans", "all"] as const,
   // Agenda interna (Sessão 6) — escopada por clínica + janela de tempo.
   appointments: (clinicId: string, scope: string) => ["appointments", clinicId, scope] as const,
+  // Ledger humano de migrations (Sessão 7) — seção admin em Configurações.
+  migrationLog: ["migrationLog"] as const,
 };

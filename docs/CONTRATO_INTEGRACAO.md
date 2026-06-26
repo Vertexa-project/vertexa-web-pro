@@ -52,6 +52,7 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
 | `adherence_snapshots` | **escreve** (VRI, 4c-2b) | **lê** (VRI) | — |
 | `workout_plans` / `workouts` / `workout_exercises` / `nutrition_plans` / `meals` | lê (4c-3, futuro) | **escreve** (editores) | — |
 | `appointments` (agenda interna, Sessão 6) | — (não usa) | **escreve + lê** (CRUD da Agenda) | — |
+| `schema_migration_log` (ledger de migrations, Sessão 7) | — (não usa) | **lê** (Configurações, admin); escrita só por migration | — |
 | `messages` (legada) | — | — (repontado) | — |
 
 Colunas-chave (verbatim do schema; **não renomear sem alinhar aqui**):
@@ -147,6 +148,7 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   - `progress_photos` (TABELA): `sprint_progress_photos_insert` (INSERT anon/auth) → `migrations/20260625170000_progress_photos_table_insert_policy.sql` ✅ (a tabela só tinha SELECT; o INSERT anon era NEGADO — gap simétrico ao bucket, fechado na Sessão 2 do app).
   - **Cadastro de paciente pela web (Sessão 4)** → `migrations/20260625180000_sprint_patient_create_write_policies.sql` ✅: INSERT em `patients` / `professional_patient_links` / `body_assessments` (`with check (true)`) + `profiles` (`with check (role = 'patient')` — restrito ao papel já na sprint, p/ não forjar admin/professional). Isolamento por clínica é client-side na sprint (vem do env da Dra. Camila); validar no servidor antes de dado real (#11–#14).
   - **Agenda interna (Sessão 6)** → `migrations/20260626090000_appointments_internal_agenda.sql` ✅: `sprint_appointment_read` (SELECT) + `sprint_appointment_write` (ALL), anon/auth `using/with check (true)`. Isolamento por `clinic_id` é client-side; `notes` é dado sensível. Fechar por papel/clínica no servidor antes de dado real (PENDENCIAS #14/#19).
+  - **Ledger de migrations (Sessão 7)** → `migrations/20260626120000_schema_migration_log.sql` ✅: tabela `schema_migration_log` (companion legível da `supabase_migrations.schema_migrations` do CLI) + `miglog_read` (SELECT anon/auth). **Sem** policy de escrita (alimentada só por migration). Metadado de schema, não dado de paciente. NÃO substitui a tabela do CLI.
 - **Migrations = fonte única no repo web** (`vertexa-web-pro/supabase/migrations`). Toda policy aplicada
   via MCP DEVE virar arquivo de migration aqui — **todas** as policies de escrita sprint já versionadas.
 - **#11–#14 (BLOQUEANTE p/ dado real):** trocar tudo isso por RLS por papel/clínica/vínculo. Tabelas a
@@ -215,6 +217,12 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   Dashboard (`AgendaCard`) escopado por clínica + seed fictício (3 compromissos da c1). Migrations
   aditivas `20260626090000` (tabela+RLS sprint) e `20260626093000` (seed, fuso `America/Sao_Paulo`).
   "Conectar Google Agenda" = placeholder (#19); Google Meet fora. Verificado E2E (criar→reload→excluir) + MCP. ✅
+- Sessão 7 — **Ledger de migrations** (`schema_migration_log`, migration `20260626120000`, backfill de 11
+  migrations) + **RBAC de UI** (papel admin/médico/nutri deriva de `profiles.role`+`professionals.type`;
+  helper `roles.ts` + `RoleProvider`/`useRole`; seletor de papel "modo demonstração" no menu de conta;
+  edição por papel — nutri↔Plano alimentar, médico↔Treino — e seção "Migrations" só admin). **RBAC de UI
+  ≠ RLS de dados** (a RLS por papel/clínica segue como dívida #11–#14 / S9). Verificado por Playwright
+  (alternando papel) + MCP. Contrato de DADOS cross-repo inalterado. ✅
 
 **App (`vertexa-app-paciente`):**
 - 4a — fundação (client Supabase + camada api) ✅ (`74806f2`)

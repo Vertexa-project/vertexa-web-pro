@@ -2,18 +2,22 @@ import { useState } from "react";
 import { Dumbbell, Pencil, Plus } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
+import { GatedAction } from "./GatedAction";
 import { WorkoutPlanEditor } from "./WorkoutPlanEditor";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWorkoutPlan } from "@/hooks/usePlans";
 import { formatWeight } from "@/lib/domain/format";
 import { muscleGroupLabel } from "@/lib/domain/muscleRecovery";
+import { EDIT_REASON } from "@/lib/domain/roles";
+import { useRole } from "@/providers/role-context";
 import type { PatientDetail } from "@/types/db";
 
 export function WorkoutTab({ patient }: { patient: PatientDetail }) {
   const { data, isLoading, isError, refetch } = useWorkoutPlan(patient.id);
   const [editing, setEditing] = useState(false);
+  const { perms } = useRole();
+  const canEdit = perms.canEditWorkout;
 
   return (
     <>
@@ -26,23 +30,35 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
         emptyTitle="Nenhum plano de treino"
         emptyDescription="Crie um treino para o paciente executar no app."
         emptyAction={
-          <Button onClick={() => setEditing(true)}>
+          <GatedAction
+            canEdit={canEdit}
+            reason={EDIT_REASON.workout}
+            wrapperClassName="items-center"
+            onClick={() => setEditing(true)}
+          >
             <Plus className="h-4 w-4" />
             Criar plano
-          </Button>
+          </GatedAction>
         }
       >
         {data ? (
           <div className="space-y-6">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">{data.title}</h2>
                 {data.goal ? <span className="text-sm text-muted-foreground">{data.goal}</span> : null}
               </div>
-              <Button variant="outline" className="shrink-0" onClick={() => setEditing(true)}>
+              <GatedAction
+                canEdit={canEdit}
+                reason={EDIT_REASON.workout}
+                wrapperClassName="items-end"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => setEditing(true)}
+              >
                 <Pencil className="h-4 w-4" />
                 Editar
-              </Button>
+              </GatedAction>
             </div>
 
           {data.workouts.map((w) => (

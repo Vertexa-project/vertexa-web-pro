@@ -1,15 +1,18 @@
 import type { LucideIcon } from "lucide-react";
-import { Bell, Building2, CreditCard, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
+import { Bell, Building2, CreditCard, Database, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
+import { useMigrationLog } from "@/hooks/useMigrationLog";
 import { initials, shortName } from "@/lib/domain/format";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-context";
+import { useRole } from "@/providers/role-context";
 import { useTheme, type Theme } from "@/providers/theme-context";
 
 function SettingRow({
@@ -74,6 +77,10 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { session, demoMode } = useAuth();
   const { data: professionalName } = useCurrentProfessionalName();
+  const { roleLabel, perms } = useRole();
+  const isAdmin = perms.isAdmin;
+  // Ledger só é buscado quando o admin está vendo (a seção é admin-only).
+  const migrations = useMigrationLog(isAdmin);
 
   const name = shortName(professionalName) ?? (demoMode ? "Dra. Camila Rocha" : "Profissional");
   const email = session?.user?.email ?? "demo@vertexa.app";
@@ -99,6 +106,12 @@ export function SettingsPage() {
             ) : null}
           </div>
           <SettingRow label="Nome de exibição" value={name} />
+          <SettingRow label="Papel">
+            <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+              {roleLabel}
+              {demoMode ? <Badge tone="muted">troque no menu de conta</Badge> : null}
+            </span>
+          </SettingRow>
           <SettingRow label="E-mail">
             <SoonButton>Alterar e-mail</SoonButton>
           </SettingRow>
@@ -179,6 +192,58 @@ export function SettingsPage() {
           </SettingRow>
         </SectionCard>
       </div>
+
+      {/* Itens de CLÍNICA (admin-only): ledger de migrations. Não-admin nem vê esta seção. */}
+      {isAdmin ? (
+        <Card>
+          <CardHeader className="flex-row items-start gap-3 space-y-0">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary" aria-hidden>
+              <Database className="h-5 w-5" />
+            </span>
+            <div className="space-y-1">
+              <CardTitle className="text-base">Migrations aplicadas</CardTitle>
+              <CardDescription>
+                Histórico legível do schema (companion da tabela do CLI). Visível apenas para administradores.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {migrations.isLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : migrations.isError ? (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">Não foi possível carregar o histórico.</p>
+                <Button variant="outline" size="sm" onClick={() => migrations.refetch()}>
+                  Tentar novamente
+                </Button>
+              </div>
+            ) : (migrations.data ?? []).length === 0 ? (
+              <p className="py-2 text-sm text-muted-foreground">Nenhuma migration registrada no ledger.</p>
+            ) : (
+              <ol className="space-y-2">
+                {(migrations.data ?? []).map((m) => (
+                  <li key={m.version} className="flex items-start gap-3 rounded-lg border bg-card px-3 py-2">
+                    <Badge tone="muted" className="mt-0.5 shrink-0">
+                      {m.session ?? "—"}
+                    </Badge>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">{m.description}</p>
+                      <p className="tnum truncate text-xs text-muted-foreground">{m.filename}</p>
+                    </div>
+                  </li>
+                ))}
+                <li className="pt-1 text-right text-xs text-muted-foreground tnum">
+                  {(migrations.data ?? []).length} migrations
+                </li>
+              </ol>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

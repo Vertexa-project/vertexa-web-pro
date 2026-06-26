@@ -21,8 +21,11 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
   abas da ficha completas (incl. Evolução/Fotos e Documentos) e **mensagem do profissional enviando de verdade** (verificada).
 - **Sessão 5 (web):** Review §6 — **redesign visual/identidade própria** (anti-template/Nutrio) +
   correção de telas vazias. Só visual/UX: sem módulos/menus novos, sem mexer em dados/fluxos.
-- **Sessão 6 (web — esta):** Review §3 — **Agenda interna no Dashboard** (tabela `appointments` + CRUD real
+- **Sessão 6 (web):** Review §3 — **Agenda interna no Dashboard** (tabela `appointments` + CRUD real
   + seed) com gancho-placeholder p/ Google Agenda. Financeiro (stretch) diferido (PENDENCIAS #20).
+- **Sessão 7 (web — esta):** **Ledger de migrations** (`schema_migration_log` + backfill) + **RBAC de UI**
+  (papel controla ver/editar; seletor de papel "modo demonstração"; seção Migrations só admin). RLS de
+  dados NÃO mexida (é a S9).
 - **Sessão 8 (dívida):** bucket de fotos privado + signed URL; RLS por papel/clínica (#11–#14).
 
 ## 3. Tracker
@@ -70,6 +73,14 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 | S6 | Revisão adversarial + correções | ✅ | Workflow 5 dimensões + verificação (33 agents). 12 achados confirmados; corrigidos: a11y do placeholder Google (texto no DOM, sem depender de tooltip), feedback de erro/pending no delete, validação término<início, `clinic_id` tipado NOT NULL, `qk.clinicProfessionals`, guarda do seed alinhada ao rollback. Documentados: RLS de `appointments` no #14, `notes` sensível, fuso, scope do select de paciente → PENDENCIAS #19/#20. |
 | S6 | Financeiro (stretch) — DIFERIDO | ⏭️ | Não implementado. Gating correto (admin/gestor) o ocultaria da persona da demo (Camila=professional); spec permite "só Calendar". Forma proposta registrada em PENDENCIAS #20. |
 | S6 | typecheck + lint + build | ✅ | tsc 0 · lint 0 (`--max-warnings 0`) · build 0 (pós-correções da revisão). 0 erro de console no Dashboard com a Agenda. |
+| S7 | PART A — ledger `schema_migration_log` (aditiva/reversível) | ✅ | `20260626120000`: tabela (version PK/filename/description/session/applied_at) + `miglog_read` (SELECT anon/auth, sem write) + BACKFILL de 11 migrations. Aplicada via MCP. Companion legível da tabela do CLI (não a substitui). |
+| S7 | PART A — backfill 100% + verificação | ✅ | 11 arquivos em `supabase/migrations/` == 11 linhas no ledger (via MCP). Descrições PT-BR fiéis ao SQL; session = pré-fase2/INTEG/S1/S2/S4/S6/S7. Idempotente (`on conflict do update`). |
+| S7 | PART A — seção "Migrations aplicadas" (admin) | ✅ | `api/migrations.ts` + `useMigrationLog(enabled=isAdmin)`; lista o ledger em Configurações só para admin (estados loading/erro/vazio). |
+| S7 | PART B — RBAC de UI (helper + provider) | ✅ | `lib/domain/roles.ts` (Role + mapa de permissões + `deriveRole`), `RoleProvider`/`useRole`; papel deriva de `profiles.role`+`professionals.type` (`getCurrentProfessional` agora traz `profileRole`). |
+| S7 | PART B — seletor de papel "modo demonstração" | ✅ | No menu de conta (Topbar), só quando `demoMode`; troca admin/médico/nutri ao vivo (runtime, não persiste). `setDemoRole` é no-op fora do demo. Playwright: troca de persona muda a experiência sem reload. |
+| S7 | PART B — edição por papel (gating) | ✅ | `GatedAction` (focável, `aria-disabled` + `aria-describedby` com motivo visível). Playwright: nutri edita Plano alimentar e NÃO Treino; médico o inverso (botão inerte + motivo). Admin vê Migrations; não-admin não. |
+| S7 | Revisão adversarial + correções | ✅ | Workflow 5 dimensões + verificação (27 agents). 9 achados confirmados, corrigidos: GatedAction focável (a11y de teclado), seletor de papel gated por `demoMode`, aria do papel ativo, empty-state das Migrations, alinhamento do header. Documentados: `miglog_read` anon (PENDENCIAS #14) e RBAC-de-UI≠RLS (#21). |
+| S7 | typecheck + lint + build + Playwright | ✅ | tsc 0 · lint 0 (`--max-warnings 0`) · build 0 · Playwright (alternando papel): edição por papel, seção admin, 0 erro de console. RLS de dados NÃO tocada (é a S9). |
 
 ## 4. Como rodar / verificar
 - `npm run dev` (precisa de `.env` — copie de `.env.example`). Sem `.env`: tela de configuração (não mais branca).

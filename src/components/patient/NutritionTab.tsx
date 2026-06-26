@@ -2,15 +2,19 @@ import { useState } from "react";
 import { Pencil, Plus, Utensils } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
+import { GatedAction } from "./GatedAction";
 import { NutritionPlanEditor } from "./NutritionPlanEditor";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNutritionPlan } from "@/hooks/usePlans";
+import { EDIT_REASON } from "@/lib/domain/roles";
+import { useRole } from "@/providers/role-context";
 import type { PatientDetail } from "@/types/db";
 
 export function NutritionTab({ patient }: { patient: PatientDetail }) {
   const { data, isLoading, isError, refetch } = useNutritionPlan(patient.id);
   const [editing, setEditing] = useState(false);
+  const { perms } = useRole();
+  const canEdit = perms.canEditNutrition;
 
   const totalKcal = data?.meals.reduce((sum, m) => sum + (m.calories ?? 0), 0) ?? 0;
 
@@ -25,23 +29,35 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
         emptyTitle="Nenhum plano alimentar"
         emptyDescription="Crie um plano alimentar para o paciente seguir no app."
         emptyAction={
-          <Button onClick={() => setEditing(true)}>
+          <GatedAction
+            canEdit={canEdit}
+            reason={EDIT_REASON.nutrition}
+            wrapperClassName="items-center"
+            onClick={() => setEditing(true)}
+          >
             <Plus className="h-4 w-4" />
             Criar plano
-          </Button>
+          </GatedAction>
         }
       >
         {data ? (
           <div className="space-y-6">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">{data.title}</h2>
                 <span className="text-sm text-muted-foreground">{totalKcal} kcal/dia</span>
               </div>
-              <Button variant="outline" className="shrink-0" onClick={() => setEditing(true)}>
+              <GatedAction
+                canEdit={canEdit}
+                reason={EDIT_REASON.nutrition}
+                wrapperClassName="items-end"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => setEditing(true)}
+              >
                 <Pencil className="h-4 w-4" />
                 Editar
-              </Button>
+              </GatedAction>
             </div>
 
           <div className="space-y-3">

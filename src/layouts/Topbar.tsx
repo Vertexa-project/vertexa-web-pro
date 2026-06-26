@@ -1,8 +1,9 @@
 import { useNavigate } from "react-router-dom";
-import { CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun } from "lucide-react";
+import { Check, CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun, UserCog } from "lucide-react";
 
 import { BrandMark } from "@/components/Brand";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,7 +15,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MobileNav } from "./MobileNav";
+import { DEMO_ROLES } from "@/lib/domain/roles";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-context";
+import { useRole } from "@/providers/role-context";
 import { useTheme } from "@/providers/theme-context";
 
 function getInitials(label: string): string {
@@ -29,6 +33,7 @@ export function Topbar() {
   const navigate = useNavigate();
   const { signOut, session, demoMode } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
+  const { role, roleLabel, setDemoRole } = useRole();
 
   const userName = session?.user?.email ?? (demoMode ? "Modo demonstração" : "Profissional");
   const initials = getInitials(userName);
@@ -81,18 +86,44 @@ export function Topbar() {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="ml-1 gap-2 px-2" aria-label="Conta">
+            <Button variant="ghost" className="ml-1 gap-2 px-2" aria-label={`Conta · papel ${roleLabel}`}>
               <Avatar>
                 <AvatarFallback>{initials}</AvatarFallback>
               </Avatar>
-              <span className="hidden max-w-[12rem] truncate text-sm font-medium sm:inline">
-                {userName}
+              <span className="hidden flex-col items-start leading-tight sm:flex">
+                <span className="max-w-[12rem] truncate text-sm font-medium">{userName}</span>
+                <span className="text-xs text-muted-foreground">{roleLabel}</span>
               </span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-60">
             <DropdownMenuLabel>Minha conta</DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {/* Seletor de papel — SÓ em modo demonstração (sob auth real, ninguém troca o
+                próprio papel pela UI). Troca a experiência ao vivo (admin/médico/nutri). */}
+            {demoMode ? (
+              <>
+                <DropdownMenuLabel className="flex items-center gap-2 pb-1 text-xs font-medium text-muted-foreground">
+                  <UserCog className="h-3.5 w-3.5" />
+                  Papel
+                  <Badge tone="muted" className="ml-auto">demonstração</Badge>
+                </DropdownMenuLabel>
+                {DEMO_ROLES.map((r) => {
+                  const active = role === r.value;
+                  return (
+                    <DropdownMenuItem
+                      key={r.value}
+                      onClick={() => setDemoRole(r.value)}
+                      aria-label={active ? `${r.label} (papel atual)` : `Ver como ${r.label}`}
+                    >
+                      <Check className={cn("h-4 w-4", active ? "opacity-100" : "opacity-0")} />
+                      {r.label}
+                    </DropdownMenuItem>
+                  );
+                })}
+                <DropdownMenuSeparator />
+              </>
+            ) : null}
             <DropdownMenuItem onClick={() => navigate("/configuracoes")}>
               <Settings />
               Configurações

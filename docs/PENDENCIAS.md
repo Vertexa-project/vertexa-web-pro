@@ -81,6 +81,12 @@
       admin/professional). Sob RLS real: derivar `clinic_id`/`professional_id` de `auth.uid()` no servidor
       (RPC `SECURITY DEFINER` que cruza `professionals.profile_id`), nunca confiar no que o client enviou —
       o isolamento por clínica hoje é **client-side** (vem do `DEMO_PROFESSIONAL_PROFILE_ID`).
+    - **Ledger de migrations (Sessão 7)** — `20260626120000_schema_migration_log.sql`: `miglog_read`
+      (SELECT) está aberto a **anon** (necessário p/ a demo anon ler a seção admin de Configurações).
+      É metadado de schema (não dado de paciente), mas as descrições citam a postura permissiva
+      (`using(true)`, INSERT permissivo, etc.) — um mapa de dívida legível por anônimo. Antes de domínio
+      público: restringir `miglog_read` a `authenticated`/`role='admin'` (alinhar à barreira real, já que
+      o gate "só admin vê a seção" na UI é cosmético sob a policy anon). Sem write anon (alimentado só por migration).
     - **Agenda interna (Sessão 6)** — `20260626090000_appointments_internal_agenda.sql`:
       `appointments` roda permissiva — `sprint_appointment_read` (SELECT) + `sprint_appointment_write` (ALL),
       `anon`/`authenticated` `using/with check (true)`. Qualquer anon lê/escreve compromissos de QUALQUER
@@ -133,3 +139,11 @@
     como a demo loga como Camila (`professional`), a aba ficaria corretamente OCULTA (só admin a veria).
     Conteúdo inicial = placeholder de UI para fontes de import (CSV/PDF/planilha/extrato), **SEM** parser real
     e **SEM** Open Finance. Retomar quando houver persona admin demonstrável ou auth real.
+
+21. **RBAC de UI ≠ RLS de dados (Sessão 7).** O papel do logado (admin/médico/nutri) controla o que a UI
+    MOSTRA/EDITA (`lib/domain/roles.ts` + `useRole`), inclusive um seletor de papel "modo demonstração"
+    (runtime, não persiste). Isto é **gating de UI, não autorização** — qualquer client com a anon key
+    ainda lê/escreve os dados (RLS sprint permissiva). A autorização real por papel/clínica é a dívida
+    #11–#14 (Sessão 9): quando a RLS fechar, o papel deve vir de `auth.uid()`→`profiles.role`/`professionals`,
+    e o override de demonstração deve ser desabilitado em produção (`import.meta.env.PROD`). O override de
+    demo hoje vive só em memória (reseta no reload) — aceitável para a demo (troca de persona ao vivo).

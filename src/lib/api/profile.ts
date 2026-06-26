@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import type { ProfessionalType } from "@/types/db";
+import type { ProfessionalType, UserRole } from "@/types/db";
 
 /** Nome (full_name) de um profile pelo id. Usado p/ saudar o profissional atuante. */
 export async function getProfileName(profileId: string): Promise<string | null> {
@@ -23,6 +23,7 @@ export interface CurrentProfessional {
   clinicId: string | null; // clínica do profissional (isolamento)
   fullName: string | null;
   type: ProfessionalType;
+  profileRole: UserRole | null; // profiles.role (admin|professional) — base do RBAC de UI
 }
 
 interface RawProfessionalRow {
@@ -30,13 +31,13 @@ interface RawProfessionalRow {
   profile_id: string | null;
   clinic_id: string | null;
   type: ProfessionalType;
-  profile: { full_name: string | null } | null;
+  profile: { full_name: string | null; role: UserRole | null } | null;
 }
 
 export async function getCurrentProfessional(profileId: string): Promise<CurrentProfessional | null> {
   const { data, error } = await supabase
     .from("professionals")
-    .select("id, profile_id, clinic_id, type, profile:profiles ( full_name )")
+    .select("id, profile_id, clinic_id, type, profile:profiles ( full_name, role )")
     .eq("profile_id", profileId)
     .maybeSingle();
   if (error) throw error;
@@ -48,6 +49,7 @@ export async function getCurrentProfessional(profileId: string): Promise<Current
     clinicId: row.clinic_id,
     fullName: row.profile?.full_name ?? null,
     type: row.type,
+    profileRole: row.profile?.role ?? null,
   };
 }
 
