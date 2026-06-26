@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Marca VERTEXA. Assinatura visual = "vertex/pico": um ápice (linha que sobe até um
- * ponto) dentro de um tile laranja — evoca o nome (vertex = ápice) e a promessa do
- * produto (adesão/retenção em alta). Acento laranja via token (inalterado).
+ * Marca VERTEXA. Assinatura visual = "V" de VERTEXA: um duplo chevron que desce até o
+ * vértice, dentro de um tile laranja — evoca o nome (vertex) e a inicial da marca. Vetor
+ * inline (nítido em qualquer DPI, recolorível via currentColor). Acento laranja via token.
  */
 export function BrandMark({
   className,
@@ -25,16 +25,21 @@ export function BrandMark({
       aria-hidden
     >
       <svg viewBox="0 0 32 32" className="h-[62%] w-[62%]" fill="none" role="img">
-        {/* ápice (pico) — sobe até o vértice */}
+        {/* "V" de VERTEXA — duplo chevron que desce até o vértice */}
         <path
-          d="M5.5 23 L16 8.5 L26.5 23"
+          d="M5 7 L16 24 L27 7"
           stroke="currentColor"
           strokeWidth="2.6"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        {/* o vértice em si */}
-        <circle cx="16" cy="8.5" r="1.9" fill="currentColor" />
+        <path
+          d="M10 7 L16 20 L22 7"
+          stroke="currentColor"
+          strokeWidth="2.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     </span>
   );
