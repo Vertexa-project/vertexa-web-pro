@@ -1,12 +1,15 @@
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
-import { Bell, Building2, CreditCard, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
+import { Bell, Building2, CalendarDays, CreditCard, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
 
+import { GoogleCalendarConnection } from "@/components/calendar/GoogleCalendarConnection";
 import { PageHeader } from "@/components/PageHeader";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
+import { useCurrentProfessional, useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
 import { initials, shortName } from "@/lib/domain/format";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-context";
@@ -75,7 +78,22 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { session, demoMode } = useAuth();
   const { data: professionalName } = useCurrentProfessionalName();
+  const { data: professional } = useCurrentProfessional();
   const { roleLabel } = useRole();
+
+  // Retorno do OAuth do Google Calendar (.../configuracoes?calendar=connected|error): mostra um aviso
+  // e limpa o param para não re-disparar em refresh/re-render.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [calendarNotice, setCalendarNotice] = useState<"connected" | "error" | null>(null);
+  useEffect(() => {
+    const calendar = searchParams.get("calendar");
+    if (calendar === "connected" || calendar === "error") {
+      setCalendarNotice(calendar);
+      const next = new URLSearchParams(searchParams);
+      next.delete("calendar");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const name = shortName(professionalName) ?? (demoMode ? "Dra. Camila Rocha" : "Profissional");
   const email = session?.user?.email ?? "demo@vertexa.app";
@@ -173,6 +191,28 @@ export function SettingsPage() {
           <SettingRow label="WhatsApp">
             <SoonButton>Conectar</SoonButton>
           </SettingRow>
+        </SectionCard>
+
+        <SectionCard
+          icon={CalendarDays}
+          title="Integrações"
+          description="Conecte ferramentas externas (somente leitura)."
+        >
+          <div className="py-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-foreground">Google Calendar</span>
+              {calendarNotice === "connected" ? (
+                <Badge tone="success">Conectado com sucesso</Badge>
+              ) : calendarNotice === "error" ? (
+                <Badge tone="destructive">Falha ao conectar</Badge>
+              ) : null}
+            </div>
+            <GoogleCalendarConnection
+              clinicId={professional?.clinicId ?? null}
+              professionalId={professional?.id ?? null}
+              variant="full"
+            />
+          </div>
         </SectionCard>
 
         <SectionCard

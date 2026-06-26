@@ -63,6 +63,7 @@ export function roleLabel(role: Role): string {
 export const EDIT_REASON = {
   nutrition: "Apenas o nutricionista edita o plano alimentar.",
   workout: "Apenas o médico ou personal trainer edita o treino.",
+  calendar: "Apenas o administrador da clínica gerencia a integração com o Google Calendar.",
 } as const;
 
 /** Papéis oferecidos no seletor de DEMONSTRAÇÃO (personas demonstráveis ao vivo). */

@@ -21,4 +21,7 @@ export const qk = {
   allPlans: ["plans", "all"] as const,
   // Agenda interna (Sessão 6) — escopada por clínica + janela de tempo.
   appointments: (clinicId: string, scope: string) => ["appointments", clinicId, scope] as const,
+  // Integração Google Calendar (Sessão 10) — escopada por clínica.
+  calendarConnection: (clinicId: string) => ["calendarConnection", clinicId] as const,
+  calendarEvents: (clinicId: string, scope: string) => ["calendarEvents", clinicId, scope] as const,
 };

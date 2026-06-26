@@ -30,6 +30,15 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
   MCP (12 linhas; sem leitura anon/auth; RLS on). QA integrada web↔app com **E2E reais** (hidratação app→web
   e chat web, ambos com cleanup) + leitura de dado seed real nos demais fluxos. Roteiro de demo + runbook
   (marcado APLICADA). Bucket privado/RLS real por papel/clínica seguem para S9/P1.
+- **Sessão 10 (web):** **integração REAL com Google Calendar** (read-only, multi-tenant) via **Supabase Edge
+  Functions (Deno)** — substitui o placeholder da S6. 4 tabelas `calendar_*` (tokens/state **deny-all**;
+  connections/cache leitura sprint), 4 funções (`auth`/`callback`(verify_jwt=false)/`sync`/`disconnect`),
+  agenda do Dashboard **mesclada** (interna S6 + Google, com chip de fonte; Google read-only) e card
+  **Integrações** em Configurações (Conectar/Atualizar/Desconectar admin-gated). Revisão adversarial (20
+  agents): 5 achados corrigidos (IDOR de escopo em sync/disconnect, find-or-update do callback, aviso de
+  erro do Google no estado vazio, allowlist anti open-redirect, layout do rodapé não-admin). Cifra do
+  refresh_token e verificação de tenant no servidor seguem para S9 (#22/#23). Round-trip OAuth real =
+  `NÃO_COMPROVADO_AUTOMATICAMENTE` (depende dos secrets do Google; ver `docs/ops/SETUP_GOOGLE_CALENDAR.md`).
 
 ## 3. Tracker
 | # | Tarefa | Status | Evidência |
@@ -87,6 +96,13 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 | S8 | QA integrada web↔app | ✅ | `docs/QA_S8_RELEASE_GATE.md`. **E2E reais nesta sessão (com cleanup):** hidratação app→`activity_events`→web "Hidratação de hoje" 0,0→0,3 L; chat web→`chat_messages`(professional/Camila)→thread. Demais fluxos: dado seed real lido (MCP+UI) + escrita conferida no código dos 2 repos. Foto app→bucket e conclusão de treino = NÃO_COMPROVADO (sem cleanup seguro). |
 | S8 | QA local (web + app) | ✅ | Web: tsc 0 · lint 0 (`--max-warnings 0`) · build 0 · `rg` ledger em `src`=0. App: vitest 25/25 · tsc 0 · build 0 · lint 3 erros+9 warns **pré-existentes** (shadcn não tocado). Playwright web+app: rotas + RBAC + 0 `console.error`/`pageerror`. |
 | S8 | Roteiro da demo 26/06 | ✅ | `docs/DEMO_2606.md`: roteiro honesto (E2E validado / pronto-UI / seed / mockado / NÃO_COMPROVADO / S9), gate APLICADA. |
+| S10 | Migration `calendar_integration` (aditiva/reversível) + RLS | ✅ | `20260626140000`: `calendar_connections` (metadado, leitura sprint), `calendar_connection_tokens` (**deny-all**: RLS on + revoke anon/auth, 0 policy), `calendar_event_cache` (leitura sprint), `calendar_oauth_state` (**deny-all**) + índices + linha no ledger. Aplicada+verificada via MCP (`has_table_privilege` anon/auth select = false em tokens/state; true em connections/cache; RLS on em todas). |
+| S10 | Edge Functions (Deno) deployadas | ✅ | `google-calendar-auth`/`sync`/`disconnect` (verify_jwt=true) + `google-calendar-callback` (verify_jwt=false, validado por state). `list_edge_functions` = 4 ACTIVE. Troca OAuth + tokens só no servidor (service_role); client nunca vê client_secret/refresh_token. |
+| S10 | Camada de dados + UI (agenda mesclada + Integrações) | ✅ | `api/calendar.ts` (functions.invoke + leitura de connection/cache), `useCalendarConnection`/`useAgenda`, tipos `CalendarConnection`/`CalendarEventCache`/`AgendaItem`. `AgendaCard` mescla interna+Google (chip de fonte; Google read-only; CRUD interno intacto). Card **Integrações** em Configurações (Conectar/Atualizar/Desconectar admin-gated; retorno `?calendar=`). Playwright: agenda mesclada (Hoje+Semana), gating nutri(disabled+motivo)/admin(ativo), 0 erro de console. |
+| S10 | Seed fictício do Google (idempotente) | ✅ | `20260626150000`: 1 conexão `connected` (sem token) + 3 eventos no cache (clínica c1, fuso `America/Sao_Paulo`), p/ a demo exibir a agenda mesclada sem conta real. Rollback por marcador `seed-demo`. |
+| S10 | Revisão adversarial + correções | ✅ | Workflow 5 dimensões + verificação (20 agents); 7 achados confirmados. Corrigidos 5: IDOR (sync/disconnect exigem `clinic_id`, sem caminho por id solto), find-or-update do callback espelha o índice unique, aviso de erro do Google no estado vazio, allowlist `ALLOWED_REDIRECT_ORIGINS` (open-redirect), rodapé compacto não-admin. Diferidos: cifra refresh_token (#22), tenant server-side (#23), seleção por status (#24). |
+| S10 | Round-trip OAuth real | ⏭️ | `NÃO_COMPROVADO_AUTOMATICAMENTE`: depende dos secrets do Google (Cloud Console + `supabase secrets`) configurados pelo responsável. Sem secrets, `Conectar` responde `google_not_configured`; a demo usa o seed. Roteiro manual em `docs/ops/SETUP_GOOGLE_CALENDAR.md`. |
+| S10 | typecheck + lint + build | ✅ | tsc 0 · lint 0 (`--max-warnings 0`) · build 0 (pós-correções da revisão). |
 
 ## 4. Como rodar / verificar
 - `npm run dev` (precisa de `.env` — copie de `.env.example`). Sem `.env`: tela de configuração (não mais branca).

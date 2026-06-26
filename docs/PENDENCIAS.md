@@ -131,7 +131,9 @@
     seed ancora em `America/Sao_Paulo` — coincidem no BR (premissa da demo), mas fora do fuso BR a aba
     "Hoje" pode deslocar; robustez real = derivar/persistir o fuso da clínica e calcular a janela nele
     (ex.: `date-fns-tz`); (c) **UX**: confirmação de exclusão usa `window.confirm` nativo (trocar por
-    AlertDialog do design system pós-MVP).
+    AlertDialog do design system pós-MVP). **Status (Sessão 10): integração REAL read-only implementada**
+    (Edge Functions + tabelas `calendar_*` + agenda mesclada interna+Google no `AgendaCard`); o placeholder
+    saiu. As subdívidas (a) isolamento server-side → vira **#23**; (b) fuso e (c) `window.confirm` seguem abertas.
 
 20. **Financeiro por papel (Sessão 6 — diferido/stretch).** Não implementado nesta sessão. Forma proposta:
     aba/rota `/financeiro` gated por papel (admin/gestor/financeiro) — com a RBAC mínima por `profiles.role`;
@@ -146,3 +148,25 @@
     #11–#14 (Sessão 9): quando a RLS fechar, o papel deve vir de `auth.uid()`→`profiles.role`/`professionals`,
     e o override de demonstração deve ser desabilitado em produção (`import.meta.env.PROD`). O override de
     demo hoje vive só em memória (reseta no reload) — aceitável para a demo (troca de persona ao vivo).
+
+22. **Cifrar `refresh_token` do Google em repouso (Sessão 10 — S9/P1).** A tabela
+    `calendar_connection_tokens` é **deny-all** (sem leitura por `anon`/`authenticated`; só `service_role`
+    via Edge Function), mas o `refresh_token` é gravado em texto puro. Antes de conectar a agenda REAL de uma
+    clínica, cifrar em repouso (pgsodium/Supabase Vault) e descriptografar só na Edge Function. Guarda-chuva
+    de segurança da S9 (junto de #11–#14).
+
+23. **Verificação de admin/tenant no SERVIDOR para o Google Calendar (Sessão 10 — S9).** Hoje as Edge
+    Functions `google-calendar-auth/sync/disconnect` recebem `clinicId`/`professionalId` do client (não há
+    `auth.uid()` no modo demo) e o gating de "admin" é só de UI (RBAC S7). As funções já escopam SEMPRE por
+    `clinic_id` (sem caminho por id solto — corrigido na revisão da S10), mas a posse real ("admin desta
+    clínica") só fecha na S9: a função deve ler o JWT → `auth.uid()` → `profiles`/`professionals` e rejeitar
+    divergência de clínica. **Pré-S9: conectar apenas conta Google de TESTE** (ver `docs/ops/SETUP_GOOGLE_CALENDAR.md`).
+    Hardening já aplicado: `ALLOWED_REDIRECT_ORIGINS` (allowlist do redirect do callback) — configurar em produção.
+
+24. **Seleção da conexão da clínica por status (Sessão 10 — latente, pós-S9).** `getCalendarConnection` e o
+    `google-calendar-sync` (escopo por clínica) pegam a conexão mais recente por `updated_at` (limit 1), sem
+    priorizar `status='connected'`. Com **mais de uma conexão por clínica** (só possível com OAuth real e 2+
+    contas, post-S9), uma conexão `revoked`/`error` recém-falhada (que bumpa `updated_at`) poderia ser
+    re-selecionada no lugar de uma boa. Hoje há no máximo 1 conexão por clínica (seed/demo), então não se
+    manifesta. Correção: priorizar `connected` (ou alinhar com a decisão de unicidade do índice) ao resolver
+    "a conexão da clínica".

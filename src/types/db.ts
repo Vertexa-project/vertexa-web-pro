@@ -251,6 +251,55 @@ export interface AppointmentView extends Appointment {
   professional_name: string | null;
 }
 
+// Integração Google Calendar (Sessão 10) — web/Edge-only (o app paciente NÃO usa).
+// METADADO da conexão: SEM tokens. Os tokens vivem em calendar_connection_tokens (DENY-ALL no banco,
+// só acessível por Edge Function/service_role) — o client NUNCA os lê.
+export type CalendarConnectionStatus = "connected" | "revoked" | "error" | "stale";
+
+export interface CalendarConnection {
+  id: string;
+  clinic_id: string;
+  professional_id: string | null;
+  provider: string; // 'google'
+  google_account_email: string | null;
+  google_calendar_id: string | null;
+  calendar_name: string | null;
+  scopes: string | null;
+  status: CalendarConnectionStatus;
+  last_synced_at: string | null; // ISO timestamptz
+  created_at: string;
+  updated_at: string;
+}
+
+// Espelho read-only dos eventos do Google (preenchido pela Edge Function de sync). web/Edge-only.
+export interface CalendarEventCache {
+  id: string;
+  connection_id: string;
+  clinic_id: string;
+  google_event_id: string;
+  title: string | null;
+  starts_at: string; // ISO timestamptz
+  ends_at: string | null;
+  all_day: boolean;
+  status: string | null;
+  synced_at: string;
+}
+
+// Item unificado da Agenda do Dashboard — discriminado por FONTE. Eventos 'google' são READ-ONLY
+// (sem editar/excluir); 'internal' carrega o AppointmentView para o CRUD interno da Sessão 6.
+export interface AgendaItem {
+  id: string; // prefixado por fonte (ex.: "internal:<uuid>" / "google:<uuid>") — chave estável de UI
+  source: "internal" | "google";
+  title: string;
+  starts_at: string;
+  ends_at: string | null;
+  all_day: boolean;
+  patient_name: string | null;
+  professional_name: string | null;
+  /** Só para 'internal' — base do editar/excluir. */
+  appointment?: AppointmentView;
+}
+
 // ========== VIEW / COMPOSED TYPES (shapes retornados pela camada api/) ==========
 export interface ProfessionalSummary {
   id: string;

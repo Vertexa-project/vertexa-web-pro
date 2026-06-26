@@ -52,6 +52,7 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
 | `adherence_snapshots` | **escreve** (VRI, 4c-2b) | **lê** (VRI) | — |
 | `workout_plans` / `workouts` / `workout_exercises` / `nutrition_plans` / `meals` | lê (4c-3, futuro) | **escreve** (editores) | — |
 | `appointments` (agenda interna, Sessão 6) | — (não usa) | **escreve + lê** (CRUD da Agenda) | — |
+| `calendar_*` (Google Calendar, Sessão 10) | — (não usa) | **lê** connections/cache; tokens/state **deny-all** (só Edge Function/service_role) | — |
 | `schema_migration_log` (ledger técnico interno, Sessão 7) | — (não usa) | — (não usa; sem API client/portal) | — |
 | `messages` (legada) | — | — (repontado) | — |
 
@@ -62,6 +63,7 @@ Colunas-chave (verbatim do schema; **não renomear sem alinhar aqui**):
 - `weight_logs(id, patient_id, weight_kg numeric, measured_at timestamptz, source text, created_at)` — `patient_id` = `patients.id`. **NÃO renomear `weight_kg`/`measured_at`.**
 - `progress_photos(id, patient_id, photo_url text, captured_in_app bool, taken_at timestamptz)`.
 - `appointments(id, clinic_id NOT NULL→clinics, patient_id?→patients, professional_id?→professionals, title, starts_at timestamptz, ends_at, notes, created_at)` — **agenda interna, web-only** (o app paciente NÃO consome). `notes` = texto livre → tratar como sensível sob RLS real.
+- `calendar_connections(id, clinic_id NOT NULL→clinics, professional_id?→professionals, provider, google_account_email, google_calendar_id, calendar_name, scopes, status, last_synced_at, created_at, updated_at)` + `calendar_event_cache(id, connection_id→calendar_connections, clinic_id, google_event_id, title, starts_at, ends_at, all_day, status, synced_at)` — **web/Edge-only** (Sessão 10; o app NÃO consome). `calendar_connection_tokens(connection_id PK, access_token, refresh_token, token_expires_at)` e `calendar_oauth_state(...)` são **deny-all** (sem leitura `anon`/`authenticated`; só Edge Function/service_role). Título de evento Google pode conter nome de paciente → sensível.
 
 ## Spine de dados: PESO / FOTO / ÁGUA (Sessão 1 — fonte inequívoca p/ a Sessão 2)
 > Contexto: hoje o app só dispara `activity_events` SEM valor confiável
@@ -230,6 +232,15 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   chat web→`chat_messages`(`sender_role='professional'`, Camila)→thread. Demais fluxos do spine: dado seed real
   lido (MCP+UI) + escrita conferida no código dos 2 repos. Contrato de DADOS inalterado. RLS real por papel/clínica
   + storage privado seguem para S9/P1. Ver `docs/QA_S8_RELEASE_GATE.md` + `docs/DEMO_2606.md`. ✅
+- Sessão 10 — **Google Calendar REAL (read-only, multi-tenant) via Supabase Edge Functions (Deno).** Substitui
+  o placeholder da S6 (#19). Migrations `20260626140000` (4 tabelas `calendar_*`: tokens/state **deny-all**;
+  connections/cache leitura sprint) e `20260626150000` (seed fictício). 4 Edge Functions
+  (`google-calendar-auth`/`callback`/`sync`/`disconnect`) — troca OAuth + tokens **só no servidor**
+  (service_role); o client (Vite) nunca vê `client_secret`/`refresh_token`. Agenda do Dashboard **mesclada**
+  (interna S6 + Google, com chip de fonte; Google read-only; CRUD interno intacto) + card **Integrações** em
+  Configurações (admin-gated). **web/Edge-only** — o app paciente NÃO consome `calendar_*`; contrato cross-repo
+  inalterado. Cifra do refresh_token (#22), verificação de tenant no servidor (#23) e round-trip OAuth real
+  (`NÃO_COMPROVADO_AUTOMATICAMENTE`, ver `docs/ops/SETUP_GOOGLE_CALENDAR.md`) seguem para a S9. ✅
 
 **App (`vertexa-app-paciente`):**
 - 4a — fundação (client Supabase + camada api) ✅ (`74806f2`)
