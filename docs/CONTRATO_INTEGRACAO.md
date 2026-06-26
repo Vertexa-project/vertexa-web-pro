@@ -48,7 +48,7 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
 | `weight_logs` | **escreve** (valor do peso; pendente no app) | **lê** (gráfico de peso) | — |
 | `progress_photos` | **escreve** (URL pós-upload; pendente no app) | **lê** (Fotos comparativas) | — |
 | Storage `progress-photos` | **upload** do binário (pendente no app) | **lê** via URL pública | — |
-| `muscle_recovery_states` | **escreve** (provisório, 4c-2) | **lê** (BodyMap/Recuperação) | — |
+| `muscle_recovery_states` | **escreve** (provisório, 4c-2) + **lê** (body map dinâmico, S11) | **lê** (BodyMap/Recuperação) | — |
 | `adherence_snapshots` | **escreve** (VRI, 4c-2b) | **lê** (VRI) | — |
 | `workout_plans` / `workouts` / `workout_exercises` / `nutrition_plans` / `meals` | lê (4c-3, futuro) | **escreve** (editores) | — |
 | `appointments` (agenda interna, Sessão 6) | — (não usa) | **escreve + lê** (CRUD da Agenda) | — |
@@ -191,10 +191,12 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   "Cadeira adutora"** (asset disponível; muscleGroups→["Adutores"]).
 - **Aquecimento**: **estático** (hardcoded no app) e os GIFs de mobilidade **seguem de terceiros**
   (não há asset oficial de aquecimento) **até existir tabela/assets próprios**. PROVISÓRIO.
-- **Body map do app** (`Progress.tsx` `PremiumBodyMap`): **SVG** que pinta grupos musculares por status de
-  recuperação (funciona). Os PNGs oficiais `Body_front/Body_back` foram entregues mas **NÃO** integrados
-  ainda — trocar o SVG por imagem estática perderia a pintura por região. **Melhoria futura:** usar o PNG
-  como base e sobrepor as regiões SVG alinhadas à anatomia da arte. PROVISÓRIO (mantido o SVG, não quebrar).
+- **Body map do app** (`Progress.tsx` → `DynamicBodyMap`): ✅ **IMPLEMENTADO na S11.** A "melhoria futura" foi
+  feita — PNG oficial `Body_front/Body_back` como base + overlay SVG das regiões por face (zonas `<path>`
+  alinhadas à anatomia, bilaterais espelhadas). Lê `muscle_recovery_states` e pinta por status DERIVADO de
+  `last_trained_at`. ⚠️ O alinhamento PNG↔SVG é **autoral** (coordenadas estimadas sobre a arte) e pode pedir
+  ajuste fino no dispositivo — limitação conhecida, não é pixel-perfect. Pendência #1 (decaimento do status
+  server-side) segue: hoje a derivação por dias é client-side.
 
 ## Log de status (atualizar a cada etapa)
 **Web (`vertexa-web-pro`):**
@@ -246,7 +248,7 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - 4a — fundação (client Supabase + camada api) ✅ (`74806f2`)
 - 4b — chat real (`TeamChat` sobre `chat_*` + @ + realtime) ✅ (`624e3b8`)
 - 4c-1 — sink de eventos → `activity_events` ✅ (`ecba42f`)
-- 4c-2 — recuperação muscular (provisória) ⏳ PENDENTE
+- 4c-2 — recuperação muscular (provisória): app **escreve** + (S11) **lê e pinta** no body map dinâmico ✅
 - 4c-2b — VRI → `adherence_snapshots` ✅ (write `sprint_adherence_write`)
 - 4c-3 — ler plano/treino reais (HomePage/Profile → "Mariana") ⏳ pendente
 - **Sessão 2 — fluxos do paciente fora do mock (pendência #16): ✅** PESO real (`weight_logs`),
@@ -261,6 +263,18 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   (`src/assets/onboarding/01..05`), removendo os overlays duplicados (logo/headline/mockup) e mantendo
   swipe/dots/CTA/tracker. Body map mantido em SVG (melhoria registrada). typecheck/lint/build/testes
   verdes; verificado por Playwright (Onboarding + WorkoutGuide carregam os assets oficiais; 0 erro de console).
+- **Sessão 11 — body map DINÂMICO de recuperação: ✅** (`3206b52`) o app agora **LÊ** `muscle_recovery_states`
+  (antes só escrevia) e pinta um mapa por status **DERIVADO de `last_trained_at`** (regra pura `recoveryRule.ts`:
+  0-2=fatigued, 3=recovering, 4=recovered, 5+=weakened, sem histórico=neutral; reusa `daysAgoLocal`/fuso local).
+  A coluna `status` continua provisória (#1) e NÃO é a fonte da cor. Implementa a "melhoria futura" do body map:
+  PNG oficial `Body_front/Body_back` + overlay SVG por face (viewBox próprio) com zonas `<path>` bilaterais
+  espelhadas, flip frente↔costas (framer-motion + `prefers-reduced-motion`), legenda dos 5 estados, bottom
+  sheet (Radix) por zona, tokens `--recovery-*` (recovered=azul, weakened=verde). Read path `getMuscleRecovery`
+  + hook `useMuscleRecovery` (`['recovery', patientId]`) + invalidação em `eventSync` via QueryClient singleton.
+  Removido o esquema antigo `activated` do body map. **SEM migration** (ENUM `muscle_status` já tem os 5 valores;
+  `sprint_read_all` já permite anon SELECT — confirmado por MCP). vitest 39/39 · tsc/build 0 · Playwright /progress
+  (dado real da Mariana, flip, tooltip, 430px). Conclusão de treino→repaint = wiring por código (não E2E p/ não
+  mutar o seed). Pendência #1 (decaimento server-side do status) segue aberta — hoje a derivação é client-side.
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
