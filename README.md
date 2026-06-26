@@ -58,3 +58,4 @@ App Paciente (logado como Mariana): vê o treino → conclui ("bater ponto").
 Web Pro (refresh): evento novo na timeline + músculo muda de cor na recuperação.
 
 Isso é o que vende. Dashboard + Perfil do Paciente + ciclo vivo com o app são P1.
+build
