@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarPlus, Loader2 } from "lucide-react";
@@ -30,6 +30,24 @@ function googleEventWhen(item: AgendaItem): string {
   const start = format(parseISO(item.starts_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
   const end = item.ends_at ? format(parseISO(item.ends_at), "HH:mm") : null;
   return end ? `${start}–${end}` : start;
+}
+
+function plural(n: number, singular: string, pluralForm: string): string {
+  return `${n} ${n === 1 ? singular : pluralForm}`;
+}
+
+/** Resumo da faixa visível (deriva dos eventos já carregados — não inventa). */
+function summaryText(s: { internal: number; confirmado: number; pendente: number; desmarcado: number; google: number }): string {
+  if (s.internal === 0 && s.google === 0) return "Sem compromissos nesta faixa.";
+  const parts: string[] = [];
+  if (s.internal > 0) {
+    parts.push(plural(s.internal, "compromisso", "compromissos"));
+    parts.push(plural(s.confirmado, "confirmado", "confirmados"));
+    parts.push(plural(s.pendente, "pendente", "pendentes"));
+    parts.push(plural(s.desmarcado, "desmarcado", "desmarcados"));
+  }
+  if (s.google > 0) parts.push(`${s.google} no Google`);
+  return parts.join(" · ");
 }
 
 function Legend({ title, items }: { title: string; items: { key: string; label: string; color: string }[] }) {
@@ -116,6 +134,22 @@ export function AgendaCard({
     [update],
   );
 
+  // Resumo da faixa visível (recalcula quando items muda — i.e., a cada datesSet/refetch).
+  const summary = useMemo(() => {
+    const s = { internal: 0, confirmado: 0, pendente: 0, desmarcado: 0, google: 0 };
+    for (const it of items) {
+      if (it.source === "google") {
+        s.google += 1;
+        continue;
+      }
+      s.internal += 1;
+      if (it.appointmentStatus === "confirmado") s.confirmado += 1;
+      else if (it.appointmentStatus === "pendente") s.pendente += 1;
+      else if (it.appointmentStatus === "desmarcado") s.desmarcado += 1;
+    }
+    return s;
+  }, [items]);
+
   const typeLegend = [
     ...TYPE_LEGEND.map((t) => ({ key: t.key as string, label: t.label, color: t.color })),
     { key: "google", label: GOOGLE_META.label, color: GOOGLE_META.color },
@@ -124,8 +158,12 @@ export function AgendaCard({
 
   return (
     <Card className="flex flex-col">
-      <CardHeader className="gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle>Agenda</CardTitle>
+      <CardHeader className="gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <CardTitle>Agenda</CardTitle>
+          {/* Resumo da faixa visível (densidade útil) — número + rótulo, discreto. */}
+          <p className="tnum text-xs text-muted-foreground">{summaryText(summary)}</p>
+        </div>
         <div className="flex items-center gap-2">
           <IntegrationsMenu clinicId={clinicId} professionalId={defaultProfessionalId} />
           <Button size="sm" onClick={openCreate} disabled={!clinicId}>
@@ -165,7 +203,7 @@ export function AgendaCard({
           </div>
         ) : null}
 
-        <Suspense fallback={<Skeleton className="h-[640px] w-full" />}>
+        <Suspense fallback={<Skeleton className="h-[720px] w-full" />}>
           <AgendaCalendar
             items={items}
             onRangeChange={onRangeChange}

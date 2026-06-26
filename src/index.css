@@ -155,6 +155,8 @@
     --fc-today-bg-color: hsl(var(--primary) / 0.06);
     --fc-now-indicator-color: hsl(var(--destructive));
     --fc-event-border-color: hsl(var(--border));
+    /* Fora do expediente (businessHours): sombreado SUTIL e quente (não berrante). */
+    --fc-non-business-color: hsl(33 13% 95.5%);
   }
   .vtx-cal .fc {
     font-size: 0.875rem;
@@ -197,6 +199,27 @@
     padding: 0 2px;
     font-weight: 500;
     cursor: pointer;
+    transition: box-shadow 0.12s ease;
+  }
+  /* Hover discreto (elevação leve), sem animação chamativa. box-shadow NÃO é aditivo: para os
+     eventos COM barra de status (inset), o hover precisa recompor a barra + a elevação, senão
+     apagaria o canal de status. As regras por status vêm depois (mesma especificidade → vencem). */
+  .vtx-cal .fc .fc-event:hover {
+    box-shadow: var(--shadow-sm);
+  }
+  .vtx-cal .fc .fc-evt-st-confirmado:hover {
+    box-shadow: inset 4px 0 0 0 hsl(142 71% 45%), var(--shadow-sm);
+  }
+  .vtx-cal .fc .fc-evt-st-pendente:hover {
+    box-shadow: inset 4px 0 0 0 hsl(45 93% 47%), var(--shadow-sm);
+  }
+  .vtx-cal .fc .fc-evt-st-desmarcado:hover {
+    box-shadow: inset 4px 0 0 0 hsl(0 72% 51%), var(--shadow-sm);
+  }
+  /* Truncamento elegante do título (não quebra o layout do chip). */
+  .vtx-cal .fc .fc-event-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .fc-evt-consulta { --fc-event-bg-color: hsl(207 90% 54% / 0.14); --fc-event-border-color: hsl(207 90% 54%); --fc-event-text-color: hsl(207 76% 34%); }
   .fc-evt-retorno  { --fc-event-bg-color: hsl(142 71% 45% / 0.16); --fc-event-border-color: hsl(142 71% 38%); --fc-event-text-color: hsl(142 60% 26%); }

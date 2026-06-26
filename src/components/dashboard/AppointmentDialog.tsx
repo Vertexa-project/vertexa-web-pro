@@ -158,6 +158,16 @@ export function AppointmentDialog({
       setError("O término deve ser depois do início.");
       return;
     }
+    // O calendário (S12.1) exibe a faixa 06:00–23:00; barrar fora dela evita salvar um
+    // compromisso que ficaria invisível nas views de tempo (Semana/Dia).
+    if (form.startTime < "06:00" || form.startTime >= "23:00") {
+      setError("O início deve estar entre 06:00 e 23:00.");
+      return;
+    }
+    if (form.endTime && form.endTime > "23:00") {
+      setError("O término deve ser até 23:00.");
+      return;
+    }
     const input: AppointmentInput = {
       clinicId,
       title,
@@ -211,11 +221,11 @@ export function AppointmentDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ap-start">Início</Label>
-              <Input id="ap-start" type="time" value={form.startTime} onChange={(e) => set("startTime", e.target.value)} />
+              <Input id="ap-start" type="time" min="06:00" max="23:00" value={form.startTime} onChange={(e) => set("startTime", e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ap-end">Término</Label>
-              <Input id="ap-end" type="time" value={form.endTime} onChange={(e) => set("endTime", e.target.value)} />
+              <Input id="ap-end" type="time" min="06:00" max="23:00" value={form.endTime} onChange={(e) => set("endTime", e.target.value)} />
             </div>
           </div>
 

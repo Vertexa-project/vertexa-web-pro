@@ -76,7 +76,7 @@ export default function AgendaCalendar({
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
 
   return (
-    <div className="vtx-cal h-[640px]">
+    <div className="vtx-cal h-[720px]">
       <FullCalendar
         plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
         initialView="timeGridWeek"
@@ -90,12 +90,18 @@ export default function AgendaCalendar({
         }}
         buttonText={{ today: "Hoje", month: "Mês", week: "Semana", day: "Dia", list: "Lista" }}
         allDaySlot
+        allDayText="Dia todo"
         nowIndicator
         expandRows
         dayMaxEvents={3}
-        slotMinTime="00:00:00"
-        slotMaxTime="24:00:00"
+        // Janela clínica: 06:00–23:00 (sem madrugada), rótulo por hora + linhas de 30min (limpo).
+        slotMinTime="06:00:00"
+        slotMaxTime="23:00:00"
+        slotDuration="00:30:00"
+        slotLabelInterval="01:00:00"
         scrollTime="07:00:00"
+        // Expediente seg–sáb 08:00–19:00; fora dele sombreia sutilmente (não bloqueia criar).
+        businessHours={{ daysOfWeek: [1, 2, 3, 4, 5, 6], startTime: "08:00", endTime: "19:00" }}
         eventOverlap
         editable
         events={events}
