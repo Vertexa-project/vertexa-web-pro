@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { formatDistanceToNow, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { CalendarCheck, Link2, Loader2, RefreshCw, Trash2 } from "lucide-react";
 
 import { GatedAction } from "@/components/patient/GatedAction";
@@ -12,39 +10,13 @@ import {
   useDisconnectGoogleCalendar,
   useSyncGoogleCalendar,
 } from "@/hooks/useCalendarConnection";
+import {
+  CONNECTION_STATUS_META,
+  connectionErrorMessage,
+  lastSyncLabel,
+} from "@/lib/domain/calendarConnection";
 import { EDIT_REASON } from "@/lib/domain/roles";
 import { useRole } from "@/providers/role-context";
-import type { CalendarConnectionStatus } from "@/types/db";
-
-const STATUS_META: Record<CalendarConnectionStatus, { label: string; tone: "success" | "destructive" | "warning" }> = {
-  connected: { label: "Conectado", tone: "success" },
-  revoked: { label: "Acesso revogado", tone: "destructive" },
-  error: { label: "Erro ao sincronizar", tone: "destructive" },
-  stale: { label: "Agenda indisponível", tone: "warning" },
-};
-
-/** Mapeia os códigos de erro das Edge Functions para mensagens PT-BR amigáveis. */
-function errorMessage(code: string | undefined): string {
-  switch (code) {
-    case "google_not_configured":
-      return "Integração ainda não configurada neste ambiente.";
-    case "professional_clinic_mismatch":
-      return "Profissional não pertence a esta clínica.";
-    case "no_connection":
-      return "Nenhuma agenda conectada para sincronizar.";
-    case "revoked":
-      return "O acesso ao Google foi revogado — reconecte a agenda.";
-    case "calendar_not_found":
-      return "A agenda não está mais disponível no Google.";
-    default:
-      return "Não foi possível concluir. Tente novamente.";
-  }
-}
-
-function lastSyncLabel(iso: string | null): string {
-  if (!iso) return "Ainda não sincronizada";
-  return `Sincronizada ${formatDistanceToNow(parseISO(iso), { addSuffix: true, locale: ptBR })}`;
-}
 
 /**
  * Integração Google Calendar (Sessão 10) — read-only, multi-tenant. Todas as ações são admin-gated
@@ -91,11 +63,11 @@ export function GoogleCalendarConnection({
 
   const connectBusy = connect.isPending || redirecting;
   const connected = Boolean(conn);
-  const statusMeta = conn ? STATUS_META[conn.status] : null;
+  const statusMeta = conn ? CONNECTION_STATUS_META[conn.status] : null;
 
-  const connectError = connect.isError ? errorMessage((connect.error as Error)?.message) : null;
-  const syncError = sync.isError ? errorMessage((sync.error as Error)?.message) : null;
-  const disconnectError = disconnect.isError ? errorMessage((disconnect.error as Error)?.message) : null;
+  const connectError = connect.isError ? connectionErrorMessage((connect.error as Error)?.message) : null;
+  const syncError = sync.isError ? connectionErrorMessage((sync.error as Error)?.message) : null;
+  const disconnectError = disconnect.isError ? connectionErrorMessage((disconnect.error as Error)?.message) : null;
 
   // ---- Botões reutilizados ----
   const connectButton = (

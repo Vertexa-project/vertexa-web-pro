@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import type { Appointment, AppointmentView } from "@/types/db";
+import type { Appointment, AppointmentStatus, AppointmentType, AppointmentView } from "@/types/db";
 
 // Linha de appointments com paciente/profissional embutidos (joins PostgREST) p/ resolver nomes.
 interface RawAppointmentRow extends Appointment {
@@ -48,6 +48,8 @@ export interface AppointmentInput {
   patientId: string | null;
   professionalId: string | null;
   notes: string | null;
+  type: AppointmentType;
+  status: AppointmentStatus;
 }
 
 function toRow(input: AppointmentInput) {
@@ -59,6 +61,8 @@ function toRow(input: AppointmentInput) {
     patient_id: input.patientId,
     professional_id: input.professionalId,
     notes: input.notes?.trim() || null,
+    type: input.type,
+    status: input.status,
   };
 }
 

@@ -25,6 +25,16 @@ export default defineConfig({
           query: ["@tanstack/react-query"],
           charts: ["recharts"],
           dates: ["date-fns"],
+          // FullCalendar (Sessão 12) — pesado (~300 KB gzip). Chunk próprio + lazy() no AgendaCard
+          // mantêm o Dashboard fora do caminho crítico. v6 auto-injeta CSS (sem import de .css).
+          fullcalendar: [
+            "@fullcalendar/core",
+            "@fullcalendar/react",
+            "@fullcalendar/daygrid",
+            "@fullcalendar/timegrid",
+            "@fullcalendar/list",
+            "@fullcalendar/interaction",
+          ],
         },
       },
     },

@@ -138,3 +138,83 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/*
+  FullCalendar (Sessão 12) — tema CLARO VERTEXA. A v6 auto-injeta o CSS base via JS (sem import
+  de .css); aqui só ajustamos as CSS vars --fc-* (tema) e definimos a cor por TIPO de evento em
+  classes .fc-evt-* (escritas à mão em @layer base → preservadas pelo Tailwind, fora do purge de
+  utilitários; os nomes também aparecem como literais em src/lib/domain/agenda.ts). Escopado em
+  .vtx-cal p/ não vazar. As cores espelham os tokens do tema (info/success/primary/muted/destructive)
+  + um rosa de marca p/ "previsão de retorno" — mantidas em sincronia com TYPE_META/STATUS_META.
+*/
+@layer base {
+  .vtx-cal {
+    --fc-border-color: hsl(var(--border));
+    --fc-page-bg-color: transparent;
+    --fc-neutral-bg-color: hsl(var(--muted));
+    --fc-today-bg-color: hsl(var(--primary) / 0.06);
+    --fc-now-indicator-color: hsl(var(--destructive));
+    --fc-event-border-color: hsl(var(--border));
+  }
+  .vtx-cal .fc {
+    font-size: 0.875rem;
+  }
+  .vtx-cal .fc .fc-toolbar-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+  /* Botões (‹ › Hoje + Mês/Semana/Dia/Lista): sóbrios; ativo = laranja-acento. */
+  .vtx-cal .fc .fc-button {
+    background-color: hsl(var(--secondary));
+    border-color: hsl(var(--border));
+    color: hsl(var(--secondary-foreground));
+    text-transform: capitalize;
+    font-weight: 500;
+    box-shadow: none;
+  }
+  .vtx-cal .fc .fc-button:hover {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+  }
+  .vtx-cal .fc .fc-button:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+  .vtx-cal .fc .fc-button-primary:not(:disabled).fc-button-active,
+  .vtx-cal .fc .fc-button-primary:not(:disabled):active {
+    background-color: hsl(var(--primary));
+    border-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+  .vtx-cal .fc .fc-button-primary:disabled {
+    opacity: 0.5;
+  }
+  /* Evento: fundo tintado suave + borda/texto na cor cheia (mesmo padrão sóbrio dos badges). */
+  .vtx-cal .fc .fc-event {
+    border-radius: 0.5rem;
+    padding: 0 2px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .fc-evt-consulta { --fc-event-bg-color: hsl(207 90% 54% / 0.14); --fc-event-border-color: hsl(207 90% 54%); --fc-event-text-color: hsl(207 76% 34%); }
+  .fc-evt-retorno  { --fc-event-bg-color: hsl(142 71% 45% / 0.16); --fc-event-border-color: hsl(142 71% 38%); --fc-event-text-color: hsl(142 60% 26%); }
+  .fc-evt-previsao { --fc-event-bg-color: hsl(330 81% 60% / 0.14); --fc-event-border-color: hsl(330 70% 52%); --fc-event-text-color: hsl(330 64% 40%); }
+  .fc-evt-outros   { --fc-event-bg-color: hsl(28 7% 42% / 0.14);   --fc-event-border-color: hsl(28 7% 42%);  --fc-event-text-color: hsl(24 14% 24%); }
+  .fc-evt-google   { --fc-event-bg-color: hsl(24 95% 53% / 0.14);  --fc-event-border-color: hsl(24 95% 48%); --fc-event-text-color: hsl(24 80% 34%); }
+  /* STATUS do agendamento = barra de acento à ESQUERDA (canal separado da cor de TIPO no
+     preenchimento). Definido APÓS as classes de tipo p/ poder sobrescrever o fundo do desmarcado. */
+  .fc-evt-st-confirmado { box-shadow: inset 4px 0 0 0 hsl(142 71% 45%); }
+  .fc-evt-st-pendente { box-shadow: inset 4px 0 0 0 hsl(45 93% 47%); }
+  /* Desmarcado: barra vermelha + risco + fundo neutro esmaecido, MAS texto na cor cheia do tipo
+     (contraste AA preservado — sem opacity no elemento inteiro). Continua visível (decisão S12). */
+  .fc-evt-st-desmarcado {
+    box-shadow: inset 4px 0 0 0 hsl(0 72% 51%);
+    --fc-event-bg-color: hsl(30 6% 95%);
+  }
+  .fc-evt-st-desmarcado .fc-event-title,
+  .fc-evt-st-desmarcado .fc-list-event-title {
+    text-decoration: line-through;
+  }
+}

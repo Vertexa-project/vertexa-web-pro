@@ -1,96 +1,55 @@
-import { useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarClock, CalendarPlus, Loader2, Pencil, Trash2 } from "lucide-react";
+import { CalendarPlus, Loader2 } from "lucide-react";
 
 import { AppointmentDialog } from "./AppointmentDialog";
-import { GoogleCalendarConnection } from "@/components/calendar/GoogleCalendarConnection";
+import { IntegrationsMenu } from "@/components/calendar/IntegrationsMenu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAgenda, useDeleteAppointment, type AgendaScope } from "@/hooks/useAppointments";
-import { cn } from "@/lib/utils";
+import { useAgenda, useUpdateAppointment } from "@/hooks/useAppointments";
+import type { AppointmentInput } from "@/lib/api/appointments";
+import { GOOGLE_META, STATUS_LEGEND, TYPE_LEGEND } from "@/lib/domain/agenda";
 import type { AgendaItem, AppointmentView } from "@/types/db";
 
-function timeRange(item: AgendaItem): string {
-  if (item.all_day) return "Dia inteiro";
-  const start = format(parseISO(item.starts_at), "HH:mm");
+// FullCalendar é pesado (~300 KB gzip) → carregado sob demanda, fora do bundle do Dashboard.
+const AgendaCalendar = lazy(() => import("./AgendaCalendar"));
+
+function googleEventWhen(item: AgendaItem): string {
+  if (item.all_day) return `Dia inteiro · ${format(parseISO(item.starts_at), "dd/MM/yyyy", { locale: ptBR })}`;
+  const start = format(parseISO(item.starts_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
   const end = item.ends_at ? format(parseISO(item.ends_at), "HH:mm") : null;
   return end ? `${start}–${end}` : start;
 }
 
-function AgendaItemRow({
-  item,
-  scope,
-  deleting,
-  onEdit,
-  onDelete,
-}: {
-  item: AgendaItem;
-  scope: AgendaScope;
-  deleting: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const isGoogle = item.source === "google";
-  const who = isGoogle
-    ? "Google Agenda"
-    : [item.patient_name, item.professional_name].filter(Boolean).join(" · ") || "Sem vínculo";
+function Legend({ title, items }: { title: string; items: { key: string; label: string; color: string }[] }) {
   return (
-    <li className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5 transition-colors hover:bg-accent/40">
-      <div className="flex w-20 shrink-0 flex-col">
-        {scope === "week" ? (
-          <span className="text-[11px] font-medium uppercase text-muted-foreground">
-            {format(parseISO(item.starts_at), "EEE dd/MM", { locale: ptBR })}
-          </span>
-        ) : null}
-        <span className="tnum font-display text-sm font-semibold text-foreground">{timeRange(item)}</span>
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 font-medium text-foreground">
-          <span className="truncate">{item.title}</span>
-          {isGoogle ? (
-            <Badge tone="muted" className="shrink-0">
-              Google
-            </Badge>
-          ) : null}
-        </div>
-        <p className="truncate text-xs text-muted-foreground">{who}</p>
-      </div>
-      {/* Eventos do Google são READ-ONLY (sem editar/excluir). CRUD só para a agenda interna. */}
-      {isGoogle ? null : (
-        <div className="flex shrink-0 items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            aria-label={`Editar ${item.title}`}
-            onClick={onEdit}
-            disabled={deleting}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            aria-label={`Excluir ${item.title}`}
-            onClick={onDelete}
-            disabled={deleting}
-          >
-            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-          </Button>
-        </div>
-      )}
-    </li>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <span className="font-medium text-muted-foreground">{title}:</span>
+      {items.map((it) => (
+        <span key={it.key} className="inline-flex items-center gap-1.5 text-muted-foreground">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: it.color }} aria-hidden />
+          {it.label}
+        </span>
+      ))}
+    </div>
   );
 }
 
 /**
- * Agenda no Dashboard (Review §3 + Sessão 10). Mescla a agenda INTERNA (CRUD real, S6) com os
- * eventos do GOOGLE CALENDAR (somente leitura) — cada item traz a fonte. O CRUD interno segue
- * intacto; eventos Google não são editados/excluídos. Escopado por clínica (isolamento).
+ * Agenda do Dashboard (Sessão 12) — calendário FullCalendar (Mês/Semana/Dia/Lista) que mescla a
+ * agenda INTERNA (CRUD da S6, com tipo/status e cor) e os eventos do GOOGLE (S10, read-only, laranja).
+ * A busca é RANGE-DRIVEN (datesSet → faixa visível). Integrações ficam num dropdown no topo (S12).
  */
 export function AgendaCard({
   clinicId,
@@ -99,47 +58,76 @@ export function AgendaCard({
   clinicId: string | null;
   defaultProfessionalId: string | null;
 }) {
-  const [scope, setScope] = useState<AgendaScope>("today");
+  const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AppointmentView | null>(null);
+  const [createStart, setCreateStart] = useState<Date | null>(null);
+  const [googleView, setGoogleView] = useState<AgendaItem | null>(null);
 
-  const { items, isLoading, isError, googleError, refetch } = useAgenda(clinicId, scope);
-  const del = useDeleteAppointment(clinicId ?? "none");
+  const { items, isFetching, isError, googleError, refetch } = useAgenda(
+    clinicId,
+    range?.from ?? null,
+    range?.to ?? null,
+  );
+  const update = useUpdateAppointment(clinicId ?? "none");
+
+  const onRangeChange = useCallback((from: string, to: string) => {
+    setRange((prev) => (prev && prev.from === from && prev.to === to ? prev : { from, to }));
+  }, []);
 
   function openCreate() {
     setEditing(null);
+    setCreateStart(null);
     setDialogOpen(true);
   }
-  function openEdit(appt: AppointmentView) {
+  const onCreateAt = useCallback((start: Date, allDay: boolean) => {
+    // Slot de mês/all-day não tem hora → ancora às 09:00 do dia clicado.
+    const base = allDay
+      ? new Date(start.getFullYear(), start.getMonth(), start.getDate(), 9, 0, 0)
+      : start;
+    setEditing(null);
+    setCreateStart(base);
+    setDialogOpen(true);
+  }, []);
+  const onSelectInternal = useCallback((appt: AppointmentView) => {
+    setCreateStart(null);
     setEditing(appt);
     setDialogOpen(true);
-  }
-  function handleDelete(appt: AppointmentView) {
-    // Confirmação simples (sprint) — evita exclusão acidental sem um diálogo dedicado.
-    if (window.confirm(`Excluir "${appt.title}"?`)) del.mutate(appt.id);
-  }
+  }, []);
+  const onSelectGoogle = useCallback((item: AgendaItem) => setGoogleView(item), []);
+
+  // Remarcar via arrastar/redimensionar (só interno). Retorna a Promise da mutação;
+  // se rejeitar, o AgendaCalendar reverte o movimento na própria UI do FullCalendar.
+  const onMoveInternal = useCallback(
+    (appt: AppointmentView, startISO: string, endISO: string | null) => {
+      const input: AppointmentInput = {
+        clinicId: appt.clinic_id,
+        title: appt.title,
+        startsAt: startISO,
+        endsAt: endISO,
+        patientId: appt.patient_id,
+        professionalId: appt.professional_id,
+        notes: appt.notes,
+        type: appt.type,
+        status: appt.status,
+      };
+      return update.mutateAsync({ id: appt.id, input });
+    },
+    [update],
+  );
+
+  const typeLegend = [
+    ...TYPE_LEGEND.map((t) => ({ key: t.key as string, label: t.label, color: t.color })),
+    { key: "google", label: GOOGLE_META.label, color: GOOGLE_META.color },
+  ];
+  const statusLegend = STATUS_LEGEND.map((s) => ({ key: s.key as string, label: s.label, color: s.color }));
 
   return (
     <Card className="flex flex-col">
       <CardHeader className="gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>Agenda</CardTitle>
         <div className="flex items-center gap-2">
-          <div role="group" aria-label="Período da agenda" className="flex rounded-lg border bg-muted/40 p-0.5">
-            {(["today", "week"] as AgendaScope[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                aria-pressed={scope === s}
-                onClick={() => setScope(s)}
-                className={cn(
-                  "rounded-md px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  scope === s ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {s === "today" ? "Hoje" : "Semana"}
-              </button>
-            ))}
-          </div>
+          <IntegrationsMenu clinicId={clinicId} professionalId={defaultProfessionalId} />
           <Button size="sm" onClick={openCreate} disabled={!clinicId}>
             <CalendarPlus className="h-4 w-4" />
             Novo compromisso
@@ -148,67 +136,51 @@ export function AgendaCard({
       </CardHeader>
 
       <CardContent className="flex flex-1 flex-col">
-        {/* Falha do Google é sinalizada SEMPRE (inclusive no estado vazio) p/ não passar "nada agendado"
-            quando na verdade os eventos do Google não carregaram. A agenda interna segue funcionando. */}
-        {!isLoading && !isError && googleError ? (
+        {/* Atualizando a faixa visível (navegação/troca de view) — eventos anteriores seguem na tela
+            (keepPreviousData); este é o feedback de carregamento da nova janela. */}
+        {isFetching && !isError ? (
+          <p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            Atualizando agenda…
+          </p>
+        ) : null}
+        {/* Falha do Google é sinalizada sem derrubar a agenda interna (S10). */}
+        {!isFetching && !isError && googleError ? (
           <p className="mb-2 text-xs text-muted-foreground" role="status">
             Mostrando a agenda interna. Não foi possível carregar os eventos do Google agora.
           </p>
         ) : null}
-        {isLoading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full" />
-            ))}
-          </div>
-        ) : isError ? (
-          <div className="flex items-center justify-between gap-3 py-2">
+        {/* Remarcar (arrastar/redimensionar) falhou: o evento volta à posição e avisamos o motivo. */}
+        {update.isError ? (
+          <p className="mb-2 text-sm text-destructive" role="alert">
+            Não foi possível remarcar o compromisso. Tente novamente.
+          </p>
+        ) : null}
+        {isError ? (
+          <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">Não foi possível carregar a agenda.</p>
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               Tentar novamente
             </Button>
           </div>
-        ) : items.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 py-8 text-center">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground" aria-hidden>
-              <CalendarClock className="h-5 w-5" />
-            </span>
-            <p className="text-sm text-muted-foreground">
-              {scope === "today" ? "Nada agendado para hoje." : "Nenhum compromisso nesta semana."}
-            </p>
-            <Button variant="outline" size="sm" onClick={openCreate} disabled={!clinicId}>
-              <CalendarPlus className="h-4 w-4" />
-              Agendar
-            </Button>
-          </div>
-        ) : (
-          <>
-            {del.isError ? (
-              <p className="mb-2 text-sm text-destructive" role="alert">
-                Não foi possível excluir o compromisso. Tente novamente.
-              </p>
-            ) : null}
-            <ul className="space-y-2">
-              {items.map((item) => (
-                <AgendaItemRow
-                  key={item.id}
-                  item={item}
-                  scope={scope}
-                  deleting={del.isPending && item.appointment ? del.variables === item.appointment.id : false}
-                  onEdit={() => item.appointment && openEdit(item.appointment)}
-                  onDelete={() => item.appointment && handleDelete(item.appointment)}
-                />
-              ))}
-            </ul>
-          </>
-        )}
+        ) : null}
 
-        {/* Integração Google Calendar (read-only) — substitui o placeholder da S6 (#19). Google Meet fora. */}
-        <GoogleCalendarConnection
-          clinicId={clinicId}
-          professionalId={defaultProfessionalId}
-          variant="compact"
-        />
+        <Suspense fallback={<Skeleton className="h-[640px] w-full" />}>
+          <AgendaCalendar
+            items={items}
+            onRangeChange={onRangeChange}
+            onSelectInternal={onSelectInternal}
+            onSelectGoogle={onSelectGoogle}
+            onCreateAt={onCreateAt}
+            onMoveInternal={onMoveInternal}
+          />
+        </Suspense>
+
+        {/* Duas legendas (como o Nutrio): cores por TIPO de evento e por STATUS do agendamento. */}
+        <div className="mt-3 flex flex-col gap-2 border-t pt-3 text-xs sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-8">
+          <Legend title="Tipos de evento" items={typeLegend} />
+          <Legend title="Status do agendamento" items={statusLegend} />
+        </div>
       </CardContent>
 
       {clinicId ? (
@@ -218,8 +190,27 @@ export function AgendaCard({
           clinicId={clinicId}
           existing={editing}
           defaultProfessionalId={defaultProfessionalId}
+          initialStart={createStart}
         />
       ) : null}
+
+      {/* Leitura de evento do Google (read-only — sem editar/excluir). */}
+      <Dialog open={Boolean(googleView)} onOpenChange={(o) => !o && setGoogleView(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="truncate">{googleView?.title}</span>
+              <Badge tone="muted" className="shrink-0">
+                Google
+              </Badge>
+            </DialogTitle>
+            <DialogDescription>Evento do Google Agenda — somente leitura.</DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <p className="text-sm text-foreground">{googleView ? googleEventWhen(googleView) : null}</p>
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

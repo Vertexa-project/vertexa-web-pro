@@ -233,6 +233,13 @@ export interface Campaign {
 
 // Agenda interna do profissional (Sessão 6) — web-only (o app paciente NÃO usa).
 // NÃO renomear colunas sem alinhar no CONTRATO. patient_id = patients.id; professional_id = professionals.id.
+
+// Tipo do compromisso (Sessão 12) — categoria clínica + cor no calendário.
+export type AppointmentType = "consulta" | "retorno" | "previsao_retorno" | "outros";
+// Status do compromisso (Sessão 12) — CICLO CLÍNICO. NÃO confundir com CalendarConnectionStatus
+// (saúde OAuth) nem com CalendarEventCache.status (valor cru do Google) — três domínios distintos.
+export type AppointmentStatus = "confirmado" | "pendente" | "desmarcado";
+
 export interface Appointment {
   id: string;
   clinic_id: string; // NOT NULL no banco (isolamento por clínica)
@@ -242,6 +249,8 @@ export interface Appointment {
   starts_at: string; // ISO timestamptz
   ends_at: string | null;
   notes: string | null;
+  type: AppointmentType; // NOT NULL no banco (default 'consulta')
+  status: AppointmentStatus; // NOT NULL no banco (default 'confirmado')
   created_at: string;
 }
 
@@ -296,6 +305,11 @@ export interface AgendaItem {
   all_day: boolean;
   patient_name: string | null;
   professional_name: string | null;
+  /** Só para 'internal' — tipo/ciclo clínico do compromisso (Sessão 12). */
+  appointmentType?: AppointmentType;
+  appointmentStatus?: AppointmentStatus;
+  /** Só para 'google' — status cru do evento no Google (confirmed/tentative/cancelled). */
+  googleEventStatus?: string | null;
   /** Só para 'internal' — base do editar/excluir. */
   appointment?: AppointmentView;
 }

@@ -243,6 +243,13 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   Configurações (admin-gated). **web/Edge-only** — o app paciente NÃO consome `calendar_*`; contrato cross-repo
   inalterado. Cifra do refresh_token (#22), verificação de tenant no servidor (#23) e round-trip OAuth real
   (`NÃO_COMPROVADO_AUTOMATICAMENTE`, ver `docs/ops/SETUP_GOOGLE_CALENDAR.md`) seguem para a S9. ✅
+- Sessão 12 — **Agenda do Dashboard como CALENDÁRIO (FullCalendar v6).** Migration aditiva `20260626160000`:
+  `appointments` ganha `type` (consulta/retorno/previsao_retorno/outros) e `status` (confirmado/pendente/desmarcado)
+  — `text` + CHECK + defaults; RLS sprint **intacta**; **NÃO** toca `calendar_*` (tokens/state seguem deny-all). A
+  web passa a ler/gravar os novos campos; **web-only** (o app paciente NÃO consome `appointments`) → contrato
+  cross-repo inalterado. Busca **range-driven** (faixa visível) + cor por tipo/status; Google (S10) segue mesclado
+  read-only. A conexão Google migrou para um dropdown **Integrações** no topo da agenda (admin-gated). Fuso fixo
+  (`@fullcalendar/luxon3`) diferido (PENDENCIAS #25); RLS real de `type/status` segue no guarda-chuva da S9. ✅
 
 **App (`vertexa-app-paciente`):**
 - 4a — fundação (client Supabase + camada api) ✅ (`74806f2`)

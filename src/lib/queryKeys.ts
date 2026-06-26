@@ -19,9 +19,11 @@ export const qk = {
   clinicProfessionals: (clinicId: string) => ["clinicProfessionals", clinicId] as const,
   campaigns: ["campaigns"] as const,
   allPlans: ["plans", "all"] as const,
-  // Agenda interna (Sessão 6) — escopada por clínica + janela de tempo.
-  appointments: (clinicId: string, scope: string) => ["appointments", clinicId, scope] as const,
-  // Integração Google Calendar (Sessão 10) — escopada por clínica.
+  // Agenda interna (Sessão 6/12) — escopada por clínica + faixa visível do calendário [from, to).
+  appointments: (clinicId: string, fromISO: string, toISO: string) =>
+    ["appointments", clinicId, fromISO, toISO] as const,
+  // Integração Google Calendar (Sessão 10/12) — escopada por clínica.
   calendarConnection: (clinicId: string) => ["calendarConnection", clinicId] as const,
-  calendarEvents: (clinicId: string, scope: string) => ["calendarEvents", clinicId, scope] as const,
+  calendarEvents: (clinicId: string, fromISO: string, toISO: string) =>
+    ["calendarEvents", clinicId, fromISO, toISO] as const,
 };

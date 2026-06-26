@@ -170,3 +170,11 @@
     re-selecionada no lugar de uma boa. Hoje há no máximo 1 conexão por clínica (seed/demo), então não se
     manifesta. Correção: priorizar `connected` (ou alinhar com a decisão de unicidade do índice) ao resolver
     "a conexão da clínica".
+
+25. **Fuso horário fixo no calendário (Sessão 12 — pós-demo).** O FullCalendar usa `timeZone: 'local'` (correto
+    para a demo BR — fuso do navegador). Para clínicas/usuários fora de `America/Sao_Paulo` (ex.: Manaus, Acre),
+    a linha do "agora" e a posição dos eventos divergem do horário da clínica. Pós-demo, fixar
+    `timeZone: 'America/Sao_Paulo'` exige o plugin `@fullcalendar/luxon3` (~60 KB gzip) — não entrou agora para
+    não inflar o bundle. Avaliar quando houver clínica multi-fuso. **Obs.:** a RLS real dos novos campos
+    `appointments.type/status` segue no guarda-chuva da S9 (a policy de sprint de `appointments` é permissiva;
+    ver #11–#14) — adicionar colunas não muda o modelo de acesso.
