@@ -20,6 +20,7 @@ dist-ssr
 
 # Artefatos repomix (pack do repo para LLM — gerado, não versionar)
 repomix-*.xml
+repomix.xml
 
 # Editor
 .vscode/*

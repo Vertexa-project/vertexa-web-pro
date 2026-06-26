@@ -81,10 +81,11 @@
       admin/professional). Sob RLS real: derivar `clinic_id`/`professional_id` de `auth.uid()` no servidor
       (RPC `SECURITY DEFINER` que cruza `professionals.profile_id`), nunca confiar no que o client enviou —
       o isolamento por clínica hoje é **client-side** (vem do `DEMO_PROFESSIONAL_PROFILE_ID`).
-    - **Ledger técnico interno (Sessão 7 corrigida)** — `20260626120000_schema_migration_log.sql` criou
-      `schema_migration_log`; `20260626123000_schema_migration_log_internal_only.sql` remove `miglog_read`,
-      revoga privilégios de `anon`/`authenticated` e mantém RLS ligada. O ledger não aparece no portal,
-      não possui API client/hook/rota/card e deve ser inspecionado somente por MCP, SQL administrativo ou migrations.
+    - **Ledger técnico interno (Sessão 7/8) — ✅ RESOLVIDO no remoto (S8).** `20260626120000_schema_migration_log.sql`
+      criou `schema_migration_log`; `20260626123000_schema_migration_log_internal_only.sql` (**aplicada via MCP em
+      2026-06-26**) removeu `miglog_read`, revogou privilégios de `anon`/`authenticated` e manteve RLS ligada.
+      Validado: 12 linhas, sem policy pública, `has_table_privilege(anon/authenticated,select)`=false, `relrowsecurity`=true.
+      O ledger não aparece no portal (sem API client/hook/rota/card; `rg` em `src`=0); inspeção só por MCP/SQL/migrations.
     - **Agenda interna (Sessão 6)** — `20260626090000_appointments_internal_agenda.sql`:
       `appointments` roda permissiva — `sprint_appointment_read` (SELECT) + `sprint_appointment_write` (ALL),
       `anon`/`authenticated` `using/with check (true)`. Qualquer anon lê/escreve compromissos de QUALQUER

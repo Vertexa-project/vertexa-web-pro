@@ -26,7 +26,10 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 - **Sessão 7 (web):** **Ledger técnico interno** (`schema_migration_log` + backfill, somente Supabase/MCP/migrations)
   + **RBAC de UI** (papel controla ver/editar; seletor de papel "modo demonstração"). O ledger não tem
   exposição no portal, API client ou acesso `anon`/`authenticated`; RLS clínica segue para a S9.
-- **Sessão 8 (dívida):** bucket de fotos privado + signed URL; RLS por papel/clínica (#11–#14).
+- **Sessão 8 (release gate + QA):** gate do ledger `20260626123000` **APLICADA** no Supabase remoto via
+  MCP (12 linhas; sem leitura anon/auth; RLS on). QA integrada web↔app com **E2E reais** (hidratação app→web
+  e chat web, ambos com cleanup) + leitura de dado seed real nos demais fluxos. Roteiro de demo + runbook
+  (marcado APLICADA). Bucket privado/RLS real por papel/clínica seguem para S9/P1.
 
 ## 3. Tracker
 | # | Tarefa | Status | Evidência |
@@ -80,6 +83,10 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 | S7 | PART B — edição por papel (gating) | ✅ | `GatedAction` (focável, `aria-disabled` + `aria-describedby` com motivo visível). Nutri edita Plano alimentar e NÃO Treino; médico o inverso (botão inerte + motivo). |
 | S7 | Revisão adversarial + correções | ✅ | Correção incremental: nenhuma referência frontend ao ledger deve permanecer em `src`; RBAC de UI permanece; RLS de dados clínicos não foi alterada. |
 | S7 | typecheck + lint + build + Playwright | ✅ | Correção incremental S7: typecheck 0 · lint 0 · build 0 · Playwright local: nutri/plano, médico/treino, admin sem ledger no portal, 0 erro de console. RLS de dados NÃO tocada (é a S9). |
+| S8 | Gate da migration `20260626123000` | ✅ | **APLICADA** via MCP (esta sessão tem MCP admin; a anterior não tinha → era `BLOCKED_REMOTE_MIGRATION`). Validado: ledger=12 linhas; `pg_policies`=∅; `has_table_privilege(anon/authenticated,select)`=false; `relrowsecurity`=true. Sem `db push`/`db reset`. Runbook marcado APLICADA. |
+| S8 | QA integrada web↔app | ✅ | `docs/QA_S8_RELEASE_GATE.md`. **E2E reais nesta sessão (com cleanup):** hidratação app→`activity_events`→web "Hidratação de hoje" 0,0→0,3 L; chat web→`chat_messages`(professional/Camila)→thread. Demais fluxos: dado seed real lido (MCP+UI) + escrita conferida no código dos 2 repos. Foto app→bucket e conclusão de treino = NÃO_COMPROVADO (sem cleanup seguro). |
+| S8 | QA local (web + app) | ✅ | Web: tsc 0 · lint 0 (`--max-warnings 0`) · build 0 · `rg` ledger em `src`=0. App: vitest 25/25 · tsc 0 · build 0 · lint 3 erros+9 warns **pré-existentes** (shadcn não tocado). Playwright web+app: rotas + RBAC + 0 `console.error`/`pageerror`. |
+| S8 | Roteiro da demo 26/06 | ✅ | `docs/DEMO_2606.md`: roteiro honesto (E2E validado / pronto-UI / seed / mockado / NÃO_COMPROVADO / S9), gate APLICADA. |
 
 ## 4. Como rodar / verificar
 - `npm run dev` (precisa de `.env` — copie de `.env.example`). Sem `.env`: tela de configuração (não mais branca).
@@ -104,8 +111,8 @@ Detalhe canônico e inequívoco vive em `docs/CONTRATO_INTEGRACAO.md → "Spine 
 - **RLS permissiva (sprint):** `weight_logs`/bucket usam policies `*_write` always-true (igual aos demais
   `sprint_*`). OK só com seed fictício; travar por papel/clínica antes de dado real (#11–#14).
 - **Bucket público (LGPD):** foto corporal = dado de saúde. Bucket é público + policy de INSERT sem
-  escopo de paciente/pasta nem limite de mime/tamanho. **BLOQUEANTE antes de paciente real** (Sessão 8 +
-  #11–#14): privado + signed URL + INSERT escopado. Hoje só seed fictício sobe ao bucket.
+  escopo de paciente/pasta nem limite de mime/tamanho. **BLOQUEANTE antes de paciente real** (S9/P1 +
+  #11–#14, PENDENCIAS #12): privado + signed URL + INSERT escopado. Hoje só seed fictício sobe ao bucket.
 - **Seed de foto** é um data URI placeholder (não há binário no bucket ainda) — some quando o app subir fotos reais.
 - **VRI da Mariana** — RECONCILIADO na Sessão 2 (app): snapshot mais recente = **88/alta** (CONTRATO #3), consistente entre web e app (ambos leem o último snapshot). Ações reais (ex.: concluir treino) recomputam o VRI de dados reais e sobem o valor (demonstra "VRI muda com ação real"); o engine satura no topo p/ paciente muito ativo (pesos do VRI provisórios, #3).
 

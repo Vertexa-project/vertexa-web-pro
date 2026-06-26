@@ -82,7 +82,7 @@ Colunas-chave (verbatim do schema; **não renomear sem alinhar aqui**):
 - **App grava** (Sessão 2, pendente): faz **upload do binário** para o bucket **`progress-photos`**
   (Storage) e insere `progress_photos (patient_id, photo_url, captured_in_app=true, taken_at)` com
   `photo_url` = URL pública do objeto. Bucket é **público** na sprint (download via URL pública,
-  sem signed URL). **Dívida Sessão 8 (BLOQUEANTE p/ paciente real — foto corporal = dado de saúde/LGPD):**
+  sem signed URL). **Dívida S9/P1 (PENDENCIAS #12/#11–#14; BLOQUEANTE p/ paciente real — foto corporal = dado de saúde/LGPD):**
   bucket privado + signed URL + policy de INSERT escopada por paciente/pasta + limite de mime/tamanho.
   Hoje só seed fictício deve subir ao bucket.
 - **Web lê**: `api/assessments.ts → getProgressPhotos(patientId)` → grade de `<img src=photo_url>`.
@@ -224,6 +224,12 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   não possui API client e não concede SELECT a `anon`/`authenticated`; inspeção só por MCP/SQL administrativo/migrations.
   **RBAC de UI ≠ RLS de dados** (a RLS por papel/clínica segue como dívida #11–#14 / S9). Verificado por Playwright
   (alternando papel) + MCP. Contrato de DADOS cross-repo inalterado. ✅
+- Sessão 8 — **Release gate + QA integrada.** Gate do ledger `20260626123000` **APLICADA** no remoto via MCP
+  (12 linhas; `miglog_read` removida; SELECT anon/auth revogado; RLS on). QA web↔app com **E2E reais** (com
+  cleanup): hidratação app→`activity_events(hydration_logged.liters)`→web "Hidratação de hoje" (0,0→0,3 L);
+  chat web→`chat_messages`(`sender_role='professional'`, Camila)→thread. Demais fluxos do spine: dado seed real
+  lido (MCP+UI) + escrita conferida no código dos 2 repos. Contrato de DADOS inalterado. RLS real por papel/clínica
+  + storage privado seguem para S9/P1. Ver `docs/QA_S8_RELEASE_GATE.md` + `docs/DEMO_2606.md`. ✅
 
 **App (`vertexa-app-paciente`):**
 - 4a — fundação (client Supabase + camada api) ✅ (`74806f2`)
