@@ -14,7 +14,7 @@
 
 ## Topologia
 - **Dois repos, UM Supabase.** Layout: `vertexa/vertexa-web-pro` + `vertexa/vertexa-app-paciente`.
-- Projeto Supabase: `jlwbagkmpzbvasrsdroo` ("Vertexa").
+- Projeto Supabase: `cdhjfyyuhmwrcuxqavib` ("Vertexa").
 - Os dois clients leem `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (somente **anon** key no client).
 - **web** = painel do profissional (light). **app** = PWA do paciente (dark). Mesmo brand laranja.
 

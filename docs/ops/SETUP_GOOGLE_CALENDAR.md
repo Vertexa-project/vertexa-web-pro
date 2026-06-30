@@ -10,7 +10,7 @@ Read-only, multi-tenant, via **Supabase Edge Functions (Deno)**. O client Vite *
 ## Arquitetura (o que já está no repo/Supabase)
 
 - **Migrations:** `20260626140000_calendar_integration.sql` (4 tabelas + RLS) e
-  `20260626150000_seed_demo_calendar.sql` (seed fictício). Já aplicadas no projeto `jlwbagkmpzbvasrsdroo`.
+  `20260626150000_seed_demo_calendar.sql` (seed fictício). Já aplicadas no projeto `cdhjfyyuhmwrcuxqavib`.
 - **Tabelas:** `calendar_connections` (metadado, leitura sprint), `calendar_connection_tokens`
   (**DENY-ALL** — só `service_role`), `calendar_event_cache` (leitura sprint), `calendar_oauth_state`
   (**DENY-ALL** — anti-CSRF, TTL 10 min, single-use).
@@ -24,7 +24,7 @@ Read-only, multi-tenant, via **Supabase Edge Functions (Deno)**. O client Vite *
 
 ```
 CALLBACK_LOCAL     = http://localhost:54321/functions/v1/google-calendar-callback
-CALLBACK_PRODUCAO  = https://jlwbagkmpzbvasrsdroo.supabase.co/functions/v1/google-calendar-callback
+CALLBACK_PRODUCAO  = https://cdhjfyyuhmwrcuxqavib.supabase.co/functions/v1/google-calendar-callback
 ```
 
 O `redirect_uri` registrado no Google é a **Edge Function** (não o `localhost:5173`/Vercel). Após a
@@ -48,7 +48,7 @@ troca, a function faz `302` de volta ao SPA em `<origem>/configuracoes?calendar=
 supabase secrets set \
   GOOGLE_CALENDAR_CLIENT_ID="<client id>" \
   GOOGLE_CALENDAR_CLIENT_SECRET="<client secret>" \
-  GOOGLE_CALENDAR_REDIRECT_URI="https://jlwbagkmpzbvasrsdroo.supabase.co/functions/v1/google-calendar-callback"
+  GOOGLE_CALENDAR_REDIRECT_URI="https://cdhjfyyuhmwrcuxqavib.supabase.co/functions/v1/google-calendar-callback"
 ```
 
 > `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` já são injetados pelo runtime das Edge Functions — não
