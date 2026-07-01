@@ -17,6 +17,7 @@ export const qk = {
   currentProfessional: (profileId: string) => ["currentProfessional", profileId] as const,
   currentProfessionalRecord: (profileId: string) => ["currentProfessional", profileId, "record"] as const,
   clinicProfessionals: (clinicId: string) => ["clinicProfessionals", clinicId] as const,
+  clinic: (clinicId: string) => ["clinic", clinicId] as const,
   campaigns: ["campaigns"] as const,
   allPlans: ["plans", "all"] as const,
   // Agenda interna (Sessão 6/12) — escopada por clínica + faixa visível do calendário [from, to).

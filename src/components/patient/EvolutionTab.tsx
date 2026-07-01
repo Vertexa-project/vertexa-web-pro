@@ -1,6 +1,7 @@
 import { ImageIcon } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
+import { ExportEvolutionButton } from "./ExportEvolutionButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useProgressPhotos } from "@/hooks/useBodyAssessments";
 import { formatDate, formatWeight } from "@/lib/domain/format";
@@ -36,6 +37,16 @@ export function EvolutionTab({ patient }: { patient: PatientDetail }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">Evolução do paciente</h2>
+          <p className="text-sm text-muted-foreground">
+            Relatório com KPIs, gráfico de peso, antropometria e fotos comparativas.
+          </p>
+        </div>
+        <ExportEvolutionButton patient={patient} />
+      </div>
+
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <SummaryCard label="Peso inicial" value={formatWeight(start)} />
         <SummaryCard label="Peso atual" value={formatWeight(current)} />
