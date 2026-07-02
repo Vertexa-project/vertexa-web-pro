@@ -159,16 +159,19 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 
 ## Pendências cross-repo
 - **#1** esquema de recuperação muscular (provisório `recovered/weakened`; confirmar c/ Juliana).
-- **#3** pesos do VRI (provisórios; web só lê snapshots). Mariana ≈ score **88 / alta** — não contradizer.
+- **#3** pesos do VRI (provisórios; web só lê snapshots). Baseline convergente da Mariana =
+  **~96 / alta** (engine-computado a partir do seed rolante — ver #3b); o **88 autoral foi SUPERADO**
+  (era incompatível com um perfil engajado sob a engine calibrada). Ainda "alta" — não contradizer o nível.
   **Calibração C7 (Sessão 15 — app): ✅** o motor NÃO crava mais 100 no primeiro toque. `computeScore`
   foi recomposto (recência = termo positivo LIMITADO sem reset + engajamento num orçamento + soft-cap
-  por retornos decrescentes na banda [70,100]). O perfil REAL da Mariana hoje LANDA **~88-91/alta**
-  (passivo 89; 1 ação isolada → nudge pequeno p/ 91, não 100). Só APP (`adherenceEngine.ts`); shape do
-  snapshot e clamp inalterados; monotonicidade + piso 88 preservados por teste. **Follow-up #3b:**
-  `streak`/`weekly_completion_rate`/`positive_factors` do recompute vivo ainda derivam dos 4 eventos
-  esparsos (streak ~0-1, weekly ~20) e NÃO batem com o seed autoral (18/80) — calibrar o score não
-  conserta isso; para o demo bater 88/18/80 é preciso um seed ADITIVO de ~18 dias de eventos reais
-  (migration de seed no repo web), fora do escopo desta sessão.
+  por retornos decrescentes na banda [70,100]). Só APP (`adherenceEngine.ts`); shape do snapshot e clamp
+  inalterados; monotonicidade + piso preservados por teste.
+  **#3b (Sessão 16 — seed convergente): ✅ RESOLVIDO (via MCP, 02/07).** A Mariana passou a ter uma janela
+  ROLANTE de ~18 dias de eventos REAIS (função versionada `refresh_demo_mariana_streak()`), de modo que a
+  ENGINE CALCULA `streak=18 / weekly=80% / score ~96/alta` — **CONVERGENTE** com o recompute vivo (o
+  snapshot que o web lê é ESCRITO PELA ENGINE, não cravado). Uma ação isolada NÃO derruba mais o streak
+  (segue 18 → 19 no dia seguinte). Drift: datas fixas envelhecem (~2 dias) → o seed é REFRESHÁVEL (ritual
+  pré-demo na Sessão 16).
 - **#15** aposentar a tabela `messages` legada + migrar seed (não-bloqueante; web e app já no `chat_*`).
 - **#16 (Sessão 2 — app): ✅ RESOLVIDO.** `Records.tsx` insere o VALOR do peso em `weight_logs`
   (`source='app'`, via `api/weight.ts`); aba Foto com input real (câmera+galeria) sobe o binário ao
@@ -357,6 +360,26 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   snapshot **91/alta, NÃO 100** → dado de teste limpo por id → Mariana restaurada a 88/alta (`a77e5c9b`).
   Ver pendência #3 (+ follow-up #3b: streak/weekly do recompute vivo ainda refletem os 4 eventos
   esparsos). App: branch `fix/vri-calibration` (PR aberto, sem merge).
+- **Sessão 16 — SEED CONVERGENTE da Mariana (fecha #3b): ✅ VERIFICADO VIA MCP (02/07).**
+  Problema: o snapshot autoral (88/streak18/weekly80) NÃO era reproduzível pela engine calibrada — o
+  recompute vivo dava streak~0-1/weekly~20, então a 1ª ação derrubava a sequência 18→1. Solução (SÓ repo
+  WEB, migration de seed — sem mudança de app): função versionada **`refresh_demo_mariana_streak()`** planta
+  uma janela ROLANTE de 18 dias de eventos REAIS relativa a `now()` SÓ p/ a Mariana (17× `hydration_logged`
+  D1..D17 + 4× `workout_checked` D0/D2/D4/D6 → weekly 80% + marcadores de timeline weight/photo), marcados
+  com `payload->>'seed'='demo_mariana_streak'`. A função é DONA do estado (delete-all + replant),
+  idempotente, SEM EXECUTE p/ anon/authenticated (espelha `20260630234139`). **Baseline COMPUTADO pela
+  engine (não cravado):** 1 ação real no app (registrar Sono → `sleep_logged` → eventSync) fez a engine
+  gravar o snapshot **96/alta/streak 18/weekly 80** (positive_factors
+  ["Sequência de 18 dias","Treinos consistentes","Peso atualizado","Plano acompanhado"]). **Convergência
+  provada:** o snapshot que o web lê == o recompute vivo; a ação isolada NÃO derrubou o streak (segue 18 →
+  19 no dia seguinte). O "88" autoral foi SUPERADO por **~96/alta** (decisão aprovada — o 88 era
+  incompatível com um perfil engajado sob a engine C7); o snapshot autoral `a77e5c9b` (88) segue como
+  histórico (o web lê o mais recente). **DRIFT — seed REFRESHÁVEL** (datas fixas envelhecem; o streak
+  colapsa em ~2 dias). **Ritual pré-demo** (via MCP + app):
+  `select public.refresh_demo_mariana_streak();` + 1 ação real da Mariana que dispare o tracker (ex.: Sono)
+  para a engine regravar o snapshot fresco. Migration `20260702130000_seed_demo_mariana_streak_convergence.sql`.
+  Gates do app (sem mudança de código): **typecheck OK · vitest 67/67 · build OK**. Web: branch
+  `fix/seed-mariana-convergence` (sem merge).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
@@ -370,5 +393,11 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   em 02/07 e dado de teste limpo por id (ver Sessão 14). Idempotente (`create table if not exists` + `drop
   policy if exists`). ⚠️ O nome do arquivo (`20260702120000`) difere do timestamp do ledger porque
   `apply_migration` usa o relógio do servidor — igual ao caso `meal_logs`.
+- `refresh_demo_mariana_streak()` (seed CONVERGENTE da Mariana, #3b) — migration
+  `20260702130000_seed_demo_mariana_streak_convergence.sql` **versionada** e **APLICADA** via
+  `apply_migration`. Função REFRESHÁVEL: janela rolante de 18 dias relativa a `now()` (delete-all + replant),
+  eventos com `payload.seed='demo_mariana_streak'`, SEM EXECUTE p/ anon/authenticated. O baseline
+  (96/18/80/alta) é escrito pela ENGINE via app (não cravado). Rollback: `drop function` + delete por marcador.
+  Ritual pré-demo: `select public.refresh_demo_mariana_streak();` + 1 ação da Mariana no app (recompute).
 
 **Teste ponta a ponta (4d):** ⏳ pendente — app `@Camila` → badge ao vivo na web + bater ponto → Timeline/recuperação.
