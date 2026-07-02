@@ -63,7 +63,12 @@
       `muscle_recovery_states` (`sprint_muscle_write_insert` INSERT + `sprint_muscle_write_update` UPDATE)
       hoje aceitam `with check (true)` de qualquer anon — ou seja, qualquer um pode injetar evento/estado
       de recuperação para QUALQUER paciente. Sob RLS real, só o próprio paciente (`auth.uid()` → seu
-      `patient_id`) pode escrever os seus eventos/estados.
+      `patient_id`) pode escrever os seus eventos/estados. Mesmo padrão em `meal_logs`
+      (`20260701120000_meal_logs.sql`: `sprint_meal_write_insert` INSERT + `sprint_meal_write_delete`
+      DELETE, `with check`/`using (true)`) e `activity_sessions` (`20260702120000_activity_sessions.sql`:
+      `sprint_activity_session_write` INSERT `with check (true)`) — qualquer anon pode marcar/desmarcar
+      refeição ou lançar atividade complementar para QUALQUER `patient_id`. Fecham junto na mesma RLS real
+      por `auth.uid()` → `patient_id`.
     - **Modo demo** não pode usar a sessão anon contra o banco real quando a RLS fechar — isolar em
       dataset fictício ou desabilitar em `import.meta.env.PROD`.
     - **IDOR**: `getPatient(id)` lê qualquer UUID da URL; a barreira real é a RLS (acima) — tratar
