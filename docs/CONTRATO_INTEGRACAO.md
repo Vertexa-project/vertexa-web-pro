@@ -305,6 +305,33 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   correto, gravadas ~02:33 UTC = 23:33 de 01/07 em SP — + 3 marcadores `activity_events(meal_logged)` e o VRI
   subiu 88→100/alta, NUNCA rebaixando o nível; o app lê `meal_logs` com HTTP 200 e `/plan` mostra as refeições
   desmarcadas após o cleanup.) App: branch `feat/meal-done-persist`. Web: branch `feat/meal-logs-migration`.
+- **Sessão 14 — ATIVIDADE COMPLEMENTAR persiste (activity_sessions): ✅ VERIFICADO VIA MCP (02/07).**
+  `/log-activity` (LogActivity.tsx) era 100% visual — o "Salvar atividade" só trocava de step, sem gravar.
+  Agora: nova tabela CANÔNICA **`activity_sessions`** (VALOR: `modality`/`duration_min`/`calories`/`source`/
+  `performed_at`; `source` 'manual'|'device' — device cosmético mas o valor é persistido); evento
+  **`activity_logged`** no eventTracker (payload `{modality,duration_min,calories,source}`) espelhado pelo
+  eventSync em `activity_events(type='activity_logged')` **apenas como MARCADOR** de timeline + recomputa o VRI;
+  `src/lib/api/activities.ts` (`logActivitySession`/`getRecentActivitySessions`/`getActivitySessionsSince`,
+  tipado + react-query); catálogo único `src/lib/activityModalities.ts` (slug canônico
+  corrida|caminhada|ciclismo|natacao|jiujitsu|tenis|cardio|outra, compartilhado LogActivity↔Progress).
+  LogActivity persiste via `logActivitySession()` + `tracker.track('activity_logged')` ANTES de navegar pro
+  sucesso (NÃO navega se a escrita falhar; loading/erro tratados). Progress LÊ `activity_sessions` REAIS no bloco
+  "Atividades complementares" (lista + tempo/kcal reais da semana; estado vazio real; mock removido). **Fator de
+  atividade complementar ADITIVO/NÃO-NEGATIVO** no VRI (`adherenceEngine`: bônus por DIA distinto com
+  `activity_logged` nos últimos 7d, satura em 3 dias -> **máx +6**, ANTES do clamp -> **não rebaixa a Mariana
+  88/alta**, pendência #3; provado por teste de monotonicidade + invariante Mariana-like). A subida do VRI a 100
+  observada vem de fatores PRÉ-EXISTENTES do engine (reset do relógio de interação + bônus peso/foto/plano
+  passando do teto), **não** do bônus +2 desta sessão — o fator é reforço, não driver. Migration aditiva
+  `20260702120000_activity_sessions.sql` (RLS sprint: `sprint_activity_session_read` SELECT +
+  `sprint_activity_session_write` INSERT, espelhando `weight_logs`; #11-#14 fecham por clínica).
+  Gates: **typecheck OK · vitest 64/64 OK · build OK · lint (diff) OK** (baseline do repo mantém 3 erros
+  pré-existentes em `ui/command.tsx`/`ui/textarea.tsx`/`tailwind.config.ts`, alheios a esta mudança).
+  **Verificado via MCP em 02/07** (dev server local + Playwright MCP dirigindo o fluxo REAL): 1 atividade
+  (Corrida 30min/330kcal) -> linha em `activity_sessions` + marcador `activity_events(activity_logged,
+  payload={modality,duration_min,calories,source})` + Progresso mostra a atividade real e PERSISTE no reload;
+  VRI recomputado 88->100/alta (NUNCA rebaixando). Dado de teste limpo CIRURGICAMENTE por id; Mariana restaurada
+  a 88/alta (snapshot `a77e5c9b`). App: branch `feat/activity-sessions-persist`. Web (migration): branch
+  `feat/activity-sessions-migration`.
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
@@ -312,5 +339,11 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 - `meal_logs` — migration `20260701120000_meal_logs.sql` **versionada** (RLS sprint) e **APLICADA** no
   remoto; linhas reais verificadas via MCP em 02/07 e dado de teste limpo (ver Sessão 13). ⚠️ Confirmar que
   está registrada no ledger do CLI (`supabase_migrations.schema_migrations`) antes do merge — é idempotente.
+- `activity_sessions` — migration `20260702120000_activity_sessions.sql` **versionada** (RLS sprint espelhando
+  `weight_logs`: read SELECT + write INSERT anon/auth) e **APLICADA** via `apply_migration` (registrada no
+  ledger como `20260702103554`); linha real + marcador `activity_events(activity_logged)` verificados via MCP
+  em 02/07 e dado de teste limpo por id (ver Sessão 14). Idempotente (`create table if not exists` + `drop
+  policy if exists`). ⚠️ O nome do arquivo (`20260702120000`) difere do timestamp do ledger porque
+  `apply_migration` usa o relógio do servidor — igual ao caso `meal_logs`.
 
 **Teste ponta a ponta (4d):** ⏳ pendente — app `@Camila` → badge ao vivo na web + bater ponto → Timeline/recuperação.
