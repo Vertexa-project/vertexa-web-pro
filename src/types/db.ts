@@ -146,6 +146,34 @@ export interface ProgressPhoto {
   taken_at: string;
 }
 
+// Documento/exame do paciente (PDF/imagem) — bucket PRIVADO 'patient-documents' + URL assinada
+// (migration 20260702230000). Modelo BIDIRECIONAL: a WEB escreve (uploaded_by_role='professional');
+// o app paciente lerá/ESCREVERÁ no futuro (uploaded_by_role='patient'). NÃO renomear colunas sem
+// alinhar aqui + no CONTRATO. file_path = CAMINHO do objeto no bucket (NÃO URL pública) — resolver
+// via createSignedUrl no clique.
+export type DocumentUploaderRole = "professional" | "patient";
+// Tipo do documento — texto flexível no banco; estes são os valores canônicos da UI.
+export type PatientDocumentKind = "exam" | "report" | "other";
+
+export interface PatientDocument {
+  id: string;
+  patient_id: string;
+  uploaded_by_role: DocumentUploaderRole;
+  uploaded_by_professional_id: string | null; // professionals.id (null quando o paciente envia)
+  kind: string; // 'exam' | 'report' | 'other' (texto flexível — ver PatientDocumentKind)
+  title: string | null;
+  file_path: string; // caminho no bucket privado (NÃO URL pública)
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  uploaded_at: string;
+  created_at: string;
+}
+
+// Documento com o nome de quem enviou resolvido (professionals -> profiles) para a lista da web.
+export interface PatientDocumentView extends PatientDocument {
+  uploaded_by_name: string | null;
+}
+
 // Peso auto-reportado pelo paciente no app (tabela canônica do VALOR de peso).
 // Compartilhada com o app paciente — ver docs/CONTRATO_INTEGRACAO.md (spine de dados).
 export interface WeightLog {

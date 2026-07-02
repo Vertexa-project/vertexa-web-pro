@@ -52,6 +52,8 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
 | `adherence_snapshots` | **escreve** (VRI, 4c-2b) | **lê** (VRI) | — |
 | `achievements` (catálogo global) / `patient_achievements` (unlocks) — conquistas, S5 | **escreve** `patient_achievements` (pelo MOTOR) + **lê** ambas | lê (futuro) | — |
 | `notifications` (S6) | **lê** + **escreve** `read_at` (marcar lida) | escreve (futuro emissor) | — |
+| `patient_documents` (exames/documentos PDF/imagem, S-DOCS) | lê + **escreve** (`uploaded_by_role='patient'`, FUTURO — sessão do app) | **escreve** (`uploaded_by_role='professional'`) + **lê** | — |
+| Storage `patient-documents` (bucket **PRIVADO**, S-DOCS) | upload + download via signed URL (FUTURO) | **upload** + **lê via signed URL** (createSignedUrl, TTL 10 min) | — |
 | `workout_plans` / `workouts` / `workout_exercises` / `nutrition_plans` / `meals` | lê (4c-3, futuro) | **escreve** (editores) | — |
 | `appointments` (agenda interna, Sessão 6) | — (não usa) | **escreve + lê** (CRUD da Agenda) | — |
 | `calendar_*` (Google Calendar, Sessão 10) | — (não usa) | **lê** connections/cache; tokens/state **deny-all** (só Edge Function/service_role) | — |
@@ -66,6 +68,7 @@ Colunas-chave (verbatim do schema; **não renomear sem alinhar aqui**):
 - `progress_photos(id, patient_id, photo_url text, captured_in_app bool, taken_at timestamptz)`.
 - `appointments(id, clinic_id NOT NULL→clinics, patient_id?→patients, professional_id?→professionals, title, starts_at timestamptz, ends_at, notes, created_at)` — **agenda interna, web-only** (o app paciente NÃO consome). `notes` = texto livre → tratar como sensível sob RLS real.
 - `calendar_connections(id, clinic_id NOT NULL→clinics, professional_id?→professionals, provider, google_account_email, google_calendar_id, calendar_name, scopes, status, last_synced_at, created_at, updated_at)` + `calendar_event_cache(id, connection_id→calendar_connections, clinic_id, google_event_id, title, starts_at, ends_at, all_day, status, synced_at)` — **web/Edge-only** (Sessão 10; o app NÃO consome). `calendar_connection_tokens(connection_id PK, access_token, refresh_token, token_expires_at)` e `calendar_oauth_state(...)` são **deny-all** (sem leitura `anon`/`authenticated`; só Edge Function/service_role). Título de evento Google pode conter nome de paciente → sensível.
+- `patient_documents(id, patient_id→patients ON DELETE CASCADE, uploaded_by_role text CHECK in ('professional','patient'), uploaded_by_professional_id?→professionals ON DELETE SET NULL [auditoria; null quando o paciente envia], kind text default 'exam' [exam|report|other, flexível], title, file_path text [CAMINHO no bucket, NÃO URL pública], mime_type, file_size_bytes bigint, uploaded_at, created_at)` — **exames/documentos** (PDF/imagem). Bucket **PRIVADO** `patient-documents` (`public=false`) + **signed URL** (TTL 10 min) na leitura — `file_path` NÃO é URL pública. Modelo **BIDIRECIONAL**: a **web ESCREVE** (`'professional'`) nesta fase; o app paciente **lerá/ESCREVERÁ** (`'patient'`, professional_id NULL) no futuro (sessão do app) — hoje o app NÃO consome. Fecha a #12 para EXAME (privado + signed); a foto de progresso segue pública (dívida à parte).
 
 ## Spine de dados: PESO / FOTO / ÁGUA (Sessão 1 — fonte inequívoca p/ a Sessão 2)
 > Contexto: hoje o app só dispara `activity_events` SEM valor confiável
@@ -153,6 +156,7 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   - **Cadastro de paciente pela web (Sessão 4)** → `migrations/20260625180000_sprint_patient_create_write_policies.sql` ✅: INSERT em `patients` / `professional_patient_links` / `body_assessments` (`with check (true)`) + `profiles` (`with check (role = 'patient')` — restrito ao papel já na sprint, p/ não forjar admin/professional). Isolamento por clínica é client-side na sprint (vem do env da Dra. Camila); validar no servidor antes de dado real (#11–#14).
   - **Agenda interna (Sessão 6)** → `migrations/20260626090000_appointments_internal_agenda.sql` ✅: `sprint_appointment_read` (SELECT) + `sprint_appointment_write` (ALL), anon/auth `using/with check (true)`. Isolamento por `clinic_id` é client-side; `notes` é dado sensível. Fechar por papel/clínica no servidor antes de dado real (PENDENCIAS #14/#19).
   - **Ledger técnico interno (Sessão 7)** → `migrations/20260626120000_schema_migration_log.sql` ✅ cria `schema_migration_log` como companion legível da `supabase_migrations.schema_migrations` do CLI; `migrations/20260626123000_schema_migration_log_internal_only.sql` ✅ remove a leitura pública (`miglog_read`) e revoga privilégios de `anon`/`authenticated`. Sem API client, hook, rota, card ou seção no portal; inspeção somente por MCP, SQL administrativo ou migrations. NÃO substitui a tabela do CLI.
+  - **Documentos/exames (S-DOCS)** → `migrations/20260702230000_patient_documents.sql` ✅: `sprint_patient_document_read` (SELECT) + `sprint_patient_document_insert` (INSERT), `anon`/`authenticated` `using/with check (true)` — **SEM** UPDATE/DELETE (documento imutável na sprint). Storage bucket **PRIVADO** `patient-documents` (`public=false`) + `sprint_patient_documents_storage_read` (SELECT — é o que AUTORIZA o anon a ASSINAR a URL) + `sprint_patient_documents_storage_write` (INSERT), escopadas por `bucket_id`. Dado de SAÚDE mais sensível (exame) atrás de RLS permissiva → **AMBAS (tabela + storage) no checklist #14**; intenção da RLS real (S9: SELECT só profissionais vinculados + o paciente; INSERT do profissional via `auth.uid()→professionals`, do paciente só o próprio) no header da migration. Fecha a **#12** para EXAME (bucket privado + signed URL, TTL 10 min).
 - **Migrations = fonte única no repo web** (`vertexa-web-pro/supabase/migrations`). Toda policy aplicada
   via MCP DEVE virar arquivo de migration aqui — **todas** as policies de escrita sprint já versionadas.
 - **#11–#14 (BLOQUEANTE p/ dado real):** trocar tudo isso por RLS por papel/clínica/vínculo. Tabelas a
@@ -479,6 +483,31 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   reload; 0 erro de console) **+ MCP** (`read_at` gravado; VRI 96/alta inalterado; seed de teste restaurado a 2 não
   lidas). **Review adversarial (workflow, 5 dimensões × verificação): 0 achados.** App: branch
   `feat/journey-notifications-live`. Web: branch `feat/journey-notifications-migration` (empilhadas sobre S5; sem merge).
+- **S-DOCS — UPLOAD de exame/documento pela web (bucket PRIVADO + signed URL): ✅ VERIFICADO VIA MCP +
+  Playwright (02/07).** A aba Documentos tinha só um placeholder ("chega em breve") + os laudos legados de
+  `body_assessments.document_url` (leitura). Agora o profissional ENVIA exame/documento (PDF/imagem) de
+  verdade: nova tabela CANÔNICA **`patient_documents`** (bucket **PRIVADO** `patient-documents`, `public=false`
+  + **signed URL** TTL 10 min no clique — `file_path` guarda o caminho, NÃO URL pública). Camada
+  `src/lib/api/documents.ts` (`uploadPatientDocument` valida mime pdf/jpeg/png/webp + tamanho ≤15MB, sobe p/
+  `<patient_id>/<ts>.<ext>` e insere a linha; `listPatientDocuments` resolve o nome de quem enviou via `.in`
+  em professionals→profiles; `getDocumentSignedUrl` = createSignedUrl 600s), hook `useDocuments`
+  (`usePatientExams`/`useUploadPatientDocument`, queryKey **`patientExams`** SEM colidir com o `patientDocuments`
+  legado), `DocumentsTab` com upload real (select de tipo + input file oculto) + lista "quem enviou · data ·
+  tamanho" + "Abrir" que assina a URL NO CLIQUE (aba aberta antes do await → sem pop-up blocker). A seção
+  legada de laudos (`body_assessments.document_url`) foi PRESERVADA **somente leitura** (nada some; allowlist
+  `isSafeDocumentUrl` intacta, #18). Modelo **BIDIRECIONAL**: só o lado do PROFISSIONAL (web) foi implementado;
+  o lado do PACIENTE (`uploaded_by_role='patient'`) é sessão FUTURA do repo do app — a web NÃO tocou o app.
+  Migration ADITIVA `20260702230000_patient_documents.sql` (RLS sprint SELECT+INSERT + storage SELECT+INSERT;
+  **AMBAS no #14**; aplicada via `apply_migration`, ledger `20260702224214`). VRI/adherence intocados. Review
+  adversarial (workflow, 5 dimensões × verificação independente): **0 Critical/Important**; 5 Minor confirmados
+  e CORRIGIDOS (id de auditoria de quem enviou só grava com o profissional resolvido; rollback esvazia o bucket
+  antes de dropá-lo; empty-state não pisca no refetch pós-upload; região aria-live sempre montada) — 3 refutados.
+  Gates: **typecheck OK · lint OK (0/0) · build OK**. **Verificado via MCP + Playwright (02/07):** logado como
+  Dra. Camila → aba Documentos do Ricardo (paciente de TESTE, NÃO a Mariana) → enviar 1 PDF → linha em
+  `patient_documents` (`uploaded_by_role='professional'`, `uploaded_by_professional_id=…e2`, mime/tamanho/
+  file_path corretos) + objeto no bucket → reload PERSISTE → "Abrir" gerou signed URL (scope=download, TTL 600s)
+  → `HTTP 200 application/pdf 460 B`. Cleanup CIRÚRGICO por id (linha + objeto do storage); seed da Mariana
+  INTACTO. Web (migration + código + docs): branch `feat/patient-documents-upload` (sem merge).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
@@ -511,5 +540,14 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   Aditiva/idempotente (`create table if not exists` + `drop policy if exists`); RLS sprint SELECT + UPDATE (marcar
   lida), SEM INSERT/DELETE p/ anon (nascem de seed — dívida do emissor web); CHECK no `type`; #14. Seed: 3 da Mariana
   (2 não lidas). Verificado via MCP (markAsRead grava `read_at`; dado de teste restaurado) + Playwright.
+- `patient_documents` + bucket **PRIVADO** `patient-documents` — migration `20260702230000_patient_documents.sql`
+  **versionada** e **APLICADA** via `apply_migration` (registrada no ledger como `20260702224214`; o nome do
+  arquivo difere do ledger porque `apply_migration` usa o relógio do servidor — igual a meal_logs/supplements).
+  Idempotente (`create table if not exists` + `drop policy if exists` + `insert bucket on conflict do nothing`).
+  Linha real de documento (Ricardo, teste) + objeto no bucket verificados via MCP em 02/07 (signed URL HTTP 200
+  application/pdf, 460 B) e dado de teste limpo CIRURGICAMENTE por id (linha + objeto; deletar o objeto do
+  storage exige a Storage API ou bypass do trigger `protect_delete` — feito via `set local
+  session_replication_role='replica'`). RLS sprint (tabela SELECT+INSERT; storage SELECT+INSERT) no checklist
+  #14. Fecha a #12 para EXAME (bucket privado + signed URL).
 
 **Teste ponta a ponta (4d):** ⏳ pendente — app `@Camila` → badge ao vivo na web + bater ponto → Timeline/recuperação.

@@ -7,6 +7,9 @@ export const qk = {
   nutritionPlan: (patientId: string) => ["patient", patientId, "nutritionPlan"] as const,
   bodyAssessments: (patientId: string) => ["patient", patientId, "bodyAssessments"] as const,
   patientDocuments: (patientId: string) => ["patient", patientId, "documents"] as const,
+  // Exames/documentos REAIS (tabela patient_documents) — distinto do `patientDocuments` legado
+  // (laudos de body_assessments.document_url) para não colidir a invalidação.
+  patientExams: (patientId: string) => ["patient", patientId, "exams"] as const,
   weightSeries: (patientId: string) => ["patient", patientId, "weightSeries"] as const,
   hydrationToday: (patientId: string) => ["patient", patientId, "hydrationToday"] as const,
   progressPhotos: (patientId: string) => ["patient", patientId, "progressPhotos"] as const,
