@@ -160,6 +160,15 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 ## Pendências cross-repo
 - **#1** esquema de recuperação muscular (provisório `recovered/weakened`; confirmar c/ Juliana).
 - **#3** pesos do VRI (provisórios; web só lê snapshots). Mariana ≈ score **88 / alta** — não contradizer.
+  **Calibração C7 (Sessão 15 — app): ✅** o motor NÃO crava mais 100 no primeiro toque. `computeScore`
+  foi recomposto (recência = termo positivo LIMITADO sem reset + engajamento num orçamento + soft-cap
+  por retornos decrescentes na banda [70,100]). O perfil REAL da Mariana hoje LANDA **~88-91/alta**
+  (passivo 89; 1 ação isolada → nudge pequeno p/ 91, não 100). Só APP (`adherenceEngine.ts`); shape do
+  snapshot e clamp inalterados; monotonicidade + piso 88 preservados por teste. **Follow-up #3b:**
+  `streak`/`weekly_completion_rate`/`positive_factors` do recompute vivo ainda derivam dos 4 eventos
+  esparsos (streak ~0-1, weekly ~20) e NÃO batem com o seed autoral (18/80) — calibrar o score não
+  conserta isso; para o demo bater 88/18/80 é preciso um seed ADITIVO de ~18 dias de eventos reais
+  (migration de seed no repo web), fora do escopo desta sessão.
 - **#15** aposentar a tabela `messages` legada + migrar seed (não-bloqueante; web e app já no `chat_*`).
 - **#16 (Sessão 2 — app): ✅ RESOLVIDO.** `Records.tsx` insere o VALOR do peso em `weight_logs`
   (`source='app'`, via `api/weight.ts`); aba Foto com input real (câmera+galeria) sobe o binário ao
@@ -332,6 +341,22 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   VRI recomputado 88->100/alta (NUNCA rebaixando). Dado de teste limpo CIRURGICAMENTE por id; Mariana restaurada
   a 88/alta (snapshot `a77e5c9b`). App: branch `feat/activity-sessions-persist`. Web (migration): branch
   `feat/activity-sessions-migration`.
+- **Sessão 15 — CALIBRAÇÃO do motor de VRI (fim do "100 no primeiro toque"): ✅ VERIFICADO VIA MCP (02/07).**
+  Diagnóstico (provado por breakdown fator-a-fator + agente independente): `computeScore` começava em 100
+  (teto) e só subtraía por inatividade, somando um STACK aditivo (≤+63) MUITO maior que o decay (≤−45) →
+  qualquer perfil ativo estourava 100 e o clamp mascarava tudo; além disso a recência RESETAVA a 0 em
+  qualquer evento novo ("reset-and-re-saturate"). **Recomposição (Strategy 2, combinado C7, SÓ app —
+  `adherenceEngine.ts`, SEM migration):** recência vira termo POSITIVO LIMITADO (`recencyPoints`, sem
+  reset) + engajamento somado num orçamento (tiers por-sinal INALTERADOS) + soft-cap por RETORNOS
+  DECRESCENTES na banda `[VRI_BASE=70, +VRI_HEADROOM=30]`, `VRI_CURVE=0.42`. NÃO baixa o clamp, NÃO
+  subtrai cegamente, NÃO muda o shape do snapshot (`deriveAdherenceConfig`/`getLevel`/`getStatus`
+  intactos). Resultado: perfil REAL da Mariana hoje **89/alta** (passivo), 1 ação isolada → **91/alta**
+  (nudge crível), DEFAULT engajado → 95, topo 100 RESERVADO ao near-perfect. Monotonicidade + piso ≥88
+  preservados (testes). Gates: **typecheck OK · vitest 67/67 · build OK · lint (diff limpo; baseline
+  mantém 3 erros pré-existentes)**. **Verificado via MCP (02/07):** recompute vivo (1 atividade) gerou
+  snapshot **91/alta, NÃO 100** → dado de teste limpo por id → Mariana restaurada a 88/alta (`a77e5c9b`).
+  Ver pendência #3 (+ follow-up #3b: streak/weekly do recompute vivo ainda refletem os 4 eventos
+  esparsos). App: branch `fix/vri-calibration` (PR aberto, sem merge).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
