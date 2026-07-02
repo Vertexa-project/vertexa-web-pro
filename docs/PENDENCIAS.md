@@ -79,6 +79,12 @@
       catálogo e INSERE unlocks para QUALQUER `patient_id`. Sob RLS real: o catálogo segue leitura pública (NÃO é
       dado de paciente), mas `patient_achievements` fecha por `auth.uid()` → `patient_id` (só o próprio paciente
       destrava as suas). O motor de conquistas NÃO alimenta o VRI — escreve só em `patient_achievements`.
+    - **Notificações (`notifications`, S6/app)** — `20260702220402_notifications.sql`:
+      `sprint_notification_read` (SELECT) + `sprint_notification_update` (UPDATE, para marcar como lida),
+      anon/auth `using/with check (true)`. SEM INSERT/DELETE para anon: as notificações NASCEM DE SEED/migration
+      (**dívida: "emissor de notificações no web"** — a web/Edge ainda não gera notificações a partir de eventos).
+      Hoje qualquer anon lê e marca como lida QUALQUER notificação. Sob RLS real: fechar por
+      `auth.uid()`->`patient_id` e restringir o UPDATE à coluna `read_at` das PRÓPRIAS notificações.
     - **Modo demo** não pode usar a sessão anon contra o banco real quando a RLS fechar — isolar em
       dataset fictício ou desabilitar em `import.meta.env.PROD`.
     - **IDOR**: `getPatient(id)` lê qualquer UUID da URL; a barreira real é a RLS (acima) — tratar

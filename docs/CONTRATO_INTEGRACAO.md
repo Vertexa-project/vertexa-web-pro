@@ -51,6 +51,7 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
 | `muscle_recovery_states` | **escreve** (provisório, 4c-2) + **lê** (body map dinâmico, S11) | **lê** (BodyMap/Recuperação) | — |
 | `adherence_snapshots` | **escreve** (VRI, 4c-2b) | **lê** (VRI) | — |
 | `achievements` (catálogo global) / `patient_achievements` (unlocks) — conquistas, S5 | **escreve** `patient_achievements` (pelo MOTOR) + **lê** ambas | lê (futuro) | — |
+| `notifications` (S6) | **lê** + **escreve** `read_at` (marcar lida) | escreve (futuro emissor) | — |
 | `workout_plans` / `workouts` / `workout_exercises` / `nutrition_plans` / `meals` | lê (4c-3, futuro) | **escreve** (editores) | — |
 | `appointments` (agenda interna, Sessão 6) | — (não usa) | **escreve + lê** (CRUD da Agenda) | — |
 | `calendar_*` (Google Calendar, Sessão 10) | — (não usa) | **lê** connections/cache; tokens/state **deny-all** (só Edge Function/service_role) | — |
@@ -459,6 +460,25 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   CORRIGIDOS (isError da resolução de patientId + contador "0 de 0" no erro). Gates: **typecheck OK · vitest
   94/94 · build OK · lint (diff limpo; baseline mantém 3 erros pré-existentes)**. App: branch
   `feat/achievements-live` (sem merge). Web (migration + docs): branch `feat/achievements-migration` (sem merge).
+- **S6 — JORNADA VIVA + NOTIFICAÇÕES REAIS + coerência temporal do seed: ✅ VERIFICADO VIA MCP + Playwright (02/07).**
+  (A) **Jornada viva:** a /journey era 100% mock (`getJourneyCheckpoints` com datas fictícias + `getAdherenceState`
+  local). Agora deriva de dado REAL via novo módulo PURO/determinístico `src/lib/journey.ts` (testado): "**Dia X do
+  acompanhamento**" (a partir de `start_date`; dayNumber TZ-safe — DATE parseada como LOCAL) + marcos = onboarding +
+  as CONQUISTAS reais (destravadas com data real, ordem CRONOLÓGICA; travadas = marcos futuros sem data) + fase/
+  streak/VRI do ÚLTIMO snapshot (`getLatestAdherenceState` — NÃO recomputa). `adherenceEngine.ts` **NÃO foi tocado**
+  (regra inviolável); `getJourneyCheckpoints` fica como export MORTO, substituído por `journey.ts`. (B) **Notificações
+  reais:** nova tabela `notifications` (migration `20260702220402`; nasce de SEED — dívida do emissor web) +
+  `src/lib/api/notifications.ts` (getMyNotifications/getUnreadCount/markAsRead/markAll) + hooks; a /notifications lê
+  real e "marcar como lida" **PERSISTE** (`read_at`); o **badge do sino da Home = getUnreadCount real** (fim do ponto
+  estático). (C) **Coerência temporal (#S5-JORNADA):** migration `20260702220213` alinhou `start_date`→**15/01** (1ª
+  avaliação = início real do acompanhamento) e as 7 conquistas às datas REAIS de cruzamento (02/04..28/06) — **DISPLAY
+  only**. **INVARIANTE VRI:** `start_date`/`unlocked_at` NÃO são inputs do adherenceEngine; snapshot da Mariana seguiu
+  `a232d1a4` **96/alta/streak18/80% BYTE-A-BYTE** (SELECT antes/depois); a janela de 18d de `activity_events` (streak)
+  não foi tocada. Gates: **typecheck OK · vitest 100/100 · build OK · lint (diff limpo; baseline 3 erros pré-existentes)**.
+  **Verificado via Playwright** (Dia 169; timeline 15Jan→28Jun + 5 travados; badge **2→1** ao marcar lida e PERSISTE no
+  reload; 0 erro de console) **+ MCP** (`read_at` gravado; VRI 96/alta inalterado; seed de teste restaurado a 2 não
+  lidas). **Review adversarial (workflow, 5 dimensões × verificação): 0 achados.** App: branch
+  `feat/journey-notifications-live`. Web: branch `feat/journey-notifications-migration` (empilhadas sobre S5; sem merge).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
@@ -484,5 +504,12 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   (desmarque via UI + marcador por id; ver Sessão 17). Idempotente (`create table if not exists` + `drop
   policy if exists` + seed `on conflict do nothing`). Seed: 5 suplementos da Mariana (ids fixos
   `30000000-…-01..05`) — o editor no web é dívida registrada. RLS sprint no checklist #14.
+- `seed_mariana_timeline_coherence` — migration `20260702220213_seed_mariana_timeline_coherence.sql` **versionada** e
+  **APLICADA** via `apply_migration`. UPDATE reversível (rollback no header) escopado à Mariana: `start_date`→15/01 +
+  `patient_achievements.unlocked_at` retroativos. DISPLAY only — VRI (a232d1a4 96/alta) inalterado, comprovado por MCP.
+- `notifications` — migration `20260702220402_notifications.sql` **versionada** e **APLICADA** via `apply_migration`.
+  Aditiva/idempotente (`create table if not exists` + `drop policy if exists`); RLS sprint SELECT + UPDATE (marcar
+  lida), SEM INSERT/DELETE p/ anon (nascem de seed — dívida do emissor web); CHECK no `type`; #14. Seed: 3 da Mariana
+  (2 não lidas). Verificado via MCP (markAsRead grava `read_at`; dado de teste restaurado) + Playwright.
 
 **Teste ponta a ponta (4d):** ⏳ pendente — app `@Camila` → badge ao vivo na web + bater ponto → Timeline/recuperação.
