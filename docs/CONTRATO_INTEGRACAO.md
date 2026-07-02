@@ -50,6 +50,7 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
 | Storage `progress-photos` | **upload** do binário (pendente no app) | **lê** via URL pública | — |
 | `muscle_recovery_states` | **escreve** (provisório, 4c-2) + **lê** (body map dinâmico, S11) | **lê** (BodyMap/Recuperação) | — |
 | `adherence_snapshots` | **escreve** (VRI, 4c-2b) | **lê** (VRI) | — |
+| `achievements` (catálogo global) / `patient_achievements` (unlocks) — conquistas, S5 | **escreve** `patient_achievements` (pelo MOTOR) + **lê** ambas | lê (futuro) | — |
 | `workout_plans` / `workouts` / `workout_exercises` / `nutrition_plans` / `meals` | lê (4c-3, futuro) | **escreve** (editores) | — |
 | `appointments` (agenda interna, Sessão 6) | — (não usa) | **escreve + lê** (CRUD da Agenda) | — |
 | `calendar_*` (Google Calendar, Sessão 10) | — (não usa) | **lê** connections/cache; tokens/state **deny-all** (só Edge Function/service_role) | — |
@@ -181,6 +182,13 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   pelo eventSync) — qualquer contagem de treino deve dedupar (a S4 conta DIAS distintos). Desbloquear =
   nova sessão com tabela de execução (ex.: `workout_session_logs` com séries/reps/carga/duração feitas,
   link p/ `workouts`) + UI de registro no WorkoutGuide; só então esses blocos voltam, condicionais a dado real.
+- **#S5-JORNADA (S6 — app, Jornada viva): âncora temporal da jornada.** As conquistas de **constância** da
+  S5 usam o **streak do motor como proxy** (D1 aprovada) — NÃO há marco de calendário. Mas a narrativa de
+  "30 dias de jornada" fica incoerente com o `patients.start_date` da Mariana = **2026-06-30** (2 dias antes
+  da demo de 02/07). Decidir na S6 (Jornada viva) UMA das opções, sem mutar o seed de eventos agora:
+  (a) tornar `start_date` coerente via **seed** (ex.: recuar ~30–40 dias, alinhado à janela rolante de
+  `refresh_demo_mariana_streak()`); ou (b) derivar a jornada de **outra âncora** (1º `activity_event`,
+  ou o próprio streak) em vez de `start_date`. Só ANOTADO aqui (D1) — não resolver na S5.
 - **#15** aposentar a tabela `messages` legada + migrar seed (não-bloqueante; web e app já no `chat_*`).
 - **#16 (Sessão 2 — app): ✅ RESOLVIDO.** `Records.tsx` insere o VALOR do peso em `weight_logs`
   (`source='app'`, via `api/weight.ts`); aba Foto com input real (câmera+galeria) sobe o binário ao
@@ -430,6 +438,27 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   7/7=100% ↔ 18/28=64% · VRI 96/alta/streak18/80% · 2 fotos) e a constância é DETERMINÍSTICA (reload = igual).
   Tela READ-ONLY → sem dado de teste; seed convergente (18d) + baseline 96/alta INTACTOS. App: branch
   `feat/progress-live` (sem merge).
+- **S5 — CONQUISTAS VIVAS (o motor prometido pela S18): ✅ VERIFICADO VIA MCP + Playwright (02/07).**
+  A tela `/achievements` e o card "Conquistas recentes" do Progresso (a S18 deixou em estado vazio) agora leem
+  dados REAIS. Novo motor PURO/DETERMINÍSTICO `src/lib/achievementsEngine.ts` (12 conquistas em 3 categorias:
+  primeiros passos, **constância = streak como proxy da jornada [D1]**, **peso "desde o início do
+  acompanhamento" [D2]** — recorte propositalmente diferente do "no período registrado" da tela de peso, p/
+  ninguém achar que -3,1 kg × 5 kg é erro) + camada `src/lib/api/achievements.ts` (deriva fatos REAIS →
+  UPSERT `patient_achievements` ON CONFLICT DO NOTHING; unlock MONOTÔNICO) + hook `useAchievements` + wiring
+  ISOLADO em `eventSync` (roda DEPOIS e à parte do VRI). **Guard #13** respeitado (treino = DIAS distintos,
+  dedup started+completed). **[D3]** conquistas de refeição/atividade/suplemento ficam TRAVADAS (tabelas-valor
+  vazias) até a Mariana fazer de verdade — seed NÃO mutado. Unlock retroativo da Mariana **VIA MOTOR** (não
+  INSERT manual): 7 destravadas (first_workout/weight/photo + streak_7/14 + weight_3kg/5kg), todas
+  `source='engine'`. **INVARIANTE VRI PROVADO:** o snapshot da Mariana seguiu `a232d1a4` **96/alta/streak18/
+  80%** BYTE-A-BYTE (mesmo id/calculated_at; snapshot_count permaneceu 1) — as conquistas NÃO tocam o
+  `adherenceEngine`/denominador nem gravam `adherence_snapshots`. Migration ADITIVA
+  `20260702210746_achievements.sql` (2 tabelas: catálogo global `achievements` + `patient_achievements`;
+  RLS sprint: catálogo SELECT, unlocks SELECT+INSERT, SEM UPDATE/DELETE; AMBAS no checklist #14). Pendência da
+  JORNADA (`start_date` 30/06 × narrativa de "30 dias") registrada como **#S5-JORNADA** (decidir na S6).
+  Review adversarial (workflow, 5 dimensões × verificação): **0 Critical/Important**; 2 Minor de estado-de-erro
+  CORRIGIDOS (isError da resolução de patientId + contador "0 de 0" no erro). Gates: **typecheck OK · vitest
+  94/94 · build OK · lint (diff limpo; baseline mantém 3 erros pré-existentes)**. App: branch
+  `feat/achievements-live` (sem merge). Web (migration + docs): branch `feat/achievements-migration` (sem merge).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅

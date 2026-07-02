@@ -72,6 +72,13 @@
       (`20260702140000_supplements.sql`, S3/app): `sprint_supplement_write` (ALL — autoria futura do web) e
       `sprint_supplement_intake_insert`/`_delete` (`with check`/`using (true)`) — qualquer anon pode editar
       a LISTA de suplementos e marcar/desmarcar "tomado" para QUALQUER `patient_id`. Mesma RLS real fecha.
+    - **Conquistas (`achievements` + `patient_achievements`, S5/app)** — `20260702210746_achievements.sql`:
+      `sprint_achievement_read` (SELECT no catálogo GLOBAL) + `sprint_patient_achievement_read` (SELECT) +
+      `sprint_patient_achievement_insert` (INSERT `with check (true)`, escrito PELO MOTOR `achievementsEngine`).
+      SEM UPDATE/DELETE para anon (unlock é monotônico; UPSERT `on conflict do nothing`). Hoje qualquer anon lê o
+      catálogo e INSERE unlocks para QUALQUER `patient_id`. Sob RLS real: o catálogo segue leitura pública (NÃO é
+      dado de paciente), mas `patient_achievements` fecha por `auth.uid()` → `patient_id` (só o próprio paciente
+      destrava as suas). O motor de conquistas NÃO alimenta o VRI — escreve só em `patient_achievements`.
     - **Modo demo** não pode usar a sessão anon contra o banco real quando a RLS fechar — isolar em
       dataset fictício ou desabilitar em `import.meta.env.PROD`.
     - **IDOR**: `getPatient(id)` lê qualquer UUID da URL; a barreira real é a RLS (acima) — tratar
