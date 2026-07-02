@@ -282,9 +282,35 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   `sprint_read_all` já permite anon SELECT — confirmado por MCP). vitest 39/39 · tsc/build 0 · Playwright /progress
   (dado real da Mariana, flip, tooltip, 430px). Conclusão de treino→repaint = wiring por código (não E2E p/ não
   mutar o seed). Pendência #1 (decaimento server-side do status) segue aberta — hoje a derivação é client-side.
+- **Sessão 13 — REFEIÇÃO FEITA persiste (meal_logs): ✅ VERIFICADO VIA MCP (02/07).** O check verde da
+  aba Alimentar (Plan.tsx) era sempre falso e não gravava. Agora: nova tabela CANÔNICA **`meal_logs`**
+  (VALOR/ESTADO "refeição consumida no dia"; toggle idempotente por `unique(patient_id,meal_id,consumed_on)`);
+  evento **`meal_logged`** no eventTracker (payload SÓ `{meal_id}`) espelhado pelo eventSync em
+  `activity_events(type='meal_logged')` **apenas como MARCADOR** de timeline; `src/lib/api/meals.ts`
+  (`toggleMealDone`/`getMealsDoneToday`/`getMealAdherenceToday`, tipado + react-query); Plan.tsx com toggle
+  otimista + `tracker.track('meal_logged')` só ao MARCAR (fallback mock com check DESABILITADO); HomePage
+  meta "Refeições" = done/total real + card de pendência que some quando done>0; **fator de adesão alimentar
+  ADITIVO** no VRI (`adherenceEngine`, bônus não-negativo máx 6 antes do clamp -> **não rebaixa a Mariana
+  88/alta**, pendência #3; provado por teste de monotonicidade). Migration aditiva
+  `20260701120000_meal_logs.sql` (RLS sprint: `sprint_meal_read` + `sprint_meal_write_insert` +
+  `sprint_meal_write_delete`, espelhando `weight_logs`; #11-#14 fecham por clínica). **web/VRI não regride**:
+  o fator é estritamente aditivo e o marcador reusa o pipeline existente.
+  Gates: **typecheck OK · vitest 59/59 OK · build OK · lint (diff) OK** (baseline do repo tem 3 erros
+  pré-existentes em `ui/command.tsx`/`ui/textarea.tsx`/`tailwind.config.ts`, alheios a esta mudança).
+  Gates: **typecheck OK · vitest 59/59 OK · build OK · lint (diff) OK** (baseline do repo tem 3 erros
+  pré-existentes em `ui/command.tsx`/`ui/textarea.tsx`/`tailwind.config.ts`, alheios).
+  **Verificado via MCP em 02/07:** `meal_logs` (source='app') + marcadores `meal_logged` (payload={meal_id})
+  + VRI recalculado sem regressão; dado de teste limpo, Mariana restaurada a 88/alta. (Detalhe da evidência:
+  3 refeições da Mariana marcadas geraram 3 linhas `meal_logs` com `consumed_on=2026-07-01` — fuso local
+  correto, gravadas ~02:33 UTC = 23:33 de 01/07 em SP — + 3 marcadores `activity_events(meal_logged)` e o VRI
+  subiu 88→100/alta, NUNCA rebaixando o nível; o app lê `meal_logs` com HTTP 200 e `/plan` mostra as refeições
+  desmarcadas após o cleanup.) App: branch `feat/meal-done-persist`. Web: branch `feat/meal-logs-migration`.
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
   (`20260618130000` activity/muscle/plan + `20260618140000` adherence)
+- `meal_logs` — migration `20260701120000_meal_logs.sql` **versionada** (RLS sprint) e **APLICADA** no
+  remoto; linhas reais verificadas via MCP em 02/07 e dado de teste limpo (ver Sessão 13). ⚠️ Confirmar que
+  está registrada no ledger do CLI (`supabase_migrations.schema_migrations`) antes do merge — é idempotente.
 
 **Teste ponta a ponta (4d):** ⏳ pendente — app `@Camila` → badge ao vivo na web + bater ponto → Timeline/recuperação.
