@@ -68,7 +68,10 @@
       DELETE, `with check`/`using (true)`) e `activity_sessions` (`20260702120000_activity_sessions.sql`:
       `sprint_activity_session_write` INSERT `with check (true)`) — qualquer anon pode marcar/desmarcar
       refeição ou lançar atividade complementar para QUALQUER `patient_id`. Fecham junto na mesma RLS real
-      por `auth.uid()` → `patient_id`.
+      por `auth.uid()` → `patient_id`. Idem `supplements` + `supplement_intakes`
+      (`20260702140000_supplements.sql`, S3/app): `sprint_supplement_write` (ALL — autoria futura do web) e
+      `sprint_supplement_intake_insert`/`_delete` (`with check`/`using (true)`) — qualquer anon pode editar
+      a LISTA de suplementos e marcar/desmarcar "tomado" para QUALQUER `patient_id`. Mesma RLS real fecha.
     - **Modo demo** não pode usar a sessão anon contra o banco real quando a RLS fechar — isolar em
       dataset fictício ou desabilitar em `import.meta.env.PROD`.
     - **IDOR**: `getPatient(id)` lê qualquer UUID da URL; a barreira real é a RLS (acima) — tratar

@@ -380,6 +380,28 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   para a engine regravar o snapshot fresco. Migration `20260702130000_seed_demo_mariana_streak_convergence.sql`.
   Gates do app (sem mudança de código): **typecheck OK · vitest 67/67 · build OK**. Web: branch
   `fix/seed-mariana-convergence` (sem merge).
+- **Sessão 17 — SUPLEMENTOS vivos (S3: supplements + supplement_intakes): ✅ VERIFICADO VIA MCP (02/07).**
+  A aba Plano › Suplem. era 100% mock (mockData.supplements) e não havia "tomado". Agora: a LISTA vem do
+  banco (**`supplements`**, autoria do profissional/web como as refeições; hoje populada por SEED da
+  Mariana com ids fixos `30000000-…-000000000001..05` — **DÍVIDA: editor de suplementos no web ainda não
+  existe**) e o "tomado" persiste em **`supplement_intakes`** (VALOR/ESTADO; toggle idempotente por
+  `unique(patient_id, supplement_id, taken_on)`; `taken_on` = data LOCAL do paciente). Marcador de
+  timeline: `activity_events(type='supplement_checked', payload={supplement_id})` via tracker/eventSync
+  (union já tinha o tipo; só entrou no allow-list) — disparado SÓ ao marcar, após a escrita. Camada
+  `src/lib/api/supplements.ts` (getMySupplements/toggleSupplementTaken/getSupplementsTakenToday/
+  getSupplementAdherenceToday, tipado + react-query); Plan.tsx com toggle otimista espelhando o de
+  refeições + loading/empty/error reais (mock removido). **Fator de suplementos ADITIVO/NÃO-NEGATIVO**
+  no VRI (`SUPPLEMENT_ADHERENCE_BONUS_MAX=4`, menor que o alimentar; entra no orçamento de engajamento
+  SEM rebasear o denominador do soft-cap — overflow satura em 1 de propósito, preservando o invariante
+  não-regressivo). INVARIANTE respeitado: Mariana convergente segue **96/alta** (recompute do teste deu
+  96 idêntico -> dedup nem gravou snapshot; soft-cap não deixou cravar 100). Migration aditiva
+  `20260702140000_supplements.sql` (RLS sprint: `sprint_supplement_read`+`sprint_supplement_write` ALL
+  espelhando planos; intakes `_read`/`_insert`/`_delete` espelhando `meal_logs`; AMBAS anotadas no
+  checklist #14). Gates: **typecheck OK · vitest 71/71 · build OK · lint (diff limpo; baseline 3 erros
+  pré-existentes)**. **Verificado via MCP (02/07):** marcar Creatina -> linha em `supplement_intakes` +
+  marcador correto -> reload PERSISTE -> desmarcar via UI (caminho DELETE real) -> cleanup cirúrgico do
+  marcador por id; seed convergente da Mariana INTACTO (24 eventos; snapshot `a232d1a4` 96/alta).
+  App: branch `feat/supplements-live`. Web (migration): branch `feat/supplements-migration` (sem merge).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
@@ -399,5 +421,11 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   eventos com `payload.seed='demo_mariana_streak'`, SEM EXECUTE p/ anon/authenticated. O baseline
   (96/18/80/alta) é escrito pela ENGINE via app (não cravado). Rollback: `drop function` + delete por marcador.
   Ritual pré-demo: `select public.refresh_demo_mariana_streak();` + 1 ação da Mariana no app (recompute).
+- `supplements` + `supplement_intakes` — migration `20260702140000_supplements.sql` **versionada** e
+  **APLICADA** via `apply_migration` (registrada no ledger como `20260702152201`); linha real de intake +
+  marcador `activity_events(supplement_checked)` verificados via MCP em 02/07 e dado de teste limpo
+  (desmarque via UI + marcador por id; ver Sessão 17). Idempotente (`create table if not exists` + `drop
+  policy if exists` + seed `on conflict do nothing`). Seed: 5 suplementos da Mariana (ids fixos
+  `30000000-…-01..05`) — o editor no web é dívida registrada. RLS sprint no checklist #14.
 
 **Teste ponta a ponta (4d):** ⏳ pendente — app `@Camila` → badge ao vivo na web + bater ponto → Timeline/recuperação.
