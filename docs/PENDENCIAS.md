@@ -41,9 +41,13 @@
     `professional_patient_links`; externo vê só o paciente vinculado via `is_external`). Não publicar
     em domínio público enquanto estiver `using(true)` (vazamento de dados de saúde — LGPD).
 
-12. **Storage privado + URL assinada.** `progress_photos.photo_url` e `body_assessments.document_url`
-    são URLs cruas. Confirmar bucket privado e gerar `createSignedUrl` na camada `api/` antes de
-    publicar (já previsto no CLAUDE.md como pós-MVP).
+12. **Storage privado + URL assinada.** ✅ **PARCIAL (S-DOCS):** os **exames/documentos** novos já vivem em
+    bucket **PRIVADO** `patient-documents` (`public=false`) + `createSignedUrl` (TTL 10 min) na camada
+    `api/documents.ts` (tabela `patient_documents`, migration `20260702230000`) — o EXAME/DOCUMENTO está
+    resolvido (o profissional envia, a equipe lê via link assinado no clique). **Ainda cru (dívida aberta):**
+    `progress_photos.photo_url` (bucket `progress-photos` PÚBLICO) e o legado `body_assessments.document_url`
+    (URL crua sob allowlist `isSafeDocumentUrl`, #18). Migrar essas duas fontes para o mesmo padrão (bucket
+    privado + signed URL) antes de publicar com dado real.
 
 13. **Salvar plano não é transacional.** `saveWorkoutPlan`/`saveNutritionPlan` fazem DELETE do plano
     anterior e depois INSERT do novo (treinos/exercícios/refeições em vários passos). Se falhar no
@@ -79,6 +83,17 @@
       catálogo e INSERE unlocks para QUALQUER `patient_id`. Sob RLS real: o catálogo segue leitura pública (NÃO é
       dado de paciente), mas `patient_achievements` fecha por `auth.uid()` → `patient_id` (só o próprio paciente
       destrava as suas). O motor de conquistas NÃO alimenta o VRI — escreve só em `patient_achievements`.
+    - **Documentos/exames (`patient_documents` + bucket privado `patient-documents`, S-DOCS)** —
+      `20260702230000_patient_documents.sql`: `sprint_patient_document_read` (SELECT) +
+      `sprint_patient_document_insert` (INSERT `with check (true)`), SEM UPDATE/DELETE (documento imutável na
+      sprint); storage `sprint_patient_documents_storage_read` (SELECT) + `sprint_patient_documents_storage_write`
+      (INSERT) escopadas só por `bucket_id`. ⚠️ **DADO DE SAÚDE MAIS SENSÍVEL (exame em PDF/imagem)**: hoje
+      qualquer anon LISTA os caminhos (patient_id + nome do arquivo) de QUALQUER paciente e ASSINA a URL de
+      QUALQUER objeto (o SELECT em `storage.objects` é justamente o que habilita o signed URL no anon). Sob RLS
+      real (S9): SELECT só profissionais VINCULADOS (`professional_patient_links`) + o próprio paciente
+      (`auth.uid()`→`patients`); INSERT do profissional via `auth.uid()`→`professionals`, do paciente só o próprio
+      (`professional_id` NULL); storage fechado por pasta = `patient_id`. O bucket é PRIVADO (sem URL pública), mas
+      a anon key é pública no bundle → NÃO publicar em domínio público enquanto permissivo (LGPD).
     - **Modo demo** não pode usar a sessão anon contra o banco real quando a RLS fechar — isolar em
       dataset fictício ou desabilitar em `import.meta.env.PROD`.
     - **IDOR**: `getPatient(id)` lê qualquer UUID da URL; a barreira real é a RLS (acima) — tratar
