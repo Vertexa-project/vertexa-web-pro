@@ -282,9 +282,36 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   `sprint_read_all` já permite anon SELECT — confirmado por MCP). vitest 39/39 · tsc/build 0 · Playwright /progress
   (dado real da Mariana, flip, tooltip, 430px). Conclusão de treino→repaint = wiring por código (não E2E p/ não
   mutar o seed). Pendência #1 (decaimento server-side do status) segue aberta — hoje a derivação é client-side.
+- **Sessão 13 — REFEIÇÃO FEITA persiste (meal_logs): ✅ CÓDIGO / ⚠️ APLICAÇÃO PENDENTE.** O check verde da
+  aba Alimentar (Plan.tsx) era sempre falso e não gravava. Agora: nova tabela CANÔNICA **`meal_logs`**
+  (VALOR/ESTADO "refeição consumida no dia"; toggle idempotente por `unique(patient_id,meal_id,consumed_on)`);
+  evento **`meal_logged`** no eventTracker (payload SÓ `{meal_id}`) espelhado pelo eventSync em
+  `activity_events(type='meal_logged')` **apenas como MARCADOR** de timeline; `src/lib/api/meals.ts`
+  (`toggleMealDone`/`getMealsDoneToday`/`getMealAdherenceToday`, tipado + react-query); Plan.tsx com toggle
+  otimista + `tracker.track('meal_logged')` só ao MARCAR (fallback mock com check DESABILITADO); HomePage
+  meta "Refeições" = done/total real + card de pendência que some quando done>0; **fator de adesão alimentar
+  ADITIVO** no VRI (`adherenceEngine`, bônus não-negativo máx 6 antes do clamp -> **não rebaixa a Mariana
+  88/alta**, pendência #3; provado por teste de monotonicidade). Migration aditiva
+  `20260701120000_meal_logs.sql` (RLS sprint: `sprint_meal_read` + `sprint_meal_write_insert` +
+  `sprint_meal_write_delete`, espelhando `weight_logs`; #11-#14 fecham por clínica). **web/VRI não regride**:
+  o fator é estritamente aditivo e o marcador reusa o pipeline existente.
+  Gates: **typecheck OK · vitest 59/59 OK · build OK · lint (diff) OK** (baseline do repo tem 3 erros
+  pré-existentes em `ui/command.tsx`/`ui/textarea.tsx`/`tailwind.config.ts`, alheios a esta mudança).
+  Render smoke (Playwright/Chromium, sem cliques -> sem escrita) contra o DB real: `/plan` pinta as **3
+  refeições reais** da Mariana com **toggles habilitados** (não caiu no mock) e `/home` mostra "Refeições";
+  os 2 únicos erros de console são `404 GET /rest/v1/meal_logs?...consumed_on=eq.2026-07-01` — **esperados
+  enquanto a migration não é aplicada** (confirmam tabela/colunas/patient_id/fuso corretos).
+  ⚠️ **`NÃO_COMPROVADO` (bloqueado por escopo do MCP):** o token do Supabase MCP nesta sessão só alcança o
+  projeto `quhivtarbdxwfgxixhwn` (org NexoDev), **não** o Vertexa `cdhjfyyuhmwrcuxqavib`. Portanto ficam
+  PENDENTES até reautorizar o conector: (1) **aplicar** a migration via MCP; (2) **verificar as linhas reais**
+  em `meal_logs` + o marcador em `activity_events` via MCP; (3) **E2E de persistência** (marcar->reload->persiste,
+  `e2e/meal-done.spec.ts`, self-cleaning) — hoje o insert daria 404 pois a tabela ainda não existe no remoto.
+  App: branch `feat/meal-done-persist` (3 commits). Web: branch `feat/meal-logs-migration` (migration + este log).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
   (`20260618130000` activity/muscle/plan + `20260618140000` adherence)
+- `meal_logs` — migration `20260701120000_meal_logs.sql` **versionada** (RLS sprint) mas **AINDA NÃO
+  APLICADA** no remoto (`NÃO_COMPROVADO`; MCP desta sessão sem acesso ao projeto Vertexa — ver Sessão 13).
 
 **Teste ponta a ponta (4d):** ⏳ pendente — app `@Camila` → badge ao vivo na web + bater ponto → Timeline/recuperação.
