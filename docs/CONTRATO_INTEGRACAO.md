@@ -172,6 +172,15 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   snapshot que o web lê é ESCRITO PELA ENGINE, não cravado). Uma ação isolada NÃO derruba mais o streak
   (segue 18 → 19 no dia seguinte). Drift: datas fixas envelhecem (~2 dias) → o seed é REFRESHÁVEL (ritual
   pré-demo na Sessão 16).
+- **#S-EXEC (Sessão futura — app): captura de EXECUÇÃO de treino.** Hoje `workout_checked` é só um
+  MARCADOR de conclusão (payload `{workoutId, action:'started'|'completed'}` do WorkoutGuide, `{source}`
+  do Records, ou `{seed}`) — o app NÃO loga o que foi FEITO (séries/reps/carga/duração reais). Por isso a
+  S4 (Progresso vivo) **REMOVEU** os blocos que exigiam execução (tempo/calorias, nº exercícios/séries/
+  reps/carga, "Regiões mais trabalhadas", "Tipos de exercícios", "Volume semanal") em vez de inventar
+  número. ⚠️ O WorkoutGuide emite 2 `workout_checked` por sessão (`started`+`completed`, ambos espelhados
+  pelo eventSync) — qualquer contagem de treino deve dedupar (a S4 conta DIAS distintos). Desbloquear =
+  nova sessão com tabela de execução (ex.: `workout_session_logs` com séries/reps/carga/duração feitas,
+  link p/ `workouts`) + UI de registro no WorkoutGuide; só então esses blocos voltam, condicionais a dado real.
 - **#15** aposentar a tabela `messages` legada + migrar seed (não-bloqueante; web e app já no `chat_*`).
 - **#16 (Sessão 2 — app): ✅ RESOLVIDO.** `Records.tsx` insere o VALOR do peso em `weight_logs`
   (`source='app'`, via `api/weight.ts`); aba Foto com input real (câmera+galeria) sobe o binário ao
@@ -402,6 +411,25 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   marcador correto -> reload PERSISTE -> desmarcar via UI (caminho DELETE real) -> cleanup cirúrgico do
   marcador por id; seed convergente da Mariana INTACTO (24 eventos; snapshot `a232d1a4` 96/alta).
   App: branch `feat/supplements-live`. Web (migration): branch `feat/supplements-migration` (sem merge).
+- **Sessão 18 — PROGRESSO VIVO (Progress.tsx real; fim do `Math.random`): ✅ VERIFICADO VIA MCP (02/07).**
+  Diagnóstico A/B/C aprovado. Viraram REAIS (via `api/*` + react-query, loading/empty/error em cada):
+  **nº de treinos do período** (DIAS distintos com `workout_checked`), **Evolução do peso** (`weight_logs`:
+  série cronológica + Δ real), **Constância** (`activity_events`, dias ativos distintos na janela 7/14/28 —
+  **DETERMINÍSTICA**, matou o `Math.random`), **Índice VRI** (LÊ o último `adherence_snapshots` via
+  `getLatestAdherenceState`, igual à Home — NÃO recomputa nem grava; engine intacto), **Fotos evolutivas**
+  (`progress_photos` reais) + modal Comparar só com **Δpeso real** (removidos os números fabricados 92%/64).
+  **REMOVIDOS** (sem fonte de EXECUÇÃO → dívida **#S-EXEC**): cards tempo/calorias/exercícios/séries/reps/
+  carga, "Regiões mais trabalhadas", "Tipos de exercícios", "Volume semanal". Conquistas → estado vazio
+  (motor é a S5). Seletor 7/14/28d MANTIDO e escopa constância + nº de treinos (muda de fato). Nova lib PURA
+  `constancy.ts` (`deriveConstancy` determinística + `countWorkoutDaysInWindow`, que DEDUPLICA o
+  `started`+`completed` do WorkoutGuide). **SEM migration** (100% derivação do que já existe). Review
+  adversarial (workflow, 10 agentes): 3 achados confirmados e CORRIGIDOS (VRI sem branch de erro → agora
+  tem retry; contagem de treino dobrava `started`+`completed` → passou a DIAS distintos). Gates: **typecheck
+  OK · vitest 78/78 · build OK · lint (baseline 3 erros pré-existentes)**. **Verificado via MCP + Playwright
+  (02/07):** /progress bate com o banco (4 treinos 7d · peso 71,5→68,4 = -3,1 kg em 8 pts · constância
+  7/7=100% ↔ 18/28=64% · VRI 96/alta/streak18/80% · 2 fotos) e a constância é DETERMINÍSTICA (reload = igual).
+  Tela READ-ONLY → sem dado de teste; seed convergente (18d) + baseline 96/alta INTACTOS. App: branch
+  `feat/progress-live` (sem merge).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
