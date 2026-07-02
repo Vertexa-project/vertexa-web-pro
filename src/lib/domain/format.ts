@@ -36,6 +36,16 @@ export function formatPercent(value: number | null | undefined): string {
   return `${Math.round(value)}%`;
 }
 
+/** Tamanho de arquivo legível. Ex.: "1,2 MB" / "840 KB" / "512 B". */
+export function formatFileSize(bytes: number | null | undefined): string {
+  if (bytes == null) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} KB`;
+  const mb = kb / 1024;
+  return `${mb.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+}
+
 /** Saudação dinâmica pelo horário. */
 export function greeting(hour: number): string {
   if (hour < 12) return "Bom dia";
