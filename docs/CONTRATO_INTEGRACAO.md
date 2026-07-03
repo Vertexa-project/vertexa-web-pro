@@ -508,6 +508,25 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   file_path corretos) + objeto no bucket → reload PERSISTE → "Abrir" gerou signed URL (scope=download, TTL 600s)
   → `HTTP 200 application/pdf 460 B`. Cleanup CIRÚRGICO por id (linha + objeto do storage); seed da Mariana
   INTACTO. Web (migration + código + docs): branch `feat/patient-documents-upload` (sem merge).
+- **S-RISK — SINAIS DE RISCO derivados (read-only) para o retorno: ✅ VERIFICADO VIA MCP + Playwright (03/07).**
+  Painel "Sinais de risco" na aba Visão geral (COMPLEMENTAR ao VRI, não o duplica) que sinaliza, 100%
+  DERIVADO do que a web já lê (SEM tabela nova, SEM escrita): **(a) sobrecarga muscular**, **(b) meta de água**,
+  **(c) foto ausente** e **(d) mobilidade**. Nova lib PURA `src/lib/domain/riskSignals.ts` (`computeRiskSignals`
+  + `RISK_THRESHOLDS` documentados) + leitor read-only `getHydrationDailyLiters` (litros/dia nos últimos N dias
+  COMPLETOS; exclui hoje parcial) + hook `useHydrationDaily` + `RiskSignalsPanel` (self-contained, AsyncSection
+  loading/empty/erro). **HONESTIDADE (regra "não inventar"):** mobilidade = `available:false` ("sem dados" — o
+  app não registra mobilidade; não fabricado); água usa DEFAULT documentado (2,0 L/dia — **não há meta por
+  paciente**) e só conta "abaixo da meta" em dias COM registro (ausência de log ≠ "não bebeu"); sobrecarga usa o
+  `status` PERSISTIDO (mesma fonte da aba Recuperação) e só dispara com fadiga SUSTENTADA ≥3d (além da janela
+  normal 0–2d), com o caveat de que o status **não decai server-side** (#1); **o VRI NÃO é recalculado nem
+  duplicado**. **Verificado (03/07):** Mariana (96/alta) → estado honesto "Sem sinais de risco no período" +
+  "Sem dados: Mobilidade" (biceps fadiga 2d NÃO sustentada; água 2,0 L batida nos dias com registro; foto há 8d
+  <30d); Ricardo (teste) → 2 sinais ATIVOS "Atenção" (água sem registros 7d + foto nunca enviada) + mobilidade
+  sem dados. 0 erro de console; read-only → sem cleanup; seed INTACTO. Gates: **typecheck OK · lint OK (0/0) ·
+  build OK**. Review adversarial (workflow, 5 dimensões × verificação): 0 Critical/Important; 2 Minor + 1
+  latente CORRIGIDOS (paridade do limite de foto com pendencies; tolerância de float na meta de água; comentário
+  do empty-state). **THRESHOLDS pendentes de validação clínica com a Juliana** (ver PENDENCIAS #9). Web: branch
+  `feat/injury-risk-signals` (sem merge).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅

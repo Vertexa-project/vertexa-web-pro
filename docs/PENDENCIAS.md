@@ -214,3 +214,16 @@
     não inflar o bundle. Avaliar quando houver clínica multi-fuso. **Obs.:** a RLS real dos novos campos
     `appointments.type/status` segue no guarda-chuva da S9 (a policy de sprint de `appointments` é permissiva;
     ver #11–#14) — adicionar colunas não muda o modelo de acesso.
+
+26. **Thresholds dos SINAIS DE RISCO — validar clínica com a Juliana (S-RISK).** O painel "Sinais de risco"
+    (aba Visão geral, `src/lib/domain/riskSignals.ts`, read-only) usa DEFAULTS não validados clinicamente:
+    (a) **sobrecarga muscular** = músculo `fatigued` sustentado ≥3 dias (alta ≥5) — além da janela normal de
+    fadiga (0–2d do `recoveryRule` do app); ⚠️ baseado no `status` PERSISTIDO de `muscle_recovery_states`, que
+    **não decai server-side** (ver #1) → um `fatigued` pode ficar "preso"; sobrecarga CRÔNICA real (recorrência/
+    carga acumulada) só com **histórico de sessões de treino**, que ainda não existe (dívida #S-EXEC). (b) **meta
+    de água = 2,0 L/dia** — **NÃO existe meta por paciente** no banco; é um default. Definir a meta (fixa? por
+    peso, ex. 35 ml/kg? por paciente, nova coluna?) e a janela (hoje uso 7 dias completos). (c) **foto ausente**
+    = 30d (espelha as pendências) / alta 60d. (d) **mobilidade = SEM FONTE**: o app não registra mobilidade/
+    aquecimento (conteúdo estático) → o sinal aparece honestamente como "sem dados" e **fica pendente até existir
+    um módulo de mobilidade no app** que persista os dados. Nenhum threshold é bloqueante para a demo (só seed
+    fictício), mas todos precisam do aval da Juliana antes de virar régua clínica real.
