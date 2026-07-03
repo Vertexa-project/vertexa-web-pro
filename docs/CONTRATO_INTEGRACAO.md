@@ -508,6 +508,22 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   file_path corretos) + objeto no bucket → reload PERSISTE → "Abrir" gerou signed URL (scope=download, TTL 600s)
   → `HTTP 200 application/pdf 460 B`. Cleanup CIRÚRGICO por id (linha + objeto do storage); seed da Mariana
   INTACTO. Web (migration + código + docs): branch `feat/patient-documents-upload` (sem merge).
+- **S-VRI-PDF — RELATÓRIO DE PONTOS / VRI (PDF client-side): ✅ VERIFICADO VIA MCP + Playwright (02/07).**
+  Novo relatório PDF motivacional focado em PONTUAÇÃO/ENGAJAMENTO, pensado p/ o paciente LEVAR ao retorno
+  (WhatsApp/impressão), reusando a infra `src/lib/pdf/*` (mesma casca `ReportShell` + primitivos do Relatório
+  de Evolução). `src/lib/pdf/PointsReport.tsx` (herói do VRI + pontos fortes/atenção + resumo de peso + recado)
+  + `generatePointsReport.tsx` (build→blob→download, `now` injetável) espelham o par Evolução; botão
+  `ExportPointsButton` (self-contained, padrão do `ExportEvolutionButton`) na aba **Visão geral** do paciente.
+  **O VRI é LIDO do último `adherence_snapshots`** (score/level/status/streak/weekly_completion_rate/
+  positive_factors/risk_factors) — a web **NÃO recalcula** (nenhum valor fixo/hardcoded); resumo de peso reusa
+  `getWeightSeries` + `WeightChartPdf`; recado é COPY derivada do nível (não é métrica inventada); **sem
+  execução de treino** (#S-EXEC). Campos ausentes degradam com elegância. Único toque em arquivo compartilhado:
+  `ReportShell` ganhou prop `footerLabel` (default preserva o Relatório de Evolução byte-a-byte). **READ-ONLY**
+  (sem escrita no banco → sem cleanup). Gates: **typecheck OK · lint OK (0/0) · build OK**. **Verificado via
+  Playwright (02/07):** ficha da Mariana → aba Visão geral → "Relatório de Pontos (PDF)" → download
+  `pontos-mariana-albuquerque-2026-07-02.pdf` (PDF válido 35 KB) disparado com **0 erro de console**; números do
+  relatório batem com o snapshot real via MCP (**96/alta · streak 18 · 80% · 4 pontos fortes · 0 riscos**); seed
+  INTACTO. Web: branch `feat/vri-points-report` (a partir do main consolidado; sem merge).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅

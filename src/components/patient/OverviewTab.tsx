@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, Dumbbell, Target, Utensils } from "lucide-react";
 
+import { ExportPointsButton } from "./ExportPointsButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +34,16 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">Resumo do paciente</h2>
+          <p className="text-sm text-muted-foreground">
+            Relatório de pontos (VRI) para o paciente levar ao retorno.
+          </p>
+        </div>
+        <ExportPointsButton patient={patient} />
+      </div>
+
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <SummaryCard label="Objetivo" value={patient.goal ?? "—"} />
         <SummaryCard

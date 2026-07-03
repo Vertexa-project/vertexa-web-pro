@@ -26,7 +26,12 @@
    dashboard gerencial.
 
 9. **Relatórios PDF de evolução.** Pedido pela cliente (Discord 14/06) — semana a semana, para ela
-   e para o paciente. Coletar como deve funcionar (escopo flexível).
+   e para o paciente. Coletar como deve funcionar (escopo flexível). **PARCIAL ✅:** já existem DOIS
+   relatórios PDF client-side (`src/lib/pdf/*`, casca `ReportShell`+primitivos): (a) **Evolução**
+   (KPIs+gráfico de peso+antropometria+fotos) e (b) **Pontos/VRI** (herói do VRI LIDO do snapshot +
+   pontos fortes/atenção + resumo de peso + recado motivacional; pensado p/ o paciente levar ao
+   retorno / WhatsApp / impressão). Falta validar com a cliente a CADÊNCIA "semana a semana" e o
+   escopo definitivo (o que entra/sai). Sem execução de treino (dívida #S-EXEC).
 
 10. **GIFs/vídeos de exercício.** Hoje o app usa URLs de terceiros (fitnessprogramer.com). Definir
     fonte própria/licenciada antes de publicar.
