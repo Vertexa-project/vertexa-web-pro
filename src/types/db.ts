@@ -146,6 +146,19 @@ export interface ProgressPhoto {
   taken_at: string;
 }
 
+// Suplemento do paciente (tabela `supplements`, criada pela S3 do app). AUTORIA do profissional:
+// a WEB escreve (editor) e o APP LÊ (getMySupplements, ordena por order_index). NÃO renomear/remover
+// colunas — quebra o app. O "tomado" vive em `supplement_intakes` (app), fora deste tipo.
+export interface Supplement {
+  id: string;
+  patient_id: string;
+  name: string;
+  dose: string | null;
+  time_label: string | null;
+  order_index: number;
+  created_at: string;
+}
+
 // Documento/exame do paciente (PDF/imagem) — bucket PRIVADO 'patient-documents' + URL assinada
 // (migration 20260702230000). Modelo BIDIRECIONAL: a WEB escreve (uploaded_by_role='professional');
 // o app paciente lerá/ESCREVERÁ no futuro (uploaded_by_role='patient'). NÃO renomear colunas sem
