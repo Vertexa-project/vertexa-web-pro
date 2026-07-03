@@ -14,6 +14,7 @@ export const qk = {
   hydrationToday: (patientId: string) => ["patient", patientId, "hydrationToday"] as const,
   hydrationDaily: (patientId: string, days: number) => ["patient", patientId, "hydrationDaily", days] as const,
   progressPhotos: (patientId: string) => ["patient", patientId, "progressPhotos"] as const,
+  patientSupplements: (patientId: string) => ["patient", patientId, "supplements"] as const,
   muscleRecovery: (patientId: string) => ["patient", patientId, "muscleRecovery"] as const,
   adherenceSnapshot: (patientId: string) => ["patient", patientId, "adherenceSnapshot"] as const,
   chatThread: (patientId: string) => ["patient", patientId, "chat"] as const,

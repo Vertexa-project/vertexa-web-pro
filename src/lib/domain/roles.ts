@@ -15,16 +15,18 @@ export interface RolePermissions {
   canEditNutrition: boolean;
   /** Edita o Treino (médico / personal trainer). */
   canEditWorkout: boolean;
+  /** Edita os Suplementos do paciente (médico ou nutricionista). */
+  canEditSupplements: boolean;
 }
 
 // Admin = gestão (vê itens de clínica; NÃO edita planos clínicos). Cada clínico edita só o seu.
 const PERMISSIONS: Record<Role, RolePermissions> = {
-  admin: { isAdmin: true, canEditNutrition: false, canEditWorkout: false },
-  doctor: { isAdmin: false, canEditNutrition: false, canEditWorkout: true },
-  nutritionist: { isAdmin: false, canEditNutrition: true, canEditWorkout: false },
-  trainer: { isAdmin: false, canEditNutrition: false, canEditWorkout: true },
-  physio: { isAdmin: false, canEditNutrition: false, canEditWorkout: false },
-  other: { isAdmin: false, canEditNutrition: false, canEditWorkout: false },
+  admin: { isAdmin: true, canEditNutrition: false, canEditWorkout: false, canEditSupplements: false },
+  doctor: { isAdmin: false, canEditNutrition: false, canEditWorkout: true, canEditSupplements: true },
+  nutritionist: { isAdmin: false, canEditNutrition: true, canEditWorkout: false, canEditSupplements: true },
+  trainer: { isAdmin: false, canEditNutrition: false, canEditWorkout: true, canEditSupplements: false },
+  physio: { isAdmin: false, canEditNutrition: false, canEditWorkout: false, canEditSupplements: false },
+  other: { isAdmin: false, canEditNutrition: false, canEditWorkout: false, canEditSupplements: false },
 };
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -63,6 +65,7 @@ export function roleLabel(role: Role): string {
 export const EDIT_REASON = {
   nutrition: "Apenas o nutricionista edita o plano alimentar.",
   workout: "Apenas o médico ou personal trainer edita o treino.",
+  supplements: "Apenas o médico ou o nutricionista edita os suplementos.",
   calendar: "Apenas o administrador da clínica gerencia a integração com o Google Calendar.",
 } as const;
 
