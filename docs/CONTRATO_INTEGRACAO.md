@@ -508,6 +508,23 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   file_path corretos) + objeto no bucket → reload PERSISTE → "Abrir" gerou signed URL (scope=download, TTL 600s)
   → `HTTP 200 application/pdf 460 B`. Cleanup CIRÚRGICO por id (linha + objeto do storage); seed da Mariana
   INTACTO. Web (migration + código + docs): branch `feat/patient-documents-upload` (sem merge).
+- **S-SUPL-EDITOR — EDITOR DE SUPLEMENTOS no web (autoria que faltava): ✅ VERIFICADO VIA MCP + Playwright (03/07).**
+  Fecha a dívida "editor de suplementos no web" (S17): a LISTA de `supplements` deixa de nascer só de seed — o
+  profissional agora faz **CRUD completo** pela web, que o app já LÊ (`getMySupplements`). **Sem migration** (a
+  tabela é da S3 do app; `sprint_supplement_write` ALL já permite INSERT/UPDATE/DELETE). `src/lib/api/supplements.ts`
+  (`listPatientSupplements`/`createSupplement`/`updateSupplement`/`deleteSupplement`, tipado) escreve EXATAMENTE as
+  colunas que o app consome (name, dose, time_label, order_index; ordena por order_index; novo item entra no fim) —
+  **NÃO renomeia/remove coluna** e **NÃO toca `supplement_intakes`** (o "tomado" é do paciente/app). Hook
+  `useSupplements` (query + mutations que invalidam a lista); aba própria **"Suplementos"** na ficha
+  (`SupplementsTab` + `SupplementEditorDialog`), RBAC via `GatedAction` (**`canEditSupplements` = médico ou nutri**;
+  os demais veem read-only) e **exclusão via AlertDialog** do design system (novo primitivo `ui/alert-dialog.tsx` +
+  dep `@radix-ui/react-alert-dialog` — fecha a #19c "trocar window.confirm por AlertDialog"). Gates: **typecheck OK ·
+  lint OK (0/0) · build OK**. **Verificado (03/07)** com paciente de TESTE **Ricardo** (nunca a Mariana): criar →
+  linha em `supplements` com as colunas do app corretas (name/dose/time_label/order_index=0) → editar (dose "5 g",
+  momento "Manhã" persistidos) → excluir via AlertDialog → lista vazia. Cleanup CIRÚRGICO por id via MCP; **os 5
+  suplementos seed da Mariana INTACTOS** e `supplement_intakes` = 0 (intocado). ⚠️ Observação de ambiente: o browser
+  do Playwright MCP estava sendo usado em paralelo por outra frente (S-EXEC) — a verificação foi confirmada pelo
+  BANCO (MCP), que é imune à disputa. Web: branch `feat/supplements-editor` (sem merge).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
@@ -532,7 +549,8 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   marcador `activity_events(supplement_checked)` verificados via MCP em 02/07 e dado de teste limpo
   (desmarque via UI + marcador por id; ver Sessão 17). Idempotente (`create table if not exists` + `drop
   policy if exists` + seed `on conflict do nothing`). Seed: 5 suplementos da Mariana (ids fixos
-  `30000000-…-01..05`) — o editor no web é dívida registrada. RLS sprint no checklist #14.
+  `30000000-…-01..05`) — o editor no web **✅ EXISTE (S-SUPL-EDITOR): a web faz CRUD (autoria) além do seed**.
+  RLS sprint no checklist #14.
 - `seed_mariana_timeline_coherence` — migration `20260702220213_seed_mariana_timeline_coherence.sql` **versionada** e
   **APLICADA** via `apply_migration`. UPDATE reversível (rollback no header) escopado à Mariana: `start_date`→15/01 +
   `patient_achievements.unlocked_at` retroativos. DISPLAY only — VRI (a232d1a4 96/alta) inalterado, comprovado por MCP.

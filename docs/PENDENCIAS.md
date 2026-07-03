@@ -73,7 +73,8 @@
       `sprint_activity_session_write` INSERT `with check (true)`) — qualquer anon pode marcar/desmarcar
       refeição ou lançar atividade complementar para QUALQUER `patient_id`. Fecham junto na mesma RLS real
       por `auth.uid()` → `patient_id`. Idem `supplements` + `supplement_intakes`
-      (`20260702140000_supplements.sql`, S3/app): `sprint_supplement_write` (ALL — autoria futura do web) e
+      (`20260702140000_supplements.sql`, S3/app): `sprint_supplement_write` (ALL — autoria do web, editor
+      implementado na S-SUPL-EDITOR) e
       `sprint_supplement_intake_insert`/`_delete` (`with check`/`using (true)`) — qualquer anon pode editar
       a LISTA de suplementos e marcar/desmarcar "tomado" para QUALQUER `patient_id`. Mesma RLS real fecha.
     - **Conquistas (`achievements` + `patient_achievements`, S5/app)** — `20260702210746_achievements.sql`:
