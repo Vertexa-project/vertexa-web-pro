@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, Dumbbell, Target, Utensils } from "lucide-react";
 
+import { RiskSignalsPanel } from "./RiskSignalsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,6 +114,8 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
           </CardContent>
         </Card>
       </div>
+
+      <RiskSignalsPanel patientId={patient.id} />
     </div>
   );
 }
