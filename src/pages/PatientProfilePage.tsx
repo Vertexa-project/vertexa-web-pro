@@ -8,6 +8,7 @@ import { NutritionTab } from "@/components/patient/NutritionTab";
 import { OverviewTab } from "@/components/patient/OverviewTab";
 import { ProfileHeader } from "@/components/patient/ProfileHeader";
 import { RecoveryTab } from "@/components/patient/RecoveryTab";
+import { SupplementsTab } from "@/components/patient/SupplementsTab";
 import { TimelineTab } from "@/components/patient/TimelineTab";
 import { WorkoutTab } from "@/components/patient/WorkoutTab";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -23,6 +24,7 @@ const TABS = [
   { value: "evolution", label: "Evolução/Fotos" },
   { value: "documents", label: "Documentos" },
   { value: "nutrition", label: "Plano alimentar" },
+  { value: "supplements", label: "Suplementos" },
   { value: "workout", label: "Treino" },
   { value: "recovery", label: "Recuperação" },
 ];
@@ -105,6 +107,9 @@ export function PatientProfilePage() {
         </TabsContent>
         <TabsContent value="nutrition">
           <NutritionTab patient={patient} />
+        </TabsContent>
+        <TabsContent value="supplements">
+          <SupplementsTab patient={patient} />
         </TabsContent>
         <TabsContent value="workout">
           <WorkoutTab patient={patient} />
