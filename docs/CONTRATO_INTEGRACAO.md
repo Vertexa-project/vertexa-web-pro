@@ -157,6 +157,11 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   - **Agenda interna (Sessão 6)** → `migrations/20260626090000_appointments_internal_agenda.sql` ✅: `sprint_appointment_read` (SELECT) + `sprint_appointment_write` (ALL), anon/auth `using/with check (true)`. Isolamento por `clinic_id` é client-side; `notes` é dado sensível. Fechar por papel/clínica no servidor antes de dado real (PENDENCIAS #14/#19).
   - **Ledger técnico interno (Sessão 7)** → `migrations/20260626120000_schema_migration_log.sql` ✅ cria `schema_migration_log` como companion legível da `supabase_migrations.schema_migrations` do CLI; `migrations/20260626123000_schema_migration_log_internal_only.sql` ✅ remove a leitura pública (`miglog_read`) e revoga privilégios de `anon`/`authenticated`. Sem API client, hook, rota, card ou seção no portal; inspeção somente por MCP, SQL administrativo ou migrations. NÃO substitui a tabela do CLI.
   - **Documentos/exames (S-DOCS)** → `migrations/20260702230000_patient_documents.sql` ✅: `sprint_patient_document_read` (SELECT) + `sprint_patient_document_insert` (INSERT), `anon`/`authenticated` `using/with check (true)` — **SEM** UPDATE/DELETE (documento imutável na sprint). Storage bucket **PRIVADO** `patient-documents` (`public=false`) + `sprint_patient_documents_storage_read` (SELECT — é o que AUTORIZA o anon a ASSINAR a URL) + `sprint_patient_documents_storage_write` (INSERT), escopadas por `bucket_id`. Dado de SAÚDE mais sensível (exame) atrás de RLS permissiva → **AMBAS (tabela + storage) no checklist #14**; intenção da RLS real (S9: SELECT só profissionais vinculados + o paciente; INSERT do profissional via `auth.uid()→professionals`, do paciente só o próprio) no header da migration. Fecha a **#12** para EXAME (bucket privado + signed URL, TTL 10 min).
+  - **Execução de treino (#S-EXEC)** → `migrations/20260702240000_workout_execution_logs.sql` ✅:
+    `sprint_workout_session_read`/`sprint_workout_set_read` (SELECT) + `sprint_workout_session_write`/
+    `sprint_workout_set_write` (INSERT), anon/auth `using/with check (true)` — **append-only** (SEM UPDATE/DELETE,
+    espelha `activity_sessions`). Intenção da RLS real (S9: SELECT do paciente dono + profissionais vinculados;
+    INSERT só o dono/profissional vinculado) no header. **AMBAS as tabelas no checklist #14.**
 - **Migrations = fonte única no repo web** (`vertexa-web-pro/supabase/migrations`). Toda policy aplicada
   via MCP DEVE virar arquivo de migration aqui — **todas** as policies de escrita sprint já versionadas.
 - **#11–#14 (BLOQUEANTE p/ dado real):** trocar tudo isso por RLS por papel/clínica/vínculo. Tabelas a
@@ -178,15 +183,30 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   snapshot que o web lê é ESCRITO PELA ENGINE, não cravado). Uma ação isolada NÃO derruba mais o streak
   (segue 18 → 19 no dia seguinte). Drift: datas fixas envelhecem (~2 dias) → o seed é REFRESHÁVEL (ritual
   pré-demo na Sessão 16).
-- **#S-EXEC (Sessão futura — app): captura de EXECUÇÃO de treino.** Hoje `workout_checked` é só um
-  MARCADOR de conclusão (payload `{workoutId, action:'started'|'completed'}` do WorkoutGuide, `{source}`
-  do Records, ou `{seed}`) — o app NÃO loga o que foi FEITO (séries/reps/carga/duração reais). Por isso a
-  S4 (Progresso vivo) **REMOVEU** os blocos que exigiam execução (tempo/calorias, nº exercícios/séries/
-  reps/carga, "Regiões mais trabalhadas", "Tipos de exercícios", "Volume semanal") em vez de inventar
-  número. ⚠️ O WorkoutGuide emite 2 `workout_checked` por sessão (`started`+`completed`, ambos espelhados
-  pelo eventSync) — qualquer contagem de treino deve dedupar (a S4 conta DIAS distintos). Desbloquear =
-  nova sessão com tabela de execução (ex.: `workout_session_logs` com séries/reps/carga/duração feitas,
-  link p/ `workouts`) + UI de registro no WorkoutGuide; só então esses blocos voltam, condicionais a dado real.
+- **#S-EXEC (app): captura de EXECUÇÃO de treino. ✅ RESOLVIDO (S-EXEC, 03/07).** O app agora CAPTURA o que
+  foi FEITO (séries/reps/carga/RPE/duração), não só o marcador. 2 tabelas CANÔNICAS **`workout_session_logs`**
+  (sessão: `workout_id`→workouts **SET NULL** [o link que faltava] + snapshot `workout_name`, `performed_on`
+  LOCAL, `started_at`/`completed_at`/`total_duration_min` nullable, `source`) + **`workout_set_logs`** (série:
+  `workout_exercise_id`→workout_exercises **SET NULL** + snapshot `exercise_name`, `set_index`, `weight_kg`,
+  `reps_done`, `rpe` nullable 6-10, `rest_seconds` nullable). Volume (peso×reps) e 1RM = **DERIVADOS em leitura**
+  (`src/lib/workoutExecution.ts`, puro/testado), NUNCA coluna. UI no WorkoutGuide: inputs por série pré-preenchidos
+  com o prescrito (0-safe: peso corporal=0 é válido) + **finalizar antecipado** (=> "3 de 4" derivável por
+  `count(set_logs)` vs `workout_exercises.sets`) + RPE opcional; grava sessão+séries via `src/lib/api/workoutLogs.ts`
+  ANTES de navegar (não navega/não emite se falhar). **VRI INTOCADO:** o marcador `workout_checked` (started+completed)
+  segue igual; o `adherenceEngine` lê só `activity_events.type/created_at` (dias distintos) — as tabelas de execução
+  NÃO são input. Progresso RELIGADO (card "Desempenho do treino", escopado pelo seletor 7/14/28): volume, nº
+  exercícios/séries/reps/carga, tempo, **Regiões mais trabalhadas** (via `workout_exercises.muscle_groups` → PT→EN
+  pelo muscleMap). CONTINUAM vazios por falta de fonte honesta: **"Tipos de exercício %"** (não há coluna de
+  categoria em `workout_exercises` nem catálogo global) e **CALORIAS de treino** (não há captura de HR/kcal). ⚠️
+  contagem de treino segue por DIAS distintos (#13, dedup started+completed). Migrations `20260702240000` (tabelas)
+  + `20260702250000` (seed Mariana). RLS sprint das 2 tabelas no **#14**.
+- **#S-EXEC-2 (dívida ADITIVA registrada): exercício por TEMPO não é modelado.** Prancha/isometria (segundos) —
+  `reps_done` não vira segundos. Solução futura ADITIVA (não implementada): `workout_set_logs.duration_seconds`
+  nullable. Não bloqueia o plano atual da Mariana (tudo por reps).
+- **#S-EXEC-3 (dívida registrada): escrita não-atômica sessão↔séries.** `logWorkoutSession` + `logWorkoutSetLogs`
+  são 2 chamadas; falha entre elas + retry pode deixar uma sessão ÓRFÃ (com duração, 0 séries). Mitigado na LEITURA
+  (o Progresso só conta tempo de sessões que TÊM séries → sem inflar o "Tempo"; a RLS sprint é append-only, sem DELETE
+  anon). Fix real futuro: RPC transacional (sessão+séries num insert) ou policy de DELETE escopada.
 - **#S5-JORNADA (S6 — app, Jornada viva): âncora temporal da jornada.** As conquistas de **constância** da
   S5 usam o **streak do motor como proxy** (D1 aprovada) — NÃO há marco de calendário. Mas a narrativa de
   "30 dias de jornada" fica incoerente com o `patients.start_date` da Mariana = **2026-06-30** (2 dias antes
@@ -397,8 +417,8 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   19 no dia seguinte). O "88" autoral foi SUPERADO por **~96/alta** (decisão aprovada — o 88 era
   incompatível com um perfil engajado sob a engine C7); o snapshot autoral `a77e5c9b` (88) segue como
   histórico (o web lê o mais recente). **DRIFT — seed REFRESHÁVEL** (datas fixas envelhecem; o streak
-  colapsa em ~2 dias). **Ritual pré-demo** (via MCP + app):
-  `select public.refresh_demo_mariana_streak();` + 1 ação real da Mariana que dispare o tracker (ex.: Sono)
+  colapsa em ~2 dias). **Ritual pré-demo CONSOLIDADO (2 passos, S-EXEC)** (via MCP + app):
+  `select public.refresh_demo_mariana();` (guarda-chuva = streak + execução de treino) + 1 ação real da Mariana que dispare o tracker (ex.: Sono)
   para a engine regravar o snapshot fresco. Migration `20260702130000_seed_demo_mariana_streak_convergence.sql`.
   Gates do app (sem mudança de código): **typecheck OK · vitest 67/67 · build OK**. Web: branch
   `fix/seed-mariana-convergence` (sem merge).
@@ -560,6 +580,27 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   suplementos seed da Mariana INTACTOS** e `supplement_intakes` = 0 (intocado). ⚠️ Observação de ambiente: o browser
   do Playwright MCP estava sendo usado em paralelo por outra frente (S-EXEC) — a verificação foi confirmada pelo
   BANCO (MCP), que é imune à disputa. Web: branch `feat/supplements-editor` (sem merge).
+- **S-EXEC — CAPTURA de EXECUÇÃO de treino (fecha #S-EXEC): ✅ VERIFICADO VIA MCP + Playwright (03/07).**
+  O WorkoutGuide guiava o treino PRESCRITO mas DESCARTAVA o feito (só `workout_checked`). Agora CAPTURA
+  séries/reps/carga/RPE/duração em 2 tabelas CANÔNICAS **`workout_session_logs`** + **`workout_set_logs`**
+  (padrão Strong/Hevy; SET NULL + snapshots `workout_name`/`exercise_name` preservam histórico na edição do
+  plano; volume/1RM DERIVADOS em leitura — `src/lib/workoutExecution.ts` puro/testado). UI: inputs por série
+  pré-preenchidos (0-safe p/ peso corporal) + **finalizar antecipado** (=> "3 de 4" derivável) + RPE opcional;
+  escreve via `src/lib/api/workoutLogs.ts` ANTES de navegar (não navega/emite se falhar). **VRI INTOCADO:**
+  `workout_checked` inalterado; `adherenceEngine` não lê estas tabelas. Progresso RELIGADO (card "Desempenho do
+  treino"): volume, nº exs/séries/reps/carga, tempo, regiões% (via `muscle_groups`→muscleMap). Vazios honestos:
+  "Tipos de exercício %" (sem categoria no schema) e calorias de treino (sem captura). Dívidas: **#S-EXEC-2**
+  (isométrico por tempo → `duration_seconds` futuro) e **#S-EXEC-3** (escrita não-atômica, mitigada na leitura).
+  Seed retroativo da Mariana (2 sessões DISPLAY-only, `source='seed'`, relativo a now()/TZ SP) via
+  `refresh_demo_mariana_workout_execution()`; ritual consolidado em `refresh_demo_mariana()` (guarda-chuva).
+  Gates: **typecheck OK · vitest 116/116 · build OK · lint (diff limpo; baseline 3 erros pré-existentes)**.
+  **Verificado (03/07):** 1 treino guiado (Puxada 42,5kg×10 RPE 8 + 40kg×12, finalizado em 2 de 4) → 1
+  `workout_session_logs`(source='app', workout_id linkado, performed_on LOCAL) + 2 `workout_set_logs` (FK +
+  snapshots + RPE) → Progresso "Desempenho do treino" bateu (volume 6.305 · 17 séries · 198 reps · 4 exs ·
+  carga máx 42,5 · 1h46 · regiões) → **VRI `a232d1a4` 96/alta BYTE-A-BYTE** (recompute dedup: hoje já era dia de
+  treino → nem gravou snapshot). Cleanup CIRÚRGICO (sessão app + 2 marcadores + restore de muscle_recovery
+  biceps/lats); seed convergente da Mariana INTACTO. App: branch `feat/workout-execution-live`. Web (migrations):
+  branch `feat/workout-execution-migration` (sem merge).
 
 **Banco:**
 - `chat_*` + realtime ✅ · read policies ✅ · write policies sprint versionadas ✅
@@ -578,7 +619,7 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   `apply_migration`. Função REFRESHÁVEL: janela rolante de 18 dias relativa a `now()` (delete-all + replant),
   eventos com `payload.seed='demo_mariana_streak'`, SEM EXECUTE p/ anon/authenticated. O baseline
   (96/18/80/alta) é escrito pela ENGINE via app (não cravado). Rollback: `drop function` + delete por marcador.
-  Ritual pré-demo: `select public.refresh_demo_mariana_streak();` + 1 ação da Mariana no app (recompute).
+  Ritual pré-demo CONSOLIDADO (S-EXEC): `select public.refresh_demo_mariana();` (guarda-chuva: streak + execução) + 1 ação da Mariana no app (recompute).
 - `supplements` + `supplement_intakes` — migration `20260702140000_supplements.sql` **versionada** e
   **APLICADA** via `apply_migration` (registrada no ledger como `20260702152201`); linha real de intake +
   marcador `activity_events(supplement_checked)` verificados via MCP em 02/07 e dado de teste limpo
@@ -602,5 +643,17 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   storage exige a Storage API ou bypass do trigger `protect_delete` — feito via `set local
   session_replication_role='replica'`). RLS sprint (tabela SELECT+INSERT; storage SELECT+INSERT) no checklist
   #14. Fecha a #12 para EXAME (bucket privado + signed URL).
+- `workout_session_logs` + `workout_set_logs` (execução de treino, #S-EXEC) — migration
+  `20260702240000_workout_execution_logs.sql` **versionada** e **APLICADA** via `apply_migration`. Aditiva/
+  idempotente (`create table if not exists` + `drop policy if exists`); FKs `workout_id`/`workout_exercise_id`
+  **ON DELETE SET NULL** (histórico sobrevive à edição do plano) + snapshots `workout_name`/`exercise_name`;
+  CHECKs `weight_kg>=0`/`reps_done>=0`/`rpe 6..10`; RLS sprint SELECT+INSERT (append-only), AMBAS no #14. Default
+  de `performed_on` endurecido p/ data LOCAL (America/Sao_Paulo), não UTC. Volume/1RM = derivados em leitura.
+- `refresh_demo_mariana_workout_execution()` + guarda-chuva `refresh_demo_mariana()` — migration
+  `20260702250000_seed_demo_mariana_workout_execution.sql` **versionada** e **APLICADA**. Função REFRESHÁVEL
+  (delete-all `source='seed'` + replant relativo a now(), `performed_on` em TZ SP), resolve workout/exercise
+  DINAMICAMENTE (letra + order_index) → robusta a regeneração do plano; SEM EXECUTE p/ anon/authenticated.
+  **VRI-invariante** (não cria `activity_events`). Ritual consolidado: `select public.refresh_demo_mariana();`
+  (= streak + execução) + 1 ação da Mariana no app. Rollback no header (drop functions + delete seed rows).
 
 **Teste ponta a ponta (4d):** ⏳ pendente — app `@Camila` → badge ao vivo na web + bater ponto → Timeline/recuperação.
