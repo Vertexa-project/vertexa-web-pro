@@ -188,11 +188,13 @@ export interface ReportShellProps {
   identity: IdentityField[]; // grade (Objetivo, Profissional, Clínica, ...)
   clinicName: string;
   emittedAt: string; // já formatado
+  /** Rótulo do rodapé-direito (nome do relatório). Default preserva o Relatório de Evolução. */
+  footerLabel?: string;
   children: ReactNode;
 }
 
 /** Uma <Page> A4 com capa/cabeçalho + rodapé fixo (marca/clínica/emissão). Reutilizável por todos os relatórios. */
-export function ReportShell({ eyebrow, patientName, subtitle, identity, clinicName, emittedAt, children }: ReportShellProps) {
+export function ReportShell({ eyebrow, patientName, subtitle, identity, clinicName, emittedAt, footerLabel = "Relatório de Evolução", children }: ReportShellProps) {
   return (
     <Page size="A4" style={s.page}>
       <View style={s.header}>
@@ -221,7 +223,7 @@ export function ReportShell({ eyebrow, patientName, subtitle, identity, clinicNa
       <Text fixed style={s.footerLeft}>
         {clinicName} · Emitido em {emittedAt} · Documento confidencial (LGPD)
       </Text>
-      <Text fixed style={s.footerRight}>VERTEXA · Relatório de Evolução</Text>
+      <Text fixed style={s.footerRight}>VERTEXA · {footerLabel}</Text>
     </Page>
   );
 }
