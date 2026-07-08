@@ -54,6 +54,15 @@ begin
     return new;
   end if;
 
+  -- SEGURANÇA (anti account-takeover): só associa/cria com e-mail VERIFICADO. A anon key é
+  -- pública → um signup por e-mail/senha NÃO verificado poderia, sem esta guarda, casar o
+  -- e-mail de um profissional semeado e SEQUESTRAR o profile dele. Google OAuth já chega
+  -- verificado (email_confirmed_at setado); e-mail/senha só associa APÓS a confirmação — por
+  -- isso o trigger também dispara no UPDATE de email_confirmed_at.
+  if new.email_confirmed_at is null then
+    return new;
+  end if;
+
   -- Match por e-mail (case/trim-insensitive) — SOMENTE se houver EXATAMENTE 1 profile órfão.
   -- (NÃO usar min(id): não existe agregado min(uuid) no Postgres — quebraria a função.)
   select count(*)
@@ -106,10 +115,12 @@ revoke all on function public.handle_new_user() from public;
 revoke all on function public.handle_new_user() from anon;
 revoke all on function public.handle_new_user() from authenticated;
 
--- 4) Trigger no signup de auth.users (idempotente).
+-- 4) Trigger no signup de auth.users (idempotente). Dispara no INSERT (Google já vem
+--    verificado) E no UPDATE de email_confirmed_at (confirmação tardia de e-mail/senha) →
+--    a associação só acontece com e-mail verificado (ver guarda na função).
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
-  after insert on auth.users
+  after insert or update of email_confirmed_at on auth.users
   for each row execute function public.handle_new_user();
 
 -- 5) Ledger técnico interno (companion legível; não substitui a tabela do CLI).
