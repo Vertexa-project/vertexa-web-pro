@@ -1,6 +1,24 @@
 import { supabase } from "@/lib/supabase";
 import type { ProfessionalType, UserRole } from "@/types/db";
 
+/**
+ * Resolve o profile do usuário autenticado (auth real) por `auth_user_id = auth.uid()`.
+ * Retorna null quando ainda não há profile associado (o trigger handle_new_user associa por
+ * e-mail ou cria um 'pending' no 1º login — ver migration 20260708120000). Só usado no modo
+ * real; no demo a identidade vem do pin de env.
+ */
+export async function getProfileByAuthUserId(
+  authUserId: string,
+): Promise<{ id: string; role: UserRole | null } | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { id: string; role: UserRole | null } | null) ?? null;
+}
+
 /** Nome (full_name) de um profile pelo id. Usado p/ saudar o profissional atuante. */
 export async function getProfileName(profileId: string): Promise<string | null> {
   const { data, error } = await supabase

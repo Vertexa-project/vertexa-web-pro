@@ -7,6 +7,7 @@ import { ProtectedRoute } from "./ProtectedRoute";
 
 // Code-splitting por rota: cada página vira um chunk próprio (recharts/editores fora do bundle inicial).
 const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const AuthCallback = lazy(() => import("@/app/AuthCallback").then((m) => ({ default: m.AuthCallback })));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
 const PatientsPage = lazy(() => import("@/pages/PatientsPage").then((m) => ({ default: m.PatientsPage })));
 const PatientProfilePage = lazy(() =>
@@ -26,6 +27,15 @@ export const router = createBrowserRouter(
       element: (
         <Suspense fallback={<LoadingState />}>
           <LoginPage />
+        </Suspense>
+      ),
+    },
+    {
+      // Retorno do OAuth (Google) — pública; confirma a sessão e redireciona.
+      path: "/auth/callback",
+      element: (
+        <Suspense fallback={<LoadingState />}>
+          <AuthCallback />
         </Suspense>
       ),
     },

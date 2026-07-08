@@ -8,6 +8,8 @@ export interface AuthContextValue {
   isAuthenticated: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  /** Inicia o OAuth do Google (redireciona para o provedor). Só faz sentido em VITE_AUTH_MODE=real. */
+  signInWithGoogle: () => Promise<void>;
   signInDemo: () => void;
   signOut: () => Promise<void>;
 }

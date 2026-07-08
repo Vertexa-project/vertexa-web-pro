@@ -21,6 +21,8 @@ export const qk = {
   unreadMentions: (profileId: string) => ["chat", "mentions", profileId] as const,
   currentProfessional: (profileId: string) => ["currentProfessional", profileId] as const,
   currentProfessionalRecord: (profileId: string) => ["currentProfessional", profileId, "record"] as const,
+  // Identidade real: profile resolvido por auth_user_id (auth.uid()).
+  profileByAuthUser: (authUserId: string) => ["profileByAuthUser", authUserId] as const,
   clinicProfessionals: (clinicId: string) => ["clinicProfessionals", clinicId] as const,
   clinic: (clinicId: string) => ["clinic", clinicId] as const,
   campaigns: ["campaigns"] as const,
