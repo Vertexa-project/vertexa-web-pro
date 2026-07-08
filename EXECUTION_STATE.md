@@ -122,8 +122,15 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 | S12 | Gate + Playwright + npm ci | ✅ | tsc 0 · lint 0 (`--max-warnings 0`) · build 0 · `npm ci && npm run build` limpo (espelho Vercel; chunk `fullcalendar` isolado, ~78 KB gzip). Playwright (tema claro): 4 views, CRUD (criar/editar/excluir verificado + MCP), cores por tipo + desmarcado riscado/legível, 2 legendas, dropdown Integrações nutri(desabilitado+motivo)↔admin(ativo), 0 erro de console. Seed restaurado pristino pós-E2E. |
 | S12.1 | Polimento premium do calendário | ✅ | Janela **06:00–23:00** (slotDuration 30min, rótulo 1h, scrollTime 07:00, expandRows, altura 720); **businessHours** seg–sáb 08–19 com sombreado sutil (token `--fc-non-business-color`); **resumo da faixa visível** no header (deriva dos events — "N compromissos · X confirmados · … · W no Google" —, recalcula no datesSet); hover discreto + truncamento do chip. Seed cheio `20260626170000` (**17** compromissos na semana corrente+próxima, type/status variados, 08–19h, fuso BR; idempotente por `[seed-s12.1]` + `where not exists`, re-run não duplica; **ledger=16**). Revisão adversarial (5 dim, 7 agents): **2 achados corrigidos** — hover apagava a barra de STATUS (box-shadow recomposto por status); janela 06–23 podia ocultar compromisso criado fora do expediente (guarda 06–23 no diálogo: `min/max` + validação no submit). Gate verde + `npm ci && build` limpo; Playwright 1440/1024 (grade 06–23, semana viva com todas as cores + risca, 4 views proporcionais, businessHours sombreado, resumo batendo, 0 erro de console). |
 
+| OBS-01 | Fundação Sentry (browser) — scrub puro + facade/client lazy | ✅ | `src/lib/observability/{scrub,sentry,sentry-client}.ts`; SDK `@sentry/react` carregado por `import()` só com DSN (chunk assíncrono ~30 KB gzip; sem DSN não é baixado). |
+| OBS-01 | ErrorBoundary + rejection + erro Supabase reportando | ✅ | `ErrorBoundary.componentDidCatch → captureException`; `globalHandlers` (default) cobre `onunhandledrejection`/`onerror`; `QueryCache`/`MutationCache` `onError` no `query-client.ts` (sem tocar `api/`/`hooks/`). |
+| OBS-01 | Scrubbing agressivo (LGPD/saúde) provado | ✅ | `beforeSend`/`beforeBreadcrumb` → `scrub.ts` puro; evento sintético com 16 agulhas de PII falsa → **PASS** (user/URL assinada/UUID/email/telefone/diagnóstico/plano/token fora; browser/os preservados). Residual (nome em prosa livre) documentado. |
+| OBS-01 | release+environment+SHA + source maps | ✅ | `.env.example`+`vite-env.d.ts` (`VITE_SENTRY_DSN`/`VITE_APP_ENV`/`VITE_APP_RELEASE`); `vite.config.ts` `sourcemap:true` + fallback de release por SHA do git (`execFileSync`, sem shell). |
+| OBS-01 | Gates + boot idêntico com/sem DSN | ✅ | tsc 0 · lint (`--max-warnings 0`) 0 · build 0 (com `.map`). `rg sentry` = só o módulo novo. Playwright (dev, com/sem `VITE_SENTRY_DSN`): app monta, 0 erro de console; sem DSN o chunk do SDK não é baixado. |
+
 ## 4. Como rodar / verificar
 - `npm run dev` (precisa de `.env` — copie de `.env.example`). Sem `.env`: tela de configuração (não mais branca).
+- Observabilidade: preencher `VITE_SENTRY_DSN` liga o Sentry; vazio = no-op. Ver `docs/ops/OBSERVABILITY.md`.
 - `npm run typecheck` · `npm run lint` · `npm run build`.
 - Demo: botão "Entrar em modo demonstração" → paciente **Mariana** (`/pacientes/10000000-0000-0000-0000-0000000000b1`) → aba **Antropometria**.
 
@@ -210,3 +217,30 @@ Detalhe canônico e inequívoco vive em `docs/CONTRATO_INTEGRACAO.md → "Spine 
   **regressão de foco de teclado na nav** (reintroduzido o ring), favicon antigo, contraste AA de rótulos `/70`,
   override de `shadow-sm` (tab ativo pesado no dark), e ARIA do controle de tema.
 - **Verificação:** light + dark, 1440 + 1280, todas as telas — 0 erro de console. Antes/depois capturados (fora do repo).
+
+## 10. Log da Sessão OBS-01 (web — fundação de observabilidade / Sentry)
+- **Escopo:** instrumentar Sentry (browser) SEM mudar comportamento de produto. Nada tocado em
+  `api/`, `hooks/`, schema, migrations, RLS, rotas, UI de produto, Auth ou no repo do app. Contrato
+  de backend intocado (nenhuma tabela/coluna/policy/evento).
+- **Design (3 camadas):** `scrub.ts` (PURO, sem dep de framework — núcleo de scrubbing testável) +
+  `sentry.ts` (facade leve, import estático, NÃO importa o SDK) + `sentry-client.ts` (camada pesada,
+  única a importar `@sentry/react`, carregada por `import()` dinâmico só quando há DSN). Resultado:
+  **sem DSN o SDK nem é baixado** (no-op absoluto, boot idêntico); com DSN, chunk assíncrono fora do
+  caminho crítico (entry +1 KB; sentry ~30 KB gzip on-demand, tree-shaken).
+- **Captura:** `ErrorBoundary` render-time → `captureException`; rejections/`onerror` pela integração
+  default `globalHandlers`; erros de dados (Supabase/API) no `QueryCache`/`MutationCache` do
+  `query-client.ts` (report-only, sem re-throw; **não** toca `api/`/`hooks/`). Query key só contribui
+  o 1º segmento (ex.: "patient") como tag — id de paciente NÃO é anexado.
+- **Privacidade (LGPD/saúde):** `sendDefaultPii:false` + `beforeSend`/`beforeBreadcrumb` → `scrub.ts`.
+  **Provado** com evento sintético (16 agulhas de PII falsa) → PASS: `user`/`server_name` fora, query de
+  URL descartada (mata URL assinada), UUID de paciente → `:id`, email/telefone/JWT/token redigidos,
+  frases clínicas em texto livre redigidas, chaves sensíveis em extra/tags/contexts redigidas, vars de
+  frame descartadas; `browser`/`os` preservados. **Tracing DESLIGADO** (`tracesSampleRate:0`) para não
+  vazar URL de span. Residual (nome em prosa sem palavra-chave clínica) documentado em `OBSERVABILITY.md`.
+- **Release/ambiente:** `VITE_SENTRY_DSN`/`VITE_APP_ENV`/`VITE_APP_RELEASE` (todas opcionais);
+  `vite.config.ts` liga `sourcemap:true` (produção) + injeta o SHA curto do git como fallback de release.
+- **Gates:** tsc 0 · lint (`--max-warnings 0`) 0 · build 0 (com `.map`) — antes e depois. `rg sentry` só
+  aponta o módulo novo. Doc: `docs/ops/OBSERVABILITY.md` (como validar um evento de teste).
+- **Fora de escopo / dívidas:** endurecer source maps (`hidden` + upload ao Sentry) antes de publicar;
+  reabrir tracing exigiria `beforeSendTransaction`. Advisory pré-existente de `esbuild`/`vite` (dev-server)
+  não relacionado — exige `vite@8` (major), não tocado.
