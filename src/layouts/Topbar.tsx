@@ -17,6 +17,7 @@ import {
 import { MobileNav } from "./MobileNav";
 import { DEMO_ROLES } from "@/lib/domain/roles";
 import { cn } from "@/lib/utils";
+import { useIdentity } from "@/hooks/useIdentity";
 import { useAuth } from "@/providers/auth-context";
 import { useRole } from "@/providers/role-context";
 import { useTheme } from "@/providers/theme-context";
@@ -34,8 +35,13 @@ export function Topbar() {
   const { signOut, session, demoMode } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
   const { role, roleLabel, setDemoRole } = useRole();
+  const identity = useIdentity();
 
-  const userName = session?.user?.email ?? (demoMode ? "Modo demonstração" : "Profissional");
+  // Auth real (active): nome do profissional resolvido. Demo: rótulo de hoje (IDÊNTICO).
+  const userName =
+    identity.status === "active"
+      ? identity.displayName ?? "Profissional"
+      : session?.user?.email ?? (demoMode ? "Modo demonstração" : "Profissional");
   const initials = getInitials(userName);
 
   async function handleSignOut() {

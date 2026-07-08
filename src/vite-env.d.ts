@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY: string;
   // Profissional atuante em modo demo (sem auth real). Ver src/lib/session.ts.
   readonly VITE_DEMO_PROFESSIONAL_PROFILE_ID?: string;
+  // Modo de autenticação: "demo" (default) | "real". Ver src/lib/auth/authMode.ts.
+  readonly VITE_AUTH_MODE?: string;
   // Observabilidade (Sentry). Todas OPCIONAIS — sem DSN a observabilidade fica desligada.
   // Ver src/lib/observability/sentry.ts e docs/ops/OBSERVABILITY.md.
   readonly VITE_SENTRY_DSN?: string;

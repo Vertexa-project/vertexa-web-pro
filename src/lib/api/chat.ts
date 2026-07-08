@@ -1,4 +1,3 @@
-import { DEMO_PROFESSIONAL_PROFILE_ID } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
 import type { ChatMessage, ChatMessageView, ChatThread } from "@/types/db";
 
@@ -46,12 +45,18 @@ export async function listChatMessages(channelId: string): Promise<ChatMessageVi
   }));
 }
 
-/** Tudo que a tela de Mensagens precisa para um paciente em uma única query. */
-export async function getChatThread(patientId: string): Promise<ChatThread> {
+/**
+ * Tudo que a tela de Mensagens precisa para um paciente em uma única query. O `actingProfileId`
+ * (remetente) vem da identidade resolvida (real: profile do usuário logado; demo: pin) — o
+ * chamador o injeta; esta camada não conhece mais o pin de env.
+ */
+export async function getChatThread(
+  patientId: string,
+  actingProfileId: string | null,
+): Promise<ChatThread> {
   const channelId = await getOrCreateChannel(patientId);
   const messages = await listChatMessages(channelId);
-  // Remetente = profissional atuante em modo demo (Dra. Camila via env).
-  return { channelId, actingProfileId: DEMO_PROFESSIONAL_PROFILE_ID, messages };
+  return { channelId, actingProfileId, messages };
 }
 
 export interface SendChatMessageInput {
