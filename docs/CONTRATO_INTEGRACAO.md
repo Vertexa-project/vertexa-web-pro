@@ -38,6 +38,33 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
 > ⚠️ `chat_channels.patient_id` = `patients.id` (`10…b1`), **não** o `profile_id`. Resolver sempre
 > `profile → patients (por profile_id) → chat_channels (por patient_id)`.
 
+## Contrato de identidade (auth real — WP-03 / AUTH-01)
+> **A web tem DOIS modos** (flag `VITE_AUTH_MODE`, default `demo`). O contrato de DADOS abaixo
+> é o mesmo nos dois; muda só de ONDE vem "o profissional logado".
+
+- **demo** (`VITE_AUTH_MODE=demo`): identidade = pin de env `VITE_DEMO_PROFESSIONAL_PROFILE_ID`
+  (Dra. Camila `…a2`). Comportamento de hoje, inalterado.
+- **real** (`VITE_AUTH_MODE=real`): login Google (Supabase Auth). Cadeia canônica:
+  `auth.uid() → profiles.auth_user_id → profiles.id → professionals.profile_id → professionals.clinic_id`.
+  Resolvido por `useIdentity` (web) reusando `getCurrentProfessional`. **Não** há id novo — é
+  `profiles.auth_user_id` (coluna que já existia, agora populada).
+
+**Associação auth↔profile (1º login) — trigger `handle_new_user` (SECURITY DEFINER), migration
+`20260708120000`:** no signup de `auth.users` (ou na confirmação de e-mail), **só com e-mail
+VERIFICADO** (`email_confirmed_at`): se houver **exatamente 1** `profiles` órfão (`auth_user_id IS
+NULL`) com aquele e-mail (case/trim-insensitive) → vincula; senão cria `profiles` **`status='pending'`**
+(role `professional`, sem professional/clinic). A guarda de e-mail verificado evita **account-takeover**
+(a anon key é pública; um signup não verificado NÃO pode sequestrar o profile de um profissional
+semeado). A associação é server-side porque `profiles` **não tem policy de UPDATE** (RLS sprint).
+
+**Estado `pending`:** sessão real válida mas sem professional/clinic → a web mostra `PendingAccessPage`
+(não vê dados de ninguém). Onboarding/criação de clínica = WP futuro (fora do WP-03).
+
+**⚠️ Cross-repo:** o trigger vive no Supabase COMPARTILHADO. Hoje só a web faz signup real (o app
+paciente é demo/sem `auth.users`). Quando o app paciente adotar auth real, **revisar** o `role` do
+`pending` (um paciente novo NÃO deve virar `professional`) — usar `raw_user_meta_data`. **RLS real por
+papel/clínica segue pendente (WP-05 / #11-#14)** — o modo real NÃO expõe mais que o demo já expõe.
+
 ## Contrato de dados (quem escreve / quem lê)
 | Tabela | App paciente | Web profissional | Realtime |
 |---|---|---|---|

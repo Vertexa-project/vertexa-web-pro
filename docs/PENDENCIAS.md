@@ -61,6 +61,13 @@
 
 14. **Checklist de segurança ANTES de dados reais (produção) — BLOQUEANTE.** Hoje a sprint roda com
     RLS permissiva (`using(true)`) + modo demo, só com seed fictício. Antes de qualquer paciente real:
+    - **AUTH REAL LIGADO (WP-03/AUTH-01), mas RLS real segue pendente (WP-05).** A identidade real já
+      existe (`VITE_AUTH_MODE=real` → login Google → `auth.uid()` → `profiles.auth_user_id` → professional
+      → clinic; trigger `handle_new_user` associa por e-mail VERIFICADO ou cria `pending`). **Isto NÃO é
+      autorização** — a RLS continua permissiva, então o modo real não expõe mais que o demo já expõe,
+      MAS também não protege. Fechar a RLS por papel/clínica usando `auth.uid()` (em vez do env pin) é
+      exatamente o WP-05. Até lá, **não publicar com dado real**. O demo/pin deve ser desabilitado em
+      produção (ver #21). A guarda anti account-takeover (e-mail verificado) já está no trigger.
     - **Leitura por papel/clínica** (substituir `sprint_read_all`): admin vê a clínica; profissional vê
       via `professional_patient_links`; externo (`is_external`) só o paciente vinculado. Hoje qualquer
       anon lê tudo (a anon key é pública no bundle).
@@ -190,6 +197,11 @@
     #11–#14 (Sessão 9): quando a RLS fechar, o papel deve vir de `auth.uid()`→`profiles.role`/`professionals`,
     e o override de demonstração deve ser desabilitado em produção (`import.meta.env.PROD`). O override de
     demo hoje vive só em memória (reseta no reload) — aceitável para a demo (troca de persona ao vivo).
+    - **AUTH-01 (WP-03):** com `VITE_AUTH_MODE=real` a identidade já vem de `auth.uid()`→profile→professional
+      (não do pin), e o botão/seletor de demonstração fica escondido. **Em PROD deve-se rodar
+      `VITE_AUTH_MODE=real`** (o pin `VITE_DEMO_PROFESSIONAL_PROFILE_ID` e o "modo demonstração" ficam então
+      inertes). Falta o gate defensivo por `import.meta.env.PROD` (forçar real em PROD independentemente da
+      flag) — anotado aqui; a RLS real (#14/WP-05) é o que efetivamente protege.
 
 22. **Cifrar `refresh_token` do Google em repouso (Sessão 10 — S9/P1).** A tabela
     `calendar_connection_tokens` é **deny-all** (sem leitura por `anon`/`authenticated`; só `service_role`
