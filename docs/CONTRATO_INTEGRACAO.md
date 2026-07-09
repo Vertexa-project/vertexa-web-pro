@@ -208,6 +208,45 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   travar: `chat_*`, `activity_events`, `muscle_recovery_states`, `adherence_snapshots`, planos, etc.
   O realtime (`postgres_changes`) respeita as policies → fechar a RLS também fecha o que vaza ao vivo.
 
+## WP-05B · RLS REAL por família — DECISÕES + CONTRATO DE HELPERS
+
+**Decisões do dono (lei):**
+- **AUTH-ADMIN-1** — admin = **DONO** (`clinics.owner_profile_id`) **OU co-admin por MEMBERSHIP**
+  (`professionals.clinic_role='admin'`, coluna aditiva do WP-05B). **NUNCA** derivar admin de `profiles.role`
+  (mutável = auto-promoção). `clinic_role` é setável **só por admin** (RLS de `professionals`).
+- **AUTH-EXT-1** — profissional externo (`professional_patient_links.is_external=true`) vê o **MÍNIMO** do caso
+  (o paciente vinculado), nunca o acesso de um interno. No nível de identidade (Família 1) vê a linha-núcleo do
+  paciente + o próprio vínculo; a exclusão fina (documentos/avaliações/chat/agenda) é aplicada nas famílias de dados.
+- **AUTH-AGENDA-1** — profissional comum enxerga só paciente **VINCULADO** (nunca "mesma clínica").
+
+**Contrato de helpers (schema `private`, SECURITY DEFINER, `search_path=''`, EXECUTE só `authenticated`, NÃO exposto
+na Data API):** `current_profile_id()`, `current_patient_id()`, `owns_professional(uuid)`, `is_clinic_admin(uuid)`,
+`is_clinic_member(uuid)`, `is_self_patient(uuid)`, `patient_clinic(uuid)`,
+`is_common_professional_of_patient(uuid)`, `is_external_professional_of_patient(uuid)`, `can_access_patient(uuid)`,
+`can_see_profile(uuid)`. Por serem DEFINER, bypassam RLS ao ler as tabelas → **quebram a recursão**; por isso
+**NÃO usar `FORCE ROW LEVEL SECURITY`** nas tabelas que eles consultam. Nenhum corpo de policy referencia tabela
+com RLS diretamente — sempre via helper. Owner-check em `Settings > API`: schemas expostos = `public`(+`graphql_public`),
+`private` **fora** da lista.
+
+**EXECUTION_STATE (RLS-FAM1) = ✅ CONCLUÍDA (aguardando auditoria do dono).** Migrations
+`20260711093000_wp05b_fam1_coadmin` (aditiva) + `20260711094000_wp05b_fam1_auth_helpers` +
+`20260711095000_wp05b_fam1_identity_rls`, **versionadas e APLICADAS** via `apply_migration`. Substituiu as `sprint_*`
+das 5 tabelas de identidade (`profiles`, `professionals`, `patients`, `professional_patient_links`, `clinics`) por
+RLS real por papel/clínica/vínculo, com **SELECT+INSERT+UPDATE+DELETE** definidos e **imutabilidade de colunas
+sensíveis** via column privileges (`profiles.role/auth_user_id/status/email`; `clinics.owner_profile_id`;
+`patients.profile_id/clinic_id`; chaves do vínculo). `anon` sem acesso a nenhuma das 5; `service_role` mantém bypass
+(Edge). Testes Nível 1 (pgTAP-style, login simulado via `request.jwt.claims`, ROLLBACK) em
+`supabase/tests/wp05b_fam1_identity_test.sql` — **77 asserções verdes** (inclui mesma-clínica-não-basta, co-admin por
+membership, externo-mínimo, pending fail-closed, anon negado, e os 5 vetores de auto-promoção). Advisors: as 5 tabelas
+saíram das listas `rls_policy_always_true`; nenhum issue novo. **KILL SWITCH (fail-closed)** documentado no header de
+`20260711095000_wp05b_fam1_identity_rls.sql` (drop programático das policies da família → deny-all; NUNCA recriar
+`sprint_*`). **Famílias restantes (Agenda, Dados clínicos, Chat, Storage/Fotos) seguem em `sprint_*` — NÃO tocadas.**
+
+**Consequência no app web (dívida, fora do escopo desta família):** `createPatient` (`src/lib/api/patients.ts`)
+insere `profiles` direto → agora **negado** (profile nasce via trigger `handle_new_user`). Fluxo precisa migrar para
+provisionamento server-side (Edge Function `service_role`) ou convite. Gates (typecheck/lint/build) seguem verdes
+(é comportamento de runtime). Ver PENDENCIAS.
+
 ## Pendências cross-repo
 - **#1** esquema de recuperação muscular (provisório `recovered/weakened`; confirmar c/ Juliana).
 - **#3** pesos do VRI (provisórios; web só lê snapshots). Baseline convergente da Mariana =
