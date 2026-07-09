@@ -276,6 +276,27 @@ IDOR). Advisors: as 6 saíram de `rls_policy_always_true`. **Cross-repo:** web p
 **não piora** — p/ prof não-vinculado o DELETE afeta 0 linhas e o INSERT é negado (falha limpa). Storage NÃO tocado.
 Famílias restantes: **Agenda, Chat, Storage/Fotos (buckets), notificações/gamificação, legado `messages`.**
 
+**EXECUTION_STATE (RLS-FAM4 · Chat) = ✅ CONCLUÍDA (aguardando auditoria).** Migrations
+`20260714090000_wp05b_fam4_helpers` + `20260714091000_wp05b_fam4_chat_rls`, versionadas e APLICADAS. Autorização por
+**PARTICIPAÇÃO** (não por patient_id) em 4 tabelas: `chat_channels`, `chat_participants`, `chat_messages`,
+`chat_mentions`. Contrato real: canal por-paciente (`chat_channels.patient_id → patients.id`, unique); participante =
+`chat_participants.profile_id`; remetente = `chat_messages.sender_profile_id` (NÃO há `sender_professional_id`).
+**REALTIME:** `chat_messages`/`chat_mentions` estão em `supabase_realtime` → o Realtime aplica a RLS de SELECT; logo
+`SELECT = can_read_channel` **FECHA o push** (não-participante que assine NÃO recebe — provado por `P2_REALTIME_NEG_CX`).
+Modelo: SELECT `can_read_channel` (participante **OU admin da clínica** do canal — AUTH-ADMIN-1, decisão reportada);
+`chat_messages` INSERT = participante **E** `sender_profile_id = current_profile_id()` (**anti-forja de remetente**),
+APPEND-ONLY (sem UPDATE/DELETE → `channel_id`/sender imutáveis); `chat_participants` geridos por prof vinculado/admin
+(**anti-join**; app não escreve participants); `chat_mentions` `read_at` só pelo próprio mencionado. Admin **lê** por
+oversight mas **NÃO envia** (envio exige ser participante). Helpers: `is_channel_participant`, `channel_patient`,
+`can_read_channel`, `can_manage_channel`, `message_channel`. Testes `supabase/tests/wp05b_fam4_chat_test.sql` (suite
+verde: realtime-negado, forja-remetente, canal-alheio, auto-join, mover-mensagem, menção-alheia, isolamento-clínica,
+anon, IDOR). Advisors: as 4 saíram de `rls_policy_always_true`. **Cross-repo:** web (`useChat.ts`/`chat.ts`) e app
+(`chat.ts`) enviam com `sender_profile_id = identidade própria` (amarrado pelo WITH CHECK); web assina `postgres_changes`
+em `chat_messages` filtrado por canal (governado pela RLS de SELECT). **KILL SWITCH:** deny-all nas 4 TAMBÉM desliga o
+realtime (fail-closed correto). Storage NÃO tocado. Dívida: `sender_profile_id` vem do client (a RLS amarra ao
+current_profile_id; endurecimento futuro = default/trigger server-side). Famílias restantes: **Agenda, Storage/Fotos
+(buckets + tabela `patient_documents`), notificações/gamificação, legado `messages`.**
+
 **Consequência no app web (dívida, fora do escopo desta família):** `createPatient` (`src/lib/api/patients.ts`)
 insere `profiles` direto → agora **negado** (profile nasce via trigger `handle_new_user`). Fluxo precisa migrar para
 provisionamento server-side (Edge Function `service_role`) ou convite. Gates (typecheck/lint/build) seguem verdes

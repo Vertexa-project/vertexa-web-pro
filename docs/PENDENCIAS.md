@@ -268,15 +268,20 @@
     policies): RLS real em `workout_plans`, `workouts`, `workout_exercises`, `nutrition_plans`, `meals`, `supplements`.
     Profissional vinculado/admin PRESCREVE (`can_prescribe_for_patient`); **paciente só LÊ** (`can_access_patient_internal`,
     externo excluído). patient_id/plan_id imutáveis; testes `supabase/tests/wp05b_fam3_prescription_test.sql`.
+    **FAMÍLIA 4 (Chat — por participação; realtime) ✅ CONCLUÍDA** (migrations `20260714090000` helpers + `20260714091000`
+    policies): RLS real em `chat_channels`, `chat_participants`, `chat_messages`, `chat_mentions` por PARTICIPAÇÃO
+    (`can_read_channel`). SELECT fecha o REALTIME (não-participante não recebe); INSERT de mensagem = participante +
+    `sender_profile_id = current_profile_id()` (anti-forja); admin lê por oversight mas não envia; testes
+    `supabase/tests/wp05b_fam4_chat_test.sql`.
     **AINDA em `sprint_*` (permissivo, dado real BLOQUEADO):** Agenda (`appointments`, `calendar_*` — ver #14/#19/#23),
-    `notifications`, `patient_achievements` (gamificação/notif), Chat (`chat_*` — ver #14), Storage/Fotos (buckets
-    `progress-photos` público + `patient_documents` bucket-wide — ver #12; as TABELAS `progress_photos`/`patient_documents`
-    metadados NÃO fechadas ainda — só `progress_photos` tabela via Fam2; `patient_documents` tabela segue sprint), legado
-    `messages`. Owner-checks: (a) `Settings > API` expõe só `public`(+`graphql_public`), **`private` fora**; (b) remover
-    os 2 objetos demo `demo/mariana/*.png` via Storage API. Dívidas: Fam2 — `adherence_snapshots`/`muscle_recovery_states`
-    gravadas pelo paciente (mover p/ engine server-side); Fam3 — escrita de prescrição não é escopada por disciplina
-    (qualquer prof vinculado edita qualquer plano do paciente) e `DÍVIDA-APP-1` (save = DELETE+INSERT não-transacional,
-    RLS não piora).
+    `notifications`, `patient_achievements` (gamificação/notif), Storage/Fotos (buckets `progress-photos` público +
+    `patient_documents` bucket-wide — ver #12; TABELA `patient_documents` metadado ainda em sprint; a tabela
+    `progress_photos` já fechada via Fam2, falta o BUCKET), legado `messages` (aposentar — ver #15). Owner-checks:
+    (a) `Settings > API` expõe só `public`(+`graphql_public`), **`private` fora**; (b) remover os 2 objetos demo
+    `demo/mariana/*.png` via Storage API. Dívidas: Fam2 — `adherence_snapshots`/`muscle_recovery_states` gravadas pelo
+    paciente (mover p/ engine server-side); Fam3 — prescrição não escopada por disciplina + `DÍVIDA-APP-1` (save
+    DELETE+INSERT, RLS não piora); Fam4 — `sender_profile_id` vem do client (RLS amarra ao current_profile_id;
+    endurecer com default/trigger server-side no futuro).
 
 28. **web `createPatient` incompatível com a RLS de identidade (dívida introduzida pela Família 1; relacionada à #16).**
     `src/lib/api/patients.ts` cria paciente inserindo `profiles` direto (role='patient') + `patients` +
