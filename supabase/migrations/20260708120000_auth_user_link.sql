@@ -11,8 +11,11 @@
 --   auth.uid() -> profiles.auth_user_id -> profiles.id -> professionals(profile_id) -> clinic.
 --
 -- Estratégia de 1º login (genérica p/ o app paciente herdar no futuro — item 9 do WP):
---   match-by-email PRIMEIRO (só se houver EXATAMENTE 1 profile órfão com aquele e-mail);
---   SENÃO cria um profile 'pending' (sem professional/clinic → tela PendingAccess na web).
+--   SÓ para signups de um provedor CONFIÁVEL (Google, que verifica o e-mail) — ver guarda de
+--   segurança abaixo. match-by-email PRIMEIRO (só se houver EXATAMENTE 1 profile órfão com aquele
+--   e-mail); SENÃO cria um profile 'pending' (sem professional/clinic → tela PendingAccess na web).
+--   ⚠️ O match é ROLE-AGNÓSTICO (casaria inclusive um ADMIN semeado) — por isso a guarda de
+--   provedor confiável é essencial (não basta email_confirmed_at; ver comentário na função).
 --   ⚠️ Enquanto o app paciente NÃO usa auth real (só a web faz signup hoje), um e-mail novo =
 --   profissional novo. Quando o app adotar auth real, revisar o role do 'pending' (usar
 --   raw_user_meta_data), pois um paciente novo NÃO deve virar 'professional'.
@@ -54,12 +57,17 @@ begin
     return new;
   end if;
 
-  -- SEGURANÇA (anti account-takeover): só associa/cria com e-mail VERIFICADO. A anon key é
-  -- pública → um signup por e-mail/senha NÃO verificado poderia, sem esta guarda, casar o
-  -- e-mail de um profissional semeado e SEQUESTRAR o profile dele. Google OAuth já chega
-  -- verificado (email_confirmed_at setado); e-mail/senha só associa APÓS a confirmação — por
-  -- isso o trigger também dispara no UPDATE de email_confirmed_at.
-  if new.email_confirmed_at is null then
+  -- SEGURANÇA (anti account-takeover): só associa/cria a partir de um provedor de identidade
+  -- CONFIÁVEL que comprova posse do e-mail (Google OAuth), E com e-mail confirmado.
+  -- ⚠️ NÃO basta `email_confirmed_at`: se o setting "Confirm email" do projeto estiver OFF, o
+  -- GoTrue AUTO-confirma signups por e-mail/senha (feitos com a anon key PÚBLICA) — um atacante
+  -- casaria o e-mail de um profissional semeado (inclusive admin) e SEQUESTRARIA o profile.
+  -- Só um provedor OAuth confiável (Google) prova a posse do e-mail independente daquele setting.
+  if new.email_confirmed_at is null
+     or not (
+       new.raw_app_meta_data ->> 'provider' = 'google'
+       or coalesce(new.raw_app_meta_data -> 'providers', '[]'::jsonb) ? 'google'
+     ) then
     return new;
   end if;
 

@@ -11,7 +11,12 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
   const identity = useIdentity();
 
-  if (loading || identity.status === "loading") {
+  // Espera pela SESSÃO (como antes). No modo real, também espera a resolução da identidade
+  // para não piscar o painel antes de saber se é 'pending'. No modo demo, NÃO bloqueamos o
+  // shell na query de identidade — o painel monta e cada seção faz seu próprio skeleton
+  // (comportamento IDÊNTICO ao de antes do WP-03).
+  const waitingIdentity = AUTH_MODE === "real" && identity.status === "loading";
+  if (loading || waitingIdentity) {
     return (
       <div className="flex h-screen items-center justify-center">
         <LoadingState />

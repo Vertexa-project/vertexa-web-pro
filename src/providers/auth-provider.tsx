@@ -11,8 +11,11 @@ const DEMO_KEY = "vertexa-demo-session";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  // demoMode SÓ existe em VITE_AUTH_MODE=demo. Assim um DEMO_KEY estagnado no localStorage
+  // (de um build demo anterior) NÃO reativa o modo demo — nem o seletor de papel de
+  // demonstração — quando o deploy passa a real.
   const [demoMode, setDemoMode] = useState<boolean>(
-    () => localStorage.getItem(DEMO_KEY) === "1",
+    () => AUTH_MODE === "demo" && localStorage.getItem(DEMO_KEY) === "1",
   );
   const [loading, setLoading] = useState(true);
 
@@ -50,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInDemo = useCallback(() => {
+    if (AUTH_MODE !== "demo") return; // demo é inerte fora do modo demo
     localStorage.setItem(DEMO_KEY, "1");
     setDemoMode(true);
   }, []);

@@ -50,12 +50,15 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
   `profiles.auth_user_id` (coluna que já existia, agora populada).
 
 **Associação auth↔profile (1º login) — trigger `handle_new_user` (SECURITY DEFINER), migration
-`20260708120000`:** no signup de `auth.users` (ou na confirmação de e-mail), **só com e-mail
-VERIFICADO** (`email_confirmed_at`): se houver **exatamente 1** `profiles` órfão (`auth_user_id IS
-NULL`) com aquele e-mail (case/trim-insensitive) → vincula; senão cria `profiles` **`status='pending'`**
-(role `professional`, sem professional/clinic). A guarda de e-mail verificado evita **account-takeover**
-(a anon key é pública; um signup não verificado NÃO pode sequestrar o profile de um profissional
-semeado). A associação é server-side porque `profiles` **não tem policy de UPDATE** (RLS sprint).
+`20260708120000`:** no signup de `auth.users`, **só a partir de um provedor CONFIÁVEL (Google) e com
+e-mail confirmado**: se houver **exatamente 1** `profiles` órfão (`auth_user_id IS NULL`) com aquele
+e-mail (case/trim-insensitive) → vincula; senão cria `profiles` **`status='pending'`** (role
+`professional`, sem professional/clinic). A associação é server-side porque `profiles` **não tem policy
+de UPDATE** (RLS sprint). **Anti account-takeover:** o match é **role-agnóstico** (casaria inclusive o
+profile de um ADMIN semeado), então a guarda NÃO pode ser só `email_confirmed_at` — se "Confirm email"
+estiver OFF no projeto, o GoTrue auto-confirma signups por e-mail/senha (anon key pública) e um atacante
+sequestraria o profile. Por isso a guarda exige **provedor Google** (`raw_app_meta_data.provider`), que
+prova posse do e-mail independentemente daquele setting; e-mail/senha **não** associa nem cria pending.
 
 **Estado `pending`:** sessão real válida mas sem professional/clinic → a web mostra `PendingAccessPage`
 (não vê dados de ninguém). Onboarding/criação de clínica = WP futuro (fora do WP-03).

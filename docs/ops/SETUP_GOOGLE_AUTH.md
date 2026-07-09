@@ -22,6 +22,13 @@ com aquele e-mail, vincula; senão cria um profile `status='pending'` → a web 
 identidade`.
 
 ## Segurança / pendências
+- **Associação só via Google (anti account-takeover).** O trigger só vincula/cria a partir de um
+  provedor OAuth confiável (`raw_app_meta_data.provider = 'google'`), **não** apenas de
+  `email_confirmed_at`. Motivo: com o setting **Authentication → "Confirm email" OFF**, o Supabase
+  auto-confirma signups por e-mail/senha (feitos com a anon key pública) — sem a guarda de provedor, um
+  atacante casaria o e-mail de um profissional/admin semeado e sequestraria o profile. **Recomendação
+  adicional:** manter "Confirm email" **ON** e, se um dia habilitar login por e-mail/senha, revisar a
+  guarda. Hoje só Google associa; e-mail/senha não vincula nem cria pending.
 - **RLS ainda permissiva** (sprint): auth real **não** é autorização — fechar por papel/clínica é o
   **WP-05** (`docs/PENDENCIAS.md #11–#14`). Não publicar com dado real antes disso.
 - **PROD** deve rodar `VITE_AUTH_MODE=real` (pin/demo ficam inertes); gate por `import.meta.env.PROD` é
