@@ -127,6 +127,11 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 | OBS-01 | Scrubbing agressivo (LGPD/saúde) provado | ✅ | `beforeSend`/`beforeBreadcrumb` → `scrub.ts` puro; evento sintético com 16 agulhas de PII falsa → **PASS** (user/URL assinada/UUID/email/telefone/diagnóstico/plano/token fora; browser/os preservados). Residual (nome em prosa livre) documentado. |
 | OBS-01 | release+environment+SHA + source maps | ✅ | `.env.example`+`vite-env.d.ts` (`VITE_SENTRY_DSN`/`VITE_APP_ENV`/`VITE_APP_RELEASE`); `vite.config.ts` `sourcemap:true` + fallback de release por SHA do git (`execFileSync`, sem shell). |
 | OBS-01 | Gates + boot idêntico com/sem DSN | ✅ | tsc 0 · lint (`--max-warnings 0`) 0 · build 0 (com `.map`). `rg sentry` = só o módulo novo. Playwright (dev, com/sem `VITE_SENTRY_DSN`): app monta, 0 erro de console; sem DSN o chunk do SDK não é baixado. |
+| AUTH-01 | Migration aditiva `auth_user_link` (trigger de associação) | ✅ | `20260708120000`: índice único parcial `profiles(auth_user_id)` + coluna `status` + `handle_new_user()` SECURITY DEFINER + trigger. Aplicada+verificada via MCP; ADITIVA/não-destrutiva; RLS sprint intocada; ledger AUTH-01. |
+| AUTH-01 | Segurança: associação SÓ com e-mail verificado | ✅ | Revisão de commit pegou account-takeover por e-mail não verificado (anon key pública). Guarda `email_confirmed_at`; trigger dispara `after insert OR update of email_confirmed_at`. Provado (MCP, rollback): verified→link, verified-new→pending, **unverified→NÃO linka**, confirm-later→link. |
+| AUTH-01 | Login Google real + resolução de identidade (flag) | ✅ | `VITE_AUTH_MODE` (default demo). `resolveIdentity` puro (proof node 14/14) + `useIdentity` (auth.uid()→profile→professional→clinic; pending). `signInWithGoogle`; `/auth/callback`; ProtectedRoute→PendingAccess; erros `captureException(source:"auth")`. |
+| AUTH-01 | Repontar consumidores do pin p/ identidade resolvida | ✅ | `useCurrentProfessional`/chat/`useChat`/Topbar derivam de `useIdentity` (fonte única); `session.ts` = ramo demo. `getChatThread` recebe `actingProfileId`. |
+| AUTH-01 | Gates + E2E (demo idêntico / Google no real) | ✅ | tsc 0 · lint 0 · build 0. Playwright: demo → login idêntico (só "modo demonstração", sem Google) + dashboard carrega (0 erro); real → botão "Entrar com Google" (demo escondido) + clique inicia OAuth (`…/auth/v1/authorize?provider=google&redirect_to=…/auth/callback`). `.env` restaurado. |
 
 ## 4. Como rodar / verificar
 - `npm run dev` (precisa de `.env` — copie de `.env.example`). Sem `.env`: tela de configuração (não mais branca).
@@ -244,3 +249,34 @@ Detalhe canônico e inequívoco vive em `docs/CONTRATO_INTEGRACAO.md → "Spine 
 - **Fora de escopo / dívidas:** endurecer source maps (`hidden` + upload ao Sentry) antes de publicar;
   reabrir tracing exigiria `beforeSendTransaction`. Advisory pré-existente de `esbuild`/`vite` (dev-server)
   não relacionado — exige `vite@8` (major), não tocado.
+
+## 11. Log da Sessão AUTH-01 (web — auth Google real por expansão, sem fechar RLS)
+- **Base:** STACK sobre `feat/obs-sentry-web` (WP-01) — decisão do owner; observability é dependência
+  (`captureException(source:"auth")`). Branch `feat/auth-google-web`. DÍVIDA-STACK-1: se o PR do WP-01
+  mudar, rebasear. Não foi possível `git fetch` (sem credencial) → origin/main em cache = `9ecf1a3`.
+- **Padrão EXPANSÃO:** identidade real passa a existir atrás da flag `VITE_AUTH_MODE` (default `demo`);
+  com `demo` o app é IDÊNTICO ao de hoje. **RLS permissiva NÃO foi tocada** (fechar = WP-05 / #11-#14).
+- **Migration ADITIVA** `20260708120000_auth_user_link.sql` (aplicada+verificada via MCP, ledger AUTH-01):
+  índice único parcial `profiles(auth_user_id)`, coluna `status` (default 'active'), função/trigger
+  `handle_new_user` SECURITY DEFINER (search_path fixo, idempotente, **nunca aborta o signup**). A função
+  é server-side porque `profiles` não tem policy de UPDATE (RLS sprint) → client não consegue setar
+  `auth_user_id`. Rollback documentado no header (drop trigger/função/índice/coluna).
+- **Associação (1º login):** match-by-email (case/trim-insensitive, exatamente 1 órfão) senão cria
+  `pending`. **Segurança:** revisão de commit pegou **account-takeover** (a anon key é pública → um
+  signup por e-mail NÃO verificado poderia casar o e-mail de um profissional semeado e sequestrar o
+  profile). Corrigido: guarda `email_confirmed_at` (Google já chega verificado; e-mail/senha associa só
+  na confirmação → trigger `after insert OR update of email_confirmed_at`). Provado via MCP (transação
+  com rollback, sem tocar o seed): verified→link · verified-new→pending · **unverified→NÃO linka** ·
+  confirm-later→link.
+- **Identidade (frontend):** `resolveIdentity` PURO (`src/lib/auth/identity.ts`, proof node 14/14 incl.
+  "real ignora o pin demo") + `useIdentity` (auth.uid()→`getProfileByAuthUserId`→`getCurrentProfessional`
+  → active/pending/anonymous/demo). Fonte ÚNICA: `useCurrentProfessional`/chat/`useChat`/Topbar/role
+  derivam dela; `session.ts` = ramo demo. `signInWithGoogle` (`signInWithOAuth` google + `/auth/callback`);
+  `ProtectedRoute` real+pending → `PendingAccessPage`. Erros de auth → `captureException(source:"auth")` sem PII.
+- **Gates:** tsc 0 · lint (`--max-warnings 0`) 0 · build 0 (antes/depois). E2E Playwright: **demo** → login
+  idêntico (só "modo demonstração", sem Google) + dashboard carrega (0 erro de console); **real** → botão
+  "Entrar com Google" (demo escondido) + clique inicia o OAuth (`…/auth/v1/authorize?provider=google&
+  redirect_to=…/auth/callback`). `.env` restaurado (VITE_AUTH_MODE removido → demo).
+- **Dívidas:** onboarding/criação de clínica p/ `pending` (WP futuro); RLS real (WP-05); provider Google no
+  Supabase Auth + round-trip real = `NÃO_COMPROVADO_AUTOMATICAMENTE` (passo externo); cross-repo: revisar
+  role do `pending` quando o app paciente adotar auth real; DÍVIDA-STACK-1 (rebase se WP-01 mudar).

@@ -31,6 +31,9 @@ export interface Profile {
   full_name: string;
   email: string | null;
   avatar_url: string | null;
+  // active | pending — pending = profissional criado no 1o login sem match por e-mail
+  // (sem professional/clinic; web mostra PendingAccess). Migration 20260708120000.
+  status: string;
   created_at: string;
 }
 

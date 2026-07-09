@@ -8,7 +8,7 @@ import {
   sendChatMessage,
 } from "@/lib/api/chat";
 import { qk } from "@/lib/queryKeys";
-import { DEMO_PROFESSIONAL_PROFILE_ID } from "@/lib/session";
+import { useIdentity } from "@/hooks/useIdentity";
 import { supabase } from "@/lib/supabase";
 
 // Sequência para tópicos de realtime ÚNICOS por montagem.
@@ -26,9 +26,10 @@ let realtimeSeq = 0;
  */
 export function useChatThread(patientId: string) {
   const queryClient = useQueryClient();
+  const { actingProfileId } = useIdentity();
   const query = useQuery({
     queryKey: qk.chatThread(patientId),
-    queryFn: () => getChatThread(patientId),
+    queryFn: () => getChatThread(patientId, actingProfileId),
     enabled: Boolean(patientId),
   });
 
@@ -85,7 +86,7 @@ export interface UnreadMentions {
  */
 export function useUnreadMentions() {
   const queryClient = useQueryClient();
-  const profileId = DEMO_PROFESSIONAL_PROFILE_ID;
+  const { actingProfileId: profileId } = useIdentity();
 
   const query = useQuery({
     queryKey: qk.unreadMentions(profileId ?? "none"),
@@ -128,16 +129,15 @@ export function useUnreadMentions() {
 /** Marca as menções de um canal como lidas e revalida os contadores. */
 export function useMarkMentionsRead() {
   const queryClient = useQueryClient();
+  const { actingProfileId: profileId } = useIdentity();
   return useMutation({
     mutationFn: (channelId: string) => {
-      if (!DEMO_PROFESSIONAL_PROFILE_ID) return Promise.resolve();
-      return markChannelMentionsRead(channelId, DEMO_PROFESSIONAL_PROFILE_ID);
+      if (!profileId) return Promise.resolve();
+      return markChannelMentionsRead(channelId, profileId);
     },
     onSuccess: () => {
-      if (!DEMO_PROFESSIONAL_PROFILE_ID) return;
-      queryClient.invalidateQueries({
-        queryKey: qk.unreadMentions(DEMO_PROFESSIONAL_PROFILE_ID),
-      });
+      if (!profileId) return;
+      queryClient.invalidateQueries({ queryKey: qk.unreadMentions(profileId) });
     },
   });
 }

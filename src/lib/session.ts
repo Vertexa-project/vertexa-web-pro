@@ -1,8 +1,7 @@
-// Identidade do profissional atuante na web.
+// Pin de identidade do MODO DEMO (VITE_AUTH_MODE=demo). No seed é a Dra. Camila Rocha (...a2).
 //
-// Em modo demo (sem auth real) é FIXA via env — no seed é a Dra. Camila Rocha
-// (...a2). É o remetente das mensagens enviadas pela web e o alvo das menções
-// (badge "mencionado"). Sob auth real isto virá de `auth.uid()` → profiles
-// (ver docs/PENDENCIAS.md #14); não confiar nisto como autorização.
+// ⚠️ Ramo DEMO da identidade: consumido SOMENTE por `useIdentity` quando AUTH_MODE="demo".
+// No modo real a identidade vem de `auth.uid()` → profiles.auth_user_id (ver src/hooks/
+// useIdentity.ts + docs/CONTRATO_INTEGRACAO.md). Nunca confiar nisto como autorização (RLS = WP-05).
 export const DEMO_PROFESSIONAL_PROFILE_ID: string | null =
   import.meta.env.VITE_DEMO_PROFESSIONAL_PROFILE_ID || null;
