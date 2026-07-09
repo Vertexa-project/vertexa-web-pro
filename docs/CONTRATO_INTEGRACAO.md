@@ -260,6 +260,22 @@ Kill switch (deny-all) no header da migration de policies. **Bucket de Storage N
 server-side no futuro (paciente poderia inflar o próprio score). Famílias restantes: **Agenda, Dados clínicos/planos,
 Chat, Storage/Fotos** seguem em `sprint_*`.
 
+**EXECUTION_STATE (RLS-FAM3 · Prescrição) = ✅ CONCLUÍDA (aguardando auditoria).** Migrations
+`20260713090000_wp05b_fam3_helpers` + `20260713091000_wp05b_fam3_prescription_rls`, versionadas e APLICADAS. **EIXO
+INVERTIDO** (profissional prescreve, paciente só LÊ) em 6 tabelas: `workout_plans`, `workouts` (via
+`workout_plan_patient`), `workout_exercises` (via `workout_patient`), `nutrition_plans`, `meals` (via
+`nutrition_plan_patient`), `supplements`. **SELECT** = `can_access_patient_internal` (paciente dono + prof comum
+vinculado + admin; **EXTERNO EXCLUÍDO** das prescrições — AUTH-EXT-1, consistente c/ `body_assessments`).
+**INSERT/UPDATE/DELETE** = `can_prescribe_for_patient` (prof comum vinculado OU admin) — o **PACIENTE NÃO ESCREVE**
+(negativo central da família). `patient_id`/plan-fk imutáveis (col-priv). Coerência: `supplements` (prescrição) ↔
+`supplement_intakes` (tomada, Fam2). Helpers novos: `workout_plan_patient`, `workout_patient`, `nutrition_plan_patient`,
+`can_prescribe_for_patient`. Testes `supabase/tests/wp05b_fam3_prescription_test.sql` (suite verde: paciente-não-edita,
+isolamento via-pai, prescrição p/ não-vinculado negada, reescrita de patient_id/plan_id negada, externo excluído, anon,
+IDOR). Advisors: as 6 saíram de `rls_policy_always_true`. **Cross-repo:** web prescreve (`planMutations.ts`,
+`supplements.ts`); app só LÊ (nenhuma escrita nas 6). **DÍVIDA-APP-1** (save = DELETE+INSERT não-transacional): a RLS
+**não piora** — p/ prof não-vinculado o DELETE afeta 0 linhas e o INSERT é negado (falha limpa). Storage NÃO tocado.
+Famílias restantes: **Agenda, Chat, Storage/Fotos (buckets), notificações/gamificação, legado `messages`.**
+
 **Consequência no app web (dívida, fora do escopo desta família):** `createPatient` (`src/lib/api/patients.ts`)
 insere `profiles` direto → agora **negado** (profile nasce via trigger `handle_new_user`). Fluxo precisa migrar para
 provisionamento server-side (Edge Function `service_role`) ou convite. Gates (typecheck/lint/build) seguem verdes
