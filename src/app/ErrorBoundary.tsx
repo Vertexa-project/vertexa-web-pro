@@ -2,6 +2,7 @@ import * as React from "react";
 import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { captureException } from "@/lib/observability/sentry";
 
 interface ErrorBoundaryState {
   error: Error | null;
@@ -26,6 +27,12 @@ export class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // Reporta ao Sentry (no-op sem DSN). O evento passa por scrubbing antes do envio; o
+    // component stack são nomes de componente (sem PII). Não anexar dado de paciente.
+    captureException(error, {
+      source: "error-boundary",
+      componentStack: info.componentStack ?? undefined,
+    });
     // Dados de saúde: em produção NÃO logar conteúdo sensível. Em DEV, logar para depurar.
     if (import.meta.env.DEV) {
       console.error("[VERTEXA] Erro não tratado na UI:", error, info.componentStack);
