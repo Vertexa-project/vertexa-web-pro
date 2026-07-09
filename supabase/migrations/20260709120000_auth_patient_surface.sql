@@ -21,6 +21,13 @@
 -- public.auth_trigger_events (auth_user_id uuid opaco + surface + outcome + sqlstate; SEM e-mail/nome),
 -- deny-all para anon/authenticated. Diagnóstico sem depender de Sentry no Postgres.
 --
+-- Endurecimento (revisão adversarial, 2 achados low corrigidos):
+--   1) provider-gate FAIL-CLOSED em NULL: `coalesce(...='google', false)` evita a lógica de 3 valores
+--      (provider ausente/NULL antes fazia o IF de skip não disparar = fail-OPEN). Não é alcançável por
+--      client anon (o GoTrue sempre seta provider), mas fecha o vetor por defesa em profundidade.
+--   2) `surface` NORMALIZADA a {web,patient_app,other} → o client não injeta texto livre/PII na tabela
+--      de diagnóstico (antes gravava `signup_surface` verbatim, ilimitado).
+--
 -- Rollback (aditiva → reversível): restaurar a função do WP-03 (20260708120000); e opcionalmente
 --   drop function if exists public.log_auth_trigger_event(uuid,text,text,text);
 --   drop table if exists public.auth_trigger_events;
@@ -79,6 +86,7 @@ declare
   v_match_count int;
   v_profile_id  uuid;
   v_surface     text;
+  v_is_google   boolean;
   v_outcome     text;
 begin
   -- Idempotência: já associado → nada a fazer (não loga re-disparos).
@@ -87,16 +95,23 @@ begin
   end if;
 
   -- Superfície de signup — DIAGNÓSTICO apenas. user_metadata é CONTROLÁVEL PELO CLIENT, então
-  -- NUNCA seleciona/concede role; só rotula o outcome na telemetria.
-  v_surface := coalesce(nullif(btrim(new.raw_user_meta_data ->> 'signup_surface'), ''), 'web');
+  -- NUNCA seleciona/concede role. NORMALIZADA a um conjunto FIXO ({web,patient_app,other}) para o
+  -- client NÃO conseguir injetar texto livre/PII na tabela de diagnóstico.
+  v_surface := case
+    when new.raw_user_meta_data ->> 'signup_surface' = 'patient_app' then 'patient_app'
+    when new.raw_user_meta_data ->> 'signup_surface' = 'web'         then 'web'
+    else 'other'
+  end;
 
-  -- Gate de segurança (PRESERVADO do WP-03): só provedor CONFIÁVEL (Google) que prova posse do
-  -- e-mail + e-mail confirmado. raw_app_meta_data é setado pelo GoTrue/OAuth, NÃO pelo client.
-  if new.email_confirmed_at is null
-     or not (
-       new.raw_app_meta_data ->> 'provider' = 'google'
-       or coalesce(new.raw_app_meta_data -> 'providers', '[]'::jsonb) ? 'google'
-     ) then
+  -- Gate de segurança (PRESERVADO do WP-03), agora FAIL-CLOSED em NULL: só provedor CONFIÁVEL
+  -- (Google) + e-mail confirmado. raw_app_meta_data é setado pelo GoTrue/OAuth, NÃO pelo client.
+  -- `coalesce(... = 'google', false)` evita a lógica de 3 valores: provider ausente/NULL → false →
+  -- NÃO associa (antes, `NULL = 'google'` = NULL fazia o IF de skip não disparar = fail-OPEN).
+  v_is_google :=
+    coalesce(new.raw_app_meta_data ->> 'provider' = 'google', false)
+    or coalesce(new.raw_app_meta_data -> 'providers', '[]'::jsonb) ? 'google';
+
+  if new.email_confirmed_at is null or not v_is_google then
     perform public.log_auth_trigger_event(new.id, v_surface, 'skipped_unverified_provider', null);
     return new;
   end if;
@@ -150,7 +165,7 @@ exception
   when others then
     -- NUNCA abortar o signup. Log técnico SEM PII: só id + SQLSTATE (jamais SQLERRM/e-mail/nome).
     raise warning '[handle_new_user] falha assoc user=% sqlstate=%', new.id, sqlstate;
-    perform public.log_auth_trigger_event(new.id, coalesce(v_surface, 'web'), 'error', sqlstate);
+    perform public.log_auth_trigger_event(new.id, coalesce(v_surface, 'other'), 'error', sqlstate);
     return new;
 end;
 $$;

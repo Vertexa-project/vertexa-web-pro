@@ -309,6 +309,13 @@ Detalhe canônico e inequívoco vive em `docs/CONTRATO_INTEGRACAO.md → "Spine 
   mirando **ADMIN → NÃO linka, sem pending** (provider-gate intacto); (6) **surface ausente → pending
   patient** (default seguro). `auth_trigger_events` com outcomes corretos (`linked`/`pending_patient`/
   `skipped_unverified_provider`) e **sem coluna de PII**; anon negado.
+- **Revisão adversarial (workflow, 4 agents; security+correctness → verify):** correctness limpo; 2 achados
+  **low CONFIRMADOS e corrigidos**: (1) provider-gate falhava ABERTO com `provider` NULL (lógica de 3
+  valores) — **não** alcançável por client anon (GoTrue sempre seta provider), mas fechado por defesa em
+  profundidade via `coalesce(...='google',false)` (fail-closed); (2) `surface` guardava texto livre do
+  client → **normalizada** a {web,patient_app,other} (sem PII/sink). Re-provado via MCP (rollback): NULL
+  provider mirando ADMIN → **skipped**; blob de 9 KB em `signup_surface` → surface `'other'` (len 5); 6
+  casos originais sem regressão.
 - **Gates web:** tsc 0 · lint (`--max-warnings 0`) 0 · build 0 (antes/depois; Parte A não muda TS).
 - **Escopo/limite:** só o repo web (migration). **RLS sprint intocada** (WP-05). **Parte B (app paciente)
   NÃO iniciada** (aguarda "A verde" + spec da Parte B). Rollback: restaurar a função do WP-03 + drop
