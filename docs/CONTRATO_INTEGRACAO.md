@@ -49,19 +49,29 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
   Resolvido por `useIdentity` (web) reusando `getCurrentProfessional`. **Não** há id novo — é
   `profiles.auth_user_id` (coluna que já existia, agora populada).
 
-**Associação auth↔profile (1º login) — trigger `handle_new_user` (SECURITY DEFINER), migration
-`20260708120000`:** no signup de `auth.users`, **só a partir de um provedor CONFIÁVEL (Google) e com
-e-mail confirmado**: se houver **exatamente 1** `profiles` órfão (`auth_user_id IS NULL`) com aquele
-e-mail (case/trim-insensitive) → vincula; senão cria `profiles` **`status='pending'`** (role
-`professional`, sem professional/clinic). A associação é server-side porque `profiles` **não tem policy
-de UPDATE** (RLS sprint). **Anti account-takeover:** o match é **role-agnóstico** (casaria inclusive o
-profile de um ADMIN semeado), então a guarda NÃO pode ser só `email_confirmed_at` — se "Confirm email"
-estiver OFF no projeto, o GoTrue auto-confirma signups por e-mail/senha (anon key pública) e um atacante
-sequestraria o profile. Por isso a guarda exige **provedor Google** (`raw_app_meta_data.provider`), que
-prova posse do e-mail independentemente daquele setting; e-mail/senha **não** associa nem cria pending.
+**Associação auth↔profile (1º login) — trigger `handle_new_user` (SECURITY DEFINER), migrations
+`20260708120000` (WP-03) + `20260709120000` (WP-04/AUTH-02):** no signup de `auth.users`, **só a partir
+de um provedor CONFIÁVEL (Google) e com e-mail confirmado** (mesma cadeia `uid → profiles.auth_user_id →
+profiles.id → …` para profissional E paciente): se houver **exatamente 1** `profiles` órfão
+(`auth_user_id IS NULL`) com aquele e-mail (case/trim-insensitive) → **vincula preservando o ROLE
+existente** (match **role-agnóstico**: paciente semeado linka como `patient`, profissional como
+`professional`, admin como `admin`); **senão (NO-MATCH) → FAIL-CLOSED: sempre cria `profiles`
+`role='patient', status='pending'`** (neutro, sem privilégio). A associação é server-side porque
+`profiles` **não tem policy de UPDATE** (RLS sprint).
 
-**Estado `pending`:** sessão real válida mas sem professional/clinic → a web mostra `PendingAccessPage`
-(não vê dados de ninguém). Onboarding/criação de clínica = WP futuro (fora do WP-03).
+**Anti account-takeover (WP-03):** a guarda NÃO pode ser só `email_confirmed_at` — se "Confirm email"
+estiver OFF, o GoTrue auto-confirma signups por e-mail/senha (anon key pública) e um atacante casaria o
+e-mail de um profissional/admin semeado. Por isso exige **provedor Google** (`raw_app_meta_data.provider`,
+setado pelo OAuth, não pelo client). **Superfície de signup (WP-04):** `raw_user_meta_data.signup_surface`
+é **user_metadata (CONTROLÁVEL PELO CLIENT)** → **nunca** seleciona/concede role; serve só de **diagnóstico**.
+Por isso o NO-MATCH é fail-closed em `patient` (menor privilégio): um app paciente ou atacante **não** vira
+`professional` por forjar/omitir a superfície. Promoção a `professional` exige mecanismo CONFIÁVEL
+posterior (convite/admin/provisioning server-side). Diagnóstico técnico do trigger em
+`public.auth_trigger_events` (**SEM PII**: `auth_user_id`/`surface`/`outcome`/`sqlstate`; deny-all p/
+anon/authenticated) — paga a DÍVIDA-AUTH-2 (log por SQLSTATE, nunca SQLERRM).
+
+**Estado `pending`:** sessão real válida mas sem professional/clinic (nem `patients`) → a web mostra
+`PendingAccessPage` (não vê dados de ninguém). Onboarding/vínculo do paciente = **Parte B (app)** / WP futuro.
 
 **⚠️ Cross-repo:** o trigger vive no Supabase COMPARTILHADO. Hoje só a web faz signup real (o app
 paciente é demo/sem `auth.users`). Quando o app paciente adotar auth real, **revisar** o `role` do

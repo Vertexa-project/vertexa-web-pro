@@ -68,6 +68,13 @@
       MAS também não protege. Fechar a RLS por papel/clínica usando `auth.uid()` (em vez do env pin) é
       exatamente o WP-05. Até lá, **não publicar com dado real**. O demo/pin deve ser desabilitado em
       produção (ver #21). A guarda anti account-takeover (e-mail verificado) já está no trigger.
+    - **Superfície do app PACIENTE coberta (WP-04/AUTH-02).** O `handle_new_user` agora é ciente da
+      superfície e **fail-closed**: NO-MATCH cria sempre um `patient` pending NEUTRO (nunca `professional`),
+      porque `signup_surface` é user_metadata controlável pelo client e não pode conceder privilégio; o
+      match por e-mail continua role-agnóstico (paciente semeado linka como paciente) e o provider-gate
+      Google segue intacto. Diagnóstico do trigger em `auth_trigger_events` (deny-all, sem PII). Ainda
+      assim, **promoção a `professional`** (convite/admin/provisioning) e o **vínculo/onboarding do
+      paciente** (Parte B do app) seguem pendentes; a RLS real (por papel/clínica) continua sendo o WP-05.
     - **Leitura por papel/clínica** (substituir `sprint_read_all`): admin vê a clínica; profissional vê
       via `professional_patient_links`; externo (`is_external`) só o paciente vinculado. Hoje qualquer
       anon lê tudo (a anon key é pública no bundle).

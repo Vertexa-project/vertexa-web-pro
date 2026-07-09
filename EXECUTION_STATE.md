@@ -132,6 +132,9 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
 | AUTH-01 | Login Google real + resolução de identidade (flag) | ✅ | `VITE_AUTH_MODE` (default demo). `resolveIdentity` puro (proof node 14/14) + `useIdentity` (auth.uid()→profile→professional→clinic; pending). `signInWithGoogle`; `/auth/callback`; ProtectedRoute→PendingAccess; erros `captureException(source:"auth")`. |
 | AUTH-01 | Repontar consumidores do pin p/ identidade resolvida | ✅ | `useCurrentProfessional`/chat/`useChat`/Topbar derivam de `useIdentity` (fonte única); `session.ts` = ramo demo. `getChatThread` recebe `actingProfileId`. |
 | AUTH-01 | Gates + E2E (demo idêntico / Google no real) | ✅ | tsc 0 · lint 0 · build 0. Playwright: demo → login idêntico (só "modo demonstração", sem Google) + dashboard carrega (0 erro); real → botão "Entrar com Google" (demo escondido) + clique inicia OAuth (`…/auth/v1/authorize?provider=google&redirect_to=…/auth/callback`). `.env` restaurado. |
+| AUTH-02 | Trigger ciente de superfície + FAIL-CLOSED (WP-04 Parte A) | ✅ | Migration aditiva `20260709120000`: NO-MATCH sempre cria **`patient` pending** neutro (nunca professional via `signup_surface`, que é user_metadata controlável). Provider-gate Google + match role-agnóstico **PRESERVADOS**. Aplicada+verificada via MCP. RLS sprint intocada; ledger AUTH-02. |
+| AUTH-02 | DÍVIDA-AUTH-2 (observabilidade do trigger) | ✅ | `EXCEPTION` mudo → log **SQLSTATE** (nunca SQLERRM/PII) + `public.auth_trigger_events` (auth_user_id/surface/outcome/sqlstate, **sem e-mail/nome**; RLS deny-all anon/auth) via helper best-effort que nunca aborta o signup. |
+| AUTH-02 | Prova adversarial (6 casos, rollback) + gates | ✅ | Transação com ROLLBACK (seed intacto): web-match→prof linked, patient_app-match→patient linked, novo→patient pending, **web forjado→patient (não professional)**, e-mail/senha→admin NÃO linka/sem pending, surface ausente→patient. Diagnóstico com outcomes corretos e **sem PII**; anon negado. Gates web tsc/lint/build 0 (Parte A não muda TS). |
 
 ## 4. Como rodar / verificar
 - `npm run dev` (precisa de `.env` — copie de `.env.example`). Sem `.env`: tela de configuração (não mais branca).
@@ -280,3 +283,33 @@ Detalhe canônico e inequívoco vive em `docs/CONTRATO_INTEGRACAO.md → "Spine 
 - **Dívidas:** onboarding/criação de clínica p/ `pending` (WP futuro); RLS real (WP-05); provider Google no
   Supabase Auth + round-trip real = `NÃO_COMPROVADO_AUTOMATICAMENTE` (passo externo); cross-repo: revisar
   role do `pending` quando o app paciente adotar auth real; DÍVIDA-STACK-1 (rebase se WP-01 mudar).
+
+## 12. Log da Sessão AUTH-02 (WP-04 Parte A — trigger ciente de superfície, fail-closed, cross-repo)
+- **Gate de base:** o executor NÃO conseguiu `git fetch` autenticado nesta sessão (sem credencial — falha
+  rápido, não trava). O **owner confirmou externamente** (sessão Git autenticada, imediatamente antes) as
+  duas bases: `vertexa-web-pro` origin/main = `22c474cf` e `vertexa-app-paciente` origin/main = `95d5ca86`;
+  meu cache batia exatamente e os objetos estavam presentes (WP-01+WP-03 já mergeados no novo main).
+  Autorizado a proceder por SHA. Branch `feat/auth-patient-surface` a partir de `22c474cf`.
+- **Correção de segurança do owner (supera A6/A7 literais):** `raw_user_meta_data.signup_surface` é
+  user_metadata **CONTROLÁVEL PELO CLIENT** → **nunca** pode conceder/selecionar `professional`. Regra
+  fail-closed: **NO-MATCH sempre cria `patient` pending** (neutro), surface só para diagnóstico; promoção a
+  professional exige mecanismo confiável posterior. (A7 caso 4 "web novo → professional" virou **→ patient**.)
+- **Migration ADITIVA** `20260709120000_auth_patient_surface.sql` (aplicada+verificada, ledger AUTH-02):
+  `CREATE OR REPLACE handle_new_user` preservando SECURITY DEFINER/search_path fixo/idempotência, o
+  **provider-gate Google** (`raw_app_meta_data`) e o **match por e-mail role-agnóstico** (preserva o role do
+  profile casado). NO-MATCH → `role='patient', status='pending'` (literal, sem depender de surface).
+- **DÍVIDA-AUTH-2 (observabilidade):** o `EXCEPTION WHEN OTHERS` mudo virou log técnico **SEM PII** —
+  `RAISE WARNING` com **SQLSTATE** (nunca SQLERRM) + linha em `public.auth_trigger_events`
+  (`auth_user_id`/`surface`/`outcome`/`sqlstate`, **sem e-mail/nome**; RLS on deny-all anon/auth) via helper
+  `log_auth_trigger_event` best-effort (swallow próprio → nunca aborta o signup).
+- **Prova adversarial (MCP, transação com ROLLBACK — nada persiste; seed intacto):** os 6 casos do WP +
+  os 6 adversariais do owner: (1) Google/web casa profissional → **linked, role preservado**; (2)
+  Google/patient_app casa paciente → **linked patient**; (3) Google/patient_app novo → **pending patient**;
+  (4) **Google/web novo (surface forjada) → pending PATIENT, não professional**; (5) e-mail/senha confirmado
+  mirando **ADMIN → NÃO linka, sem pending** (provider-gate intacto); (6) **surface ausente → pending
+  patient** (default seguro). `auth_trigger_events` com outcomes corretos (`linked`/`pending_patient`/
+  `skipped_unverified_provider`) e **sem coluna de PII**; anon negado.
+- **Gates web:** tsc 0 · lint (`--max-warnings 0`) 0 · build 0 (antes/depois; Parte A não muda TS).
+- **Escopo/limite:** só o repo web (migration). **RLS sprint intocada** (WP-05). **Parte B (app paciente)
+  NÃO iniciada** (aguarda "A verde" + spec da Parte B). Rollback: restaurar a função do WP-03 + drop
+  helper/tabela (header da migration).
