@@ -242,6 +242,24 @@ saíram das listas `rls_policy_always_true`; nenhum issue novo. **KILL SWITCH (f
 `20260711095000_wp05b_fam1_identity_rls.sql` (drop programático das policies da família → deny-all; NUNCA recriar
 `sprint_*`). **Famílias restantes (Agenda, Dados clínicos, Chat, Storage/Fotos) seguem em `sprint_*` — NÃO tocadas.**
 
+**EXECUTION_STATE (RLS-FAM2 · Comportamento do Paciente) = ✅ CONCLUÍDA (aguardando auditoria).** Migrations
+`20260712090000_wp05b_fam2_helpers` + `20260712091000_wp05b_fam2_behavior_rls`, versionadas e APLICADAS. RLS real
+por vínculo em 11 tabelas: `weight_logs`, `activity_events`, `activity_sessions`, `meal_logs`, `supplement_intakes`,
+`muscle_recovery_states`, `adherence_snapshots`, `workout_session_logs`, `workout_set_logs` (via pai
+`session_log_patient`), `progress_photos` (só metadado; bucket = família Storage), `body_assessments`. **Modelo:**
+self-logs → SELECT `can_access_patient` (inclui externo), escrita `is_self_patient` (**anti-forja**: `patient_id` vem
+do client, WITH CHECK amarra ao próprio). **`body_assessments` (clínico) → EXTERNO EXCLUÍDO** (`can_access_patient_internal`);
+escrita = prof comum vinculado/admin. `patient_id` imutável (append-only sem UPDATE; col-priv onde há UPDATE). Novos
+helpers: `session_log_patient`, `can_access_patient_internal`. Testes Nível 1 (`supabase/tests/wp05b_fam2_behavior_test.sql`):
+suite verde — isolamento paciente-paciente nas 11, forja de `patient_id` negada (todas), via-pai negada, não-vinculado
+negado, externo-mínimo (vê behavioral, NÃO vê `body_assessments`), reescrita de `patient_id` negada, anon negado, IDOR.
+Advisors: as 11 saíram de `rls_policy_always_true`. **Cross-repo:** app grava sempre o próprio `patient_id`
+(compatível sob login real; demo/anon quebra por design); web só LÊ o comportamental e ESCREVE `body_assessments`.
+Kill switch (deny-all) no header da migration de policies. **Bucket de Storage NÃO alterado.** Dívida:
+`adherence_snapshots`/`muscle_recovery_states` são gravadas pelo paciente (contrato atual) — idealmente engine
+server-side no futuro (paciente poderia inflar o próprio score). Famílias restantes: **Agenda, Dados clínicos/planos,
+Chat, Storage/Fotos** seguem em `sprint_*`.
+
 **Consequência no app web (dívida, fora do escopo desta família):** `createPatient` (`src/lib/api/patients.ts`)
 insere `profiles` direto → agora **negado** (profile nasce via trigger `handle_new_user`). Fluxo precisa migrar para
 provisionamento server-side (Edge Function `service_role`) ou convite. Gates (typecheck/lint/build) seguem verdes

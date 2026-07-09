@@ -258,12 +258,19 @@
     por papel/clínica/vínculo** (fecha a parte de IDENTIDADE das #11–#14). Migrations `20260711093000` (co-admin
     aditiva) + `20260711094000` (helpers `private.*`) + `20260711095000` (policies), branch `feat/rls-real-web`,
     aguardando auditoria do dono. Testes Nível 1 verdes (`supabase/tests/wp05b_fam1_identity_test.sql`). Decisões
-    AUTH-ADMIN-1/EXT-1/AGENDA-1 e contrato de helpers em `CONTRATO_INTEGRACAO.md`. **AINDA em `sprint_*` (permissivo,
-    dado real BLOQUEADO):** Agenda (`appointments`, `calendar_*` — ver #14/#19/#23), Dados clínicos (planos,
-    `weight_logs`, `body_assessments`, `activity_*`, `muscle_recovery_states`, `adherence_snapshots`, `supplements*`,
-    `meal_logs`, `notifications`, `patient_achievements`), Chat (`chat_*` — ver #14), Storage/Fotos (`progress_photos`
-    + bucket público; `patient_documents` storage bucket-wide — ver #12). Owner-checks: (a) `Settings > API` expõe só
-    `public`(+`graphql_public`), **`private` fora**; (b) remover os 2 objetos demo `demo/mariana/*.png` via Storage API.
+    AUTH-ADMIN-1/EXT-1/AGENDA-1 e contrato de helpers em `CONTRATO_INTEGRACAO.md`.
+    **FAMÍLIA 2 (Comportamento do Paciente) ✅ CONCLUÍDA** (migrations `20260712090000` helpers + `20260712091000`
+    policies): RLS real por vínculo em `weight_logs`, `activity_events`, `activity_sessions`, `meal_logs`,
+    `supplement_intakes`, `muscle_recovery_states`, `adherence_snapshots`, `workout_session_logs`, `workout_set_logs`,
+    `progress_photos` (só metadado), `body_assessments` (externo excluído). Escrita `is_self_patient` (anti-forja);
+    testes `supabase/tests/wp05b_fam2_behavior_test.sql`. **AINDA em `sprint_*` (permissivo, dado real BLOQUEADO):**
+    Agenda (`appointments`, `calendar_*` — ver #14/#19/#23), Dados clínicos/planos (`nutrition_plans`, `meals`,
+    `workout_plans`, `workouts`, `workout_exercises`, `supplements`), `notifications`, `patient_achievements`,
+    Chat (`chat_*` — ver #14), Storage/Fotos (bucket `progress-photos` público + `patient_documents` storage
+    bucket-wide — ver #12; a TABELA `progress_photos` já está fechada, falta o BUCKET). Owner-checks: (a) `Settings > API`
+    expõe só `public`(+`graphql_public`), **`private` fora**; (b) remover os 2 objetos demo `demo/mariana/*.png` via Storage API.
+    Dívida Fam2: `adherence_snapshots`/`muscle_recovery_states` gravadas pelo paciente (contrato atual) — mover p/
+    engine server-side no futuro (paciente poderia inflar o próprio VRI/recuperação).
 
 28. **web `createPatient` incompatível com a RLS de identidade (dívida introduzida pela Família 1; relacionada à #16).**
     `src/lib/api/patients.ts` cria paciente inserindo `profiles` direto (role='patient') + `patients` +
