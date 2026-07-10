@@ -313,6 +313,25 @@ bucket-wide (`sprint_patient_documents_storage_read`) — qualquer authenticated
 dedicado**. Kill switch = deny-all na tabela (nunca sprint_*). Famílias restantes: **Agenda, Storage (buckets
 `progress-photos`+`patient-documents`), notificações/gamificação, legado `messages`.**
 
+**EXECUTION_STATE (RLS-FAM6 · Agenda/Clínica) = ✅ CONCLUÍDA (aguardando auditoria).** Migrations
+`20260716090000_wp05b_fam6_helpers` + `20260716091000_wp05b_fam6_agenda_clinic_rls`. **DUAS CHAVES:**
+- **appointments (chave PACIENTE, AUTH-AGENDA-1):** SELECT = admin-da-clínica OU (paciente vinculado, prof comum) OU
+  (prof ATRIBUÍDO lê a sua consulta); WRITE = admin OU (paciente vinculado) OU (bloco sem paciente do próprio prof) —
+  **não auto-atribui a paciente não-vinculado** (mesma clínica NÃO basta). **Paciente e EXTERNO EXCLUÍDOS** (app não
+  consome agenda; `notes` sensível). `patient_id`/`clinic_id` imutáveis.
+- **campaigns (chave CLÍNICA):** SELECT = staff da clínica (admin+profissionais; **paciente NÃO vê**); escrita = admin.
+- **calendar_connections / calendar_event_cache (chave CLÍNICA/PROF):** **SELECT-only p/ client** (dono da conexão OU
+  admin); **Edge (service_role) escreve**. `calendar_event_cache` escopado ao **dono da conexão** → **fecha a porta
+  lateral do Google** (quem não veria a consulta também não vê o cache do outro profissional — provado por `P2_SIDEDOOR_cache0`).
+- **`calendar_connection_tokens` + `calendar_oauth_state`: deny-all mantido** (sem policy nem grant; tokens nunca ao
+  client) — **NÃO tocados**.
+Helpers: `is_clinic_staff`, `owns_calendar_connection`. Testes `supabase/tests/wp05b_fam6_agenda_test.sql` (suite verde:
+não-vinculado⟂agenda, cache-side-door fechado, campanhas só staff, tokens inacessíveis, isolamento clínica,
+reescrita patient_id/clinic_id negada, anon, IDOR). Advisors: `appointments` saiu de `rls_policy_always_true`.
+Cross-repo: web escreve appointments (`appointments.ts`); NÃO escreve campaigns/calendar_* (Edge do Google usa
+service_role → bypass, não quebra); app NÃO consome agenda. Storage NÃO tocado. Famílias restantes: **Storage
+(buckets), notificações/gamificação (`notifications`/`patient_achievements`), catálogo `achievements`, legado `messages`.**
+
 **Consequência no app web (dívida, fora do escopo desta família):** `createPatient` (`src/lib/api/patients.ts`)
 insere `profiles` direto → agora **negado** (profile nasce via trigger `handle_new_user`). Fluxo precisa migrar para
 provisionamento server-side (Edge Function `service_role`) ou convite. Gates (typecheck/lint/build) seguem verdes

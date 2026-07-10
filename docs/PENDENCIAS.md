@@ -276,8 +276,14 @@
     **FAMÍLIA 5 (Documentos) ✅ CONCLUÍDA** (migration `20260715090000`): RLS real na TABELA `patient_documents`
     (metadado). SELECT `can_access_patient_internal` (externo excluído); escrita `can_prescribe_for_patient` (paciente
     não sobe); patient_id/file_path imutáveis; testes `supabase/tests/wp05b_fam5_documents_test.sql`. **Bucket NÃO tocado.**
-    **AINDA em `sprint_*` (permissivo, dado real BLOQUEADO):** Agenda (`appointments`, `calendar_*` — ver #14/#19/#23),
-    `notifications`, `patient_achievements` (gamificação/notif), legado `messages` (aposentar — ver #15).
+    **FAMÍLIA 6 (Agenda/Clínica — duas chaves) ✅ CONCLUÍDA** (migrations `20260716090000` helpers + `20260716091000`
+    policies): RLS real em `appointments` (chave PACIENTE/AUTH-AGENDA-1: vínculo, não clínica; paciente/externo excluídos;
+    `notes` sensível), `campaigns` (chave CLÍNICA: staff lê, admin escreve; paciente não vê), `calendar_connections`/
+    `calendar_event_cache` (SELECT-only: dono da conexão+admin; Edge escreve; **cache fecha a porta lateral do Google**).
+    `calendar_connection_tokens`/`calendar_oauth_state` seguem **deny-all** (não tocados). Testes
+    `supabase/tests/wp05b_fam6_agenda_test.sql`.
+    **AINDA em `sprint_*` (permissivo, dado real BLOQUEADO):** `notifications`, `patient_achievements` (gamificação/notif),
+    `achievements` (catálogo — só SELECT anon; dar policy própria), legado `messages` (aposentar — ver #15).
     **STORAGE (WP DEDICADO, PENDENTE — NÃO resolvido):** os BUCKETS `progress-photos` (público → tornar privado, mudança
     de contrato: path+signed URL) e `patient-documents` (privado, mas policy de `storage.objects` bucket-wide =
     `sprint_patient_documents_storage_read`/`_write` + `sprint_progress_photos_write`) seguem em sprint — ver #12. As
