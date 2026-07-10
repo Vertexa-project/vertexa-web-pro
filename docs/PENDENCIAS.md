@@ -282,8 +282,13 @@
     `calendar_event_cache` (SELECT-only: dono da conexão+admin; Edge escreve; **cache fecha a porta lateral do Google**).
     `calendar_connection_tokens`/`calendar_oauth_state` seguem **deny-all** (não tocados). Testes
     `supabase/tests/wp05b_fam6_agenda_test.sql`.
-    **AINDA em `sprint_*` (permissivo, dado real BLOQUEADO):** `notifications`, `patient_achievements` (gamificação/notif),
-    `achievements` (catálogo — só SELECT anon; dar policy própria), legado `messages` (aposentar — ver #15).
+    **FAMÍLIA 7 (Gamificação/Notificações — três modelos) ✅ CONCLUÍDA** (migration `20260717090000`): RLS real em
+    `achievements` (CATÁLOGO: SELECT authenticated, anon negado; escrita de ninguém pelo client — os 12 itens intactos),
+    `patient_achievements` (SELECT `can_access_patient_internal` externo excluído; INSERT `is_self_patient` anti-forja;
+    append-only; **dívida: desbloqueio client-side = paciente pode inflar gamificação, mover p/ engine server-side**),
+    `notifications` (SELECT/UPDATE só o destinatário; UPDATE só `read_at`; INSERT/DELETE negado — emissor server-side).
+    Testes `supabase/tests/wp05b_fam7_gamification_test.sql`. **Advisors: `rls_policy_always_true` VAZIO.**
+    **AINDA em `sprint_*` (permissivo, dado real BLOQUEADO):** legado `messages` (só SELECT anon — aposentar, ver #15).
     **STORAGE (WP DEDICADO, PENDENTE — NÃO resolvido):** os BUCKETS `progress-photos` (público → tornar privado, mudança
     de contrato: path+signed URL) e `patient-documents` (privado, mas policy de `storage.objects` bucket-wide =
     `sprint_patient_documents_storage_read`/`_write` + `sprint_progress_photos_write`) seguem em sprint — ver #12. As

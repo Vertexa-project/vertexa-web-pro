@@ -332,6 +332,24 @@ Cross-repo: web escreve appointments (`appointments.ts`); NÃO escreve campaigns
 service_role → bypass, não quebra); app NÃO consome agenda. Storage NÃO tocado. Famílias restantes: **Storage
 (buckets), notificações/gamificação (`notifications`/`patient_achievements`), catálogo `achievements`, legado `messages`.**
 
+**EXECUTION_STATE (RLS-FAM7 · Gamificação/Notificações) = ✅ CONCLUÍDA (aguardando auditoria).** Migration
+`20260717090000_wp05b_fam7_gamification_rls` (sem helper novo). **TRÊS MODELOS:**
+- **`achievements` (CATÁLOGO, sem patient_id):** SELECT p/ qualquer authenticated (`achievements_catalog_read`,
+  **anon negado** — fecha o catálogo anon-open que sobrava); **escrita de ninguém pelo client** (sem policy + revoke;
+  só service_role/migration). Os 12 itens do catálogo (dado preservado na Fase A) intactos.
+- **`patient_achievements`:** SELECT `can_access_patient_internal` (paciente dono + prof comum vinculado + admin;
+  **EXTERNO EXCLUÍDO**); INSERT `is_self_patient` (**anti-forja**: só desbloqueia p/ si); **append-only** (sem UPDATE/
+  DELETE; `patient_id` imutável). **DÍVIDA (não resolvida): desbloqueio é CLIENT-SIDE** (app faz `upsert` —
+  `achievements.ts`), então o paciente pode inflar a própria gamificação (mesma classe do VRI/adherence da Fam2);
+  idealmente engine server-side.
+- **`notifications`:** SELECT/UPDATE **só o DESTINATÁRIO** (`is_self_patient`; prof/admin NÃO veem a caixa pessoal);
+  UPDATE **só `read_at`** (col-priv; não edita título/corpo/tipo); INSERT/DELETE do client **negado** (emissor =
+  seed/server-side; criar emissor real é dívida à parte). App só marca `read_at` (`notifications.ts`).
+Testes `supabase/tests/wp05b_fam7_gamification_test.sql` (suite verde: catálogo read-only-client, forja-de-conquista
+negada, notificação-alheia negada, read_at-only, isolamento, externo, anon, IDOR). **Advisors: `rls_policy_always_true`
+agora VAZIO** (`notifications`/`patient_achievements` eram os últimos). Storage NÃO tocado. Famílias restantes: **apenas
+o WP de Storage (buckets `progress-photos`/`patient-documents` + `storage.objects`) e o legado `messages` (aposentar, #15).**
+
 **Consequência no app web (dívida, fora do escopo desta família):** `createPatient` (`src/lib/api/patients.ts`)
 insere `profiles` direto → agora **negado** (profile nasce via trigger `handle_new_user`). Fluxo precisa migrar para
 provisionamento server-side (Edge Function `service_role`) ou convite. Gates (typecheck/lint/build) seguem verdes
