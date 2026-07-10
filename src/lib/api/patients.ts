@@ -135,12 +135,14 @@ export async function getPatient(id: string): Promise<PatientDetail> {
 }
 
 // ===== Cadastro de paciente (Sessão 4) =====
-// O nome do paciente vive em profiles.full_name (não há name em patients), então o
-// cadastro encadeia: profiles (role='patient') -> patients -> professional_patient_links
-// (vincula o profissional logado) -> body_assessments (anamnese, opcional).
-// ⚠️ NÃO transacional (mesma dívida de saveWorkoutPlan/Nutrition — PENDENCIAS #13): num
-// erro no meio, pode sobrar profile/paciente parcial. OK p/ sprint (seed fictício); migrar
-// para RPC SECURITY DEFINER + validação de vínculo no servidor antes de dado real (#14).
+// O nome do paciente vive em profiles.full_name (não há name em patients). Sob a RLS real
+// (WP-05B), o client NÃO insere em `profiles` (nasce via trigger handle_new_user). O cadastro
+// roda pela RPC SECURITY DEFINER `create_patient` (WP-APP-1), que — de forma TRANSACIONAL e
+// com AUTORIZAÇÃO INTERNA (o chamador tem de ser profissional/admin da clínica-alvo) — encadeia
+// profiles(role='patient') -> patients -> professional_patient_links(vínculo amarrado ao
+// chamador) -> body_assessments(anamnese opcional). O paciente entra SEM auth_user_id; o login
+// (Google) liga a identidade depois via match-by-email no handle_new_user. professionalId do
+// input não é mais enviado: o servidor deriva o vínculo do próprio chamador (anti-forja).
 export interface CreatePatientAnamnese {
   method: string | null; // bioimpedancia | adipometro | dexa | manual
   weight: number | null;
@@ -165,57 +167,27 @@ export interface CreatePatientInput {
 export async function createPatient(input: CreatePatientInput): Promise<string> {
   const fullName = input.fullName.trim();
   if (!fullName) throw new Error("Nome do paciente é obrigatório.");
+  if (!input.clinicId) throw new Error("Clínica do profissional não resolvida.");
 
-  // 1) profile do paciente (role='patient'). full_name + role são NOT NULL.
-  const { data: prof, error: profErr } = await supabase
-    .from("profiles")
-    .insert({ role: "patient", full_name: fullName, email: input.email?.trim() || null })
-    .select("id")
-    .single();
-  if (profErr) throw profErr;
-  const profileId = (prof as { id: string }).id;
-
-  // 2) paciente (clinic_id = clínica do profissional logado → isolamento).
-  const startWeight = input.startWeight ?? null;
-  const { data: pat, error: patErr } = await supabase
-    .from("patients")
-    .insert({
-      profile_id: profileId,
-      clinic_id: input.clinicId,
-      goal: input.goal?.trim() || null,
-      birth_date: input.birthDate || null,
-      sex: input.sex || null,
-      height_cm: input.heightCm ?? null,
-      start_weight: startWeight,
-      current_weight: startWeight,
-      target_weight: input.targetWeight ?? null,
-    })
-    .select("id")
-    .single();
-  if (patErr) throw patErr;
-  const patientId = (pat as { id: string }).id;
-
-  // 3) vínculo com o profissional logado (se houver profissional resolvido).
-  if (input.professionalId) {
-    const { error: linkErr } = await supabase
-      .from("professional_patient_links")
-      .insert({ professional_id: input.professionalId, patient_id: patientId });
-    if (linkErr) throw linkErr;
-  }
-
-  // 4) anamnese/pré-consulta inicial (opcional) → body_assessments.
+  // Caminho de escrita CONTROLADO: RPC SECURITY DEFINER (transacional; autorização e vínculo
+  // revalidados no servidor). O provisionamento inteiro (profile+patient+link+anamnese) é
+  // atômico — erro no meio não deixa paciente/perfil parcial.
   const a = input.anamnese;
-  if (a && (a.weight != null || a.bodyFatPct != null || a.method || a.notes)) {
-    const { error: baErr } = await supabase.from("body_assessments").insert({
-      patient_id: patientId,
-      professional_id: input.professionalId,
-      method: a.method || null,
-      weight: a.weight ?? null,
-      body_fat_pct: a.bodyFatPct ?? null,
-      measurements: a.notes?.trim() ? { notes: a.notes.trim() } : null,
-    });
-    if (baErr) throw baErr;
-  }
-
-  return patientId;
+  const { data, error } = await supabase.rpc("create_patient", {
+    p_clinic_id: input.clinicId,
+    p_full_name: fullName,
+    p_email: input.email?.trim() || null,
+    p_birth_date: input.birthDate || null,
+    p_sex: input.sex || null,
+    p_height_cm: input.heightCm ?? null,
+    p_goal: input.goal?.trim() || null,
+    p_start_weight: input.startWeight ?? null,
+    p_target_weight: input.targetWeight ?? null,
+    p_anamnese_method: a?.method || null,
+    p_anamnese_weight: a?.weight ?? null,
+    p_anamnese_body_fat_pct: a?.bodyFatPct ?? null,
+    p_anamnese_notes: a?.notes?.trim() || null,
+  });
+  if (error) throw error;
+  return data as string; // patients.id do paciente criado
 }

@@ -94,7 +94,8 @@ papel/clínica segue pendente (WP-05 / #11-#14)** — o modo real NÃO expõe ma
 | `notifications` (S6) | **lê** + **escreve** `read_at` (marcar lida) | escreve (futuro emissor) | — |
 | `patient_documents` (exames/documentos PDF/imagem, S-DOCS) | lê + **escreve** (`uploaded_by_role='patient'`, FUTURO — sessão do app) | **escreve** (`uploaded_by_role='professional'`) + **lê** | — |
 | Storage `patient-documents` (bucket **PRIVADO**, S-DOCS) | upload + download via signed URL (FUTURO) | **upload** + **lê via signed URL** (createSignedUrl, TTL 10 min) | — |
-| `workout_plans` / `workouts` / `workout_exercises` / `nutrition_plans` / `meals` | lê (4c-3, futuro) | **escreve** (editores) | — |
+| `workout_plans` / `workouts` / `workout_exercises` / `nutrition_plans` / `meals` | lê (4c-3, futuro) | **escreve via RPC** `save_workout_plan`/`save_nutrition_plan` (WP-APP-1, transacional; nunca INSERT/DELETE direto) | — |
+| `profiles`+`patients`+`professional_patient_links`+`body_assessments` (cadastro de paciente) | — (não escreve) | **escreve via RPC** `create_patient` (WP-APP-1; profile nasce aqui, não pelo client) | — |
 | `appointments` (agenda interna, Sessão 6) | — (não usa) | **escreve + lê** (CRUD da Agenda) | — |
 | `calendar_*` (Google Calendar, Sessão 10) | — (não usa) | **lê** connections/cache; tokens/state **deny-all** (só Edge Function/service_role) | — |
 | `schema_migration_log` (ledger técnico interno, Sessão 7) | — (não usa) | — (não usa; sem API client/portal) | — |
@@ -358,6 +359,42 @@ header = recriar a tabela vazia (CREATE original do base_schema). **DÍVIDA #15 
 existe mais; tabelas public 39→38; nenhuma policy/publicação referencia `messages`; **build verde** (prova indireta de
 que o web não a usava); advisors sem regressão (`rls_policy_always_true` segue VAZIO). `chat_*`/Storage/demais NÃO tocados.
 
+**EXECUTION_STATE (WP-APP-1 · Provisionamento server-side) = ✅ CONCLUÍDA (aguardando auditoria).** Migration
+`20260719090000_wp_app1_server_provisioning_rpcs` (versionada e APLICADA; ledger `20260719090000`). Paga a **DÍVIDA-APP-1**
+(#28/#16/#13): sob a RLS real (Fam1/Fam3) o client NÃO insere em `profiles` (nasce via trigger) e o `save*Plan` era
+DELETE+INSERT não-atômico. Três **RPCs SECURITY DEFINER** viram o **caminho de escrita CONTROLADO** — DEFINER **não é
+bypass**: cada uma REVALIDA a autorização com os helpers `private.*` (as mesmas checagens que a RLS faria):
+- **`create_patient(p_clinic_id, p_full_name, p_email, p_birth_date, p_sex, p_height_cm, p_goal, p_start_weight,
+  p_target_weight, p_anamnese_method, p_anamnese_weight, p_anamnese_body_fat_pct, p_anamnese_notes) → uuid`** — cria
+  `profiles(role='patient')`+`patients`+vínculo+`body_assessments`(opcional) **atômico**. **AUTORIZAÇÃO INTERNA:** o
+  chamador tem de ser **profissional da clínica-alvo OU `is_clinic_admin`** — não cria em clínica alheia. **Anti-escalação:**
+  `role` SEMPRE `'patient'` (hardcoded), `auth_user_id` **NUNCA** setado (o login liga depois via `handle_new_user`
+  match-by-email), **vínculo AMARRADO ao chamador** (não se vincula a paciente de terceiro). Admin sem professional row
+  não gera vínculo automático.
+- **`save_workout_plan(p_patient_id, p_title, p_goal, p_workouts jsonb) → uuid`** e **`save_nutrition_plan(p_patient_id,
+  p_title, p_meals jsonb) → uuid`** — **TRANSACIONAIS**: o DELETE do plano vigente + os INSERTs do novo são UMA transação
+  (erro no meio ⇒ plano antigo **INTACTO**, sem plano parcial). Autorização = `private.can_prescribe_for_patient`
+  (prof vinculado/admin; paciente/externo negados). `day_index`/`order_index` derivados server-side pela ordem do array.
+
+Todas: `search_path=''`, schema-qualified, **EXECUTE só `authenticated`** (revogado de `public`/`anon`), sem caminho de
+auto-promoção. **Advisor:** `authenticated_security_definer_function_executable` (0029) marca as 3 como WARN —
+**intencional** (SÃO o endpoint de escrita autenticado via `/rpc`; a segurança está na revalidação interna), não é
+regressão. Testes Nível 1 em `supabase/tests/wp_app1_provisioning_test.sql` (suite verde: cria-só-staff, clínica-alheia
+negada, paciente-não-cria, role sempre patient + auth_user_id null, vínculo=chamador, admin sem vínculo espúrio,
+**atomicidade** — payload que falha deixa o plano antigo vivo, não-vinculado/externo/paciente não prescrevem, anon não
+executa). **INTEGRAÇÃO WEB (permitida — código deste repo):** `src/lib/api/patients.ts::createPatient` e
+`src/lib/api/planMutations.ts::saveWorkoutPlan/saveNutritionPlan` passam a chamar `supabase.rpc(...)` em vez do
+INSERT/DELETE direto; `professionalId` do input não é mais enviado (servidor deriva o autor/vínculo do chamador —
+anti-forja). Gates verdes (typecheck/lint/build). **Cross-repo:** app **NÃO** afetado — nunca chamou esses fluxos (grep
+read-only confirma: no app, `workout_plans`/`nutrition_plans`/`patients`/`profiles` são **SELECT**; os únicos INSERTs são
+`chat_*`). **E2E real depende do Google OAuth configurado (passo do dono)** — provado em Nível 1 (harness); E2E real
+**não forjado**. **KILL SWITCH:** `drop function` das 3 RPCs volta ao estado anterior — mas esse estado é o fluxo QUEBRADO
+sob RLS, então o rollback REAL reverte **também** a integração do web (voltar aos INSERT/DELETE diretos). RLS **NÃO**
+afrouxada (nenhuma policy nova; `profiles` segue sem INSERT de client). Header da migration documenta tudo.
+
+**As 3 RPCs são CONTRATO OFICIAL de escrita** (parte deste documento): a web escreve paciente/planos SÓ por elas; o app
+não escreve nessas tabelas. Assinaturas verbatim acima — **não renomear parâmetros sem alinhar aqui**.
+
 ---
 
 ## 🏁 FECHAMENTO DA FASE B (BANCO) — 8 FAMÍLIAS
@@ -386,17 +423,19 @@ path+signed URL; bucket `patient-documents` bucket-wide → fechar por pasta=pat
 - **STORAGE-2** — buckets `progress-photos` (público) e `patient-documents` (bucket-wide) ainda em `sprint_*` (WP dedicado).
 - **RLS-2 (métricas client-side)** — VRI/`adherence_snapshots`, `muscle_recovery_states` e `patient_achievements` são
   gravados/desbloqueados pelo paciente no client → inflável; mover p/ engine server-side.
-- **APP-1** — web `createPatient` (insere `profiles` direto, negado pela RLS de identidade) e `save*Plan` DELETE+INSERT
-  não-transacional → mover p/ provisionamento/RPC server-side (PENDENCIAS #28/#16).
+- ~~**APP-1** — web `createPatient` (insere `profiles` direto, negado pela RLS de identidade) e `save*Plan` DELETE+INSERT
+  não-transacional → mover p/ provisionamento/RPC server-side (PENDENCIAS #28/#16).~~ **✅ RESOLVIDO (WP-APP-1):** RPCs
+  SECURITY DEFINER `create_patient`/`save_workout_plan`/`save_nutrition_plan` (transacionais, autorização interna
+  `private.*`) + integração do web. Ver EXECUTION_STATE (WP-APP-1) acima. Resta só o E2E real (owner: configurar OAuth).
 - **AUTH-4 (promoção)** — promover `pending`→`professional` exige mecanismo confiável server-side (não default).
 - **AUTH-#22** — cifrar `refresh_token` do Google em repouso (`calendar_connection_tokens`).
 - **Owner-checks** — `Settings > API` expor só `public`(+`graphql_public`), `private` FORA; remover 2 objetos demo
   `demo/mariana/*.png` via Storage API.
 
-**Consequência no app web (dívida, fora do escopo desta família):** `createPatient` (`src/lib/api/patients.ts`)
-insere `profiles` direto → agora **negado** (profile nasce via trigger `handle_new_user`). Fluxo precisa migrar para
-provisionamento server-side (Edge Function `service_role`) ou convite. Gates (typecheck/lint/build) seguem verdes
-(é comportamento de runtime). Ver PENDENCIAS.
+**Consequência no app web — ✅ RESOLVIDA em WP-APP-1:** `createPatient` (`src/lib/api/patients.ts`) e
+`saveWorkoutPlan`/`saveNutritionPlan` (`src/lib/api/planMutations.ts`) já **NÃO** escrevem direto — chamam as RPCs
+SECURITY DEFINER `create_patient`/`save_workout_plan`/`save_nutrition_plan` (provisionamento server-side transacional,
+autorização revalidada; ver EXECUTION_STATE acima). O fluxo de cadastro/prescrição volta a funcionar sob a RLS real.
 
 ## Pendências cross-repo
 - **#1** esquema de recuperação muscular (provisório `recovered/weakened`; confirmar c/ Juliana).
