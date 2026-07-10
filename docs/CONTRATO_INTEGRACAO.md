@@ -350,6 +350,49 @@ negada, notificação-alheia negada, read_at-only, isolamento, externo, anon, ID
 agora VAZIO** (`notifications`/`patient_achievements` eram os últimos). Storage NÃO tocado. Famílias restantes: **apenas
 o WP de Storage (buckets `progress-photos`/`patient-documents` + `storage.objects`) e o legado `messages` (aposentar, #15).**
 
+**EXECUTION_STATE (RLS-FAM8 · legado `messages`) = ✅ CONCLUÍDA (aguardando auditoria).** Migration
+`20260718090000_wp05b_fam8_drop_legacy_messages`. **VEREDITO da prova = MORTA → DROP (Caminho A):** 0 linhas,
+**0 FK de terceiros**, **0 uso no web e no app** (único match = um comentário em `types/db.ts`), fora do realtime —
+substituída pelo `chat_*` (Família 4). `DROP TABLE public.messages` (idempotente; guard `if exists`). Rollback no
+header = recriar a tabela vazia (CREATE original do base_schema). **DÍVIDA #15 FECHADA.** Verificação: `messages` não
+existe mais; tabelas public 39→38; nenhuma policy/publicação referencia `messages`; **build verde** (prova indireta de
+que o web não a usava); advisors sem regressão (`rls_policy_always_true` segue VAZIO). `chat_*`/Storage/demais NÃO tocados.
+
+---
+
+## 🏁 FECHAMENTO DA FASE B (BANCO) — 8 FAMÍLIAS
+
+Toda tabela de DADOS do schema `public` agora tem **RLS real por papel/clínica/vínculo/participação** (ou foi
+aposentada). Helpers de autorização vivem em `private` (SECURITY DEFINER, `search_path=''`, execute só `authenticated`,
+fora da Data API). anon negado em tudo; `service_role` mantém bypass (Edge Functions).
+
+| # | Família | Tabelas | Chave |
+|---|---|---|---|
+| 1 | Identidade | profiles, professionals, patients, professional_patient_links, clinics | papel/posse/vínculo |
+| 2 | Comportamento | weight_logs, activity_events/sessions, meal_logs, supplement_intakes, muscle_recovery_states, adherence_snapshots, workout_session_logs, workout_set_logs, progress_photos(tabela), body_assessments | paciente (self-write) |
+| 3 | Prescrição | workout_plans, workouts, workout_exercises, nutrition_plans, meals, supplements | prof prescreve, paciente lê |
+| 4 | Chat | chat_channels, chat_participants, chat_messages, chat_mentions | participação (realtime) |
+| 5 | Documentos | patient_documents (só a tabela) | clínico (externo excluído) |
+| 6 | Agenda/Clínica | appointments, campaigns, calendar_connections, calendar_event_cache | paciente + clínica |
+| 7 | Gamificação/Notif | achievements(catálogo), patient_achievements, notifications | 3 modelos |
+| 8 | Legado | messages | **DROP** (morta) |
+
+**`sprint_*` remanescentes = 3, APENAS em `storage.objects`** (nenhuma tabela de dados). `calendar_connection_tokens`/
+`calendar_oauth_state`/`schema_migration_log`/`auth_trigger_events` = deny-all intencional.
+**FALTA PARA O RELEASE GATE: o WP de STORAGE** (`storage.objects`: bucket `progress-photos` público→privado com
+path+signed URL; bucket `patient-documents` bucket-wide → fechar por pasta=patient_id).
+
+**DÍVIDAS CONSOLIDADAS EM ABERTO (para o dono):**
+- **STORAGE-2** — buckets `progress-photos` (público) e `patient-documents` (bucket-wide) ainda em `sprint_*` (WP dedicado).
+- **RLS-2 (métricas client-side)** — VRI/`adherence_snapshots`, `muscle_recovery_states` e `patient_achievements` são
+  gravados/desbloqueados pelo paciente no client → inflável; mover p/ engine server-side.
+- **APP-1** — web `createPatient` (insere `profiles` direto, negado pela RLS de identidade) e `save*Plan` DELETE+INSERT
+  não-transacional → mover p/ provisionamento/RPC server-side (PENDENCIAS #28/#16).
+- **AUTH-4 (promoção)** — promover `pending`→`professional` exige mecanismo confiável server-side (não default).
+- **AUTH-#22** — cifrar `refresh_token` do Google em repouso (`calendar_connection_tokens`).
+- **Owner-checks** — `Settings > API` expor só `public`(+`graphql_public`), `private` FORA; remover 2 objetos demo
+  `demo/mariana/*.png` via Storage API.
+
 **Consequência no app web (dívida, fora do escopo desta família):** `createPatient` (`src/lib/api/patients.ts`)
 insere `profiles` direto → agora **negado** (profile nasce via trigger `handle_new_user`). Fluxo precisa migrar para
 provisionamento server-side (Edge Function `service_role`) ou convite. Gates (typecheck/lint/build) seguem verdes

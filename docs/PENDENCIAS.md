@@ -152,13 +152,10 @@
       nunca logar. O select de **paciente** no diálogo usa `useListPatients()` (não escopado por clínica,
       igual ao resto do app) — fechar junto (criar `listClinicPatients`).
 
-15. **Aposentar a tabela legada `messages` (web e app já alinhados em `chat_*`).** Tanto a web (Etapa 3)
-    quanto o app paciente (TeamChat) leem/escrevem direto em `chat_messages`/`chat_mentions` com realtime
-    — o app NUNCA usou a `messages` legada (era 100% mock antes). Logo a `messages` só sobrevive por causa
-    do backfill da Etapa 2 e do `supabase/seed.sql` (que ainda insere 2 linhas nela). Pendência (não
-    bloqueante): migrar o seed para `chat_*` e dropar `messages` quando ninguém mais depender dela.
-    Remetente da web em modo demo = profile fixo da Dra. Camila via `VITE_DEMO_PROFESSIONAL_PROFILE_ID`;
-    sob auth real vira `auth.uid()` (ver #14).
+15. **✅ RESOLVIDO (WP-05B Fam8, 2026-07-11) — tabela legada `messages` APOSENTADA (DROP).** Prova: 0 linhas
+    (purgada na Fase A), 0 FK de terceiros, 0 uso no web e no app (só um comentário em `types/db.ts`), fora do
+    realtime → MORTA. Migration `20260718090000_wp05b_fam8_drop_legacy_messages` fez `DROP TABLE public.messages`
+    (rollback = recriar vazia, no header). Substituída por `chat_*` (Família 4, já com RLS real). Nada mais depende dela.
 
 16. **`createPatient` não é transacional (Sessão 4).** O cadastro encadeia 4 inserts
     (`profiles` → `patients` → `professional_patient_links` → `body_assessments`) sem transação. Um
@@ -288,7 +285,10 @@
     append-only; **dívida: desbloqueio client-side = paciente pode inflar gamificação, mover p/ engine server-side**),
     `notifications` (SELECT/UPDATE só o destinatário; UPDATE só `read_at`; INSERT/DELETE negado — emissor server-side).
     Testes `supabase/tests/wp05b_fam7_gamification_test.sql`. **Advisors: `rls_policy_always_true` VAZIO.**
-    **AINDA em `sprint_*` (permissivo, dado real BLOQUEADO):** legado `messages` (só SELECT anon — aposentar, ver #15).
+    **FAMÍLIA 8 (legado `messages`) ✅ CONCLUÍDA — DROP** (migration `20260718090000`): tabela comprovadamente morta
+    (0 linhas, 0 FK de terceiros, 0 uso web/app, fora do realtime) → `DROP TABLE`. Fecha a #15. Substituída por `chat_*`.
+    **🏁 FASE B (BANCO) FECHADA — 8 famílias. TODA tabela de dados do schema `public` tem RLS real (ou foi aposentada).**
+    Só resta `sprint_*` em **`storage.objects` (3 policies = WP de STORAGE dedicado)** — nenhuma tabela de dados.
     **STORAGE (WP DEDICADO, PENDENTE — NÃO resolvido):** os BUCKETS `progress-photos` (público → tornar privado, mudança
     de contrato: path+signed URL) e `patient-documents` (privado, mas policy de `storage.objects` bucket-wide =
     `sprint_patient_documents_storage_read`/`_write` + `sprint_progress_photos_write`) seguem em sprint — ver #12. As
