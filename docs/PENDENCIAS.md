@@ -49,10 +49,13 @@
 12. **Storage privado + URL assinada.** ✅ **PARCIAL (S-DOCS):** os **exames/documentos** novos já vivem em
     bucket **PRIVADO** `patient-documents` (`public=false`) + `createSignedUrl` (TTL 10 min) na camada
     `api/documents.ts` (tabela `patient_documents`, migration `20260702230000`) — o EXAME/DOCUMENTO está
-    resolvido (o profissional envia, a equipe lê via link assinado no clique). **Ainda cru (dívida aberta):**
-    `progress_photos.photo_url` (bucket `progress-photos` PÚBLICO) e o legado `body_assessments.document_url`
-    (URL crua sob allowlist `isSafeDocumentUrl`, #18). Migrar essas duas fontes para o mesmo padrão (bucket
-    privado + signed URL) antes de publicar com dado real.
+    resolvido (o profissional envia, a equipe lê via link assinado no clique). **⬆️ WP-STORAGE-P1 (2026-07-10,
+    migration `20260720090000`): os DOIS buckets fecharam no BANCO** — `progress-photos` virou PRIVADO
+    (`public=false`, URL pública morta) e `storage.objects` ganhou RLS real escopada por path
+    `{patient_id}/...` (as 3 `sprint_*` bucket-wide saíram; anon zero). **Ainda cru (Parte 2, cross-repo):**
+    o app grava/lê `progress_photos.photo_url` como URL PÚBLICA (exibição de fotos QUEBRADA por design até
+    migrar app+web p/ path relativo + `createSignedUrl`, como `documents.ts`) e o legado
+    `body_assessments.document_url` (URL crua sob allowlist `isSafeDocumentUrl`, #18) segue aberto.
 
 13. **✅ RESOLVIDO (WP-APP-1, 2026-07-09).** ~~Salvar plano não é transacional.~~ `saveWorkoutPlan`/
     `saveNutritionPlan` faziam DELETE do plano anterior e depois INSERT do novo em vários passos → num erro
@@ -293,12 +296,14 @@
     (0 linhas, 0 FK de terceiros, 0 uso web/app, fora do realtime) → `DROP TABLE`. Fecha a #15. Substituída por `chat_*`.
     **🏁 FASE B (BANCO) FECHADA — 8 famílias. TODA tabela de dados do schema `public` tem RLS real (ou foi aposentada).**
     Só resta `sprint_*` em **`storage.objects` (3 policies = WP de STORAGE dedicado)** — nenhuma tabela de dados.
-    **STORAGE (WP DEDICADO, PENDENTE — NÃO resolvido):** os BUCKETS `progress-photos` (público → tornar privado, mudança
-    de contrato: path+signed URL) e `patient-documents` (privado, mas policy de `storage.objects` bucket-wide =
-    `sprint_patient_documents_storage_read`/`_write` + `sprint_progress_photos_write`) seguem em sprint — ver #12. As
-    TABELAS `progress_photos` (Fam2) e `patient_documents` (Fam5) já estão fechadas; falta fechar os BUCKETS/`storage.objects`.
+    **STORAGE (WP-STORAGE): PARTE 1 (BANCO) ✅ FECHADA (2026-07-10, migration `20260720090000`, aguardando auditoria) —
+    PARTE 2 (CROSS-REPO) PENDENTE:** `progress-photos` agora PRIVADO (`public=false`) e `storage.objects` com RLS real
+    por path `{patient_id}/...` (helper `private.storage_object_patient`; as 3 `sprint_*` bucket-wide ELIMINADAS; anon
+    zero; testes `supabase/tests/wp_storage2_p1_storage_objects_test.sql`). PENDENTE (Parte 2): app+web migrarem
+    `progress_photos.photo_url` de URL pública p/ path relativo + `createSignedUrl` (exibição de fotos QUEBRADA por
+    design até lá — sem dado real); ver EXECUTION_STATE (WP-STORAGE-P1) no CONTRATO.
     Owner-checks: (a) `Settings > API` expõe só `public`(+`graphql_public`), **`private` fora**; (b) remover os 2 objetos
-    demo `demo/mariana/*.png` via Storage API. Dívidas: Fam2 — `adherence_snapshots`/`muscle_recovery_states` gravadas pelo
+    demo `demo/mariana/*.png` via Storage API (órfãos e hoje inacessíveis a qualquer papel — sem urgência). Dívidas: Fam2 — `adherence_snapshots`/`muscle_recovery_states` gravadas pelo
     paciente (mover p/ engine server-side); Fam3 — prescrição não escopada por disciplina + `DÍVIDA-APP-1` (save
     DELETE+INSERT, RLS não piora); Fam4 — `sender_profile_id` vem do client (RLS amarra ao current_profile_id).
 
