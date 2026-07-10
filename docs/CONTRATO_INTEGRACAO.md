@@ -208,6 +208,196 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
   travar: `chat_*`, `activity_events`, `muscle_recovery_states`, `adherence_snapshots`, planos, etc.
   O realtime (`postgres_changes`) respeita as policies → fechar a RLS também fecha o que vaza ao vivo.
 
+## WP-05B · RLS REAL por família — DECISÕES + CONTRATO DE HELPERS
+
+**Decisões do dono (lei):**
+- **AUTH-ADMIN-1** — admin = **DONO** (`clinics.owner_profile_id`) **OU co-admin por MEMBERSHIP**
+  (`professionals.clinic_role='admin'`, coluna aditiva do WP-05B). **NUNCA** derivar admin de `profiles.role`
+  (mutável = auto-promoção). `clinic_role` é setável **só por admin** (RLS de `professionals`).
+- **AUTH-EXT-1** — profissional externo (`professional_patient_links.is_external=true`) vê o **MÍNIMO** do caso
+  (o paciente vinculado), nunca o acesso de um interno. No nível de identidade (Família 1) vê a linha-núcleo do
+  paciente + o próprio vínculo; a exclusão fina (documentos/avaliações/chat/agenda) é aplicada nas famílias de dados.
+- **AUTH-AGENDA-1** — profissional comum enxerga só paciente **VINCULADO** (nunca "mesma clínica").
+
+**Contrato de helpers (schema `private`, SECURITY DEFINER, `search_path=''`, EXECUTE só `authenticated`, NÃO exposto
+na Data API):** `current_profile_id()`, `current_patient_id()`, `owns_professional(uuid)`, `is_clinic_admin(uuid)`,
+`is_clinic_member(uuid)`, `is_self_patient(uuid)`, `patient_clinic(uuid)`,
+`is_common_professional_of_patient(uuid)`, `is_external_professional_of_patient(uuid)`, `can_access_patient(uuid)`,
+`can_see_profile(uuid)`. Por serem DEFINER, bypassam RLS ao ler as tabelas → **quebram a recursão**; por isso
+**NÃO usar `FORCE ROW LEVEL SECURITY`** nas tabelas que eles consultam. Nenhum corpo de policy referencia tabela
+com RLS diretamente — sempre via helper. Owner-check em `Settings > API`: schemas expostos = `public`(+`graphql_public`),
+`private` **fora** da lista.
+
+**EXECUTION_STATE (RLS-FAM1) = ✅ CONCLUÍDA (aguardando auditoria do dono).** Migrations
+`20260711093000_wp05b_fam1_coadmin` (aditiva) + `20260711094000_wp05b_fam1_auth_helpers` +
+`20260711095000_wp05b_fam1_identity_rls`, **versionadas e APLICADAS** via `apply_migration`. Substituiu as `sprint_*`
+das 5 tabelas de identidade (`profiles`, `professionals`, `patients`, `professional_patient_links`, `clinics`) por
+RLS real por papel/clínica/vínculo, com **SELECT+INSERT+UPDATE+DELETE** definidos e **imutabilidade de colunas
+sensíveis** via column privileges (`profiles.role/auth_user_id/status/email`; `clinics.owner_profile_id`;
+`patients.profile_id/clinic_id`; chaves do vínculo). `anon` sem acesso a nenhuma das 5; `service_role` mantém bypass
+(Edge). Testes Nível 1 (pgTAP-style, login simulado via `request.jwt.claims`, ROLLBACK) em
+`supabase/tests/wp05b_fam1_identity_test.sql` — **77 asserções verdes** (inclui mesma-clínica-não-basta, co-admin por
+membership, externo-mínimo, pending fail-closed, anon negado, e os 5 vetores de auto-promoção). Advisors: as 5 tabelas
+saíram das listas `rls_policy_always_true`; nenhum issue novo. **KILL SWITCH (fail-closed)** documentado no header de
+`20260711095000_wp05b_fam1_identity_rls.sql` (drop programático das policies da família → deny-all; NUNCA recriar
+`sprint_*`). **Famílias restantes (Agenda, Dados clínicos, Chat, Storage/Fotos) seguem em `sprint_*` — NÃO tocadas.**
+
+**EXECUTION_STATE (RLS-FAM2 · Comportamento do Paciente) = ✅ CONCLUÍDA (aguardando auditoria).** Migrations
+`20260712090000_wp05b_fam2_helpers` + `20260712091000_wp05b_fam2_behavior_rls`, versionadas e APLICADAS. RLS real
+por vínculo em 11 tabelas: `weight_logs`, `activity_events`, `activity_sessions`, `meal_logs`, `supplement_intakes`,
+`muscle_recovery_states`, `adherence_snapshots`, `workout_session_logs`, `workout_set_logs` (via pai
+`session_log_patient`), `progress_photos` (só metadado; bucket = família Storage), `body_assessments`. **Modelo:**
+self-logs → SELECT `can_access_patient` (inclui externo), escrita `is_self_patient` (**anti-forja**: `patient_id` vem
+do client, WITH CHECK amarra ao próprio). **`body_assessments` (clínico) → EXTERNO EXCLUÍDO** (`can_access_patient_internal`);
+escrita = prof comum vinculado/admin. `patient_id` imutável (append-only sem UPDATE; col-priv onde há UPDATE). Novos
+helpers: `session_log_patient`, `can_access_patient_internal`. Testes Nível 1 (`supabase/tests/wp05b_fam2_behavior_test.sql`):
+suite verde — isolamento paciente-paciente nas 11, forja de `patient_id` negada (todas), via-pai negada, não-vinculado
+negado, externo-mínimo (vê behavioral, NÃO vê `body_assessments`), reescrita de `patient_id` negada, anon negado, IDOR.
+Advisors: as 11 saíram de `rls_policy_always_true`. **Cross-repo:** app grava sempre o próprio `patient_id`
+(compatível sob login real; demo/anon quebra por design); web só LÊ o comportamental e ESCREVE `body_assessments`.
+Kill switch (deny-all) no header da migration de policies. **Bucket de Storage NÃO alterado.** Dívida:
+`adherence_snapshots`/`muscle_recovery_states` são gravadas pelo paciente (contrato atual) — idealmente engine
+server-side no futuro (paciente poderia inflar o próprio score). Famílias restantes: **Agenda, Dados clínicos/planos,
+Chat, Storage/Fotos** seguem em `sprint_*`.
+
+**EXECUTION_STATE (RLS-FAM3 · Prescrição) = ✅ CONCLUÍDA (aguardando auditoria).** Migrations
+`20260713090000_wp05b_fam3_helpers` + `20260713091000_wp05b_fam3_prescription_rls`, versionadas e APLICADAS. **EIXO
+INVERTIDO** (profissional prescreve, paciente só LÊ) em 6 tabelas: `workout_plans`, `workouts` (via
+`workout_plan_patient`), `workout_exercises` (via `workout_patient`), `nutrition_plans`, `meals` (via
+`nutrition_plan_patient`), `supplements`. **SELECT** = `can_access_patient_internal` (paciente dono + prof comum
+vinculado + admin; **EXTERNO EXCLUÍDO** das prescrições — AUTH-EXT-1, consistente c/ `body_assessments`).
+**INSERT/UPDATE/DELETE** = `can_prescribe_for_patient` (prof comum vinculado OU admin) — o **PACIENTE NÃO ESCREVE**
+(negativo central da família). `patient_id`/plan-fk imutáveis (col-priv). Coerência: `supplements` (prescrição) ↔
+`supplement_intakes` (tomada, Fam2). Helpers novos: `workout_plan_patient`, `workout_patient`, `nutrition_plan_patient`,
+`can_prescribe_for_patient`. Testes `supabase/tests/wp05b_fam3_prescription_test.sql` (suite verde: paciente-não-edita,
+isolamento via-pai, prescrição p/ não-vinculado negada, reescrita de patient_id/plan_id negada, externo excluído, anon,
+IDOR). Advisors: as 6 saíram de `rls_policy_always_true`. **Cross-repo:** web prescreve (`planMutations.ts`,
+`supplements.ts`); app só LÊ (nenhuma escrita nas 6). **DÍVIDA-APP-1** (save = DELETE+INSERT não-transacional): a RLS
+**não piora** — p/ prof não-vinculado o DELETE afeta 0 linhas e o INSERT é negado (falha limpa). Storage NÃO tocado.
+Famílias restantes: **Agenda, Chat, Storage/Fotos (buckets), notificações/gamificação, legado `messages`.**
+
+**EXECUTION_STATE (RLS-FAM4 · Chat) = ✅ CONCLUÍDA (aguardando auditoria).** Migrations
+`20260714090000_wp05b_fam4_helpers` + `20260714091000_wp05b_fam4_chat_rls`, versionadas e APLICADAS. Autorização por
+**PARTICIPAÇÃO** (não por patient_id) em 4 tabelas: `chat_channels`, `chat_participants`, `chat_messages`,
+`chat_mentions`. Contrato real: canal por-paciente (`chat_channels.patient_id → patients.id`, unique); participante =
+`chat_participants.profile_id`; remetente = `chat_messages.sender_profile_id` (NÃO há `sender_professional_id`).
+**REALTIME:** `chat_messages`/`chat_mentions` estão em `supabase_realtime` → o Realtime aplica a RLS de SELECT; logo
+`SELECT = can_read_channel` **FECHA o push** (não-participante que assine NÃO recebe — provado por `P2_REALTIME_NEG_CX`).
+Modelo: SELECT `can_read_channel` (participante **OU admin da clínica** do canal — AUTH-ADMIN-1, decisão reportada);
+`chat_messages` INSERT = participante **E** `sender_profile_id = current_profile_id()` (**anti-forja de remetente**),
+APPEND-ONLY (sem UPDATE/DELETE → `channel_id`/sender imutáveis); `chat_participants` geridos por prof vinculado/admin
+(**anti-join**; app não escreve participants); `chat_mentions` `read_at` só pelo próprio mencionado. Admin **lê** por
+oversight mas **NÃO envia** (envio exige ser participante). Helpers: `is_channel_participant`, `channel_patient`,
+`can_read_channel`, `can_manage_channel`, `message_channel`. Testes `supabase/tests/wp05b_fam4_chat_test.sql` (suite
+verde: realtime-negado, forja-remetente, canal-alheio, auto-join, mover-mensagem, menção-alheia, isolamento-clínica,
+anon, IDOR). Advisors: as 4 saíram de `rls_policy_always_true`. **Cross-repo:** web (`useChat.ts`/`chat.ts`) e app
+(`chat.ts`) enviam com `sender_profile_id = identidade própria` (amarrado pelo WITH CHECK); web assina `postgres_changes`
+em `chat_messages` filtrado por canal (governado pela RLS de SELECT). **KILL SWITCH:** deny-all nas 4 TAMBÉM desliga o
+realtime (fail-closed correto). Storage NÃO tocado. Dívida: `sender_profile_id` vem do client (a RLS amarra ao
+current_profile_id; endurecimento futuro = default/trigger server-side). Famílias restantes: **Agenda, Storage/Fotos
+(buckets + tabela `patient_documents`), notificações/gamificação, legado `messages`.**
+
+**EXECUTION_STATE (RLS-FAM5 · Documentos) = ✅ CONCLUÍDA (aguardando auditoria).** Migration
+`20260715090000_wp05b_fam5_patient_documents_rls` (versionada e APLICADA). ESCOPO: **SÓ a TABELA `patient_documents`**
+(metadado) — bucket/`storage.objects` **NÃO tocados**. `patient_id` direto; autoria `uploaded_by_role`/
+`uploaded_by_professional_id`; `file_path` = caminho no bucket privado (não tocado). SELECT `can_access_patient_internal`
+(paciente dono + prof comum vinculado + admin; **EXTERNO EXCLUÍDO** — documento clínico); INSERT/UPDATE/DELETE
+`can_prescribe_for_patient` (prof vinculado/admin — **paciente NÃO escreve**: app não consome documentos, verificado por
+grep). `patient_id`/`file_path` imutáveis (col-priv). Testes `supabase/tests/wp05b_fam5_documents_test.sql` (suite verde:
+isolamento X⟂Y, não-vinculado negado, externo excluído, paciente-não-sobe, reescrita de patient_id negada, anon, IDOR).
+Advisors: `patient_documents` saiu de `rls_policy_always_true`. Cross-repo: web escreve+lê (`documents.ts`, DocumentsTab);
+app NÃO consome documentos. **A exibição atual NÃO quebra** (a signed URL do arquivo depende da policy de `storage.objects`,
+que segue intacta). **DEPENDÊNCIA / STORAGE PENDENTE:** o bucket privado `patient-documents` continua com a policy sprint
+bucket-wide (`sprint_patient_documents_storage_read`) — qualquer authenticated ainda pode ASSINAR uma URL se souber o
+`file_path`; fechar a tabela reduz a exposição (não dá p/ enumerar `file_path`) mas o BUCKET só fecha no **WP de Storage
+dedicado**. Kill switch = deny-all na tabela (nunca sprint_*). Famílias restantes: **Agenda, Storage (buckets
+`progress-photos`+`patient-documents`), notificações/gamificação, legado `messages`.**
+
+**EXECUTION_STATE (RLS-FAM6 · Agenda/Clínica) = ✅ CONCLUÍDA (aguardando auditoria).** Migrations
+`20260716090000_wp05b_fam6_helpers` + `20260716091000_wp05b_fam6_agenda_clinic_rls`. **DUAS CHAVES:**
+- **appointments (chave PACIENTE, AUTH-AGENDA-1):** SELECT = admin-da-clínica OU (paciente vinculado, prof comum) OU
+  (prof ATRIBUÍDO lê a sua consulta); WRITE = admin OU (paciente vinculado) OU (bloco sem paciente do próprio prof) —
+  **não auto-atribui a paciente não-vinculado** (mesma clínica NÃO basta). **Paciente e EXTERNO EXCLUÍDOS** (app não
+  consome agenda; `notes` sensível). `patient_id`/`clinic_id` imutáveis.
+- **campaigns (chave CLÍNICA):** SELECT = staff da clínica (admin+profissionais; **paciente NÃO vê**); escrita = admin.
+- **calendar_connections / calendar_event_cache (chave CLÍNICA/PROF):** **SELECT-only p/ client** (dono da conexão OU
+  admin); **Edge (service_role) escreve**. `calendar_event_cache` escopado ao **dono da conexão** → **fecha a porta
+  lateral do Google** (quem não veria a consulta também não vê o cache do outro profissional — provado por `P2_SIDEDOOR_cache0`).
+- **`calendar_connection_tokens` + `calendar_oauth_state`: deny-all mantido** (sem policy nem grant; tokens nunca ao
+  client) — **NÃO tocados**.
+Helpers: `is_clinic_staff`, `owns_calendar_connection`. Testes `supabase/tests/wp05b_fam6_agenda_test.sql` (suite verde:
+não-vinculado⟂agenda, cache-side-door fechado, campanhas só staff, tokens inacessíveis, isolamento clínica,
+reescrita patient_id/clinic_id negada, anon, IDOR). Advisors: `appointments` saiu de `rls_policy_always_true`.
+Cross-repo: web escreve appointments (`appointments.ts`); NÃO escreve campaigns/calendar_* (Edge do Google usa
+service_role → bypass, não quebra); app NÃO consome agenda. Storage NÃO tocado. Famílias restantes: **Storage
+(buckets), notificações/gamificação (`notifications`/`patient_achievements`), catálogo `achievements`, legado `messages`.**
+
+**EXECUTION_STATE (RLS-FAM7 · Gamificação/Notificações) = ✅ CONCLUÍDA (aguardando auditoria).** Migration
+`20260717090000_wp05b_fam7_gamification_rls` (sem helper novo). **TRÊS MODELOS:**
+- **`achievements` (CATÁLOGO, sem patient_id):** SELECT p/ qualquer authenticated (`achievements_catalog_read`,
+  **anon negado** — fecha o catálogo anon-open que sobrava); **escrita de ninguém pelo client** (sem policy + revoke;
+  só service_role/migration). Os 12 itens do catálogo (dado preservado na Fase A) intactos.
+- **`patient_achievements`:** SELECT `can_access_patient_internal` (paciente dono + prof comum vinculado + admin;
+  **EXTERNO EXCLUÍDO**); INSERT `is_self_patient` (**anti-forja**: só desbloqueia p/ si); **append-only** (sem UPDATE/
+  DELETE; `patient_id` imutável). **DÍVIDA (não resolvida): desbloqueio é CLIENT-SIDE** (app faz `upsert` —
+  `achievements.ts`), então o paciente pode inflar a própria gamificação (mesma classe do VRI/adherence da Fam2);
+  idealmente engine server-side.
+- **`notifications`:** SELECT/UPDATE **só o DESTINATÁRIO** (`is_self_patient`; prof/admin NÃO veem a caixa pessoal);
+  UPDATE **só `read_at`** (col-priv; não edita título/corpo/tipo); INSERT/DELETE do client **negado** (emissor =
+  seed/server-side; criar emissor real é dívida à parte). App só marca `read_at` (`notifications.ts`).
+Testes `supabase/tests/wp05b_fam7_gamification_test.sql` (suite verde: catálogo read-only-client, forja-de-conquista
+negada, notificação-alheia negada, read_at-only, isolamento, externo, anon, IDOR). **Advisors: `rls_policy_always_true`
+agora VAZIO** (`notifications`/`patient_achievements` eram os últimos). Storage NÃO tocado. Famílias restantes: **apenas
+o WP de Storage (buckets `progress-photos`/`patient-documents` + `storage.objects`) e o legado `messages` (aposentar, #15).**
+
+**EXECUTION_STATE (RLS-FAM8 · legado `messages`) = ✅ CONCLUÍDA (aguardando auditoria).** Migration
+`20260718090000_wp05b_fam8_drop_legacy_messages`. **VEREDITO da prova = MORTA → DROP (Caminho A):** 0 linhas,
+**0 FK de terceiros**, **0 uso no web e no app** (único match = um comentário em `types/db.ts`), fora do realtime —
+substituída pelo `chat_*` (Família 4). `DROP TABLE public.messages` (idempotente; guard `if exists`). Rollback no
+header = recriar a tabela vazia (CREATE original do base_schema). **DÍVIDA #15 FECHADA.** Verificação: `messages` não
+existe mais; tabelas public 39→38; nenhuma policy/publicação referencia `messages`; **build verde** (prova indireta de
+que o web não a usava); advisors sem regressão (`rls_policy_always_true` segue VAZIO). `chat_*`/Storage/demais NÃO tocados.
+
+---
+
+## 🏁 FECHAMENTO DA FASE B (BANCO) — 8 FAMÍLIAS
+
+Toda tabela de DADOS do schema `public` agora tem **RLS real por papel/clínica/vínculo/participação** (ou foi
+aposentada). Helpers de autorização vivem em `private` (SECURITY DEFINER, `search_path=''`, execute só `authenticated`,
+fora da Data API). anon negado em tudo; `service_role` mantém bypass (Edge Functions).
+
+| # | Família | Tabelas | Chave |
+|---|---|---|---|
+| 1 | Identidade | profiles, professionals, patients, professional_patient_links, clinics | papel/posse/vínculo |
+| 2 | Comportamento | weight_logs, activity_events/sessions, meal_logs, supplement_intakes, muscle_recovery_states, adherence_snapshots, workout_session_logs, workout_set_logs, progress_photos(tabela), body_assessments | paciente (self-write) |
+| 3 | Prescrição | workout_plans, workouts, workout_exercises, nutrition_plans, meals, supplements | prof prescreve, paciente lê |
+| 4 | Chat | chat_channels, chat_participants, chat_messages, chat_mentions | participação (realtime) |
+| 5 | Documentos | patient_documents (só a tabela) | clínico (externo excluído) |
+| 6 | Agenda/Clínica | appointments, campaigns, calendar_connections, calendar_event_cache | paciente + clínica |
+| 7 | Gamificação/Notif | achievements(catálogo), patient_achievements, notifications | 3 modelos |
+| 8 | Legado | messages | **DROP** (morta) |
+
+**`sprint_*` remanescentes = 3, APENAS em `storage.objects`** (nenhuma tabela de dados). `calendar_connection_tokens`/
+`calendar_oauth_state`/`schema_migration_log`/`auth_trigger_events` = deny-all intencional.
+**FALTA PARA O RELEASE GATE: o WP de STORAGE** (`storage.objects`: bucket `progress-photos` público→privado com
+path+signed URL; bucket `patient-documents` bucket-wide → fechar por pasta=patient_id).
+
+**DÍVIDAS CONSOLIDADAS EM ABERTO (para o dono):**
+- **STORAGE-2** — buckets `progress-photos` (público) e `patient-documents` (bucket-wide) ainda em `sprint_*` (WP dedicado).
+- **RLS-2 (métricas client-side)** — VRI/`adherence_snapshots`, `muscle_recovery_states` e `patient_achievements` são
+  gravados/desbloqueados pelo paciente no client → inflável; mover p/ engine server-side.
+- **APP-1** — web `createPatient` (insere `profiles` direto, negado pela RLS de identidade) e `save*Plan` DELETE+INSERT
+  não-transacional → mover p/ provisionamento/RPC server-side (PENDENCIAS #28/#16).
+- **AUTH-4 (promoção)** — promover `pending`→`professional` exige mecanismo confiável server-side (não default).
+- **AUTH-#22** — cifrar `refresh_token` do Google em repouso (`calendar_connection_tokens`).
+- **Owner-checks** — `Settings > API` expor só `public`(+`graphql_public`), `private` FORA; remover 2 objetos demo
+  `demo/mariana/*.png` via Storage API.
+
+**Consequência no app web (dívida, fora do escopo desta família):** `createPatient` (`src/lib/api/patients.ts`)
+insere `profiles` direto → agora **negado** (profile nasce via trigger `handle_new_user`). Fluxo precisa migrar para
+provisionamento server-side (Edge Function `service_role`) ou convite. Gates (typecheck/lint/build) seguem verdes
+(é comportamento de runtime). Ver PENDENCIAS.
+
 ## Pendências cross-repo
 - **#1** esquema de recuperação muscular (provisório `recovered/weakened`; confirmar c/ Juliana).
 - **#3** pesos do VRI (provisórios; web só lê snapshots). Baseline convergente da Mariana =

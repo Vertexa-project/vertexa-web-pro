@@ -152,13 +152,10 @@
       nunca logar. O select de **paciente** no diálogo usa `useListPatients()` (não escopado por clínica,
       igual ao resto do app) — fechar junto (criar `listClinicPatients`).
 
-15. **Aposentar a tabela legada `messages` (web e app já alinhados em `chat_*`).** Tanto a web (Etapa 3)
-    quanto o app paciente (TeamChat) leem/escrevem direto em `chat_messages`/`chat_mentions` com realtime
-    — o app NUNCA usou a `messages` legada (era 100% mock antes). Logo a `messages` só sobrevive por causa
-    do backfill da Etapa 2 e do `supabase/seed.sql` (que ainda insere 2 linhas nela). Pendência (não
-    bloqueante): migrar o seed para `chat_*` e dropar `messages` quando ninguém mais depender dela.
-    Remetente da web em modo demo = profile fixo da Dra. Camila via `VITE_DEMO_PROFESSIONAL_PROFILE_ID`;
-    sob auth real vira `auth.uid()` (ver #14).
+15. **✅ RESOLVIDO (WP-05B Fam8, 2026-07-11) — tabela legada `messages` APOSENTADA (DROP).** Prova: 0 linhas
+    (purgada na Fase A), 0 FK de terceiros, 0 uso no web e no app (só um comentário em `types/db.ts`), fora do
+    realtime → MORTA. Migration `20260718090000_wp05b_fam8_drop_legacy_messages` fez `DROP TABLE public.messages`
+    (rollback = recriar vazia, no header). Substituída por `chat_*` (Família 4, já com RLS real). Nada mais depende dela.
 
 16. **`createPatient` não é transacional (Sessão 4).** O cadastro encadeia 4 inserts
     (`profiles` → `patients` → `professional_patient_links` → `body_assessments`) sem transação. Um
@@ -252,3 +249,60 @@
     aquecimento (conteúdo estático) → o sinal aparece honestamente como "sem dados" e **fica pendente até existir
     um módulo de mobilidade no app** que persista os dados. Nenhum threshold é bloqueante para a demo (só seed
     fictício), mas todos precisam do aval da Juliana antes de virar régua clínica real.
+
+27. **WP-05B RLS real — FAMÍLIA 1 (Identidade) ✅ CONCLUÍDA; famílias restantes pendentes.** As 5 tabelas de
+    identidade (`profiles`, `professionals`, `patients`, `professional_patient_links`, `clinics`) agora têm **RLS real
+    por papel/clínica/vínculo** (fecha a parte de IDENTIDADE das #11–#14). Migrations `20260711093000` (co-admin
+    aditiva) + `20260711094000` (helpers `private.*`) + `20260711095000` (policies), branch `feat/rls-real-web`,
+    aguardando auditoria do dono. Testes Nível 1 verdes (`supabase/tests/wp05b_fam1_identity_test.sql`). Decisões
+    AUTH-ADMIN-1/EXT-1/AGENDA-1 e contrato de helpers em `CONTRATO_INTEGRACAO.md`.
+    **FAMÍLIA 2 (Comportamento do Paciente) ✅ CONCLUÍDA** (migrations `20260712090000` helpers + `20260712091000`
+    policies): RLS real por vínculo em `weight_logs`, `activity_events`, `activity_sessions`, `meal_logs`,
+    `supplement_intakes`, `muscle_recovery_states`, `adherence_snapshots`, `workout_session_logs`, `workout_set_logs`,
+    `progress_photos` (só metadado), `body_assessments` (externo excluído). Escrita `is_self_patient` (anti-forja);
+    testes `supabase/tests/wp05b_fam2_behavior_test.sql`.
+    **FAMÍLIA 3 (Prescrição — eixo invertido) ✅ CONCLUÍDA** (migrations `20260713090000` helpers + `20260713091000`
+    policies): RLS real em `workout_plans`, `workouts`, `workout_exercises`, `nutrition_plans`, `meals`, `supplements`.
+    Profissional vinculado/admin PRESCREVE (`can_prescribe_for_patient`); **paciente só LÊ** (`can_access_patient_internal`,
+    externo excluído). patient_id/plan_id imutáveis; testes `supabase/tests/wp05b_fam3_prescription_test.sql`.
+    **FAMÍLIA 4 (Chat — por participação; realtime) ✅ CONCLUÍDA** (migrations `20260714090000` helpers + `20260714091000`
+    policies): RLS real em `chat_channels`, `chat_participants`, `chat_messages`, `chat_mentions` por PARTICIPAÇÃO
+    (`can_read_channel`). SELECT fecha o REALTIME (não-participante não recebe); INSERT de mensagem = participante +
+    `sender_profile_id = current_profile_id()` (anti-forja); admin lê por oversight mas não envia; testes
+    `supabase/tests/wp05b_fam4_chat_test.sql`.
+    **FAMÍLIA 5 (Documentos) ✅ CONCLUÍDA** (migration `20260715090000`): RLS real na TABELA `patient_documents`
+    (metadado). SELECT `can_access_patient_internal` (externo excluído); escrita `can_prescribe_for_patient` (paciente
+    não sobe); patient_id/file_path imutáveis; testes `supabase/tests/wp05b_fam5_documents_test.sql`. **Bucket NÃO tocado.**
+    **FAMÍLIA 6 (Agenda/Clínica — duas chaves) ✅ CONCLUÍDA** (migrations `20260716090000` helpers + `20260716091000`
+    policies): RLS real em `appointments` (chave PACIENTE/AUTH-AGENDA-1: vínculo, não clínica; paciente/externo excluídos;
+    `notes` sensível), `campaigns` (chave CLÍNICA: staff lê, admin escreve; paciente não vê), `calendar_connections`/
+    `calendar_event_cache` (SELECT-only: dono da conexão+admin; Edge escreve; **cache fecha a porta lateral do Google**).
+    `calendar_connection_tokens`/`calendar_oauth_state` seguem **deny-all** (não tocados). Testes
+    `supabase/tests/wp05b_fam6_agenda_test.sql`.
+    **FAMÍLIA 7 (Gamificação/Notificações — três modelos) ✅ CONCLUÍDA** (migration `20260717090000`): RLS real em
+    `achievements` (CATÁLOGO: SELECT authenticated, anon negado; escrita de ninguém pelo client — os 12 itens intactos),
+    `patient_achievements` (SELECT `can_access_patient_internal` externo excluído; INSERT `is_self_patient` anti-forja;
+    append-only; **dívida: desbloqueio client-side = paciente pode inflar gamificação, mover p/ engine server-side**),
+    `notifications` (SELECT/UPDATE só o destinatário; UPDATE só `read_at`; INSERT/DELETE negado — emissor server-side).
+    Testes `supabase/tests/wp05b_fam7_gamification_test.sql`. **Advisors: `rls_policy_always_true` VAZIO.**
+    **FAMÍLIA 8 (legado `messages`) ✅ CONCLUÍDA — DROP** (migration `20260718090000`): tabela comprovadamente morta
+    (0 linhas, 0 FK de terceiros, 0 uso web/app, fora do realtime) → `DROP TABLE`. Fecha a #15. Substituída por `chat_*`.
+    **🏁 FASE B (BANCO) FECHADA — 8 famílias. TODA tabela de dados do schema `public` tem RLS real (ou foi aposentada).**
+    Só resta `sprint_*` em **`storage.objects` (3 policies = WP de STORAGE dedicado)** — nenhuma tabela de dados.
+    **STORAGE (WP DEDICADO, PENDENTE — NÃO resolvido):** os BUCKETS `progress-photos` (público → tornar privado, mudança
+    de contrato: path+signed URL) e `patient-documents` (privado, mas policy de `storage.objects` bucket-wide =
+    `sprint_patient_documents_storage_read`/`_write` + `sprint_progress_photos_write`) seguem em sprint — ver #12. As
+    TABELAS `progress_photos` (Fam2) e `patient_documents` (Fam5) já estão fechadas; falta fechar os BUCKETS/`storage.objects`.
+    Owner-checks: (a) `Settings > API` expõe só `public`(+`graphql_public`), **`private` fora**; (b) remover os 2 objetos
+    demo `demo/mariana/*.png` via Storage API. Dívidas: Fam2 — `adherence_snapshots`/`muscle_recovery_states` gravadas pelo
+    paciente (mover p/ engine server-side); Fam3 — prescrição não escopada por disciplina + `DÍVIDA-APP-1` (save
+    DELETE+INSERT, RLS não piora); Fam4 — `sender_profile_id` vem do client (RLS amarra ao current_profile_id).
+
+28. **web `createPatient` incompatível com a RLS de identidade (dívida introduzida pela Família 1; relacionada à #16).**
+    `src/lib/api/patients.ts` cria paciente inserindo `profiles` direto (role='patient') + `patients` +
+    `professional_patient_links`. Sob a RLS real: `profiles` INSERT é **negado** ao client (profile nasce via trigger
+    `handle_new_user`); `patients` INSERT e o vínculo exigem **admin da clínica**. Efeito: o fluxo de "cadastrar
+    paciente" pela web para de funcionar sob login real. **Correção (fora do escopo da Família 1):** mover para
+    provisionamento server-side (Edge Function `service_role`, resolvendo também a #16 transacional) ou fluxo de
+    convite (paciente cria o próprio profile no 1º login; admin vincula). Gates (typecheck/lint/build) seguem verdes
+    (é comportamento de runtime, não de build).
