@@ -297,6 +297,22 @@ realtime (fail-closed correto). Storage NÃO tocado. Dívida: `sender_profile_id
 current_profile_id; endurecimento futuro = default/trigger server-side). Famílias restantes: **Agenda, Storage/Fotos
 (buckets + tabela `patient_documents`), notificações/gamificação, legado `messages`.**
 
+**EXECUTION_STATE (RLS-FAM5 · Documentos) = ✅ CONCLUÍDA (aguardando auditoria).** Migration
+`20260715090000_wp05b_fam5_patient_documents_rls` (versionada e APLICADA). ESCOPO: **SÓ a TABELA `patient_documents`**
+(metadado) — bucket/`storage.objects` **NÃO tocados**. `patient_id` direto; autoria `uploaded_by_role`/
+`uploaded_by_professional_id`; `file_path` = caminho no bucket privado (não tocado). SELECT `can_access_patient_internal`
+(paciente dono + prof comum vinculado + admin; **EXTERNO EXCLUÍDO** — documento clínico); INSERT/UPDATE/DELETE
+`can_prescribe_for_patient` (prof vinculado/admin — **paciente NÃO escreve**: app não consome documentos, verificado por
+grep). `patient_id`/`file_path` imutáveis (col-priv). Testes `supabase/tests/wp05b_fam5_documents_test.sql` (suite verde:
+isolamento X⟂Y, não-vinculado negado, externo excluído, paciente-não-sobe, reescrita de patient_id negada, anon, IDOR).
+Advisors: `patient_documents` saiu de `rls_policy_always_true`. Cross-repo: web escreve+lê (`documents.ts`, DocumentsTab);
+app NÃO consome documentos. **A exibição atual NÃO quebra** (a signed URL do arquivo depende da policy de `storage.objects`,
+que segue intacta). **DEPENDÊNCIA / STORAGE PENDENTE:** o bucket privado `patient-documents` continua com a policy sprint
+bucket-wide (`sprint_patient_documents_storage_read`) — qualquer authenticated ainda pode ASSINAR uma URL se souber o
+`file_path`; fechar a tabela reduz a exposição (não dá p/ enumerar `file_path`) mas o BUCKET só fecha no **WP de Storage
+dedicado**. Kill switch = deny-all na tabela (nunca sprint_*). Famílias restantes: **Agenda, Storage (buckets
+`progress-photos`+`patient-documents`), notificações/gamificação, legado `messages`.**
+
 **Consequência no app web (dívida, fora do escopo desta família):** `createPatient` (`src/lib/api/patients.ts`)
 insere `profiles` direto → agora **negado** (profile nasce via trigger `handle_new_user`). Fluxo precisa migrar para
 provisionamento server-side (Edge Function `service_role`) ou convite. Gates (typecheck/lint/build) seguem verdes
