@@ -24,55 +24,34 @@ export interface SaveWorkoutPlanInput {
   workouts: WorkoutInput[];
 }
 
-/** Cria o plano de treino e SUBSTITUI o anterior do paciente (apenas 1 ativo na sprint). */
+/**
+ * Cria o plano de treino e SUBSTITUI o anterior do paciente (apenas 1 ativo na sprint).
+ * Escreve pela RPC SECURITY DEFINER `save_workout_plan` (WP-APP-1): o DELETE+INSERT vira
+ * UMA transação atômica no servidor (erro no meio → plano antigo intacto; sem plano parcial)
+ * e a autorização é revalidada via can_prescribe_for_patient (vínculo/admin). day_index/
+ * order_index são derivados server-side pela ordem do array. professionalId não é enviado:
+ * o servidor resolve o autor pelo próprio chamador.
+ */
 export async function saveWorkoutPlan(input: SaveWorkoutPlanInput): Promise<void> {
-  const { error: delErr } = await supabase
-    .from("workout_plans")
-    .delete()
-    .eq("patient_id", input.patientId);
-  if (delErr) throw delErr;
-
-  const { data: plan, error: planErr } = await supabase
-    .from("workout_plans")
-    .insert({
-      patient_id: input.patientId,
-      professional_id: input.professionalId,
-      title: input.title,
-      goal: input.goal,
-    })
-    .select("id")
-    .single();
-  if (planErr) throw planErr;
-
-  for (const [i, w] of input.workouts.entries()) {
-    const { data: workout, error: wErr } = await supabase
-      .from("workouts")
-      .insert({
-        workout_plan_id: plan.id,
-        letter: w.letter,
-        name: w.name,
-        primary_muscle_group: w.primary_muscle_group,
-        day_index: i + 1,
-        estimated_minutes: w.estimated_minutes,
-      })
-      .select("id")
-      .single();
-    if (wErr) throw wErr;
-
-    if (w.exercises.length > 0) {
-      const rows = w.exercises.map((ex, j) => ({
-        workout_id: workout.id,
+  const { error } = await supabase.rpc("save_workout_plan", {
+    p_patient_id: input.patientId,
+    p_title: input.title,
+    p_goal: input.goal,
+    p_workouts: input.workouts.map((w) => ({
+      letter: w.letter,
+      name: w.name,
+      primary_muscle_group: w.primary_muscle_group,
+      estimated_minutes: w.estimated_minutes,
+      exercises: w.exercises.map((ex) => ({
         name: ex.name,
         muscle_groups: ex.muscle_groups,
         sets: ex.sets,
         reps: ex.reps,
         load_kg: ex.load_kg,
-        order_index: j + 1,
-      }));
-      const { error: exErr } = await supabase.from("workout_exercises").insert(rows);
-      if (exErr) throw exErr;
-    }
-  }
+      })),
+    })),
+  });
+  if (error) throw error;
 }
 
 export interface MealInput {
@@ -89,36 +68,21 @@ export interface SaveNutritionPlanInput {
   meals: MealInput[];
 }
 
-/** Cria o plano alimentar e SUBSTITUI o anterior do paciente. */
+/**
+ * Cria o plano alimentar e SUBSTITUI o anterior do paciente.
+ * Escreve pela RPC SECURITY DEFINER `save_nutrition_plan` (WP-APP-1): DELETE+INSERT atômico no
+ * servidor (sem plano parcial) e autorização revalidada via can_prescribe_for_patient.
+ */
 export async function saveNutritionPlan(input: SaveNutritionPlanInput): Promise<void> {
-  const { error: delErr } = await supabase
-    .from("nutrition_plans")
-    .delete()
-    .eq("patient_id", input.patientId);
-  if (delErr) throw delErr;
-
-  const { data: plan, error: planErr } = await supabase
-    .from("nutrition_plans")
-    .insert({
-      patient_id: input.patientId,
-      professional_id: input.professionalId,
-      title: input.title,
-      status: "active",
-    })
-    .select("id")
-    .single();
-  if (planErr) throw planErr;
-
-  if (input.meals.length > 0) {
-    const rows = input.meals.map((m, i) => ({
-      nutrition_plan_id: plan.id,
+  const { error } = await supabase.rpc("save_nutrition_plan", {
+    p_patient_id: input.patientId,
+    p_title: input.title,
+    p_meals: input.meals.map((m) => ({
       time: m.time,
       name: m.name,
       items: m.items,
       calories: m.calories,
-      order_index: i + 1,
-    }));
-    const { error: mErr } = await supabase.from("meals").insert(rows);
-    if (mErr) throw mErr;
-  }
+    })),
+  });
+  if (error) throw error;
 }

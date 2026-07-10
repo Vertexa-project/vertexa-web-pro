@@ -54,10 +54,13 @@
     (URL crua sob allowlist `isSafeDocumentUrl`, #18). Migrar essas duas fontes para o mesmo padrão (bucket
     privado + signed URL) antes de publicar com dado real.
 
-13. **Salvar plano não é transacional.** `saveWorkoutPlan`/`saveNutritionPlan` fazem DELETE do plano
-    anterior e depois INSERT do novo (treinos/exercícios/refeições em vários passos). Se falhar no
-    meio, o plano antigo já foi apagado e o novo fica parcial. Mover para uma RPC/transação (Postgres
-    function `SECURITY DEFINER`) antes de uso real, para o app paciente nunca ler um plano inconsistente.
+13. **✅ RESOLVIDO (WP-APP-1, 2026-07-09).** ~~Salvar plano não é transacional.~~ `saveWorkoutPlan`/
+    `saveNutritionPlan` faziam DELETE do plano anterior e depois INSERT do novo em vários passos → num erro
+    no meio o plano antigo já ia embora e o novo ficava parcial. Agora escrevem pelas RPCs SECURITY DEFINER
+    **`save_workout_plan`/`save_nutrition_plan`** (migration `20260719090000`): o DELETE+INSERT é UMA transação
+    atômica no servidor (erro no meio ⇒ plano antigo INTACTO). Autorização revalidada por
+    `private.can_prescribe_for_patient`. Provado por teste de atomicidade em `wp_app1_provisioning_test.sql`.
+    Ver EXECUTION_STATE (WP-APP-1) no `CONTRATO_INTEGRACAO.md`.
 
 14. **Checklist de segurança ANTES de dados reais (produção) — BLOQUEANTE.** Hoje a sprint roda com
     RLS permissiva (`using(true)`) + modo demo, só com seed fictício. Antes de qualquer paciente real:
@@ -157,12 +160,13 @@
     realtime → MORTA. Migration `20260718090000_wp05b_fam8_drop_legacy_messages` fez `DROP TABLE public.messages`
     (rollback = recriar vazia, no header). Substituída por `chat_*` (Família 4, já com RLS real). Nada mais depende dela.
 
-16. **`createPatient` não é transacional (Sessão 4).** O cadastro encadeia 4 inserts
-    (`profiles` → `patients` → `professional_patient_links` → `body_assessments`) sem transação. Um
-    erro no meio deixa um `profile` de paciente (dado pessoal) órfão, sem patient/vínculo e sem caminho
-    de UI para limpar (a web não tem DELETE). Igual à dívida #13 dos planos: mover para uma RPC/transação
-    (`SECURITY DEFINER`, begin/commit) antes de cadastro real — isso também resolve o isolamento (#14).
-    Hoje OK só com seed fictício.
+16. **✅ RESOLVIDO (WP-APP-1, 2026-07-09).** ~~`createPatient` não é transacional (Sessão 4).~~ O cadastro
+    encadeava 4 inserts (`profiles` → `patients` → `professional_patient_links` → `body_assessments`) sem
+    transação → erro no meio deixava um `profile` de paciente órfão. Agora chama a RPC SECURITY DEFINER
+    **`create_patient`** (migration `20260719090000`): o provisionamento inteiro é atômico e a autorização
+    (chamador = profissional/admin da clínica-alvo) é revalidada no servidor — o que também **resolve o
+    isolamento por clínica** que a #14 pedia (o `clinic_id`/vínculo não vêm mais só do client). Ver #28 e o
+    EXECUTION_STATE (WP-APP-1) no `CONTRATO_INTEGRACAO.md`.
 
 17. **`listPatients` lê embeds sem limite (perf pré-produção).** O `select` da listagem embute
     `activity_events`, `weight_logs(measured_at)` e `progress_photos(taken_at)` SEM limite, só para
@@ -298,11 +302,13 @@
     paciente (mover p/ engine server-side); Fam3 — prescrição não escopada por disciplina + `DÍVIDA-APP-1` (save
     DELETE+INSERT, RLS não piora); Fam4 — `sender_profile_id` vem do client (RLS amarra ao current_profile_id).
 
-28. **web `createPatient` incompatível com a RLS de identidade (dívida introduzida pela Família 1; relacionada à #16).**
-    `src/lib/api/patients.ts` cria paciente inserindo `profiles` direto (role='patient') + `patients` +
-    `professional_patient_links`. Sob a RLS real: `profiles` INSERT é **negado** ao client (profile nasce via trigger
-    `handle_new_user`); `patients` INSERT e o vínculo exigem **admin da clínica**. Efeito: o fluxo de "cadastrar
-    paciente" pela web para de funcionar sob login real. **Correção (fora do escopo da Família 1):** mover para
-    provisionamento server-side (Edge Function `service_role`, resolvendo também a #16 transacional) ou fluxo de
-    convite (paciente cria o próprio profile no 1º login; admin vincula). Gates (typecheck/lint/build) seguem verdes
-    (é comportamento de runtime, não de build).
+28. **✅ RESOLVIDO (WP-APP-1, 2026-07-09).** ~~web `createPatient` incompatível com a RLS de identidade.~~
+    `src/lib/api/patients.ts` inseria `profiles` direto (negado pela RLS real; profile nasce via trigger) +
+    `patients`/vínculo (exigem staff da clínica) → o cadastro parava sob login real. **Correção aplicada:** a RPC
+    SECURITY DEFINER **`create_patient`** (migration `20260719090000`) faz o provisionamento server-side transacional
+    com **autorização interna** — o chamador tem de ser profissional da clínica-alvo OU `is_clinic_admin` (não cria em
+    clínica alheia), o `role` é sempre `'patient'` (anti-escalação), `auth_user_id` nunca é setado (o login liga depois
+    via `handle_new_user` match-by-email) e o **vínculo é amarrado ao chamador** (não confia no `professionalId` do
+    client). `patients.ts::createPatient` passou a chamar `supabase.rpc('create_patient', …)`. Fecha junto a #16 (atômico)
+    e o isolamento por clínica da #14. **NÃO afrouxou a RLS** (nenhuma policy nova; `profiles` segue sem INSERT de client).
+    Falta só o **E2E real** (owner: configurar Google OAuth) — provado em Nível 1 (harness). Ver EXECUTION_STATE (WP-APP-1).
