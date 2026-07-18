@@ -145,6 +145,12 @@ export interface ProgressPhoto {
   id: string;
   patient_id: string | null;
   photo_url: string;
+  /**
+   * WP-STORAGE-P2: path canônico no bucket privado `progress-photos` ({patient_id}/{uuid}.ext).
+   * Fonte da signed URL na exibição. NULL = linha legada → fallback `photo_url`. Convive com
+   * `photo_url` (STORAGE-CONTRACT-1); não substitui o legado.
+   */
+  storage_path: string | null;
   captured_in_app: boolean;
   taken_at: string;
 }

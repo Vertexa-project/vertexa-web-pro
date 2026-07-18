@@ -71,12 +71,24 @@ export function EvolutionTab({ patient }: { patient: PatientDetail }) {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
               {(photos.data ?? []).map((p) => (
                 <figure key={p.id} className="space-y-1">
-                  <img
-                    src={p.photo_url}
-                    alt={`Foto de progresso de ${formatDate(p.taken_at)}`}
-                    loading="lazy"
-                    className="aspect-[3/4] w-full rounded-md bg-muted object-cover"
-                  />
+                  {p.display_url ? (
+                    <img
+                      src={p.display_url}
+                      alt={`Foto de progresso de ${formatDate(p.taken_at)}`}
+                      loading="lazy"
+                      className="aspect-[3/4] w-full rounded-md bg-muted object-cover"
+                    />
+                  ) : (
+                    // Sem signed URL (linha sem storage_path ou falha ao assinar → já reportada
+                    // ao Sentry): placeholder, nunca <img> quebrada.
+                    <div
+                      role="img"
+                      aria-label={`Foto de progresso de ${formatDate(p.taken_at)} indisponível`}
+                      className="flex aspect-[3/4] w-full items-center justify-center rounded-md bg-muted text-muted-foreground"
+                    >
+                      <ImageIcon className="h-6 w-6" />
+                    </div>
+                  )}
                   <figcaption className="text-xs text-muted-foreground">{formatDate(p.taken_at)}</figcaption>
                 </figure>
               ))}
