@@ -320,3 +320,38 @@ Detalhe canônico e inequívoco vive em `docs/CONTRATO_INTEGRACAO.md → "Spine 
 - **Escopo/limite:** só o repo web (migration). **RLS sprint intocada** (WP-05). **Parte B (app paciente)
   NÃO iniciada** (aguarda "A verde" + spec da Parte B). Rollback: restaurar a função do WP-03 + drop
   helper/tabela (header da migration).
+
+## 13. Log da Sessão STORAGE-P1 (WP-STORAGE Parte 1 — arquivo físico: buckets privados + RLS de storage.objects)
+- **Gate de base:** fetch autenticado OK; `vertexa-web-pro` origin/main = `548ec9cc` (APP-1 contido — merge PR #10,
+  `dd9f6c3` no topo) e `vertexa-app-paciente` origin/main = `b7233f8b4454493cb12367b8690fa2ed1532cb85` (ls-remote;
+  batia com o esperado). Branch `feat/storage-rls-web` a partir da main do web.
+- **Estado provado (P1.1):** `progress-photos` public=TRUE + `patient-documents` public=false; 3 policies sprint
+  bucket-wide em `storage.objects` (read/write docs + write fotos — TODAS incluíam **anon**); objetos existentes:
+  só 2 demo órfãos `demo/mariana/*.png` (tabelas de metadado VAZIAS pós-Fase A); app sobe foto em
+  `${patientId}/${ts}.ext` e grava **URL PÚBLICA** em `photo_url`; web sobe doc em `${patientId}/${ts}.ext` e grava
+  **PATH** em `file_path` (signed URL no clique). App nativo (`vertexa-patient-native`) não toca os buckets.
+- **Contrato de path (P1.2):** `{patient_id}/{arquivo}` canonizado — JÁ era o padrão dos dois writers; sem gap p/
+  objetos novos. Parser NULL-safe novo `private.storage_object_patient(name)` (exige pasta + uuid válido, senão
+  NULL ⇒ deny — sem cast error no legado `demo/...`).
+- **Migration `20260720090000_wp_storage2_p1_storage_objects_rls` (APLICADA + ledger):** bucket fotos →
+  `public=false`; 5 policies novas por bucket+comando (fotos: SELECT `can_access_patient` ESPELHANDO a tabela Fam2
+  — **EXTERNO INCLUÍDO, decisão reportada**; INSERT só paciente na própria pasta; docs: SELECT
+  `can_access_patient_internal` (externo excluído), INSERT/DELETE `can_prescribe_for_patient`; UPDATE negado nos
+  dois buckets); as 3 `sprint_*` dropadas SÓ depois do dry-run verde.
+- **Testes (P1.4):** dry-run transacional (migration+suíte+ROLLBACK) ANTES do apply; suíte re-rodada pós-apply —
+  verde 2×. Cobertura: X⟂Y (IDOR de path), prof não-vinculado (mesma clínica NÃO basta), isolamento entre clínicas
+  (AdminB⟂A), externo⟂documentos (e foto SIM, espelho Fam2), INSERT em pasta alheia negado, mover objeto (UPDATE de
+  name) negado, paciente não sobe doc, prof não sobe foto, anon⟂tudo, demo invisível até p/ admin. **Descoberta de
+  plataforma:** trigger `protect_objects_delete` (statement-level, novo na plataforma) bloqueia DELETE via SQL
+  direto — a suíte seta `storage.allow_delete_query=true` (transaction-local) p/ exercitar a RLS real; o Storage
+  API seta esse GUC sozinho, então a policy de DELETE é o que vale no fluxo real.
+- **Provas externas:** URL pública antiga do bucket de fotos → **HTTP 400 "Bucket not found"** (público morreu de
+  fato). Advisors: **zero apontamento de storage** (restantes = pré-existentes intencionais: RPCs APP-1 WARN 0029,
+  deny-all INFO, funções demo legadas). Gates web: tsc 0 · lint (`--max-warnings 0`) 0 · build ✓.
+- **Janela POR DESIGN (sem dado real):** exibição de fotos de evolução QUEBRADA até a Parte 2 — o app grava/lê URL
+  pública (`photo_url`) e o bucket agora é privado; `pdf/images.ts` (web) também consome essa URL. Parte 2 =
+  path relativo + `createSignedUrl` nos dois repos (padrão `documents.ts`).
+- **Kill switch (fail-closed):** deny-all em `storage.objects` (drop das policies); **NUNCA `public=true` de
+  volta** (reabriria toda foto por URL), **JAMAIS recriar sprint_***. Header da migration documenta.
+- **Escopo/limite:** SÓ repo web + banco (Nível 1). App paciente NÃO tocado (Parte 2 em branch própria, após
+  auditoria desta Parte 1). PARADO para auditoria conforme o WP.

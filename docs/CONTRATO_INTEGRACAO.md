@@ -395,6 +395,33 @@ afrouxada (nenhuma policy nova; `profiles` segue sem INSERT de client). Header d
 **As 3 RPCs são CONTRATO OFICIAL de escrita** (parte deste documento): a web escreve paciente/planos SÓ por elas; o app
 não escreve nessas tabelas. Assinaturas verbatim acima — **não renomear parâmetros sem alinhar aqui**.
 
+**EXECUTION_STATE (WP-STORAGE-P1 · Arquivo físico/buckets) = ✅ PARTE 1 (BANCO) CONCLUÍDA (aguardando auditoria;
+Parte 2 cross-repo PENDENTE).** Migration `20260720090000_wp_storage2_p1_storage_objects_rls` (versionada e APLICADA;
+ledger `WP-STORAGE-P1`). **CONTRATO DE PATH (oficial, parte deste documento):** o storage key dos DOIS buckets é
+**`{patient_id}/{arquivo}`** — a 1ª pasta É o `patient_id`. Já era o padrão dos dois writers (app `photos.ts` e web
+`documents.ts`, ambos `${patientId}/${Date.now()}.ext`) — **sem gap** p/ objetos novos; únicos fora do padrão = 2
+objetos-demo órfãos `demo/mariana/*.png` (sem linha de metadado; ficam INACESSÍVEIS a todo papel; remoção via Storage
+API = owner-check). Extração do `patient_id` via helper novo **`private.storage_object_patient(name)`** (parser puro
+NULL-safe: exige pasta + uuid válido, senão NULL ⇒ todo helper nega — sem cast error no legado). **`progress-photos`
+virou PRIVADO (`public=false`)** — URL pública morta (provado: HTTP 400 "Bucket not found"). Policies por
+bucket+comando (todas `TO authenticated`; **anon: zero policy** — as sprint davam até a anon):
+- **fotos:** SELECT `can_access_patient` (**EXTERNO INCLUÍDO — ESPELHA a TABELA `progress_photos` (Fam2)**; divergir
+  deixaria o externo vendo a linha sem o arquivo; se o dono reclassificar foto corporal como clínico, trocar nos DOIS
+  lados — decisão REPORTADA); INSERT só o paciente na PRÓPRIA pasta; UPDATE/DELETE negados (sem fluxo; upsert:false).
+- **documentos:** SELECT `can_access_patient_internal` (**EXTERNO EXCLUÍDO**, AUTH-EXT-1/Fam5 — **assinar URL agora
+  exige vínculo real**); INSERT/DELETE `can_prescribe_for_patient` (DELETE habilita a limpeza de órfão de
+  `documents.ts`); UPDATE negado (mover objeto = UPDATE de name — negado).
+As 3 `sprint_*` bucket-wide **ELIMINADAS** (drop só após dry-run verde). Testes
+`supabase/tests/wp_storage2_p1_storage_objects_test.sql` (verde pré-drop em transação E pós-apply: IDOR de path,
+não-vinculado, isolamento de clínica, externo⟂docs e foto-sim, INSERT em pasta alheia negado, mover negado, anon⟂tudo,
+demo invisível até p/ admin). Nota de plataforma: trigger `protect_objects_delete` (statement-level) bloqueia DELETE
+via SQL direto; o Storage API seta `storage.allow_delete_query=true` sozinho — o teste seta o GUC p/ exercitar a RLS
+real. Advisors: **zero apontamento de storage**. **JANELA POR DESIGN (sem dado real): exibição de fotos QUEBRADA até
+a Parte 2** — o app grava/lê **URL PÚBLICA** em `progress_photos.photo_url` (e `pdf/images.ts` do web consome essa
+URL); a Parte 2 migra app+web p/ **path relativo + `createSignedUrl`** (padrão de `documents.ts`). Kill switch
+fail-closed = deny-all em `storage.objects`; **NUNCA `public=true` de volta, JAMAIS recriar sprint_***. Gates web
+verdes (tsc/lint/build).
+
 ---
 
 ## 🏁 FECHAMENTO DA FASE B (BANCO) — 8 FAMÍLIAS
