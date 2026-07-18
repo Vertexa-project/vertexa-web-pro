@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getBodyAssessments, getPatientDocuments, getProgressPhotos } from "@/lib/api/assessments";
+import { getBodyAssessments, getPatientDocuments, getProgressPhotosWithUrls } from "@/lib/api/assessments";
 import { getWeightSeries } from "@/lib/api/weight";
 import { qk } from "@/lib/queryKeys";
 
@@ -30,6 +30,6 @@ export const useWeightSeries = (patientId: string) =>
 export const useProgressPhotos = (patientId: string) =>
   useQuery({
     queryKey: qk.progressPhotos(patientId),
-    queryFn: () => getProgressPhotos(patientId),
+    queryFn: () => getProgressPhotosWithUrls(patientId),
     enabled: Boolean(patientId),
   });

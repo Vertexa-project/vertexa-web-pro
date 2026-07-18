@@ -15,7 +15,8 @@ export interface EvolutionReportInput {
   patient: PatientDetail;
   weightSeries: WeightPoint[];
   assessments: BodyAssessment[];
-  photos: ProgressPhoto[];
+  /** Fotos já enriquecidas com `display_url` (signed URL ou fallback legado) pela camada de leitura. */
+  photos: Array<ProgressPhoto & { display_url?: string | null }>;
   adherence: AdherenceSnapshot | null;
   professional: { fullName: string | null; type: ProfessionalType | null } | null;
   clinicName: string | null;
@@ -66,9 +67,11 @@ export async function buildEvolutionReportData(input: EvolutionReportInput): Pro
     const first = photosAsc[0];
     const last = photosAsc[photosAsc.length - 1];
     const twoDistinct = photosAsc.length >= 2;
+    // Sob bucket privado (P1), a foto vem por signed URL (display_url). Fallback ao photo_url
+    // legado só p/ linhas antigas sem storage_path. Falha de fetch → null → placeholder no PDF.
     const [beforeUri, afterUri] = await Promise.all([
-      twoDistinct ? urlToDataUri(first.photo_url) : Promise.resolve(null),
-      urlToDataUri(last.photo_url),
+      twoDistinct ? urlToDataUri(first.display_url ?? first.photo_url) : Promise.resolve(null),
+      urlToDataUri(last.display_url ?? last.photo_url),
     ]);
     photos = {
       beforeUri,
