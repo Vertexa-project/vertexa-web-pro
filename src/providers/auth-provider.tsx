@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { AUTH_MODE } from "@/lib/auth/authMode";
 import { captureException } from "@/lib/observability/sentry";
 import { AuthContext } from "./auth-context";
+import { queryClient } from "./query-client";
 
 const DEMO_KEY = "vertexa-demo-session";
 
@@ -62,6 +63,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(DEMO_KEY);
     setDemoMode(false);
     await supabase.auth.signOut();
+    // Higiene de dados de SAÚDE: descarta o cache do react-query (dados de paciente em memória)
+    // ao sair, para não vazarem para uma sessão seguinte na mesma aba. (WP-HARDENING A7)
+    queryClient.clear();
   }, []);
 
   const value = useMemo(
