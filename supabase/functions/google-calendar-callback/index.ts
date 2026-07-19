@@ -102,17 +102,14 @@ Deno.serve(async (req: Request) => {
       connectionId = inserted.id;
     }
 
-    // 4) Tokens (deny-all): só aqui, via service_role.
-    const { error: tokErr } = await db.from("calendar_connection_tokens").upsert(
-      {
-        connection_id: connectionId,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        token_expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "connection_id" },
-    );
+    // 4) Tokens (cifrados EM REPOUSO, deny-all): gravados só aqui, via RPC service-role-only
+    //    set_calendar_tokens (pgcrypto + chave no Vault). O client não tem caminho até o token. (WP-A2)
+    const { error: tokErr } = await db.rpc("set_calendar_tokens", {
+      p_connection_id: connectionId,
+      p_refresh_token: tokens.refresh_token,
+      p_access_token: tokens.access_token,
+      p_token_expires_at: expiresAt,
+    });
     if (tokErr) return backToApp(redirectBase, "error");
 
     return backToApp(redirectBase, "connected");
