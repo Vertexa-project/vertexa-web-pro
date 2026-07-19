@@ -214,11 +214,20 @@
       inertes). Falta o gate defensivo por `import.meta.env.PROD` (forçar real em PROD independentemente da
       flag) — anotado aqui; a RLS real (#14/WP-05) é o que efetivamente protege.
 
-22. **Cifrar `refresh_token` do Google em repouso (Sessão 10 — S9/P1).** A tabela
-    `calendar_connection_tokens` é **deny-all** (sem leitura por `anon`/`authenticated`; só `service_role`
-    via Edge Function), mas o `refresh_token` é gravado em texto puro. Antes de conectar a agenda REAL de uma
-    clínica, cifrar em repouso (pgsodium/Supabase Vault) e descriptografar só na Edge Function. Guarda-chuva
-    de segurança da S9 (junto de #11–#14).
+22. **[RESOLVIDO — WP-A2 (AUTH-#22); aguardando deploy coordenado] Cifrar `refresh_token` do Google em
+    repouso (Sessão 10 — S9/P1).** A tabela `calendar_connection_tokens` é **deny-all** (sem leitura por
+    `anon`/`authenticated`; só `service_role` via Edge Function), mas o `refresh_token`/`access_token` eram
+    gravados em texto puro.
+    **WP-A2:** passam a `bytea` **cifrado** (pgcrypto `pgp_sym_*`) com chave simétrica no **Supabase Vault**
+    (`calendar_token_key`, gerada no apply, nunca em migration em claro). Acesso só por funções SECURITY
+    DEFINER **service-role-only** (`public.set_calendar_tokens` / `set_calendar_access_token` /
+    `get_calendar_refresh_token`); a leitura da chave fica em `private.calendar_token_key` (fora da Data API).
+    O client (`anon`/`authenticated`) segue **sem qualquer caminho** até o token. RLS deny-all preservada.
+    Entregue no PR (não mergeado): migration `20260724090000_wp_a2_calendar_token_encryption.sql` + edge
+    functions `google-calendar-callback`/`sync` atualizadas. **Passo do dono:** aplicar a migration + redeploy
+    das 2 functions **juntos** (a migration dropa as colunas em claro). Provado Nível 1 (transações ROLLBACK):
+    round-trip correto, ilegível em repouso, `anon`/`authenticated` sem SELECT/EXECUTE. **E2E OAuth real** =
+    `NÃO_COMPROVADO_AUTOMATICAMENTE` (depende dos secrets do Google — bloqueio externo).
 
 23. **Verificação de admin/tenant no SERVIDOR para o Google Calendar (Sessão 10 — S9).** Hoje as Edge
     Functions `google-calendar-auth/sync/disconnect` recebem `clinicId`/`professionalId` do client (não há

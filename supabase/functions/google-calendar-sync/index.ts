@@ -46,30 +46,28 @@ Deno.serve(async (req: Request) => {
       .update({ status, updated_at: new Date().toISOString() })
       .eq("id", conn.id);
 
-  // Token (deny-all) — só aqui via service_role.
-  const { data: tok } = await db
-    .from("calendar_connection_tokens")
-    .select("refresh_token")
-    .eq("connection_id", conn.id)
-    .maybeSingle();
-  if (!tok?.refresh_token) {
+  // Token (cifrado EM REPOUSO, deny-all) — decifrado só aqui via RPC service-role-only
+  // get_calendar_refresh_token (pgcrypto + chave no Vault). O client não alcança o token. (WP-A2)
+  const { data: refreshToken, error: tokErr } = await db.rpc("get_calendar_refresh_token", {
+    p_connection_id: conn.id,
+  });
+  if (tokErr || !refreshToken) {
     await setStatus("error");
     return jsonResponse({ error: "no_token", status: "error" }, 409);
   }
 
-  const refreshed = await refreshAccessToken(creds, tok.refresh_token);
+  const refreshed = await refreshAccessToken(creds, refreshToken as string);
   if (!refreshed.ok) {
     const status = refreshed.revoked ? "revoked" : "error";
     await setStatus(status);
     return jsonResponse({ error: refreshed.revoked ? "revoked" : "refresh_failed", status }, 409);
   }
-  await db.from("calendar_connection_tokens")
-    .update({
-      access_token: refreshed.accessToken,
-      token_expires_at: new Date(Date.now() + (refreshed.expiresIn ?? 3600) * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("connection_id", conn.id);
+  // Persiste o novo access_token CIFRADO via RPC service-role-only (WP-A2).
+  await db.rpc("set_calendar_access_token", {
+    p_connection_id: conn.id,
+    p_access_token: refreshed.accessToken,
+    p_token_expires_at: new Date(Date.now() + (refreshed.expiresIn ?? 3600) * 1000).toISOString(),
+  });
 
   const { timeMin, timeMax } = syncWindow(30);
   const result = await listEvents(refreshed.accessToken!, conn.google_calendar_id ?? "primary", timeMin, timeMax);

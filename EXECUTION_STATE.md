@@ -36,9 +36,11 @@ Painel web profissional estável e com o **spine de dados** pronto para o app pa
   agenda do Dashboard **mesclada** (interna S6 + Google, com chip de fonte; Google read-only) e card
   **Integrações** em Configurações (Conectar/Atualizar/Desconectar admin-gated). Revisão adversarial (20
   agents): 5 achados corrigidos (IDOR de escopo em sync/disconnect, find-or-update do callback, aviso de
-  erro do Google no estado vazio, allowlist anti open-redirect, layout do rodapé não-admin). Cifra do
-  refresh_token e verificação de tenant no servidor seguem para S9 (#22/#23). Round-trip OAuth real =
-  `NÃO_COMPROVADO_AUTOMATICAMENTE` (depende dos secrets do Google; ver `docs/ops/SETUP_GOOGLE_CALENDAR.md`).
+  erro do Google no estado vazio, allowlist anti open-redirect, layout do rodapé não-admin). Verificação de
+  tenant no servidor segue para S9 (#23); **cifra do refresh_token em repouso RESOLVIDA no WP-A2 (#22)** —
+  `bytea` cifrado (pgcrypto + chave no Vault), funções SECDEF service-role-only, client sem caminho ao token;
+  migration `20260724090000` + edge functions callback/sync no PR (deploy coordenado = passo do dono). Round-trip
+  OAuth real = `NÃO_COMPROVADO_AUTOMATICAMENTE` (depende dos secrets do Google; ver `docs/ops/SETUP_GOOGLE_CALENDAR.md`).
 - **Sessão 12 (web):** Review §3 — **Agenda do Dashboard vira CALENDÁRIO** (FullCalendar v6.1.21, MIT) com
   4 views (Mês/Semana/Dia/Lista), pt-BR e busca **range-driven** (faixa visível → `datesSet`, `keepPreviousData`).
   Migration aditiva `20260626160000` adiciona `type` (consulta/retorno/previsao_retorno/outros) e `status`
