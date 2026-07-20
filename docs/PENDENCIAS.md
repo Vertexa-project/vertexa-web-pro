@@ -342,3 +342,14 @@
     client). `patients.ts::createPatient` passou a chamar `supabase.rpc('create_patient', …)`. Fecha junto a #16 (atômico)
     e o isolamento por clínica da #14. **NÃO afrouxou a RLS** (nenhuma policy nova; `profiles` segue sem INSERT de client).
     Falta só o **E2E real** (owner: configurar Google OAuth) — provado em Nível 1 (harness). Ver EXECUTION_STATE (WP-APP-1).
+
+- **DÍVIDA-CHAT-ATTACH (WP-CHAT-ATTACH A — bucket/policies/modelo, em PR sem merge; NÃO aplicado):**
+  - **Janitor de órfãos:** o DELETE do bucket só permite o **próprio uploader** apagar objeto órfão na hora; órfão cujo uploader
+    nunca volta (upload ok mas INSERT da mensagem falhou e o usuário some) fica residual. Sugerir **job agendado (service_role)**
+    que apaga objetos de `chat-attachments` sem mensagem referenciando. **NÃO implementar agora** (WP futuro).
+  - **N anexos por mensagem:** modelo aprovado é **1 anexo/mensagem** (colunas em `chat_messages`). Se N virar requisito → migrar
+    para tabela filha `chat_message_attachments` (herda a autorização por canal). Anotado.
+  - **Partes B (app) e C (web):** falta o **cliente** — upload (Storage) + INSERT com `attachment_path`, render do anexo (tratar
+    `body` possivelmente `null`), **validação de MIME/tamanho no client** (o bucket já limita, mas validar antes p/ UX), e signed URL
+    na leitura (padrão `documents.ts`). O menu de anexo do app hoje é **cosmético** (sem upload). NÃO tocar app nesta Parte A.
+  - **Advisor previsto no apply:** +1 WARN `authenticated_security_definer` (`chat_attachment_is_orphan`, SECDEF intencional).
