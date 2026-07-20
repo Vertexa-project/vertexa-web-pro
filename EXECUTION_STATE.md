@@ -177,6 +177,15 @@ Detalhe canônico e inequívoco vive em `docs/CONTRATO_INTEGRACAO.md → "Spine 
   `api/weight.ts`, `api/hydration.ts`, hooks, `WeightChart`, `AnthropometryTab`.
 - **Testes:** typecheck/lint/build = 0; Playwright = 0 erros de console em todos os fluxos.
 
+## 8. WP-DISC · A — Disciplinas por profissional (fecha DÍVIDA-RLS-3)
+Migration `20260725090000_wp_disc_a_disciplines.sql` (PR sem merge; provado Nível 1 em transação ROLLBACK: **48/48 checks**). Contrato detalhado em `docs/CONTRATO_INTEGRACAO.md → "Disciplinas por profissional"`.
+- **Modelo:** `disciplines(code,label,is_clinical)` + `professional_disciplines(professional_id,discipline,granted_by,created_at; PK composta)` — **1:N** sem constraint limitante. Backfill idempotente `map(type)`; `professionals.type` mantido (dívida).
+- **Autorização (UNIÃO/OU):** `private.can_write_discipline(patient, text[])` = vínculo (`can_prescribe_for_patient`) **E** posse de QUALQUER disciplina exigida. Acumular só amplia.
+- **Mapa:** nutrição→`nutricionista`; treino→`educador_fisico`|`fisioterapeuta`; `body_assessments`→`nutricionista`|`educador_fisico`|`fisioterapeuta`|`medico`; `patient_documents`/`appointments` NÃO escopados. **SELECT / leitura integrada (DISC-2) INTACTOS.**
+- **RPCs:** `save_workout_plan`/`save_nutrition_plan` revalidam a disciplina; atribuição só admin via `assign`/`revoke_professional_discipline` (nunca auto).
+- **Comportamento/lacuna (ver PENDENCIAS):** admin sem disciplina perde escrita de `body_assessments` (DISC-ADMIN-1, intencional); `medico` só escreve `body_assessments` (sem superfície de prescrição médica — lacuna de produto).
+- **Parte B (web):** alinhar `src/lib/domain/roles.ts` (hoje 1 role por `type`) ao modelo multi-disciplina — WP separado.
+
 ## 8. Log da Sessão 4 (web — Review do painel)
 - **Foco:** tudo gira em torno do paciente; Dashboard como centro; mensagem do profissional enviando de verdade.
 - **Navegação:** `app/routes.ts` já sem "Retenção"/"Planos" na lateral (Diários/Questionários nunca estiveram).
