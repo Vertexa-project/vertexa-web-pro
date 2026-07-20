@@ -19,6 +19,8 @@ export const qk = {
   adherenceSnapshot: (patientId: string) => ["patient", patientId, "adherenceSnapshot"] as const,
   chatThread: (patientId: string) => ["patient", patientId, "chat"] as const,
   unreadMentions: (profileId: string) => ["chat", "mentions", profileId] as const,
+  // URL assinada de anexo do chat (TTL curto; não cachear além do TTL).
+  chatAttachmentUrl: (path: string) => ["chat", "attachment", path] as const,
   currentProfessional: (profileId: string) => ["currentProfessional", profileId] as const,
   currentProfessionalRecord: (profileId: string) => ["currentProfessional", profileId, "record"] as const,
   // Identidade real: profile resolvido por auth_user_id (auth.uid()).
