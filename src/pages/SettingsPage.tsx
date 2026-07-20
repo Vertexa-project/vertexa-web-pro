@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import { Bell, Building2, CalendarDays, CreditCard, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
 
@@ -79,7 +79,8 @@ export function SettingsPage() {
   const { session, demoMode } = useAuth();
   const { data: professionalName } = useCurrentProfessionalName();
   const { data: professional } = useCurrentProfessional();
-  const { roleLabel } = useRole();
+  const { roleLabel, perms } = useRole();
+  const navigate = useNavigate();
 
   // Retorno do OAuth do Google Calendar (.../configuracoes?calendar=connected|error): mostra um aviso
   // e limpa o param para não re-disparar em refresh/re-render.
@@ -133,6 +134,13 @@ export function SettingsPage() {
         <SectionCard icon={Building2} title="Clínica" description="Dados da clínica e equipe.">
           <SettingRow label="Clínica" value="Clínica Vértice" />
           <SettingRow label="Profissionais" value="Médica, Nutricionista" />
+          {perms.isAdmin ? (
+            <SettingRow label="Disciplinas da equipe">
+              <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/disciplinas")}>
+                Gerenciar
+              </Button>
+            </SettingRow>
+          ) : null}
           <SettingRow label="Convidar profissional">
             <SoonButton>Convidar</SoonButton>
           </SettingRow>

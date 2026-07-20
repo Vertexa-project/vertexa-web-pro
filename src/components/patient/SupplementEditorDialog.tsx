@@ -14,6 +14,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCreateSupplement, useUpdateSupplement } from "@/hooks/useSupplements";
+import { useDisciplinePermissions } from "@/hooks/useDisciplines";
+import { DISCIPLINE_REASON, isDisciplineDenied, writeDeniedMessage } from "@/lib/domain/disciplines";
+import { captureException } from "@/lib/observability/sentry";
 import type { Supplement } from "@/types/db";
 
 interface Props {
@@ -33,6 +36,8 @@ export function SupplementEditorDialog({ patientId, existing, open, onOpenChange
   const create = useCreateSupplement(patientId);
   const update = useUpdateSupplement(patientId);
   const pending = create.isPending || update.isPending;
+  const { perms } = useDisciplinePermissions();
+  const canEdit = perms.canEditSupplements;
 
   useEffect(() => {
     if (open) {
@@ -44,12 +49,23 @@ export function SupplementEditorDialog({ patientId, existing, open, onOpenChange
   }, [open, existing]);
 
   function handleSave() {
+    if (!canEdit) {
+      setError(DISCIPLINE_REASON.supplements);
+      return;
+    }
     if (!name.trim()) {
       setError("Informe o nome do suplemento.");
       return;
     }
     const onSuccess = () => onOpenChange(false);
-    const onError = () => setError("Não foi possível salvar. Tente novamente.");
+    const onError = (err: unknown) => {
+      if (isDisciplineDenied(err)) {
+        captureException(err, { source: "authz", scope: "supplements" });
+        setError(writeDeniedMessage(err, "supplements"));
+      } else {
+        setError("Não foi possível salvar. Tente novamente.");
+      }
+    };
     if (existing) {
       update.mutate({ id: existing.id, name, dose, timeLabel }, { onSuccess, onError });
     } else {
@@ -92,6 +108,11 @@ export function SupplementEditorDialog({ patientId, existing, open, onOpenChange
               />
             </div>
           </div>
+          {!canEdit ? (
+            <p className="text-sm text-muted-foreground" role="note">
+              {DISCIPLINE_REASON.supplements}
+            </p>
+          ) : null}
           {error ? (
             <p className="text-sm text-destructive" role="alert">
               {error}
@@ -103,7 +124,7 @@ export function SupplementEditorDialog({ patientId, existing, open, onOpenChange
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={pending} aria-busy={pending}>
+          <Button onClick={handleSave} disabled={!canEdit || pending} aria-busy={pending}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
             {pending ? "Salvando…" : existing ? "Salvar" : "Adicionar"}
           </Button>

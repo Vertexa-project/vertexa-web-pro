@@ -18,6 +18,9 @@ const MessagesPage = lazy(() => import("@/pages/MessagesPage").then((m) => ({ de
 const CampaignsPage = lazy(() => import("@/pages/CampaignsPage").then((m) => ({ default: m.CampaignsPage })));
 const RetentionPage = lazy(() => import("@/pages/RetentionPage").then((m) => ({ default: m.RetentionPage })));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const DisciplinesAdminPage = lazy(() =>
+  import("@/pages/DisciplinesAdminPage").then((m) => ({ default: m.DisciplinesAdminPage })),
+);
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
 
 export const router = createBrowserRouter(
@@ -56,6 +59,7 @@ export const router = createBrowserRouter(
         { path: "campanhas", element: <CampaignsPage /> },
         { path: "retencao", element: <RetentionPage /> },
         { path: "configuracoes", element: <SettingsPage /> },
+        { path: "configuracoes/disciplinas", element: <DisciplinesAdminPage /> },
         { path: "*", element: <NotFoundPage /> },
       ],
     },
