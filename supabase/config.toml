@@ -1,0 +1,31 @@
+# supabase/config.toml — VERTEXA Web Pro
+#
+# DECLARA o estado ATUAL das Edge Functions publicadas (não altera nada). É a fonte de verdade do
+# `verify_jwt` por função para deploys FUTUROS via CLI (`supabase functions deploy`). Sem este
+# arquivo, a CLI aplica o default `verify_jwt = true` e QUEBRARIA o callback (ver aviso abaixo).
+#
+# ⚠️  NÃO altere `[functions.google-calendar-callback].verify_jwt` (mantê-lo `false`):
+#     o callback é o REDIRECT do Google (OAuth), chamado pelo NAVEGADOR, SEM JWT de usuário.
+#     Se virar `true`, o gateway passa a exigir Authorization JWT → o Google recebe **401** e o
+#     fluxo de conexão do calendário QUEBRA EM SILÊNCIO (o usuário só vê "falha"). Mantê-lo público
+#     é seguro: a própria function valida o `state` anti-CSRF (single-use, TTL) — ver
+#     supabase/functions/google-calendar-callback/index.ts e docs/ops/SETUP_GOOGLE_CALENDAR.md.
+#
+# Estado no ar (ver docs/ops/DEPLOY_EDGE_FUNCTIONS.md): callback v2 (false), sync v2 (true),
+# auth v1 (true), disconnect v1 (true).
+
+project_id = "cdhjfyyuhmwrcuxqavib"
+
+# Redirect do Google (GET, sem JWT de usuário) → PÚBLICO. NÃO MUDAR (ver aviso acima).
+[functions.google-calendar-callback]
+verify_jwt = false
+
+# Demais funções são chamadas pelo SPA autenticado (supabase.functions.invoke) → exigem JWT.
+[functions.google-calendar-auth]
+verify_jwt = true
+
+[functions.google-calendar-sync]
+verify_jwt = true
+
+[functions.google-calendar-disconnect]
+verify_jwt = true
