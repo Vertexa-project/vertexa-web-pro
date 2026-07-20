@@ -94,6 +94,7 @@ papel/clínica segue pendente (WP-05 / #11-#14)** — o modo real NÃO expõe ma
 | `notifications` (S6) | **lê** + **escreve** `read_at` (marcar lida) | escreve (futuro emissor) | — |
 | `patient_documents` (exames/documentos PDF/imagem, S-DOCS) | lê + **escreve** (`uploaded_by_role='patient'`, FUTURO — sessão do app) | **escreve** (`uploaded_by_role='professional'`) + **lê** | — |
 | Storage `patient-documents` (bucket **PRIVADO**, S-DOCS) | upload + download via signed URL (FUTURO) | **upload** + **lê via signed URL** (createSignedUrl, TTL 10 min) | — |
+| Storage `chat-attachments` (bucket **PRIVADO**, WP-CHAT-ATTACH A; pasta = `channel_id`) | **envia** (participante) + **lê** (signed URL) | **envia** (participante) + **lê**; admin da clínica **lê** e **não envia** | sim (payload governado pelo SELECT) |
 | `workout_plans` / `workouts` / `workout_exercises` / `nutrition_plans` / `meals` | lê (4c-3, futuro) | **escreve via RPC** `save_workout_plan`/`save_nutrition_plan` (WP-APP-1, transacional; nunca INSERT/DELETE direto) | — |
 | `profiles`+`patients`+`professional_patient_links`+`body_assessments` (cadastro de paciente) | — (não escreve) | **escreve via RPC** `create_patient` (WP-APP-1; profile nasce aqui, não pelo client) | — |
 | `appointments` (agenda interna, Sessão 6) | — (não usa) | **escreve + lê** (CRUD da Agenda) | — |
@@ -102,8 +103,10 @@ papel/clínica segue pendente (WP-05 / #11-#14)** — o modo real NÃO expõe ma
 | `messages` (legada) | — | — (repontado) | — |
 
 Colunas-chave (verbatim do schema; **não renomear sem alinhar aqui**):
-- `chat_messages(id, channel_id, sender_profile_id, sender_role, body, created_at)` — **sem** `sender_professional_id`.
+- `chat_messages(id, channel_id, sender_profile_id, sender_role, body, created_at, attachment_path, attachment_name, attachment_mime, attachment_size)` — **sem** `sender_professional_id`. **`body` é ANULÁVEL** (WP-CHAT-ATTACH A) + CHECK `body IS NOT NULL OR attachment_path IS NOT NULL` (proíbe row vazio; mensagem só-anexo permitida). `attachment_*` = 1 anexo/mensagem (dívida: N anexos → tabela filha). Ao ler, tratar `body` possivelmente `null` (render do anexo).
 - `chat_mentions(id, message_id, mentioned_profile_id, read_at)` — `read_at IS NULL` = não lida (badge).
+
+**Anexo do chat (WP-CHAT-ATTACH A):** bucket **PRIVADO** `chat-attachments` (`public=false`, `allowed_mime_types = pdf/jpeg/png/webp`, `file_size_limit = 10 MB`). Caminho **`{channel_id}/{uuid}.{ext}`** (pasta = `channel_id`, não a pasta do paciente — a autorização do chat é por PARTICIPAÇÃO, não por acesso ao paciente). Enviar = upload no storage + INSERT em `chat_messages` com `attachment_path` (o path DEVE ser do próprio canal — item v do INSERT). Ler = `createSignedUrl` (padrão de `documents.ts`). **Quem envia:** participante (profissional ou paciente). **Quem lê:** `can_read_channel` (participantes + admin da clínica, oversight). **Admin lê mas NÃO envia.** UPDATE negado; DELETE só de objeto **órfão do próprio uploader** (`owner=auth.uid()` + sem mensagem referenciando). MIME/tamanho validados também no client (Partes B/C).
 - `activity_events(id, patient_id, type, payload jsonb, created_at)` — `patient_id` = `patients.id`.
 - `weight_logs(id, patient_id, weight_kg numeric, measured_at timestamptz, source text, created_at)` — `patient_id` = `patients.id`. **NÃO renomear `weight_kg`/`measured_at`.**
 - `progress_photos(id, patient_id, photo_url text, captured_in_app bool, taken_at timestamptz)`.
