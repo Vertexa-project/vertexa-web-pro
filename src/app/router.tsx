@@ -21,6 +21,12 @@ const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ de
 const DisciplinesAdminPage = lazy(() =>
   import("@/pages/DisciplinesAdminPage").then((m) => ({ default: m.DisciplinesAdminPage })),
 );
+const BatchReportPage = lazy(() =>
+  import("@/pages/BatchReportPage").then((m) => ({ default: m.BatchReportPage })),
+);
+const ReportAuditPage = lazy(() =>
+  import("@/pages/ReportAuditPage").then((m) => ({ default: m.ReportAuditPage })),
+);
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
 
 export const router = createBrowserRouter(
@@ -60,6 +66,8 @@ export const router = createBrowserRouter(
         { path: "retencao", element: <RetentionPage /> },
         { path: "configuracoes", element: <SettingsPage /> },
         { path: "configuracoes/disciplinas", element: <DisciplinesAdminPage /> },
+        { path: "configuracoes/auditoria", element: <ReportAuditPage /> },
+        { path: "relatorios/lote", element: <BatchReportPage /> },
         { path: "*", element: <NotFoundPage /> },
       ],
     },

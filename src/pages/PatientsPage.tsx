@@ -56,7 +56,6 @@ export function PatientsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | PatientStatus>("all");
   const [professionalFilter, setProfessionalFilter] = useState<string>("all");
-  const [notice, setNotice] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
   const professionalOptions = useMemo(() => {
@@ -152,9 +151,9 @@ export function PatientsPage() {
         description="Acompanhe status, adesão e atividade dos seus pacientes."
         actions={
           <>
-            <Button variant="outline" onClick={() => setNotice("Exportação disponível em breve.")}>
+            <Button variant="outline" onClick={() => navigate("/relatorios/lote")}>
               <Download className="h-4 w-4" />
-              Exportar
+              Exportar em lote
             </Button>
             <Button onClick={() => setCreateOpen(true)}>
               <UserPlus className="h-4 w-4" />
@@ -214,12 +213,6 @@ export function PatientsPage() {
           </Select>
         </div>
       </div>
-
-      {notice ? (
-        <p className="text-sm text-info" role="status" aria-live="polite">
-          {notice}
-        </p>
-      ) : null}
 
       {isLoading ? (
         <TableSkeleton rows={5} cols={5} />

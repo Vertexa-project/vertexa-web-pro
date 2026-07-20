@@ -29,6 +29,9 @@ export const qk = {
   clinic: (clinicId: string) => ["clinic", clinicId] as const,
   // Sinal REAL "sou admin da clínica?" (RPC am_i_clinic_admin). null = clínica do logado (server-side).
   clinicAdmin: (clinicId: string | null) => ["clinicAdmin", clinicId ?? "self"] as const,
+  // Trilha de auditoria de exportação (WP-REPORT B) — lista filtrada/paginada + profissionais p/ filtro.
+  reportExports: (filters: unknown, page: number) => ["reportExports", filters, page] as const,
+  clinicProfessionalProfiles: (clinicId: string) => ["clinicProfessionalProfiles", clinicId] as const,
   // Disciplinas (WP-DISC B): lista canônica, do profissional logado, e da equipe da clínica (admin).
   disciplinesList: ["disciplines", "list"] as const,
   myDisciplines: (professionalId: string) => ["disciplines", "mine", professionalId] as const,

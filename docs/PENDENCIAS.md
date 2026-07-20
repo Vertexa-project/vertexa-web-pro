@@ -360,3 +360,9 @@
   - **PDF no servidor:** a montagem do PDF é client-side (`@react-pdf`); a RPC entrega JSON. Se algum dia o PDF precisar ser gerado no servidor (ex.: e-mail agendado), será preciso renderizar `@react-pdf` em Deno/Node e resolver as fotos por signed URL no servidor.
   - **Fotos embutidas:** o cliente embute o par antes/depois (URL assinada → data URI); relatórios com muitas fotos ficam pesados — o teto de imagens embutidas pode ser exposto na UI no futuro.
   - **Advisor previsto no apply:** +1 WARN `authenticated_security_definer` (`export_patient_report`, SECDEF intencional com portão `can_prescribe_for_patient`).
+
+- **DÍVIDA-REPORT-B (WP-REPORT B — lote + auditoria, em PR sem merge; NÃO aplicado):**
+  - **N chamadas vs agregação server-side:** o lote é N chamadas SEQUENCIAIS da RPC (1 por paciente) — simples, audita cada paciente e reavalia autz individualmente, mas com N ida-e-voltas. Se o volume crescer muito (lotes grandes/frequentes), avaliar uma agregação server-side (Edge Function que itere no servidor e ainda grave 1 linha/paciente). Teto atual: 50 pacientes/lote.
+  - **Visão pessoal do autor:** a tela de auditoria é admin-only nesta fase; a RLS já permite o autor ler as PRÓPRIAS exportações — uma visão "minhas exportações" para não-admin fica como evolução.
+  - **Fotos no PDF de lote:** o lote NÃO embute imagens (limita o tamanho do arquivo); o relatório individual embute o par antes/depois. Expor essa opção no lote é evolução.
+  - **Advisor previsto no apply:** +1 unused_index INFO (idx_report_exports_batch, novo — passa a "usado" quando a auditoria filtrar por lote).

@@ -993,3 +993,8 @@ A ÚNICA forma de obter o **pacote agregado** de um paciente é a RPC (autoriza 
 **Trilha** `public.report_exports` (auditoria, **sem conteúdo clínico**): `exported_by_profile_id, patient_id, clinic_id, exported_at, period_from, period_to, sections[], record_count, surface`.
 - **Gravação:** SÓ pela RPC (definer). **RLS SELECT** = `is_clinic_admin(clinic_id)` OU autor (`exported_by_profile_id = current_profile_id()`); **UPDATE/DELETE negados a todos os clientes** (imutável); anon sem acesso.
 - **Kill switch:** `revoke execute on function public.export_patient_report(...) from authenticated` desativa a exportação sem afetar o resto.
+
+### Exportação multi-paciente + auditoria (WP-REPORT B)
+- **`export_patient_report` ganhou `p_batch_id uuid default null`** (6º parâmetro). A versão de 5 args foi removida; chamadas de 1 paciente continuam válidas (default null). **Autorização inalterada** (`can_prescribe_for_patient`).
+- **Lote = N chamadas da MESMA RPC** (1 por paciente, mesmo `batch_id` gerado no cliente): cada paciente gera 1 linha na trilha e é autorizado individualmente. **Nenhuma função de agregação nova.** Falha parcial (ex.: 42501 por vínculo removido) NÃO aborta o lote. Teto: 50 pacientes/lote. `report_exports.batch_id` (anulável) agrupa as linhas do lote.
+- **Leitura da trilha (auditoria):** `report_exports` via PostgREST com joins (author=profiles, patient=patients→profiles). A **RLS** já escopa: admin da clínica vê as da clínica; autor vê as próprias; terceiros ⟂. A tela `/configuracoes/auditoria` (admin-only, `am_i_clinic_admin`) lista quem/paciente/quando/período/seções/registros/lote — **sem conteúdo clínico**.

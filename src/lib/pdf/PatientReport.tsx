@@ -36,6 +36,52 @@ export interface PatientReportPhotos {
   after: PhotoSlot;
 }
 
+/** Corpo do relatório de UM paciente (aviso de truncamento + seções + fotos). Reutilizado pelo
+ *  relatório individual e por CADA paciente do relatório de LOTE (dentro do próprio ReportShell). */
+export function PatientReportSections({
+  model,
+  photos,
+}: {
+  model: PatientReportModel;
+  photos?: PatientReportPhotos | null;
+}) {
+  return (
+    <>
+      {/* A4 — aviso de truncamento (omissão de registros) — POR PACIENTE. */}
+      {model.truncated && model.truncationNotice ? (
+        <View style={s.notice}>
+          <Text style={s.noticeTitle}>Atenção: relatório parcial</Text>
+          <Text style={s.noticeText}>{model.truncationNotice}</Text>
+        </View>
+      ) : null}
+
+      {model.sections.map((sec) => (
+        <View key={sec.key} wrap={false}>
+          <SectionTitle title={sec.title} />
+          <View style={s.sectionBody}>
+            {sec.kpis ? (
+              <KpiRow items={sec.kpis.map((k) => ({ label: k.label, value: k.value, sub: k.sub }))} />
+            ) : sec.table ? (
+              <DataTable columns={sec.table.columns} rows={sec.table.rows} />
+            ) : (
+              <EmptyState text={sec.emptyText ?? "Sem dados."} />
+            )}
+          </View>
+        </View>
+      ))}
+
+      {photos ? (
+        <View>
+          <SectionTitle title="Fotos comparativas" />
+          <View style={s.sectionBody}>
+            <PhotoPair before={photos.before} after={photos.after} />
+          </View>
+        </View>
+      ) : null}
+    </>
+  );
+}
+
 export function PatientReportDoc({
   model,
   photos,
@@ -54,37 +100,7 @@ export function PatientReportDoc({
         emittedAt={model.emittedAt}
         footerLabel="Relatório do paciente"
       >
-        {/* A4 — aviso de truncamento (omissão de registros) */}
-        {model.truncated && model.truncationNotice ? (
-          <View style={s.notice}>
-            <Text style={s.noticeTitle}>Atenção: relatório parcial</Text>
-            <Text style={s.noticeText}>{model.truncationNotice}</Text>
-          </View>
-        ) : null}
-
-        {model.sections.map((sec) => (
-          <View key={sec.key} wrap={false}>
-            <SectionTitle title={sec.title} />
-            <View style={s.sectionBody}>
-              {sec.kpis ? (
-                <KpiRow items={sec.kpis.map((k) => ({ label: k.label, value: k.value, sub: k.sub }))} />
-              ) : sec.table ? (
-                <DataTable columns={sec.table.columns} rows={sec.table.rows} />
-              ) : (
-                <EmptyState text={sec.emptyText ?? "Sem dados."} />
-              )}
-            </View>
-          </View>
-        ))}
-
-        {photos ? (
-          <View>
-            <SectionTitle title="Fotos comparativas" />
-            <View style={s.sectionBody}>
-              <PhotoPair before={photos.before} after={photos.after} />
-            </View>
-          </View>
-        ) : null}
+        <PatientReportSections model={model} photos={photos} />
       </ReportShell>
     </Document>
   );
