@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { AnthropometryTab } from "@/components/patient/AnthropometryTab";
 import { DocumentsTab } from "@/components/patient/DocumentsTab";
 import { EvolutionTab } from "@/components/patient/EvolutionTab";
+import { ExportPatientReportButton } from "@/components/patient/ExportPatientReportButton";
 import { NutritionTab } from "@/components/patient/NutritionTab";
 import { OverviewTab } from "@/components/patient/OverviewTab";
 import { ProfileHeader } from "@/components/patient/ProfileHeader";
@@ -78,6 +79,10 @@ export function PatientProfilePage() {
   return (
     <div className="space-y-6">
       <ProfileHeader patient={patient} snapshot={snapshot} />
+
+      <div className="flex justify-end">
+        <ExportPatientReportButton patientId={patient.id} />
+      </div>
 
       <Tabs value={tab} onValueChange={setTab}>
         <div className="overflow-x-auto pb-1">

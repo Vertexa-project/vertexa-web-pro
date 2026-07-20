@@ -353,3 +353,10 @@
     `body` possivelmente `null`), **validação de MIME/tamanho no client** (o bucket já limita, mas validar antes p/ UX), e signed URL
     na leitura (padrão `documents.ts`). O menu de anexo do app hoje é **cosmético** (sem upload). NÃO tocar app nesta Parte A.
   - **Advisor previsto no apply:** +1 WARN `authenticated_security_definer` (`chat_attachment_is_orphan`, SECDEF intencional).
+
+- **DÍVIDA-REPORT (WP-REPORT A — exportação + trilha, em PR sem merge; NÃO aplicado):**
+  - **Log de tentativas NEGADAS (A1):** hoje só o SUCESSO fica no banco (a negação 42501 desfaz a transação; no web reporta ao Sentry `source:"authz"` sem PII). Um registro persistente de tentativas negadas exigiria mecanismo **fora da transação** (ex.: `security definer` separado / trigger / job) — decisão futura do cliente sobre volume e privacidade.
+  - **Seções selecionáveis na UI:** o botão exporta um conjunto padrão (`DEFAULT_REPORT_SECTIONS`) + período; a RPC já aceita `p_sections` (lista fixa validada). Falta a UI de seleção fina de seções (checkboxes) — evolução.
+  - **PDF no servidor:** a montagem do PDF é client-side (`@react-pdf`); a RPC entrega JSON. Se algum dia o PDF precisar ser gerado no servidor (ex.: e-mail agendado), será preciso renderizar `@react-pdf` em Deno/Node e resolver as fotos por signed URL no servidor.
+  - **Fotos embutidas:** o cliente embute o par antes/depois (URL assinada → data URI); relatórios com muitas fotos ficam pesados — o teto de imagens embutidas pode ser exposto na UI no futuro.
+  - **Advisor previsto no apply:** +1 WARN `authenticated_security_definer` (`export_patient_report`, SECDEF intencional com portão `can_prescribe_for_patient`).
