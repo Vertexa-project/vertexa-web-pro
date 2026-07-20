@@ -267,8 +267,14 @@ export interface ChatMessage {
   channel_id: string | null;
   sender_profile_id: string | null;
   sender_role: UserRole;
-  body: string;
+  /** ANULÁVEL desde WP-CHAT-ATTACH A: mensagem só-anexo não tem texto (CHECK exige body OU anexo). */
+  body: string | null;
   created_at: string;
+  // Anexo (1 por mensagem; bucket privado chat-attachments, caminho {channel_id}/{uuid}.{ext}).
+  attachment_path: string | null;
+  attachment_name: string | null;
+  attachment_mime: string | null;
+  attachment_size: number | null;
 }
 
 export interface Campaign {

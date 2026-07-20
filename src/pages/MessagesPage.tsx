@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { Bot, MessageSquare, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bot, Loader2, MessageSquare, Paperclip, Send, X } from "lucide-react";
 
+import { ChatAttachment } from "@/components/chat/ChatAttachment";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
@@ -19,6 +20,7 @@ import {
   useUnreadMentions,
 } from "@/hooks/useChat";
 import { useListPatients } from "@/hooks/usePatients";
+import { CHAT_ATTACHMENT_MIME, hasChatAttachment, validateChatAttachment } from "@/lib/domain/chatAttachment";
 import { formatRelative, initials } from "@/lib/domain/format";
 import { cn } from "@/lib/utils";
 import type { PatientListItem } from "@/types/db";
@@ -29,6 +31,9 @@ function Thread({ patient }: { patient: PatientListItem }) {
   const { data: mentions } = useUnreadMentions();
   const { mutate: markRead } = useMarkMentionsRead();
   const [draft, setDraft] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const patientName = patient.profile?.full_name ?? "Paciente";
 
   const channelId = data?.channelId;
@@ -45,14 +50,35 @@ function Thread({ patient }: { patient: PatientListItem }) {
   const messages = data?.messages ?? [];
   // Sem profissional atuante configurado (env) não há remetente válido em modo demo.
   const canSend = Boolean(data?.actingProfileId);
+  const hasContent = draft.trim().length > 0 || file !== null;
 
   const handleSend = () => {
     const body = draft.trim();
-    if (!body || !data?.channelId || !data.actingProfileId || sendMessage.isPending) return;
+    if ((!body && !file) || !data?.channelId || !data.actingProfileId || sendMessage.isPending) return;
     sendMessage.mutate(
-      { channelId: data.channelId, senderProfileId: data.actingProfileId, body },
-      { onSuccess: () => setDraft("") },
+      { channelId: data.channelId, senderProfileId: data.actingProfileId, body: body || null, file },
+      {
+        onSuccess: () => {
+          setDraft("");
+          setFile(null);
+          setAttachError(null);
+        },
+      },
     );
+  };
+
+  const handlePickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0] ?? null;
+    e.target.value = ""; // permite re-selecionar o mesmo arquivo
+    if (!picked) return;
+    const invalid = validateChatAttachment(picked); // valida tipo/tamanho ANTES do upload
+    if (invalid) {
+      setAttachError(invalid);
+      setFile(null);
+      return;
+    }
+    setAttachError(null);
+    setFile(picked);
   };
 
   return (
@@ -77,11 +103,21 @@ function Thread({ patient }: { patient: PatientListItem }) {
                 <span className="mb-1 text-xs text-muted-foreground">{author}</span>
                 <div
                   className={cn(
-                    "max-w-[80%] rounded-lg px-3 py-2 text-sm",
+                    "max-w-[80%] space-y-2 rounded-lg px-3 py-2 text-sm",
                     fromPatient ? "bg-muted text-foreground" : "bg-primary/10 text-foreground",
                   )}
                 >
-                  {m.body}
+                  {/* body é ANULÁVEL: mensagem só-anexo não tem texto. */}
+                  {m.body ? <p className="whitespace-pre-wrap">{m.body}</p> : null}
+                  {hasChatAttachment(m) ? (
+                    <ChatAttachment
+                      path={m.attachment_path as string}
+                      name={m.attachment_name}
+                      mime={m.attachment_mime}
+                      size={m.attachment_size}
+                      align={fromPatient ? "start" : "end"}
+                    />
+                  ) : null}
                 </div>
                 <time dateTime={m.created_at} className="mt-1 text-xs text-muted-foreground">
                   {formatRelative(m.created_at)}
@@ -93,7 +129,48 @@ function Thread({ patient }: { patient: PatientListItem }) {
       </div>
 
       <div className="border-t p-3">
+        {/* Anexo selecionado (chip com remover) */}
+        {file ? (
+          <div className="mb-2 flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs">
+            <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-foreground">{file.name}</span>
+            <button
+              type="button"
+              onClick={() => setFile(null)}
+              disabled={sendMessage.isPending}
+              className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Remover anexo"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : null}
+        {attachError ? (
+          <p className="mb-2 text-xs text-destructive" role="alert">
+            {attachError}
+          </p>
+        ) : null}
+
         <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={CHAT_ATTACHMENT_MIME.join(",")}
+            className="hidden"
+            onChange={handlePickFile}
+            aria-hidden
+            tabIndex={-1}
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!canSend || sendMessage.isPending}
+            title="Anexar arquivo (PDF ou imagem)"
+            aria-label="Anexar arquivo"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
           <Input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -113,15 +190,15 @@ function Thread({ patient }: { patient: PatientListItem }) {
           <Button
             size="icon"
             onClick={handleSend}
-            disabled={!canSend || sendMessage.isPending || draft.trim().length === 0}
+            disabled={!canSend || sendMessage.isPending || !hasContent}
             aria-label="Enviar"
           >
-            <Send className="h-4 w-4" />
+            {sendMessage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
         {sendMessage.isError ? (
           <p className="mt-2 text-xs text-destructive">
-            Não foi possível enviar. Tente novamente.
+            Não foi possível enviar. Verifique o arquivo e tente novamente.
           </p>
         ) : (
           <p className="mt-2 text-xs text-muted-foreground">

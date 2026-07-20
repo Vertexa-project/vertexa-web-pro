@@ -2,11 +2,14 @@ import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  getChatAttachmentSignedUrl,
   getChatThread,
   listUnreadMentionPatientIds,
   markChannelMentionsRead,
   sendChatMessage,
+  type SendChatMessageInput,
 } from "@/lib/api/chat";
+import { captureException } from "@/lib/observability/sentry";
 import { qk } from "@/lib/queryKeys";
 import { useIdentity } from "@/hooks/useIdentity";
 import { supabase } from "@/lib/supabase";
@@ -62,15 +65,48 @@ export function useChatThread(patientId: string) {
   return query;
 }
 
-/** Envia mensagem como profissional e revalida a thread ao concluir. */
+/** Envia mensagem (texto e/ou anexo) como profissional e revalida a thread ao concluir. */
 export function useSendChatMessage(patientId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { channelId: string; senderProfileId: string; body: string }) =>
-      sendChatMessage(vars),
+    mutationFn: (vars: SendChatMessageInput) => sendChatMessage(vars),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.chatThread(patientId) });
     },
+    onError: (_err, vars) => {
+      // Só reporta o fluxo de ANEXO (upload/insert). Erro SANITIZADO (sem nome de arquivo/caminho = sem PII).
+      if (vars.file) {
+        captureException(new Error("chat attachment send failed"), {
+          source: "chat-attachment",
+          scope: "send",
+        });
+      }
+    },
+  });
+}
+
+/**
+ * URL assinada (TTL 600s) de um anexo, gerada SOB DEMANDA. `staleTime` < TTL para nunca reusar
+ * um link além da validade. Erro de assinatura é reportado ao Sentry (source:"chat-attachment", sem PII).
+ */
+export function useChatAttachmentUrl(path: string | null) {
+  return useQuery({
+    queryKey: qk.chatAttachmentUrl(path ?? "none"),
+    queryFn: async () => {
+      try {
+        return await getChatAttachmentSignedUrl(path as string);
+      } catch (err) {
+        captureException(new Error("chat attachment signed url failed"), {
+          source: "chat-attachment",
+          scope: "sign",
+        });
+        throw err;
+      }
+    },
+    enabled: Boolean(path),
+    staleTime: 540_000, // 9 min < TTL 10 min
+    gcTime: 540_000,
+    retry: 1,
   });
 }
 
