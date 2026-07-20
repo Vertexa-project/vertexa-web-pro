@@ -195,6 +195,13 @@ Branch `feat/disciplines-ui-web` (PR sem merge). Gates: vitest **15/15** · tsc 
 - **B5 erro authz:** mensagem amigável + Sentry `source:"authz"` (sem PII).
 - **Infra:** o repo web ganhou **vitest** (antes sem runner) — script `test`, `vitest.config.ts`, 1º teste unitário.
 
+## 9.1 WP-CLINIC-ADMIN-SIGNAL — sinal REAL de admin da clínica (corrige AUTH-ADMIN-1)
+Branch `feat/clinic-admin-signal` (PR base main, **sem merge**). Gates: vitest **24/24** (15 disc + 9 admin) · tsc 0 · lint 0 · build 0. **Nada aplicado em produção** (migration fica no PR até auditoria).
+- **Problema:** a UI decidia "é admin?" por `profiles.role === 'admin'` — anti-padrão AUTH-ADMIN-1. A autoridade real é DONO (`clinics.owner_profile_id`) OU co-admin (`professionals.clinic_role='admin'`); o admin de verdade frequentemente NÃO tem `profiles.role='admin'` e não via a tela de disciplinas (travava a atribuição).
+- **Banco (migration `20260726090000`, no PR):** `public.am_i_clinic_admin(uuid default null)` SECDEF, `search_path=''`, EXECUTE só `authenticated` (revoke public/anon). **DELEGA** a `private.is_clinic_admin` (mesma lógica, sem copiar/divergir); `p_clinic` null resolve a clínica do logado (professionals; senão owner). Só retorna boolean; **nenhuma policy tocada**.
+- **Web:** `useIsClinicAdmin` (react-query, cache 5min) + derivação PURA `resolveClinicAdmin` (**fail-closed**: undefined/erro ⇒ não-admin; demo espelha a persona). Consumido por DisciplinesAdminPage (com estado de carregamento p/ não piscar), SettingsPage (linha de admin), IntegrationsMenu e GoogleCalendarConnection (calendário admin-gated). `roles.ts` `isAdmin` fica só como fallback de **demonstração**.
+- **Testes:** unit `clinicAdmin.test.ts` (9: real true/false, loading/erro fail-closed, demo). Banco em ROLLBACK (`supabase/tests/wp_clinic_admin_signal_test.sql`): dono→true, co-admin→true, comum→false, outra clínica→false, anon não executa — provado com `profiles.role='professional'` (NÃO 'admin'), confirmando que o sinal não depende de `profiles.role`.
+
 ## 8. Log da Sessão 4 (web — Review do painel)
 - **Foco:** tudo gira em torno do paciente; Dashboard como centro; mensagem do profissional enviando de verdade.
 - **Navegação:** `app/routes.ts` já sem "Retenção"/"Planos" na lateral (Diários/Questionários nunca estiveram).
