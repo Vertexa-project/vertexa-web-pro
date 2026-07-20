@@ -313,8 +313,18 @@
     design até lá — sem dado real); ver EXECUTION_STATE (WP-STORAGE-P1) no CONTRATO.
     Owner-checks: (a) `Settings > API` expõe só `public`(+`graphql_public`), **`private` fora**; (b) remover os 2 objetos
     demo `demo/mariana/*.png` via Storage API (órfãos e hoje inacessíveis a qualquer papel — sem urgência). Dívidas: Fam2 — `adherence_snapshots`/`muscle_recovery_states` gravadas pelo
-    paciente (mover p/ engine server-side); Fam3 — prescrição não escopada por disciplina + `DÍVIDA-APP-1` (save
-    DELETE+INSERT, RLS não piora); Fam4 — `sender_profile_id` vem do client (RLS amarra ao current_profile_id).
+    paciente (mover p/ engine server-side); Fam3 — **✅ DÍVIDA-RLS-3 RESOLVIDA (WP-DISC-A, migration
+    `20260725090000`)**: prescrição agora escopada por DISCIPLINA. Modelo `disciplines` +
+    `professional_disciplines` (1:N; autorização por UNIÃO/OU — possuir QUALQUER disciplina exigida),
+    helper `private.can_write_discipline(uuid,text[])`, policies de ESCRITA das 6 tabelas de prescrição +
+    `body_assessments` passam a exigir a disciplina do mapa (SELECT / leitura integrada DISC-2 **intactos**),
+    e `save_workout_plan`/`save_nutrition_plan` (SECDEF) revalidam a disciplina. Atribuição SÓ por admin
+    (RPCs `assign_professional_discipline`/`revoke_professional_discipline`, nunca auto-atribuição).
+    **Registrar:** (a) **lacuna de produto** — sob o mapa, `medico` só escreve `body_assessments`; o
+    sistema NÃO tem superfície de prescrição médica (medicamento/conduta) — decidir com o cliente (fora do
+    WP); (b) **mudança de comportamento** — admin SEM disciplina clínica **perde** a escrita de
+    `body_assessments` (DISC-ADMIN-1, intencional). `professionals.type` mantido por compat (dívida).
+    `DÍVIDA-APP-1` (save DELETE+INSERT) segue anotada; Fam4 — `sender_profile_id` vem do client (RLS amarra ao current_profile_id).
 
 28. **✅ RESOLVIDO (WP-APP-1, 2026-07-09).** ~~web `createPatient` incompatível com a RLS de identidade.~~
     `src/lib/api/patients.ts` inseria `profiles` direto (negado pela RLS real; profile nasce via trigger) +

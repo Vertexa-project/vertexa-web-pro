@@ -953,3 +953,26 @@ autorização revalidada; ver EXECUTION_STATE acima). O fluxo de cadastro/prescr
   (= streak + execução) + 1 ação da Mariana no app. Rollback no header (drop functions + delete seed rows).
 
 **Teste ponta a ponta (4d):** ⏳ pendente — app `@Camila` → badge ao vivo na web + bater ponto → Timeline/recuperação.
+
+## Disciplinas por profissional (WP-DISC-A) — contrato de escrita
+**Modelo (fonte de verdade no banco), migration `20260725090000`:**
+- `disciplines(code PK, label, is_clinical)` — lista canônica: `medico`, `nutricionista`, `fisioterapeuta`, `educador_fisico`, `psicologo`, `outro`.
+- `professional_disciplines(professional_id → professionals ON DELETE CASCADE, discipline → disciplines.code, granted_by, created_at, PK(professional_id, discipline))` — **1:N** (um profissional pode ter N disciplinas; **sem** constraint/enum/coluna única que impeça múltiplas).
+- `professionals.type` **mantido** por compatibilidade (dívida; a **disciplina** é a nova fonte de autorização de escrita).
+
+**Semântica de autorização (LEI): UNIÃO / OU.** Pode ESCREVER numa tabela se o profissional possuir **QUALQUER** disciplina exigida por ela. Acumular disciplinas **sempre amplia, nunca restringe**. Helper `private.can_write_discipline(p_patient, p_disciplines text[])` = `can_prescribe_for_patient(p_patient)` (vínculo ativo **não-externo** OU admin) **E** posse de alguma disciplina do conjunto pelo profissional do chamador na clínica do paciente.
+
+**Mapa disciplina → escrita:**
+| Tabela(s) | Disciplina exigida (OU) |
+|---|---|
+| `nutrition_plans`, `meals`, `supplements` | `nutricionista` |
+| `workout_plans`, `workouts`, `workout_exercises` | `educador_fisico` OU `fisioterapeuta` |
+| `body_assessments` | `nutricionista` OU `educador_fisico` OU `fisioterapeuta` OU `medico` |
+| `patient_documents`, `appointments` | **não escopado** (mantêm a regra anterior — `can_prescribe`/administrativo) |
+
+- **Leitura (DISC-2):** integrada — qualquer profissional vinculado lê tudo. As policies de **SELECT NÃO foram tocadas**.
+- **Atribuição:** SÓ admin da clínica via `assign_professional_discipline` / `revoke_professional_discipline` (SECDEF, individual, idempotente, **nunca auto-atribuição**). O client (`anon`/`authenticated`) não escreve nas 2 tabelas novas (RLS: só SELECT — o próprio profissional ou staff/admin da clínica leem).
+- **RPCs SECDEF:** `save_workout_plan` e `save_nutrition_plan` **revalidam** a disciplina internamente (senão seriam porta lateral que ignora a policy).
+- **Exceção:** a anamnese (`body_assessment`) criada dentro de `create_patient` é **administrativa** (SECDEF, não passa pela policy) — **não** é bloqueada por disciplina (staff/admin sem disciplina segue cadastrando).
+- **Mudança de comportamento:** admin **sem** disciplina clínica **perde** a escrita de `body_assessments` (antes tinha) — DISC-ADMIN-1, intencional. **Lacuna:** `medico` só escreve `body_assessments` (o sistema não tem superfície de prescrição médica/medicamento — decisão de produto).
+- **Onde o mapa vive:** em CÓDIGO (constante de disciplina por policy/RPC). Porta aberta para "personalizável por clínica" no futuro (tabela de config) **sem** mudar a forma das policies.
