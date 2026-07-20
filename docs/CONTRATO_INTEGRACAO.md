@@ -979,3 +979,17 @@ autorização revalidada; ver EXECUTION_STATE acima). O fluxo de cadastro/prescr
 - **Exceção:** a anamnese (`body_assessment`) criada dentro de `create_patient` é **administrativa** (SECDEF, não passa pela policy) — **não** é bloqueada por disciplina (staff/admin sem disciplina segue cadastrando).
 - **Mudança de comportamento:** admin **sem** disciplina clínica **perde** a escrita de `body_assessments` (antes tinha) — DISC-ADMIN-1, intencional. **Lacuna:** `medico` só escreve `body_assessments` (o sistema não tem superfície de prescrição médica/medicamento — decisão de produto).
 - **Onde o mapa vive:** em CÓDIGO (constante de disciplina por policy/RPC). Porta aberta para "personalizável por clínica" no futuro (tabela de config) **sem** mudar a forma das policies.
+
+## Exportação de relatório de UM paciente (WP-REPORT A) — contrato oficial
+A ÚNICA forma de obter o **pacote agregado** de um paciente é a RPC (autoriza + audita + retorna); não há caminho paralelo.
+
+**RPC** `public.export_patient_report(p_patient_id uuid, p_from date, p_to date, p_sections text[], p_surface text default 'web') → jsonb`
+— SECURITY DEFINER, `search_path=''`, VOLATILE, EXECUTE só `authenticated`.
+- **Autorização:** `private.can_prescribe_for_patient(p_patient_id)` = profissional **vinculado não-externo** OU **admin da clínica**. Externo/paciente/não-vinculado/outra-clínica ⇒ **42501** (transação desfeita: nada gravado, nada retornado). **Paciente NÃO exporta.**
+- **Validação:** `p_from ≤ p_to`, janela **≤ 366 dias**; `p_sections` contra **lista fixa** (`identity, weight, anthropometry, workout_plan, nutrition_plan, supplements, adherence, recovery, workout_execution, documents, appointments, photos, achievements, timeline`) — nome desconhecido ⇒ erro. `p_sections` vazio/`null` ⇒ default `{identity,weight,anthropometry}`.
+- **Retorno:** `{ meta:{patient_id,from,to,sections,record_count,truncated,generated_at,exported_by}, patient:{…}, sections:{…} }`. **Tetos por seção** (weight 1000; séries 500; docs 200; fotos 24) ⇒ quando excede, trunca e marca `truncated:true` (o PDF exibe aviso).
+- **Fotos/documentos:** só **metadado** (`storage_path`/`file_path`); o binário sai por **URL assinada gerada no cliente** (bucket privado). **Chat excluído** do relatório.
+
+**Trilha** `public.report_exports` (auditoria, **sem conteúdo clínico**): `exported_by_profile_id, patient_id, clinic_id, exported_at, period_from, period_to, sections[], record_count, surface`.
+- **Gravação:** SÓ pela RPC (definer). **RLS SELECT** = `is_clinic_admin(clinic_id)` OU autor (`exported_by_profile_id = current_profile_id()`); **UPDATE/DELETE negados a todos os clientes** (imutável); anon sem acesso.
+- **Kill switch:** `revoke execute on function public.export_patient_report(...) from authenticated` desativa a exportação sem afetar o resto.
