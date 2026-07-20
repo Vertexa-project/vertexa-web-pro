@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCurrentProfessional, useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
+import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import { initials, shortName } from "@/lib/domain/format";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-context";
@@ -79,7 +80,8 @@ export function SettingsPage() {
   const { session, demoMode } = useAuth();
   const { data: professionalName } = useCurrentProfessionalName();
   const { data: professional } = useCurrentProfessional();
-  const { roleLabel, perms } = useRole();
+  const { roleLabel } = useRole(); // roleLabel: só DISPLAY. Autoridade de admin vem do sinal real abaixo.
+  const { isClinicAdmin } = useIsClinicAdmin(professional?.clinicId ?? null);
   const navigate = useNavigate();
 
   // Retorno do OAuth do Google Calendar (.../configuracoes?calendar=connected|error): mostra um aviso
@@ -134,7 +136,7 @@ export function SettingsPage() {
         <SectionCard icon={Building2} title="Clínica" description="Dados da clínica e equipe.">
           <SettingRow label="Clínica" value="Clínica Vértice" />
           <SettingRow label="Profissionais" value="Médica, Nutricionista" />
-          {perms.isAdmin ? (
+          {isClinicAdmin ? (
             <SettingRow label="Disciplinas da equipe">
               <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/disciplinas")}>
                 Gerenciar

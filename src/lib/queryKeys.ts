@@ -25,6 +25,8 @@ export const qk = {
   profileByAuthUser: (authUserId: string) => ["profileByAuthUser", authUserId] as const,
   clinicProfessionals: (clinicId: string) => ["clinicProfessionals", clinicId] as const,
   clinic: (clinicId: string) => ["clinic", clinicId] as const,
+  // Sinal REAL "sou admin da clínica?" (RPC am_i_clinic_admin). null = clínica do logado (server-side).
+  clinicAdmin: (clinicId: string | null) => ["clinicAdmin", clinicId ?? "self"] as const,
   // Disciplinas (WP-DISC B): lista canônica, do profissional logado, e da equipe da clínica (admin).
   disciplinesList: ["disciplines", "list"] as const,
   myDisciplines: (professionalId: string) => ["disciplines", "mine", professionalId] as const,

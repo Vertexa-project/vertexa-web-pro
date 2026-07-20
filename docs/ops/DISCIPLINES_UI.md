@@ -51,9 +51,10 @@ evento é reportado ao Sentry com `source:"authz"` — **sem PII**. `isDisciplin
 
 - **Auto-atribuição bloqueada:** os chips do **próprio** admin ficam desabilitados com aviso ("Você não
   pode atribuir disciplinas a si mesmo") — o banco também nega.
-- **Visibilidade** usa `perms.isAdmin` (`profiles.role === "admin"`). ⚠️ Caveat: um admin apenas por
-  `professionals.clinic_role='admin'`/owner (sem `profiles.role='admin'`) não veria a área, embora o banco
-  ainda o autorize — **melhoria futura:** expor `is_clinic_admin` ao client.
+- **Visibilidade** usa o **SINAL REAL do banco** (`useIsClinicAdmin` → RPC `public.am_i_clinic_admin` =
+  dono OU `clinic_role='admin'`), **não** `profiles.role`. Isso corrige AUTH-ADMIN-1: um admin apenas por
+  `owner`/`clinic_role='admin'` (sem `profiles.role='admin'`) **passa a ver** a área. Fail-closed: enquanto
+  carrega ou em erro, a área **não** aparece. (WP-CLINIC-ADMIN-SIGNAL — migration `20260726090000`.)
 
 ## Situação inicial (importante)
 `professional_disciplines` nasce **vazia** e só o admin popula. Até o admin conceder disciplinas pela tela

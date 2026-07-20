@@ -10,13 +10,13 @@ import {
   useDisconnectGoogleCalendar,
   useSyncGoogleCalendar,
 } from "@/hooks/useCalendarConnection";
+import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import {
   CONNECTION_STATUS_META,
   connectionErrorMessage,
   lastSyncLabel,
 } from "@/lib/domain/calendarConnection";
 import { EDIT_REASON } from "@/lib/domain/roles";
-import { useRole } from "@/providers/role-context";
 
 /**
  * Integração Google Calendar (Sessão 10) — read-only, multi-tenant. Todas as ações são admin-gated
@@ -33,8 +33,8 @@ export function GoogleCalendarConnection({
   professionalId: string | null;
   variant: "compact" | "full";
 }) {
-  const { perms } = useRole();
-  const isAdmin = perms.isAdmin;
+  // Admin da clínica pelo SINAL REAL do banco (dono OU clinic_role='admin'), não por profiles.role.
+  const { isClinicAdmin: isAdmin } = useIsClinicAdmin(clinicId);
   const { data: conn, isLoading } = useCalendarConnection(clinicId);
   const connect = useConnectGoogleCalendar();
   const sync = useSyncGoogleCalendar(clinicId ?? "none");

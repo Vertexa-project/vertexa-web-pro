@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ShieldAlert, UserCog } from "lucide-react";
+import { Loader2, ShieldAlert, UserCog } from "lucide-react";
 
 import { AsyncSection } from "@/components/patient/AsyncSection";
 import { PageHeader } from "@/components/PageHeader";
@@ -13,10 +13,10 @@ import {
   useDisciplinesList,
   useRevokeDiscipline,
 } from "@/hooks/useDisciplines";
+import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import { isDisciplineDenied } from "@/lib/domain/disciplines";
 import { initials, shortName } from "@/lib/domain/format";
 import { captureException } from "@/lib/observability/sentry";
-import { useRole } from "@/providers/role-context";
 
 /**
  * Administração de DISCIPLINAS (WP-DISC B4). SÓ o admin da clínica: lista a equipe e concede/revoga
@@ -24,9 +24,10 @@ import { useRole } from "@/providers/role-context";
  * (assign/revoke_professional_discipline exigem admin e negam auto-atribuição); aqui a UI espelha isso.
  */
 export function DisciplinesAdminPage() {
-  const { perms } = useRole(); // isAdmin = administrativo (profiles.role === "admin")
   const { data: me } = useCurrentProfessional();
   const clinicId = me?.clinicId ?? null;
+  // Visibilidade pelo SINAL REAL do banco (dono OU clinic_role='admin'), NÃO por profiles.role.
+  const { isClinicAdmin, isLoading: adminLoading } = useIsClinicAdmin(clinicId);
 
   const disciplines = useDisciplinesList();
   const team = useClinicProfessionalDisciplines(clinicId);
@@ -34,7 +35,23 @@ export function DisciplinesAdminPage() {
   const revoke = useRevokeDiscipline(clinicId);
   const [error, setError] = useState<string | null>(null);
 
-  if (!perms.isAdmin) {
+  // Enquanto o sinal carrega, mostra um estado neutro (não pisca a tela de "sem acesso").
+  if (adminLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Disciplinas da equipe" />
+        <Card>
+          <CardContent className="flex items-center gap-3 p-6 text-sm text-muted-foreground">
+            <Loader2 className="h-5 w-5 shrink-0 animate-spin text-muted-foreground" aria-hidden />
+            Verificando suas permissões…
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Fail-closed: só admin da clínica vê a administração.
+  if (!isClinicAdmin) {
     return (
       <div className="space-y-6">
         <PageHeader title="Disciplinas da equipe" />
