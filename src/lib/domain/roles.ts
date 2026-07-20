@@ -1,32 +1,27 @@
-// RBAC de UI (Sessão 7) — papel do profissional logado controla o que VÊ/EDITA na interface.
-// ⚠️ Isto é gating de UI, NÃO autorização real. A barreira de verdade é a RLS por papel/clínica
-// no banco (dívida #11–#14 / Sessão 9). Nunca confiar só no "botão escondido".
-//
-// Papel efetivo deriva de profiles.role (admin|professional) + professionals.type
-// (doctor|nutritionist|personal_trainer|physiotherapist|other).
+// RBAC ADMINISTRATIVO de UI (admin da clínica) + rótulo/persona de DISPLAY.
+// ⚠️ O gating CLÍNICO (dieta/treino/avaliação/suplementos) NÃO vive mais aqui: vem das DISCIPLINAS do
+// profissional (WP-DISC B) — ver src/lib/domain/disciplines.ts + useDisciplinePermissions. Aqui só
+// resta o que é ADMINISTRATIVO (isAdmin, ex.: calendário/administração de disciplinas) e o RÓTULO de
+// display. `professionals.type` é usado APENAS para o rótulo de display (deriveRole/roleLabel) e para
+// listar a equipe — NUNCA para permissão clínica.
+// Gating de UI, não autorização — a barreira real é a RLS por papel/clínica/disciplina no banco.
 import type { ProfessionalType, UserRole } from "@/types/db";
 
 export type Role = "admin" | "doctor" | "nutritionist" | "trainer" | "physio" | "other";
 
 export interface RolePermissions {
-  /** Gestão administrativa da clínica, como Financeiro futuro. */
+  /** Gestão administrativa da clínica (ex.: integração de calendário, administração de disciplinas). */
   isAdmin: boolean;
-  /** Edita o Plano alimentar (nutricionista). */
-  canEditNutrition: boolean;
-  /** Edita o Treino (médico / personal trainer). */
-  canEditWorkout: boolean;
-  /** Edita os Suplementos do paciente (médico ou nutricionista). */
-  canEditSupplements: boolean;
 }
 
-// Admin = gestão (vê itens de clínica; NÃO edita planos clínicos). Cada clínico edita só o seu.
+// Só administrativo. admin = gestão; os demais papéis não são admin (a autoridade clínica é a disciplina).
 const PERMISSIONS: Record<Role, RolePermissions> = {
-  admin: { isAdmin: true, canEditNutrition: false, canEditWorkout: false, canEditSupplements: false },
-  doctor: { isAdmin: false, canEditNutrition: false, canEditWorkout: true, canEditSupplements: true },
-  nutritionist: { isAdmin: false, canEditNutrition: true, canEditWorkout: false, canEditSupplements: true },
-  trainer: { isAdmin: false, canEditNutrition: false, canEditWorkout: true, canEditSupplements: false },
-  physio: { isAdmin: false, canEditNutrition: false, canEditWorkout: false, canEditSupplements: false },
-  other: { isAdmin: false, canEditNutrition: false, canEditWorkout: false, canEditSupplements: false },
+  admin: { isAdmin: true },
+  doctor: { isAdmin: false },
+  nutritionist: { isAdmin: false },
+  trainer: { isAdmin: false },
+  physio: { isAdmin: false },
+  other: { isAdmin: false },
 };
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -46,8 +41,14 @@ const TYPE_TO_ROLE: Record<ProfessionalType, Role> = {
   other: "other",
 };
 
-/** Papel efetivo: admin (pelo profile.role) tem precedência; senão, deriva do tipo do profissional. */
-export function deriveRole(profileRole: UserRole | null | undefined, type: ProfessionalType | null | undefined): Role {
+/**
+ * Papel de DISPLAY/administrativo. admin (profiles.role) tem precedência; senão deriva do tipo do
+ * profissional APENAS para o RÓTULO de display — NÃO define permissão clínica (isso vem das disciplinas).
+ */
+export function deriveRole(
+  profileRole: UserRole | null | undefined,
+  type: ProfessionalType | null | undefined,
+): Role {
   if (profileRole === "admin") return "admin";
   if (type) return TYPE_TO_ROLE[type] ?? "other";
   return "other";
@@ -61,11 +62,11 @@ export function roleLabel(role: Role): string {
   return ROLE_LABELS[role];
 }
 
-/** Motivos PT-BR de bloqueio de edição (mostrados quando a ação fica desabilitada). */
+/**
+ * Motivo PT-BR de bloqueio ADMINISTRATIVO (calendário). Os motivos CLÍNICOS por disciplina vivem em
+ * `DISCIPLINE_REASON` (src/lib/domain/disciplines.ts).
+ */
 export const EDIT_REASON = {
-  nutrition: "Apenas o nutricionista edita o plano alimentar.",
-  workout: "Apenas o médico ou personal trainer edita o treino.",
-  supplements: "Apenas o médico ou o nutricionista edita os suplementos.",
   calendar: "Apenas o administrador da clínica gerencia a integração com o Google Calendar.",
 } as const;
 

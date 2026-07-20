@@ -17,8 +17,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useDeleteSupplement, usePatientSupplements } from "@/hooks/useSupplements";
-import { EDIT_REASON } from "@/lib/domain/roles";
-import { useRole } from "@/providers/role-context";
+import { useDisciplinePermissions } from "@/hooks/useDisciplines";
+import { DISCIPLINE_REASON } from "@/lib/domain/disciplines";
 import type { PatientDetail, Supplement } from "@/types/db";
 
 /**
@@ -29,7 +29,7 @@ import type { PatientDetail, Supplement } from "@/types/db";
  */
 export function SupplementsTab({ patient }: { patient: PatientDetail }) {
   const { data, isLoading, isError, refetch } = usePatientSupplements(patient.id);
-  const { perms } = useRole();
+  const { perms } = useDisciplinePermissions();
   const canEdit = perms.canEditSupplements;
   const del = useDeleteSupplement(patient.id);
 
@@ -58,7 +58,7 @@ export function SupplementsTab({ patient }: { patient: PatientDetail }) {
         </div>
         <GatedAction
           canEdit={canEdit}
-          reason={EDIT_REASON.supplements}
+          reason={DISCIPLINE_REASON.supplements}
           wrapperClassName="items-end"
           size="sm"
           onClick={openCreate}
@@ -79,7 +79,7 @@ export function SupplementsTab({ patient }: { patient: PatientDetail }) {
         emptyAction={
           <GatedAction
             canEdit={canEdit}
-            reason={EDIT_REASON.supplements}
+            reason={DISCIPLINE_REASON.supplements}
             wrapperClassName="items-center"
             onClick={openCreate}
           >

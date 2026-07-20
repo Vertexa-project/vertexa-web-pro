@@ -15,6 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useSaveNutritionPlan } from "@/hooks/usePlanMutations";
+import { useDisciplinePermissions } from "@/hooks/useDisciplines";
+import { DISCIPLINE_REASON, isDisciplineDenied, writeDeniedMessage } from "@/lib/domain/disciplines";
+import { captureException } from "@/lib/observability/sentry";
 import type { SaveNutritionPlanInput } from "@/lib/api/planMutations";
 import type { NutritionPlanFull, PatientDetail } from "@/types/db";
 
@@ -57,6 +60,8 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
   const [form, setForm] = useState<PlanForm>(() => fromExisting(existing));
   const [error, setError] = useState<string | null>(null);
   const save = useSaveNutritionPlan(patient.id);
+  const { perms } = useDisciplinePermissions();
+  const canEdit = perms.canEditNutrition;
 
   useEffect(() => {
     if (open) {
@@ -70,6 +75,10 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
   }
 
   function handleSave() {
+    if (!canEdit) {
+      setError(DISCIPLINE_REASON.nutrition);
+      return;
+    }
     if (!form.title.trim()) {
       setError("Dê um título ao plano.");
       return;
@@ -92,7 +101,14 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
     };
     save.mutate(input, {
       onSuccess: () => onOpenChange(false),
-      onError: () => setError("Não foi possível salvar o plano. Tente novamente."),
+      onError: (err) => {
+        if (isDisciplineDenied(err)) {
+          captureException(err, { source: "authz", scope: "nutrition" });
+          setError(writeDeniedMessage(err, "nutrition"));
+        } else {
+          setError("Não foi possível salvar o plano. Tente novamente.");
+        }
+      },
     });
   }
 
@@ -166,6 +182,11 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
             Adicionar refeição
           </Button>
 
+          {!canEdit ? (
+            <p className="text-sm text-muted-foreground" role="note">
+              {DISCIPLINE_REASON.nutrition}
+            </p>
+          ) : null}
           {error ? (
             <p className="text-sm text-destructive" role="alert">
               {error}
@@ -177,7 +198,7 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={save.isPending}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={save.isPending} aria-busy={save.isPending}>
+          <Button onClick={handleSave} disabled={!canEdit || save.isPending} aria-busy={save.isPending}>
             {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
             {save.isPending ? "Salvando…" : "Salvar plano"}
           </Button>

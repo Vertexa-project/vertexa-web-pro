@@ -6,14 +6,14 @@ import { GatedAction } from "./GatedAction";
 import { NutritionPlanEditor } from "./NutritionPlanEditor";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNutritionPlan } from "@/hooks/usePlans";
-import { EDIT_REASON } from "@/lib/domain/roles";
-import { useRole } from "@/providers/role-context";
+import { useDisciplinePermissions } from "@/hooks/useDisciplines";
+import { DISCIPLINE_REASON } from "@/lib/domain/disciplines";
 import type { PatientDetail } from "@/types/db";
 
 export function NutritionTab({ patient }: { patient: PatientDetail }) {
   const { data, isLoading, isError, refetch } = useNutritionPlan(patient.id);
   const [editing, setEditing] = useState(false);
-  const { perms } = useRole();
+  const { perms } = useDisciplinePermissions();
   const canEdit = perms.canEditNutrition;
 
   const totalKcal = data?.meals.reduce((sum, m) => sum + (m.calories ?? 0), 0) ?? 0;
@@ -31,7 +31,7 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
         emptyAction={
           <GatedAction
             canEdit={canEdit}
-            reason={EDIT_REASON.nutrition}
+            reason={DISCIPLINE_REASON.nutrition}
             wrapperClassName="items-center"
             onClick={() => setEditing(true)}
           >
@@ -49,7 +49,7 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
               </div>
               <GatedAction
                 canEdit={canEdit}
-                reason={EDIT_REASON.nutrition}
+                reason={DISCIPLINE_REASON.nutrition}
                 wrapperClassName="items-end"
                 variant="outline"
                 className="shrink-0"

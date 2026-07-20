@@ -186,6 +186,15 @@ Migration `20260725090000_wp_disc_a_disciplines.sql` (PR sem merge; provado Nív
 - **Comportamento/lacuna (ver PENDENCIAS):** admin sem disciplina perde escrita de `body_assessments` (DISC-ADMIN-1, intencional); `medico` só escreve `body_assessments` (sem superfície de prescrição médica — lacuna de produto).
 - **Parte B (web):** alinhar `src/lib/domain/roles.ts` (hoje 1 role por `type`) ao modelo multi-disciplina — WP separado.
 
+## 9. WP-DISC · B — UI multi-disciplina (permissões por união + administração)
+Branch `feat/disciplines-ui-web` (PR sem merge). Gates: vitest **15/15** · tsc 0 · lint 0 · build 0. Detalhe em `docs/ops/DISCIPLINES_UI.md`.
+- **Permissões por UNIÃO** das disciplinas do profissional (`useDisciplinePermissions` + `derivePermissions`), NUNCA de `type`. `roles.ts` reduzido ao administrativo (`isAdmin`); `type` só p/ display/listagem.
+- **Espelho do mapa** do banco em `src/lib/domain/disciplines.ts` (`DISCIPLINE_WRITE_MAP`), travado por teste (`disciplines.test.ts`).
+- **Gating em 3 camadas:** botão (`GatedAction`) + editor (*Salvar*) + mutation hook (`useWriteGuard` → `WriteForbiddenError`). `patient_documents`/`appointments` NÃO gateados; `body_assessments` é read-only na web (perm exposta p/ futuro).
+- **B4 tela de administração** (`/configuracoes/disciplinas`, admin-only): concede/revoga disciplinas por profissional; auto-atribuição bloqueada na UI (o banco também nega).
+- **B5 erro authz:** mensagem amigável + Sentry `source:"authz"` (sem PII).
+- **Infra:** o repo web ganhou **vitest** (antes sem runner) — script `test`, `vitest.config.ts`, 1º teste unitário.
+
 ## 8. Log da Sessão 4 (web — Review do painel)
 - **Foco:** tudo gira em torno do paciente; Dashboard como centro; mensagem do profissional enviando de verdade.
 - **Navegação:** `app/routes.ts` já sem "Retenção"/"Planos" na lateral (Diários/Questionários nunca estiveram).

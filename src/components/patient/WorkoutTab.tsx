@@ -9,14 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWorkoutPlan } from "@/hooks/usePlans";
 import { formatWeight } from "@/lib/domain/format";
 import { muscleGroupLabel } from "@/lib/domain/muscleRecovery";
-import { EDIT_REASON } from "@/lib/domain/roles";
-import { useRole } from "@/providers/role-context";
+import { useDisciplinePermissions } from "@/hooks/useDisciplines";
+import { DISCIPLINE_REASON } from "@/lib/domain/disciplines";
 import type { PatientDetail } from "@/types/db";
 
 export function WorkoutTab({ patient }: { patient: PatientDetail }) {
   const { data, isLoading, isError, refetch } = useWorkoutPlan(patient.id);
   const [editing, setEditing] = useState(false);
-  const { perms } = useRole();
+  const { perms } = useDisciplinePermissions();
   const canEdit = perms.canEditWorkout;
 
   return (
@@ -32,7 +32,7 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
         emptyAction={
           <GatedAction
             canEdit={canEdit}
-            reason={EDIT_REASON.workout}
+            reason={DISCIPLINE_REASON.workout}
             wrapperClassName="items-center"
             onClick={() => setEditing(true)}
           >
@@ -50,7 +50,7 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
               </div>
               <GatedAction
                 canEdit={canEdit}
-                reason={EDIT_REASON.workout}
+                reason={DISCIPLINE_REASON.workout}
                 wrapperClassName="items-end"
                 variant="outline"
                 className="shrink-0"

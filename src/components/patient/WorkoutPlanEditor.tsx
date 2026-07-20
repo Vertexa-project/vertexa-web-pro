@@ -14,6 +14,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSaveWorkoutPlan } from "@/hooks/usePlanMutations";
+import { useDisciplinePermissions } from "@/hooks/useDisciplines";
+import { DISCIPLINE_REASON, isDisciplineDenied, writeDeniedMessage } from "@/lib/domain/disciplines";
+import { captureException } from "@/lib/observability/sentry";
 import type { SaveWorkoutPlanInput } from "@/lib/api/planMutations";
 import type { PatientDetail, WorkoutPlanFull } from "@/types/db";
 
@@ -74,6 +77,8 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
   const [form, setForm] = useState<PlanForm>(() => fromExisting(existing));
   const [error, setError] = useState<string | null>(null);
   const save = useSaveWorkoutPlan(patient.id);
+  const { perms } = useDisciplinePermissions();
+  const canEdit = perms.canEditWorkout;
 
   useEffect(() => {
     if (open) {
@@ -97,6 +102,10 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
   }
 
   function handleSave() {
+    if (!canEdit) {
+      setError(DISCIPLINE_REASON.workout);
+      return;
+    }
     if (!form.title.trim()) {
       setError("Dê um título ao plano.");
       return;
@@ -129,7 +138,14 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
     };
     save.mutate(input, {
       onSuccess: () => onOpenChange(false),
-      onError: () => setError("Não foi possível salvar o plano. Tente novamente."),
+      onError: (err) => {
+        if (isDisciplineDenied(err)) {
+          captureException(err, { source: "authz", scope: "workout" });
+          setError(writeDeniedMessage(err, "workout"));
+        } else {
+          setError("Não foi possível salvar o plano. Tente novamente.");
+        }
+      },
     });
   }
 
@@ -275,6 +291,11 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
             Adicionar treino
           </Button>
 
+          {!canEdit ? (
+            <p className="text-sm text-muted-foreground" role="note">
+              {DISCIPLINE_REASON.workout}
+            </p>
+          ) : null}
           {error ? (
             <p className="text-sm text-destructive" role="alert">
               {error}
@@ -286,7 +307,7 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={save.isPending}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={save.isPending} aria-busy={save.isPending}>
+          <Button onClick={handleSave} disabled={!canEdit || save.isPending} aria-busy={save.isPending}>
             {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
             {save.isPending ? "Salvando…" : "Salvar plano"}
           </Button>

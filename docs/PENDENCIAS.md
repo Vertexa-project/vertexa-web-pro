@@ -324,7 +324,13 @@
     sistema NÃO tem superfície de prescrição médica (medicamento/conduta) — decidir com o cliente (fora do
     WP); (b) **mudança de comportamento** — admin SEM disciplina clínica **perde** a escrita de
     `body_assessments` (DISC-ADMIN-1, intencional). `professionals.type` mantido por compat (dívida).
-    `DÍVIDA-APP-1` (save DELETE+INSERT) segue anotada; Fam4 — `sender_profile_id` vem do client (RLS amarra ao current_profile_id).
+    `DÍVIDA-APP-1` (save DELETE+INSERT) segue anotada. **WP-DISC B (UI, PR sem merge)** entregou o gating
+    multi-disciplina (permissões por UNIÃO, `useDisciplinePermissions`) + a tela de administração de
+    disciplinas (`/configuracoes/disciplinas`, admin-only). **DÍVIDA-UI-DISC (manter sincronizado):** o mapa
+    da UI `DISCIPLINE_WRITE_MAP` (`src/lib/domain/disciplines.ts`) é **ESPELHO** das policies do banco —
+    travado por teste (`disciplines.test.ts`), mas exige atualizar OS DOIS lados a cada mudança do mapa.
+    Dívida futura: **derivar o mapa do banco** (RPC/endpoint) em vez de espelhar, eliminando a divergência.
+    (Ver `docs/ops/DISCIPLINES_UI.md`.) Fam4 — `sender_profile_id` vem do client (RLS amarra ao current_profile_id).
 
 28. **✅ RESOLVIDO (WP-APP-1, 2026-07-09).** ~~web `createPatient` incompatível com a RLS de identidade.~~
     `src/lib/api/patients.ts` inseria `profiles` direto (negado pela RLS real; profile nasce via trigger) +

@@ -25,6 +25,10 @@ export const qk = {
   profileByAuthUser: (authUserId: string) => ["profileByAuthUser", authUserId] as const,
   clinicProfessionals: (clinicId: string) => ["clinicProfessionals", clinicId] as const,
   clinic: (clinicId: string) => ["clinic", clinicId] as const,
+  // Disciplinas (WP-DISC B): lista canônica, do profissional logado, e da equipe da clínica (admin).
+  disciplinesList: ["disciplines", "list"] as const,
+  myDisciplines: (professionalId: string) => ["disciplines", "mine", professionalId] as const,
+  clinicDisciplines: (clinicId: string) => ["disciplines", "clinic", clinicId] as const,
   campaigns: ["campaigns"] as const,
   allPlans: ["plans", "all"] as const,
   // Agenda interna (Sessão 6/12) — escopada por clínica + faixa visível do calendário [from, to).
