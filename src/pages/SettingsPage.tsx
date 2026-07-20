@@ -143,6 +143,13 @@ export function SettingsPage() {
               </Button>
             </SettingRow>
           ) : null}
+          {isClinicAdmin ? (
+            <SettingRow label="Auditoria de exportações">
+              <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/auditoria")}>
+                Ver registros
+              </Button>
+            </SettingRow>
+          ) : null}
           <SettingRow label="Convidar profissional">
             <SoonButton>Convidar</SoonButton>
           </SettingRow>
