@@ -1008,3 +1008,24 @@ A ÚNICA forma de obter o **pacote agregado** de um paciente é a RPC (autoriza 
   - `public.move_patient_journey(p_patient_id uuid, p_to_column_id uuid) → jsonb` — autz `is_clinic_admin OR is_common_professional_of_patient` (**externo NÃO move**); coluna destino tem de ser da mesma clínica; grava estado + histórico atômicos.
   - `public.ack_journey_milestone(p_patient_id uuid, p_milestone_key text) → jsonb` — mesma autz; valida a chave canônica; idempotente.
 - **`create_patient`** ganhou `p_start_date date default null` (K1): null ⇒ CURRENT_DATE; **recusa data futura**. Chamada sem o parâmetro é idêntica à anterior.
+
+## WP-ARTE · A — Consentimento de MÍDIA por peça e por versão (SÓ BANCO; em PR sem merge; NÃO aplicado)
+
+Modelo que torna **IMPOSSÍVEL usar uma peça sem consentimento ATIVO** — a checagem vive no banco (função canônica), não na interface. Consentimento é **por PEÇA e por VERSÃO** (nunca genérico). Escrita de estado **só por RPC SECURITY DEFINER** com autor derivado do servidor (anti-forja). **Nenhuma policy existente alterada.**
+
+**Tabelas (public):** `media_channels` (canais, extensível sem migration — seed: instagram/site/whatsapp/tela_interna/impresso/anuncio_pago); `media_pieces`→`media_piece_versions` (imutável; qualquer alteração relevante de PEÇA gera nova versão) →`media_piece_version_professionals`; `media_consent_terms` (texto imutável por versão); `media_consents` (amarrado à `piece_version_id`; `origin` app|in_person com CHECK dos campos presenciais; `status` pending|authorized|change_requested|refused|revoked|expired; `expires_at`=concessão+12m) →`media_consent_channels`.
+
+**Contrato de escrita (RPCs oficiais — não renomear params sem alinhar aqui):**
+| Ação | RPC | Quem chama |
+|---|---|---|
+| Criar peça+versão 1 | `media_piece_create(...)` | **WEB** (staff interno vinculado/admin) |
+| Nova versão (D1) | `media_piece_new_version(...)` | **WEB** (staff) |
+| **Conceder no app** | `media_consent_grant_app(version, channels[], term, purpose, sponsored)` | **APP** (o PACIENTE dono — autor do servidor) |
+| Registrar presencial | `media_consent_record_in_person(version, channels[], term, method, obtained_at, proof_path, ...)` | **WEB** (staff; exceção presencial) |
+| **Revogar** | `media_consent_revoke(consent, reason?)` | **APP** (só o PACIENTE, sozinho, sem justificativa) |
+| Pode usar? (canônica) | `media_use_check(version, channel)` → `{usable, reason, expires_at}` | WEB/APP (todo USO passa por ela) |
+| Vencendo em N dias | `media_consents_expiring(N)` | WEB (alertas da clínica — etapa D) |
+
+**Regras (lei do cliente + orquestrador):** consentimento por peça+versão+canais selecionados+clínica/profissionais; validade 12m OU até revogação; revogação bloqueia download/edição/duplicação/republicação e tira da biblioteca (derivado da função canônica); auditoria preservada e **NUNCA reutilizável como ativa**. **D1** peça muda ⇒ nova versão+consentimento / uso muda (canal/pago/finalidade) ⇒ novo consentimento na MESMA versão. **D3** três fronteiras: GERIR (staff vê/cria sem consent) · DECIDIR (paciente vê a própria peça p/ consentir — ver ≠ usar) · USAR (baixar/publicar exige consent ativo p/ o canal). **D4** menor OU `birth_date` nula ⇒ concessão NEGADA (requer modelo de responsável legal — etapa C). **D6** link assinado publicável = **300s**; limitação (link já emitido não é revogável, só expira) consta no termo.
+
+**Cross-repo:** quando implementado, o **app** concede/revoga consentimento (RPCs acima, identidade do próprio paciente amarrada pelo servidor); a **web** cria peças/versões e registra presencial; **externo NÃO acessa**. app/patient-native NÃO tocados nesta fase (só banco).
