@@ -366,3 +366,11 @@
   - **Visão pessoal do autor:** a tela de auditoria é admin-only nesta fase; a RLS já permite o autor ler as PRÓPRIAS exportações — uma visão "minhas exportações" para não-admin fica como evolução.
   - **Fotos no PDF de lote:** o lote NÃO embute imagens (limita o tamanho do arquivo); o relatório individual embute o par antes/depois. Expor essa opção no lote é evolução.
   - **Advisor previsto no apply:** +1 unused_index INFO (idx_report_exports_batch, novo — passa a "usado" quando a auditoria filtrar por lote).
+
+- **DÍVIDA-KANBAN-A (WP-KANBAN A — jornada, em PR sem merge; NÃO aplicado):**
+  - **Offsets 180/365:** os marcos por dia derivam de `private.journey_day_offsets()` (hoje {30,60,90}); adicionar 180/365 = **1 linha** nessa função (a validação do ack e o cálculo do client passam a reconhecê-los).
+  - **appointment_next FORA de escopo** nesta fase (marco de próxima consulta agendada) — avaliar depois.
+  - **birth_date nulo ⇒ SEM selo de aniversário:** o cartão simplesmente não mostra o marco de aniversário quando o paciente não tem data de nascimento.
+  - **Parte B (UI):** falta o quadro (kanban), o arraste/mover (chama `move_patient_journey`), a administração de colunas (admin), os selos/alertas de marco (derivados de `start_date`/`birth_date`, janela 7 dias) e o botão de reconhecer (`ack_journey_milestone`).
+  - **Artes (Func. 5):** o `journey_milestone_ack` é a âncora canônica (milestone_key estável) para a futura geração de arte — não implementado agora.
+  - **Advisors previstos no apply:** +2 WARN `authenticated_security_definer` (move/ack, SECDEF intencional) + INFO `unindexed_foreign_keys` das colunas de auditoria das novas tabelas.
