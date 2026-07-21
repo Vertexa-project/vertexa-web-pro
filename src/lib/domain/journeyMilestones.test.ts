@@ -8,8 +8,9 @@ describe("computeMilestones — caso típico (start há 30 dias)", () => {
   const ms = computeMilestones({ startDate: "2026-06-20", birthDate: "1990-03-10", today: "2026-07-20" });
 
   it("chaves canônicas batem com a RPC (start / day_<offset> / birthday:YYYY)", () => {
+    // J1: 10/mar já passou em 2026 (hoje é 20/jul) ⇒ próxima ocorrência = 2027 ⇒ birthday:2027.
     expect(ms.map((m) => m.key).sort()).toEqual(
-      ["birthday:2026", "day_30", "day_60", "day_90", "start"].sort(),
+      ["birthday:2027", "day_30", "day_60", "day_90", "start"].sort(),
     );
   });
 
@@ -49,16 +50,34 @@ describe("computeMilestones — start_date nula", () => {
   });
 });
 
-describe("computeMilestones — aniversário do ano corrente", () => {
-  it("aniversário JÁ PASSOU neste ano ⇒ past (ano corrente, não o próximo)", () => {
-    const ms = computeMilestones({ startDate: null, birthDate: "1985-01-10", today: "2026-07-20" });
-    const b = find(ms, "birthday:2026")!;
-    expect(b.date).toBe("2026-01-10");
-    expect(b.daysUntil).toBeLessThan(0);
-    expect(b.status).toBe("past");
+describe("computeMilestones — aniversário = PRÓXIMA ocorrência (J1)", () => {
+  it("aniversário AMANHÃ ⇒ upcoming (ocorrência deste ano)", () => {
+    const ms = computeMilestones({ startDate: null, birthDate: "1985-07-21", today: "2026-07-20" });
+    expect(find(ms, "birthday:2026")).toMatchObject({ date: "2026-07-21", daysUntil: 1, status: "upcoming" });
   });
 
-  it("aniversário em 5 dias ⇒ upcoming; em 8 dias ⇒ future (fronteira da janela de 7)", () => {
+  it("aniversário HOJE ⇒ ocorrência de HOJE (daysUntil 0; NÃO pula p/ o ano seguinte)", () => {
+    const ms = computeMilestones({ startDate: null, birthDate: "1985-07-20", today: "2026-07-20" });
+    expect(find(ms, "birthday:2026")).toMatchObject({ date: "2026-07-20", daysUntil: 0, status: "upcoming" });
+  });
+
+  it("3/jan com hoje 28/dez ⇒ upcoming ATRAVESSANDO o ano (fim do ponto cego da virada)", () => {
+    const ms = computeMilestones({ startDate: null, birthDate: "1990-01-03", today: "2026-12-28" });
+    const b = find(ms, "birthday:2027")!; // ocorrência = ANO SEGUINTE (chave estável no ano da ocorrência)
+    expect(b.date).toBe("2027-01-03");
+    expect(b.daysUntil).toBe(6);
+    expect(b.status).toBe("upcoming");
+  });
+
+  it("aniversário ONTEM ⇒ próxima ocorrência = ANO SEGUINTE, fora da janela (future)", () => {
+    const ms = computeMilestones({ startDate: null, birthDate: "1985-07-19", today: "2026-07-20" });
+    const b = find(ms, "birthday:2027")!;
+    expect(b.date).toBe("2027-07-19");
+    expect(b.status).toBe("future");
+    expect(b.daysUntil).toBeGreaterThan(7);
+  });
+
+  it("dentro da janela: 5 dias ⇒ upcoming; 8 dias ⇒ future (fronteira; ocorrência deste ano)", () => {
     const soon = computeMilestones({ startDate: null, birthDate: "1985-07-25", today: "2026-07-20" });
     expect(find(soon, "birthday:2026")).toMatchObject({ daysUntil: 5, status: "upcoming" });
     const far = computeMilestones({ startDate: null, birthDate: "1985-07-28", today: "2026-07-20" });
@@ -71,8 +90,8 @@ describe("computeMilestones — aniversário do ano corrente", () => {
   });
 });
 
-describe("computeMilestones — 29/02 (ano bissexto)", () => {
-  it("ano NÃO-bissexto: clampa 29/02 → 28/02 (não vaza para março)", () => {
+describe("computeMilestones — 29/02 (regra adotada: 28/02 em ano comum)", () => {
+  it("ano NÃO-bissexto, ainda por vir: 29/02 → 28/02 (ocorrência deste ano)", () => {
     const ms = computeMilestones({ startDate: null, birthDate: "2000-02-29", today: "2026-02-15" });
     expect(find(ms, "birthday:2026")!.date).toBe("2026-02-28");
   });
@@ -80,6 +99,11 @@ describe("computeMilestones — 29/02 (ano bissexto)", () => {
   it("ano bissexto: mantém 29/02", () => {
     const ms = computeMilestones({ startDate: null, birthDate: "2000-02-29", today: "2028-02-15" });
     expect(find(ms, "birthday:2028")!.date).toBe("2028-02-29");
+  });
+
+  it("ano NÃO-bissexto, já passou 28/02 ⇒ próxima ocorrência no ano seguinte (clampada se comum)", () => {
+    const ms = computeMilestones({ startDate: null, birthDate: "2000-02-29", today: "2026-03-01" });
+    expect(find(ms, "birthday:2027")!.date).toBe("2027-02-28"); // 2027 é comum ⇒ 28/02
   });
 });
 

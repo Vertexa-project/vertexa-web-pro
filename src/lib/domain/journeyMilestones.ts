@@ -39,8 +39,9 @@ function statusFor(daysUntil: number): MilestoneStatus {
 }
 
 /**
- * Aniversário no ANO indicado, com CLAMP de 29/02 → 28/02 em ano não-bissexto (nunca "vaza" para
- * março). Escolha documentada: em ano comum, o aniversário de 29/02 é marcado em 28/02.
+ * Aniversário no ANO indicado, com CLAMP de 29/02 → 28/02 em ano não-bissexto. REGRA ADOTADA para
+ * 29/fev em ano comum: 28/fev (último dia de fevereiro — permanece no mês de nascimento, nunca "vaza"
+ * para março). Combina com a lógica de PRÓXIMA ocorrência (J1) em computeMilestones.
  */
 function birthdayInYear(birthDate: string, year: number): Date {
   const bd = parseISO(birthDate);
@@ -93,14 +94,24 @@ export function computeMilestones(input: {
   }
 
   if (input.birthDate) {
-    const year = today.getFullYear();
-    const bday = birthdayInYear(input.birthDate, year);
-    const daysUntil = differenceInCalendarDays(bday, today);
+    // J1: PRÓXIMA OCORRÊNCIA do aniversário (não "ano corrente"). Se a deste ano já passou, usa a do
+    // ano seguinte — assim um aniversário no início de janeiro dispara o alerta de 7 dias já no fim de
+    // dezembro (ATRAVESSA o ano, fim do ponto cego) e o cartão nunca fica preso em "passou há meses".
+    // Aniversário HOJE conta como ocorrência de HOJE (daysUntil 0, não pula). O identificador mantém o
+    // ANO DA OCORRÊNCIA (`birthday:YYYY`), estável para o reconhecimento.
+    const curYear = today.getFullYear();
+    let occ = birthdayInYear(input.birthDate, curYear);
+    let occYear = curYear;
+    if (differenceInCalendarDays(occ, today) < 0) {
+      occYear = curYear + 1;
+      occ = birthdayInYear(input.birthDate, occYear);
+    }
+    const daysUntil = differenceInCalendarDays(occ, today);
     out.push({
-      key: `birthday:${year}`,
+      key: `birthday:${occYear}`,
       kind: "birthday",
       label: "Aniversário",
-      date: format(bday, "yyyy-MM-dd"),
+      date: format(occ, "yyyy-MM-dd"),
       daysUntil,
       status: statusFor(daysUntil),
     });
