@@ -1,4 +1,5 @@
 import {
+  KanbanSquare,
   LayoutDashboard,
   LayoutTemplate,
   Megaphone,
@@ -25,6 +26,7 @@ export interface NavItem {
 export const mainNav: NavItem[] = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
   { path: "/pacientes", label: "Pacientes", icon: Users },
+  { path: "/jornada", label: "Jornada", icon: KanbanSquare },
   { path: "/mensagens", label: "Mensagens", icon: MessageSquare },
   { path: "/campanhas", label: "Campanhas", icon: Megaphone },
   // Roadmap (não implementado): modelos de plano/treino/mensagem reutilizáveis.

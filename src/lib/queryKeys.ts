@@ -36,6 +36,11 @@ export const qk = {
   disciplinesList: ["disciplines", "list"] as const,
   myDisciplines: (professionalId: string) => ["disciplines", "mine", professionalId] as const,
   clinicDisciplines: (clinicId: string) => ["disciplines", "clinic", clinicId] as const,
+  // Jornada do paciente (WP-KANBAN B): colunas por clínica, estado atual (por paciente) e marcos
+  // reconhecidos. `journeyState`/`journeyAcks` são globais (a RLS escopa ao que o usuário acessa).
+  journeyColumns: (clinicId: string) => ["journey", "columns", clinicId] as const,
+  journeyState: ["journey", "state"] as const,
+  journeyAcks: ["journey", "acks"] as const,
   campaigns: ["campaigns"] as const,
   allPlans: ["plans", "all"] as const,
   // Agenda interna (Sessão 6/12) — escopada por clínica + faixa visível do calendário [from, to).
