@@ -40,6 +40,7 @@ interface RawPatientListRow {
   goal: string | null;
   current_weight: number | null;
   start_date: string | null;
+  birth_date: string | null;
   profile: Pick<Profile, "full_name" | "email" | "avatar_url"> | null;
   adherence_snapshots: RawSnap[] | null;
   professional_patient_links: RawLink[] | null;
@@ -63,7 +64,7 @@ export async function listPatients(): Promise<PatientListItem[]> {
   const { data, error } = await supabase
     .from("patients")
     .select(
-      `id, goal, current_weight, start_date,
+      `id, goal, current_weight, start_date, birth_date,
        profile:profiles ( full_name, email, avatar_url ),
        adherence_snapshots ( score, level, status, weekly_completion_rate, calculated_at ),
        professional_patient_links ( professionals ( id, type, profile:profiles ( full_name ) ) ),
@@ -98,6 +99,7 @@ export async function listPatients(): Promise<PatientListItem[]> {
       goal: row.goal,
       current_weight: row.current_weight,
       start_date: row.start_date,
+      birth_date: row.birth_date,
       profile: row.profile ?? null,
       snapshot: latestSnap,
       professionals: mapProfessionals(row.professional_patient_links),

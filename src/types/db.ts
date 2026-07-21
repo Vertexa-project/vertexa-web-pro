@@ -382,6 +382,10 @@ export interface PatientListItem {
   goal: string | null;
   current_weight: number | null;
   start_date: string | null;
+  // WP-KANBAN B: data de nascimento (DATE) para os marcos DERIVADOS do cartão (aniversário do ano
+  // corrente). A RLS já limita quais pacientes cada um enxerga — é o MESMO caminho de leitura, só
+  // acrescido de uma coluna (sem novo acesso).
+  birth_date: string | null;
   profile: Pick<Profile, "full_name" | "email" | "avatar_url"> | null;
   snapshot:
     | Pick<AdherenceSnapshot, "score" | "level" | "status" | "weekly_completion_rate" | "calculated_at">

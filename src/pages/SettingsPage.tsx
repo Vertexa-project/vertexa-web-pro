@@ -144,6 +144,13 @@ export function SettingsPage() {
             </SettingRow>
           ) : null}
           {isClinicAdmin ? (
+            <SettingRow label="Colunas da jornada">
+              <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/jornada")}>
+                Gerenciar
+              </Button>
+            </SettingRow>
+          ) : null}
+          {isClinicAdmin ? (
             <SettingRow label="Auditoria de exportações">
               <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/auditoria")}>
                 Ver registros

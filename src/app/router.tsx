@@ -21,6 +21,12 @@ const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ de
 const DisciplinesAdminPage = lazy(() =>
   import("@/pages/DisciplinesAdminPage").then((m) => ({ default: m.DisciplinesAdminPage })),
 );
+const JourneyBoardPage = lazy(() =>
+  import("@/pages/JourneyBoardPage").then((m) => ({ default: m.JourneyBoardPage })),
+);
+const JourneyColumnsAdminPage = lazy(() =>
+  import("@/pages/JourneyColumnsAdminPage").then((m) => ({ default: m.JourneyColumnsAdminPage })),
+);
 const BatchReportPage = lazy(() =>
   import("@/pages/BatchReportPage").then((m) => ({ default: m.BatchReportPage })),
 );
@@ -60,12 +66,14 @@ export const router = createBrowserRouter(
         { index: true, element: <DashboardPage /> },
         { path: "pacientes", element: <PatientsPage /> },
         { path: "pacientes/:id", element: <PatientProfilePage /> },
+        { path: "jornada", element: <JourneyBoardPage /> },
         { path: "planos", element: <PlansPage /> },
         { path: "mensagens", element: <MessagesPage /> },
         { path: "campanhas", element: <CampaignsPage /> },
         { path: "retencao", element: <RetentionPage /> },
         { path: "configuracoes", element: <SettingsPage /> },
         { path: "configuracoes/disciplinas", element: <DisciplinesAdminPage /> },
+        { path: "configuracoes/jornada", element: <JourneyColumnsAdminPage /> },
         { path: "configuracoes/auditoria", element: <ReportAuditPage /> },
         { path: "relatorios/lote", element: <BatchReportPage /> },
         { path: "*", element: <NotFoundPage /> },
