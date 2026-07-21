@@ -383,3 +383,17 @@
   - **V1 SEM FOTO antes/depois:** `media_piece_versions` PREVÊ `has_before_after_photo`/`photo_asset_path`, mas as RPCs V1 os fixam em false/null (decisão do orquestrador; restrição dos conselhos sobre publicidade de "antes/depois"). Gerar peça com foto exige um WP futuro (params + consentimento explícito) com autorização do dono.
   - **ANEXO PRESENCIAL (storage):** `media_consents.in_person_proof_path` reserva o caminho; o bucket privado + policies (padrão `{patient_id}/…` via `storage_object_patient`) são ETAPA C/D quando o fluxo presencial for construído.
   - **Advisors previstos no apply:** +7 WARN `authenticated_security_definer` (as 7 RPCs, SECDEF intencional) + INFO `unindexed_foreign_keys` (colunas de auditoria) + INFO `unused_index` (índices novos, vazios).
+
+- **DÍVIDA-SEED (WP-SEED — dado de teste no banco; APLICADO em produção):**
+  - **HÁ DADO DE TESTE EM PRODUÇÃO — REMOVER ANTES DO PRIMEIRO CLIENTE REAL.** O seed
+    (`supabase/seeds/wp_seed_test_data.sql`) populou 2 clínicas (Alfa/Beta), 6 profissionais, 5 pacientes,
+    prescrições, registros, chat e jornada, para rodar o playbook. NÃO é migration (não está no ledger).
+    **Remoção:** rodar `supabase/seeds/wp_seed_test_data_remove.sql` (apaga exatamente o que o seed criou,
+    por ids determinísticos + FK a partir das 2 clínicas-âncora). Guia: `docs/ops/SEED_TEST_DATA.md`.
+  - **Login exige e-mails reais:** os perfis dos profissionais nascem com e-mails placeholder
+    (`PREENCHA_*@exemplo.com`); ninguém loga até o dono trocar pelo e-mail Google real (o seed é idempotente
+    e não re-roda — atualizar via `update profiles set email=...` ou remover+editar+re-rodar). Ver o guia.
+  - **Não semeado (limitações):** anexos de chat (exigem arquivo no bucket), fotos de progresso (binário no
+    bucket) e consentimento/peças de mídia (WP-ARTE, sem interface) — ficam de fora.
+  - **Schema/policies intactos:** o seed é só DADO — contagem/HASH de policies idênticos antes/depois
+    (116 / `d19d55adae35af55fb2b92db3a2adcc8`); nenhuma migration nova no ledger.
