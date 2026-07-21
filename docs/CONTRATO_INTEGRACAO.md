@@ -71,7 +71,9 @@ posterior (convite/admin/provisioning server-side). Diagnóstico técnico do tri
 anon/authenticated) — paga a DÍVIDA-AUTH-2 (log por SQLSTATE, nunca SQLERRM).
 
 **Estado `pending`:** sessão real válida mas sem professional/clinic (nem `patients`) → a web mostra
-`PendingAccessPage` (não vê dados de ninguém). Onboarding/vínculo do paciente = **Parte B (app)** / WP futuro.
+`PendingAccessPage` (não vê dados de ninguém), agora com DOIS caminhos (WP-ONBOARDING): **(1) criar a PRÓPRIA
+clínica** — RPC `create_clinic_with_owner` → vira admin na hora e destrava o painel; **(2) aguardar o cadastro**
+por uma clínica que o convidou (comportamento anterior; vínculo/onboarding do paciente = **Parte B (app)** / WP futuro).
 
 **⚠️ Cross-repo:** o trigger vive no Supabase COMPARTILHADO. Hoje só a web faz signup real (o app
 paciente é demo/sem `auth.users`). Quando o app paciente adotar auth real, **revisar** o `role` do
@@ -397,6 +399,24 @@ afrouxada (nenhuma policy nova; `profiles` segue sem INSERT de client). Header d
 
 **As 3 RPCs são CONTRATO OFICIAL de escrita** (parte deste documento): a web escreve paciente/planos SÓ por elas; o app
 não escreve nessas tabelas. Assinaturas verbatim acima — **não renomear parâmetros sem alinhar aqui**.
+
+**EXECUTION_STATE (WP-ONBOARDING · Criação da própria clínica) = ✅ CONCLUÍDA (BANCO + WEB; PR sem merge; NÃO aplicado).**
+Migration `20260801090000_wp_onboarding_create_clinic` (ledger `20260801090000`; **NÃO aplicada** — dry-run em ROLLBACK).
+Fecha o vazio "não havia caminho para a PRIMEIRA clínica". **RPC oficial de onboarding `create_clinic_with_owner(p_name text)
+→ jsonb{clinic_id, professional_id}`** (SECURITY DEFINER, `search_path=''`, EXECUTE só `authenticated`, revoke public/anon):
+(1) autor SEMPRE do servidor (`private.current_profile_id()`←`auth.uid()`; **não forjável** — sem parâmetro de owner);
+(2) **guarda-corpo: UMA clínica por perfil COMO DONO** (recusa a 2ª, hint `ALREADY_OWNS_CLINIC`); (3) valida nome
+(obrigatório; **2..120**); (4) cria `clinics(name, owner_profile_id=chamador)`; (5) cria `professionals(profile_id=chamador,
+clinic_id, type='other', clinic_role='admin')` — mínimos coerentes; (6) destrava o perfil (`role='professional',
+status='active'`) — **COSMÉTICO**: autoridade segue posse/clinic_role (`is_clinic_admin` não lê `profiles.role`, AUTH-ADMIN-1);
+(7) **transacional tudo-ou-nada**. **PORTÃO COMERCIAL** (código de ativação/plano/aprovação da Vertexa) = decisão FUTURA:
+**NÃO implementado**, com **UM ÚNICO ponto de encaixe COMENTADO** na função (após a auth, antes de qualquer escrita) — ao ligar,
+lança `ONBOARDING_NOT_ALLOWED` e nada mais na UI muda (trata por `hint`). **Web:** `PendingAccessPage` com 2 caminhos
+(criar a própria clínica → vira admin na hora; ou aguardar o cadastro por uma clínica). `CreateClinicForm` → `useCreateOwnClinic`
+→ RPC → invalida identidade (`profileByAuthUser`/`currentProfessional`/`clinicAdmin`). Erros por `hint`
+(`src/lib/domain/clinicOnboarding.ts`); só o inesperado ao Sentry (`source:"onboarding"`, sem PII). **Nenhuma policy existente
+alterada; nenhuma tabela nova** (policies 116, hash inalterado). **KILL SWITCH:** `revoke execute … from authenticated`
+desativa a criação (fail-closed). Assinatura verbatim — **não renomear sem alinhar aqui**.
 
 **EXECUTION_STATE (WP-STORAGE-P1 · Arquivo físico/buckets) = ✅ PARTE 1 (BANCO) CONCLUÍDA (aguardando auditoria;
 Parte 2 cross-repo PENDENTE).** Migration `20260720090000_wp_storage2_p1_storage_objects_rls` (versionada e APLICADA;

@@ -383,3 +383,19 @@
   - **V1 SEM FOTO antes/depois:** `media_piece_versions` PREVÊ `has_before_after_photo`/`photo_asset_path`, mas as RPCs V1 os fixam em false/null (decisão do orquestrador; restrição dos conselhos sobre publicidade de "antes/depois"). Gerar peça com foto exige um WP futuro (params + consentimento explícito) com autorização do dono.
   - **ANEXO PRESENCIAL (storage):** `media_consents.in_person_proof_path` reserva o caminho; o bucket privado + policies (padrão `{patient_id}/…` via `storage_object_patient`) são ETAPA C/D quando o fluxo presencial for construído.
   - **Advisors previstos no apply:** +7 WARN `authenticated_security_definer` (as 7 RPCs, SECDEF intencional) + INFO `unindexed_foreign_keys` (colunas de auditoria) + INFO `unused_index` (índices novos, vazios).
+
+- **DÍVIDA-ONBOARDING (WP-ONBOARDING — criação da própria clínica, em PR sem merge; NÃO aplicado):**
+  - **PORTÃO COMERCIAL = decisão PENDENTE do cliente.** Hoje QUALQUER autenticado cria a SUA clínica (guarda-corpo: **uma
+    por perfil como dono**; 2ª tentativa recusada com `ALREADY_OWNS_CLINIC`). A trava comercial (código de ativação / plano /
+    aprovação da Vertexa) **não** está implementada — o risco é COMERCIAL, não de vazamento (isolamento por clínica já provado).
+    **PONTO ÚNICO DE ENCAIXE** (já comentado no código): dentro de `public.create_clinic_with_owner`, logo após a resolução do
+    autor e ANTES de qualquer escrita — a checagem entra ali (ex.: `if not private.onboarding_allowed(v_me) then raise …`),
+    lança `ONBOARDING_NOT_ALLOWED` quando negado, e a web já trata esse `hint` (mensagem pronta em
+    `src/lib/domain/clinicOnboarding.ts`). A assinatura pode ganhar `p_activation_code` no WP do portão — **nada mais muda**.
+    Não espalhar a lógica em outros pontos.
+  - **Perfil destravado é COSMÉTICO:** a RPC seta `profiles.role='professional'/status='active'` só para destravar a UI de
+    "pendente"; a autoridade de admin continua em posse/clinic_role (`private.is_clinic_admin`, AUTH-ADMIN-1 — nunca `profiles.role`).
+  - **`professionals.type='other'` no dono:** valor mínimo coerente na criação (a profissão real é escolhida/ajustada depois);
+    registrar para quando houver edição do próprio cadastro profissional / seleção de tipo no onboarding.
+  - **Advisor previsto no apply:** +1 WARN `authenticated_security_definer` (`create_clinic_with_owner`, SECDEF intencional —
+    endpoint autenticado com portão interno). Sem tabela/índice/policy novos ⇒ perf inalterada.
