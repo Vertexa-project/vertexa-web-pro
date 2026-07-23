@@ -385,7 +385,8 @@
   - **ANEXO PRESENCIAL (storage):** `media_consents.in_person_proof_path` reserva o caminho; o bucket privado + policies (padrão `{patient_id}/…` via `storage_object_patient`) são ETAPA C/D quando o fluxo presencial for construído.
   - **Advisors previstos no apply:** +7 WARN `authenticated_security_definer` (as 7 RPCs, SECDEF intencional) + INFO `unindexed_foreign_keys` (colunas de auditoria) + INFO `unused_index` (índices novos, vazios).
 
-- **DÍVIDA-ONBOARDING (WP-ONBOARDING — criação da própria clínica, em PR sem merge; NÃO aplicado):**
+- **DÍVIDA-ONBOARDING (WP-ONBOARDING — criação da própria clínica; ✅ PR #27 MERGEADO e migration
+  `20260801090000` APLICADA em produção em 2026-07-23, merge commit `3d49267`):**
   - **PORTÃO COMERCIAL = decisão PENDENTE do cliente.** Hoje QUALQUER autenticado cria a SUA clínica (guarda-corpo: **uma
     por perfil como dono**; 2ª tentativa recusada com `ALREADY_OWNS_CLINIC`). A trava comercial (código de ativação / plano /
     aprovação da Vertexa) **não** está implementada — o risco é COMERCIAL, não de vazamento (isolamento por clínica já provado).
@@ -400,7 +401,8 @@
     registrar para quando houver edição do próprio cadastro profissional / seleção de tipo no onboarding.
   - **Advisor previsto no apply:** +1 WARN `authenticated_security_definer` (`create_clinic_with_owner`, SECDEF intencional —
     endpoint autenticado com portão interno). Sem tabela/índice/policy novos ⇒ perf inalterada.
-- **DÍVIDA-DISC-FIX (WP-DISC-FIX — admin atribui disciplina a si mesmo; em PR sem merge, NÃO aplicado):**
+- **DÍVIDA-DISC-FIX (WP-DISC-FIX — admin atribui disciplina a si mesmo; ✅ PR #29 MERGEADO e migration
+  `20260802090000` APLICADA em produção em 2026-07-23, merge commit `78f7577`):**
   - **MUDANÇA DE REGRA (decisão do orquestrador):** `assign_professional_discipline` **deixou de negar a
     auto-atribuição**. O ADMIN da clínica passa a poder conceder E revogar disciplinas a **SI MESMO**.
     **MOTIVO:** impasse circular que travava a clínica solo — `create_clinic_with_owner` (WP-ONBOARDING)
@@ -416,21 +418,49 @@
     da clínica do alvo).
   - **`revoke_professional_discipline` NÃO foi alterada:** provado no banco que ela **nunca** teve trava de
     self — o auto-revogar do admin já era permitido e o não-admin já era negado.
-  - **DEPENDÊNCIA:** o teste do FLUXO SOLO ponta a ponta exige `create_clinic_with_owner` (WP-ONBOARDING,
-    migration `20260801090000`, **PR #27 sem merge**). A migration deste WP **não** depende dele; só o
-    bloco SOLO da suíte — que, se a RPC faltar, registra `SOLO_SKIPPED_NO_PR27` em vez de passar calado.
+  - **DEPENDÊNCIA (resolvida):** o teste do FLUXO SOLO ponta a ponta exige `create_clinic_with_owner`
+    (WP-ONBOARDING, migration `20260801090000`) — **aplicada em produção antes desta**, na ordem
+    obrigatória. A suíte roda sem o marcador `SOLO_SKIPPED_NO_PR27` (guarda mantida no arquivo para o
+    caso de rodar em um ambiente onde a RPC não exista).
   - **Advisor previsto no apply:** nenhum novo (a função já existia e já era SECDEF executável por
     `authenticated`); sem tabela/índice/policy novos ⇒ performance inalterada.
-- **DÍVIDA-SEED (WP-SEED — dado de teste no banco; APLICADO em produção):**
+- **DÍVIDA-SEED (WP-SEED v2 — dado de teste no banco; APLICADO em produção em 2026-07-23):**
   - **HÁ DADO DE TESTE EM PRODUÇÃO — REMOVER ANTES DO PRIMEIRO CLIENTE REAL.** O seed
-    (`supabase/seeds/wp_seed_test_data.sql`) populou 2 clínicas (Alfa/Beta), 6 profissionais, 5 pacientes,
-    prescrições, registros, chat e jornada, para rodar o playbook. NÃO é migration (não está no ledger).
-    **Remoção:** rodar `supabase/seeds/wp_seed_test_data_remove.sql` (apaga exatamente o que o seed criou,
-    por ids determinísticos + FK a partir das 2 clínicas-âncora). Guia: `docs/ops/SEED_TEST_DATA.md`.
-  - **Login exige e-mails reais:** os perfis dos profissionais nascem com e-mails placeholder
-    (`PREENCHA_*@exemplo.com`); ninguém loga até o dono trocar pelo e-mail Google real (o seed é idempotente
-    e não re-roda — atualizar via `update profiles set email=...` ou remover+editar+re-rodar). Ver o guia.
-  - **Não semeado (limitações):** anexos de chat (exigem arquivo no bucket), fotos de progresso (binário no
-    bucket) e consentimento/peças de mídia (WP-ARTE, sem interface) — ficam de fora.
+    (`supabase/seeds/wp_seed_test_data.sql`) popula 2 clínicas (Alfa/Beta), 6 profissionais, 5 pacientes,
+    prescrições, registros, chat e jornada, para rodar o playbook. NÃO é migration (não está em
+    `supabase/migrations/` nem em nenhum dos dois ledgers). **Remoção:** rodar
+    `supabase/seeds/wp_seed_test_data_remove.sql`. Guia: `docs/ops/SEED_TEST_DATA.md`.
+  - **Critério de rastreabilidade (oficial):** os 6 profiles de profissional têm id determinístico
+    `md5('wp-seed:v2:'||<chave>)::uuid`; tudo o mais é alcançado por FK a partir desse conjunto fechado
+    (clínicas por `owner_profile_id`, equipe e pacientes por `clinic_id`, filhos por `patient_id`).
+    Nada é apagado por nome ou heurística.
+  - **CAMINHOS REAIS:** o seed chama as RPCs de produção (`create_clinic_with_owner`,
+    `promote_to_professional`, `assign_professional_discipline`, `create_patient`, `save_workout_plan`,
+    `save_nutrition_plan`, `move_patient_journey`) simulando cada ator por `request.jwt.claims`.
+    INSERÇÃO DIRETA só onde não existe RPC: profiles dos profissionais, vínculos extras
+    (`professional_patient_links`), auto-registros do paciente (`weight_logs`/`activity_events`/
+    `meal_logs`/`workout_session_logs`/`workout_set_logs`) e chat.
+  - **Login exige e-mails reais:** os perfis nascem com placeholders `PREENCHA.*@exemplo.com` e
+    `auth_user_id = NULL`. Ninguém loga até o dono trocar pelo e-mail Google real
+    (`update public.profiles set email='...' where id=md5('wp-seed:v2:prof:alfa:owner')::uuid;`).
+    Com `auth_user_id` NULL + e-mail igual, `handle_new_user` VINCULA o perfil semeado no 1º login
+    (comprovado em ensaio); com id sintético, ele criaria um perfil pendente novo — falha SILENCIOSA
+    (não há FK de `profiles.auth_user_id` para `auth.users`).
+  - **Não semeado (limitações):** anexos de chat e fotos de progresso (exigem arquivo binário no bucket;
+    SQL não sobe objeto no Storage) e consentimento/peças de mídia (WP-ARTE) — ficam de fora.
   - **Schema/policies intactos:** o seed é só DADO — contagem/HASH de policies idênticos antes/depois
-    (116 / `d19d55adae35af55fb2b92db3a2adcc8`); nenhuma migration nova no ledger.
+    (116 / `d19d55adae35af55fb2b92db3a2adcc8`) e hash do schema inalterado; nada novo em nenhum ledger.
+
+- **DÍVIDA-LEDGER (carimbo das migrations dessincronizado — DIAGNOSTICADO, NÃO CORRIGIDO):**
+  - Comparando `supabase/migrations/` (67 arquivos) com `supabase_migrations.schema_migrations`
+    (69 linhas): **46 migrations têm carimbo dessincronizado** (mesmo `name`, `version` diferente —
+    o `version` do catálogo é gerado no `apply_migration`, o do arquivo é o do repositório);
+    21 batem por `version` (1 delas com `name` diferente: `achievements` vs
+    `achievements_and_patient_achievements`); **2 linhas do catálogo não têm arquivo no repo**
+    (`20260703023827 seed_demo_mariana_workout_execution_tz_fix` e
+    `20260703031129 workout_session_logs_performed_on_local_default`).
+  - **Nenhum arquivo do repo está por aplicar** — todos têm par no catálogo (por `version` ou por `name`).
+  - **Correção NÃO executada:** escrever em `schema_migrations` exige autorização explícita do dono.
+    Comando proposto (UPDATE de `version` par a par, dentro de transação, preservando `statements`/
+    `rollback`) está no retorno `retorno-seed.txt`. As 2 linhas órfãs precisam de decisão à parte:
+    recuperar os arquivos (`supabase db pull`) ou aceitar que rodaram fora do repo.
