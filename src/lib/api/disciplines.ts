@@ -1,7 +1,8 @@
 // Camada de dados das DISCIPLINAS (WP-DISC B). Lê public.disciplines (lista canônica) e
 // public.professional_disciplines (do profissional logado; da equipe, p/ admin) e chama as RPCs
 // admin-only assign_professional_discipline / revoke_professional_discipline. RLS do banco é o gate
-// real: o profissional lê as próprias; staff/admin da clínica leem as da equipe; só admin escreve.
+// real: o profissional lê as próprias; staff/admin da clínica leem as da equipe; só admin escreve —
+// inclusive sobre as PRÓPRIAS disciplinas (WP-DISC-FIX).
 import { supabase } from "@/lib/supabase";
 import type { ProfessionalType } from "@/types/db";
 
@@ -71,7 +72,11 @@ export async function listClinicProfessionalDisciplines(
   }));
 }
 
-/** Concede uma disciplina a um profissional (RPC admin-only; o banco nega não-admin e auto-atribuição). */
+/**
+ * Concede uma disciplina a um profissional (RPC admin-only). O banco nega não-admin e clínica alheia.
+ * WP-DISC-FIX: o admin PODE conceder a SI MESMO (destrava a clínica solo) — a auto-atribuição deixou de
+ * ser bloqueada; o único gate é ser admin da clínica do profissional-alvo.
+ */
 export async function assignDiscipline(professionalId: string, discipline: string): Promise<void> {
   const { error } = await supabase.rpc("assign_professional_discipline", {
     p_professional_id: professionalId,

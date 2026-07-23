@@ -49,8 +49,14 @@ evento é reportado ao Sentry com `source:"authz"` — **sem PII**. `isDisciplin
 **individualmente** (chips por disciplina; múltiplas por profissional). Só o admin vê a área; o banco
 (RPCs `assign_professional_discipline` / `revoke_professional_discipline`) é o gate real.
 
-- **Auto-atribuição bloqueada:** os chips do **próprio** admin ficam desabilitados com aviso ("Você não
-  pode atribuir disciplinas a si mesmo") — o banco também nega.
+- **Auto-atribuição LIBERADA para o admin (WP-DISC-FIX, migration `20260802090000`):** os chips do
+  **próprio** admin ficam **habilitados** (a linha dele aparece marcada com "(você)"). Motivo: sem isso a
+  **clínica solo** nascia travada — `create_clinic_with_owner` cria o dono sem disciplina, sem disciplina
+  ele não escreve nada clínico, e numa clínica nova não existe outra pessoa para conceder. Não é escalada:
+  o admin já promove pessoas e já concede a terceiros (poderia contornar criando um co-admin).
+  **Continua negado:** profissional **não-admin** atribuir/revogar (a si ou a terceiros) — ele nem vê esta
+  área (fail-closed acima) e o banco recusa —, e **admin em clínica alheia** (o gate usa a clínica do
+  profissional-ALVO).
 - **Visibilidade** usa o **SINAL REAL do banco** (`useIsClinicAdmin` → RPC `public.am_i_clinic_admin` =
   dono OU `clinic_role='admin'`), **não** `profiles.role`. Isso corrige AUTH-ADMIN-1: um admin apenas por
   `owner`/`clinic_role='admin'` (sem `profiles.role='admin'`) **passa a ver** a área. Fail-closed: enquanto
