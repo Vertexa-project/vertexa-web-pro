@@ -21,7 +21,12 @@ import { captureException } from "@/lib/observability/sentry";
 /**
  * Administração de DISCIPLINAS (WP-DISC B4). SÓ o admin da clínica: lista a equipe e concede/revoga
  * disciplinas INDIVIDUALMENTE (múltiplas por profissional). A autorização REAL é a RLS/RPC do banco
- * (assign/revoke_professional_discipline exigem admin e negam auto-atribuição); aqui a UI espelha isso.
+ * (assign/revoke_professional_discipline exigem admin da clínica do profissional-alvo); a UI espelha isso.
+ *
+ * WP-DISC-FIX: o admin PODE conceder/revogar disciplina a SI MESMO — sem isso a clínica solo (dono que
+ * é o único profissional) nascia travada: sem disciplina ele não escreve nada clínico e não havia outra
+ * pessoa para conceder. O bloqueio ao NÃO-admin continua: quem não é admin nem chega nesta tela (o
+ * fail-closed acima), e o banco recusa de qualquer forma.
  */
 export function DisciplinesAdminPage() {
   const { data: me } = useCurrentProfessional();
@@ -128,33 +133,34 @@ export function DisciplinesAdminPage() {
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">
                         {shortName(prof.fullName) ?? "Profissional"}
+                        {isSelf ? (
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">(você)</span>
+                        ) : null}
                       </p>
-                      {isSelf ? (
-                        <p className="text-xs text-muted-foreground">
-                          Você não pode atribuir disciplinas a si mesmo(a).
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          {prof.disciplines.length > 0
-                            ? `${prof.disciplines.length} disciplina(s)`
-                            : "Sem disciplina — não escreve nada clínico"}
-                        </p>
-                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {prof.disciplines.length > 0
+                          ? `${prof.disciplines.length} disciplina(s)`
+                          : "Sem disciplina — não escreve nada clínico"}
+                      </p>
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-1.5">
                     {allDisciplines.map((d) => {
                       const has = prof.disciplines.includes(d.code);
+                      // WP-DISC-FIX: `disabled` NÃO usa mais `isSelf` — o admin também administra as
+                      // PRÓPRIAS disciplinas (era o que travava a clínica solo).
                       return (
                         <Button
                           key={d.code}
                           type="button"
                           size="sm"
                           variant={has ? "default" : "outline"}
-                          disabled={isSelf || busy(prof.professionalId, d.code)}
+                          disabled={busy(prof.professionalId, d.code)}
                           aria-pressed={has}
-                          aria-label={`${has ? "Remover" : "Conceder"} ${d.label} de ${prof.fullName ?? "profissional"}`}
+                          aria-label={`${has ? "Remover" : "Conceder"} ${d.label} de ${
+                            isSelf ? "você" : prof.fullName ?? "profissional"
+                          }`}
                           onClick={() => toggle(prof.professionalId, d.code, has)}
                         >
                           {d.label}
