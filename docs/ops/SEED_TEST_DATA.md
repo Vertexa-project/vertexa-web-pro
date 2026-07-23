@@ -57,9 +57,51 @@ Por isso o seed **zera** os `auth_user_id` sintéticos no último passo. Se um `
 ficasse gravado, o passo 2 não casaria e a pessoa cairia num **perfil pendente novo** — não no semeado.
 Não há FK de `profiles.auth_user_id` para `auth.users`, então o erro seria **silencioso**.
 
-> ⚠️ **Preencha os e-mails antes de rodar.** Com os placeholders `PREENCHA.*@exemplo.com` os dados
-> existem, mas ninguém consegue entrar. Para corrigir depois:
-> `update public.profiles set email = 'real@gmail.com' where id = md5('wp-seed:v2:prof:alfa:owner')::uuid;`
+> ⚠️ **Troque os e-mails ANTES do primeiro login.** Com os placeholders `PREENCHA.*@exemplo.com` os
+> dados existem, mas ninguém consegue entrar. Use o script dedicado (abaixo) — não edite à mão.
+
+### Trocar os e-mails: `wp_seed_set_emails.sql`
+
+[`supabase/seeds/wp_seed_set_emails.sql`](../../supabase/seeds/wp_seed_set_emails.sql) tem um bloco de
+**configuração no topo** com os 6 e-mails. Preencha e rode; deixar `''` **pula** aquele perfil, então dá
+para preencher aos poucos.
+
+**Faça isto ANTES do primeiro login.** Depois que a pessoa entra, o `auth_user_id` já foi gravado e
+trocar o e-mail não revincula nada — o script recusa esse caso de propósito.
+
+**Use exatamente as contas Google que serão usadas na demonstração**, e cadastre cada uma como
+**usuária de teste** no Google Cloud (APIs & Services → OAuth consent screen → **Test users**). Enquanto
+o app estiver em modo de testes, uma conta Google que não esteja nessa lista não consegue concluir o
+login — e aí o perfil semeado nunca é vinculado.
+
+O script **recusa e não grava nada** se qualquer trava falhar (todas verificadas em ensaio):
+
+| Trava | Comportamento |
+|---|---|
+| Formato de e-mail inválido | recusado |
+| Valor ainda é `PREENCHA…` | recusado |
+| Perfil semeado não existe (seed não rodou) | recusado |
+| Perfil já tem `auth_user_id` (a pessoa já logou) | recusado |
+| Mesmo e-mail repetido entre os 6 informados | recusado |
+| E-mail já pertence a outro profile do banco | recusado |
+
+Por que as duas últimas importam: `handle_new_user` só vincula quando encontra **exatamente um**
+profile com aquele e-mail e `auth_user_id IS NULL`. Dois profiles com o mesmo e-mail fazem o login
+cair no caminho "cria perfil pendente novo".
+
+O script **nunca toca em `auth_user_id`** — ele precisa continuar `NULL` até o primeiro login, e há uma
+checagem final que aborta se algum dos 6 tiver sido preenchido. É **idempotente** (rodar de novo com os
+mesmos valores não muda nada) e **reversível** (bloco comentado no fim do arquivo devolve os placeholders).
+
+Conferir a qualquer momento:
+
+```sql
+select id, full_name, email, auth_user_id, status from public.profiles
+ where id in (md5('wp-seed:v2:prof:alfa:owner')::uuid, md5('wp-seed:v2:prof:alfa:edu')::uuid,
+              md5('wp-seed:v2:prof:alfa:med')::uuid,   md5('wp-seed:v2:prof:alfa:nodisc')::uuid,
+              md5('wp-seed:v2:prof:alfa:ext')::uuid,   md5('wp-seed:v2:prof:beta:owner')::uuid)
+ order by full_name;
+```
 
 ## Cenário criado
 
