@@ -319,7 +319,8 @@
     helper `private.can_write_discipline(uuid,text[])`, policies de ESCRITA das 6 tabelas de prescrição +
     `body_assessments` passam a exigir a disciplina do mapa (SELECT / leitura integrada DISC-2 **intactos**),
     e `save_workout_plan`/`save_nutrition_plan` (SECDEF) revalidam a disciplina. Atribuição SÓ por admin
-    (RPCs `assign_professional_discipline`/`revoke_professional_discipline`, nunca auto-atribuição).
+    (RPCs `assign_professional_discipline`/`revoke_professional_discipline`; a proibição de auto-atribuição
+    foi **removida** pelo WP-DISC-FIX — ver `DÍVIDA-DISC-FIX` no fim deste documento).
     **Registrar:** (a) **lacuna de produto** — sob o mapa, `medico` só escreve `body_assessments`; o
     sistema NÃO tem superfície de prescrição médica (medicamento/conduta) — decidir com o cliente (fora do
     WP); (b) **mudança de comportamento** — admin SEM disciplina clínica **perde** a escrita de
@@ -384,6 +385,42 @@
   - **ANEXO PRESENCIAL (storage):** `media_consents.in_person_proof_path` reserva o caminho; o bucket privado + policies (padrão `{patient_id}/…` via `storage_object_patient`) são ETAPA C/D quando o fluxo presencial for construído.
   - **Advisors previstos no apply:** +7 WARN `authenticated_security_definer` (as 7 RPCs, SECDEF intencional) + INFO `unindexed_foreign_keys` (colunas de auditoria) + INFO `unused_index` (índices novos, vazios).
 
+- **DÍVIDA-ONBOARDING (WP-ONBOARDING — criação da própria clínica, em PR sem merge; NÃO aplicado):**
+  - **PORTÃO COMERCIAL = decisão PENDENTE do cliente.** Hoje QUALQUER autenticado cria a SUA clínica (guarda-corpo: **uma
+    por perfil como dono**; 2ª tentativa recusada com `ALREADY_OWNS_CLINIC`). A trava comercial (código de ativação / plano /
+    aprovação da Vertexa) **não** está implementada — o risco é COMERCIAL, não de vazamento (isolamento por clínica já provado).
+    **PONTO ÚNICO DE ENCAIXE** (já comentado no código): dentro de `public.create_clinic_with_owner`, logo após a resolução do
+    autor e ANTES de qualquer escrita — a checagem entra ali (ex.: `if not private.onboarding_allowed(v_me) then raise …`),
+    lança `ONBOARDING_NOT_ALLOWED` quando negado, e a web já trata esse `hint` (mensagem pronta em
+    `src/lib/domain/clinicOnboarding.ts`). A assinatura pode ganhar `p_activation_code` no WP do portão — **nada mais muda**.
+    Não espalhar a lógica em outros pontos.
+  - **Perfil destravado é COSMÉTICO:** a RPC seta `profiles.role='professional'/status='active'` só para destravar a UI de
+    "pendente"; a autoridade de admin continua em posse/clinic_role (`private.is_clinic_admin`, AUTH-ADMIN-1 — nunca `profiles.role`).
+  - **`professionals.type='other'` no dono:** valor mínimo coerente na criação (a profissão real é escolhida/ajustada depois);
+    registrar para quando houver edição do próprio cadastro profissional / seleção de tipo no onboarding.
+  - **Advisor previsto no apply:** +1 WARN `authenticated_security_definer` (`create_clinic_with_owner`, SECDEF intencional —
+    endpoint autenticado com portão interno). Sem tabela/índice/policy novos ⇒ perf inalterada.
+- **DÍVIDA-DISC-FIX (WP-DISC-FIX — admin atribui disciplina a si mesmo; em PR sem merge, NÃO aplicado):**
+  - **MUDANÇA DE REGRA (decisão do orquestrador):** `assign_professional_discipline` **deixou de negar a
+    auto-atribuição**. O ADMIN da clínica passa a poder conceder E revogar disciplinas a **SI MESMO**.
+    **MOTIVO:** impasse circular que travava a clínica solo — `create_clinic_with_owner` (WP-ONBOARDING)
+    cria o dono como `professional type='other'` **sem disciplina**; sem disciplina ele não escreve nada
+    clínico (WP-DISC A); a concessão exigia outra pessoa; numa clínica recém-criada não existe outra
+    pessoa. Atinge a persona do **plano de entrada** (profissional solo).
+  - **NÃO é escalada de privilégio:** quem é admin já promove pessoas (`promote_to_professional`) e já
+    concede disciplina a terceiros — poderia contornar o bloqueio criando um co-admin e pedindo a
+    concessão. O bloqueio não produzia segurança, só o impasse.
+  - **PERMANECE NEGADO:** profissional **não-admin** atribuir/revogar (a si mesmo ou a qualquer pessoa) e
+    **admin em clínica alheia** — garantido pelo gate `private.is_clinic_admin(<clínica do ALVO>)`, que é a
+    razão de o bloco de self ter sido **removido** em vez de condicionado (quem passa do gate JÁ é admin
+    da clínica do alvo).
+  - **`revoke_professional_discipline` NÃO foi alterada:** provado no banco que ela **nunca** teve trava de
+    self — o auto-revogar do admin já era permitido e o não-admin já era negado.
+  - **DEPENDÊNCIA:** o teste do FLUXO SOLO ponta a ponta exige `create_clinic_with_owner` (WP-ONBOARDING,
+    migration `20260801090000`, **PR #27 sem merge**). A migration deste WP **não** depende dele; só o
+    bloco SOLO da suíte — que, se a RPC faltar, registra `SOLO_SKIPPED_NO_PR27` em vez de passar calado.
+  - **Advisor previsto no apply:** nenhum novo (a função já existia e já era SECDEF executável por
+    `authenticated`); sem tabela/índice/policy novos ⇒ performance inalterada.
 - **DÍVIDA-SEED (WP-SEED — dado de teste no banco; APLICADO em produção):**
   - **HÁ DADO DE TESTE EM PRODUÇÃO — REMOVER ANTES DO PRIMEIRO CLIENTE REAL.** O seed
     (`supabase/seeds/wp_seed_test_data.sql`) populou 2 clínicas (Alfa/Beta), 6 profissionais, 5 pacientes,
