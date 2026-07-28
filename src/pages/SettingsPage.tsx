@@ -141,6 +141,13 @@ export function SettingsPage() {
           <SettingRow label="Clínica" value="Clínica Vértice" />
           <SettingRow label="Profissionais" value="Médica, Nutricionista" />
           {isClinicAdmin ? (
+            <SettingRow label="Equipe">
+              <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/equipe")}>
+                Gerenciar
+              </Button>
+            </SettingRow>
+          ) : null}
+          {isClinicAdmin ? (
             <SettingRow label="Disciplinas da equipe">
               <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/disciplinas")}>
                 Gerenciar
@@ -170,11 +177,19 @@ export function SettingsPage() {
               <ClinicJoinCodeRow clinicId={professional?.clinicId ?? null} />
             </SettingRow>
           ) : null}
+          {/* O indicador agora LEVA à tela que resolve o pedido (WP-TEAM-2a) — antes era um
+              badge morto, que informava sem oferecer o que fazer a respeito. */}
           {isClinicAdmin && (pendingJoinRequests.data ?? 0) > 0 ? (
             <SettingRow label="Solicitações de acesso">
-              <Badge tone="primary">
-                {pendingJoinRequests.data} aguardando aprovação
-              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => navigate("/configuracoes/equipe")}
+              >
+                <Badge tone="primary">{pendingJoinRequests.data}</Badge>
+                Revisar pedidos
+              </Button>
             </SettingRow>
           ) : null}
         </SectionCard>

@@ -75,8 +75,39 @@ export async function listMyJoinRequests(): Promise<ClinicJoinRequest[]> {
 }
 
 /**
- * Quantos pedidos PENDENTES a clínica tem. Usado só como INDICADOR no painel do admin — a tela
- * de aprovação (com a lista) é o WP-2. A RLS garante que um admin só conta a própria clínica.
+ * Fila de pedidos PENDENTES de uma clínica (tela de Equipe do admin, WP-TEAM-2a).
+ * A policy clinic_join_requests_select já garante que só o admin daquela clínica lê estas
+ * linhas — o `.eq("clinic_id", ...)` aqui é escopo de consulta, NÃO é o controle de acesso.
+ * Nome e e-mail vêm denormalizados na própria linha (WP-JOIN-1b): sem join a profiles, que
+ * voltaria vazio porque can_see_profile() é falsa para um profile pendente.
+ */
+export async function listPendingJoinRequests(clinicId: string): Promise<ClinicJoinRequest[]> {
+  const { data, error } = await supabase
+    .from("clinic_join_requests")
+    .select("id, profile_id, clinic_id, status, created_at, decided_at, requester_name, requester_email")
+    .eq("clinic_id", clinicId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as RawRow[]).map(toRequest);
+}
+
+/** Aprova o pedido: a RPC chama promote_to_professional. Devolve o id do professional criado. */
+export async function approveJoinRequest(requestId: string): Promise<string> {
+  const { data, error } = await supabase.rpc("approve_join_request", { p_request_id: requestId });
+  if (error) throw error;
+  return data as string;
+}
+
+/** Rejeita o pedido. O solicitante segue 'pending' e nada é criado. */
+export async function rejectJoinRequest(requestId: string): Promise<void> {
+  const { error } = await supabase.rpc("reject_join_request", { p_request_id: requestId });
+  if (error) throw error;
+}
+
+/**
+ * Quantos pedidos PENDENTES a clínica tem. Usado como INDICADOR (badge) fora da tela de Equipe.
+ * A RLS garante que um admin só conta a própria clínica.
  */
 export async function countPendingJoinRequests(clinicId: string): Promise<number> {
   const { count, error } = await supabase

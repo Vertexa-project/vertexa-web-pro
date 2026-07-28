@@ -1,8 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  approveJoinRequest,
   countPendingJoinRequests,
   listMyJoinRequests,
+  listPendingJoinRequests,
+  rejectJoinRequest,
   requestClinicAccess,
   rotateClinicJoinCode,
 } from "@/lib/api/clinicJoin";
@@ -34,7 +37,43 @@ export function useRequestClinicAccess() {
   });
 }
 
-/** Contagem de pedidos pendentes da clínica — indicador do admin (a lista é o WP-2). */
+/** Fila de pedidos pendentes da clínica — tela de Equipe (admin). */
+export function usePendingJoinRequests(clinicId: string | null | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: qk.pendingJoinRequestList(clinicId ?? "none"),
+    queryFn: () => listPendingJoinRequests(clinicId as string),
+    enabled: Boolean(clinicId) && enabled,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Invalidação compartilhada por Aprovar/Rejeitar: a fila, o badge de contagem e — no caso da
+ * aprovação — a EQUIPE e as disciplinas, porque o aprovado acabou de virar professional e
+ * precisa aparecer na lista para receber disciplina.
+ */
+function useAfterDecision(clinicId: string | null | undefined) {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: qk.pendingJoinRequestList(clinicId ?? "none") });
+    qc.invalidateQueries({ queryKey: qk.pendingJoinRequests(clinicId ?? "none") });
+    qc.invalidateQueries({ queryKey: qk.clinicDisciplines(clinicId ?? "none") });
+  };
+}
+
+/** Aprova o pedido (RPC existente: chama promote_to_professional). */
+export function useApproveJoinRequest(clinicId: string | null | undefined) {
+  const after = useAfterDecision(clinicId);
+  return useMutation({ mutationFn: (requestId: string) => approveJoinRequest(requestId), onSuccess: after });
+}
+
+/** Rejeita o pedido (RPC existente). */
+export function useRejectJoinRequest(clinicId: string | null | undefined) {
+  const after = useAfterDecision(clinicId);
+  return useMutation({ mutationFn: (requestId: string) => rejectJoinRequest(requestId), onSuccess: after });
+}
+
+/** Contagem de pedidos pendentes da clínica — indicador (badge) fora da tela de Equipe. */
 export function usePendingJoinRequestCount(clinicId: string | null | undefined, enabled: boolean) {
   return useQuery({
     queryKey: qk.pendingJoinRequests(clinicId ?? "none"),
