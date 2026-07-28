@@ -526,3 +526,27 @@
 - **`chat_channels.patient_id` é anulável** e `chat_participants.channel_id`/`profile_id` também.
   A RPC trata (`if v_channel is null then raise`), mas o modelo permitiria linhas órfãs.
   `NOT NULL` nessas colunas é limpeza barata para um WP futuro.
+
+### WP-TEAM-2b-i — o que ficou registrado (2026-07-28)
+
+- **DÍVIDA V7 (do WP-CHAT-FIX) — FECHADA.** `deactivate_patient_link` remove o profissional de
+  `chat_participants` na mesma transação, então perder o vínculo passa a cortar leitura **e**
+  escrita do chat imediatamente. A janela residual descrita no WP-CHAT-FIX deixa de existir
+  para o caminho da RPC de desativação.
+- **FRONTEND NÃO ENTROU — falta âncora de UI (decisão do dono pendente).** O perfil da paciente
+  tem 9 abas e nenhuma de "Equipe"; `ProfileHeader` mostra só `nome · tipo +N` como texto, sem
+  lista nem ação. Não há elemento existente com espaço para a ação de desativar um vínculo
+  individual. Opção recomendada: **nova seção "Equipe da paciente" dentro da aba Visão geral**
+  do perfil, listando os vínculos com ação de desativar/reativar para admin. `TeamAdminPage` NÃO
+  serve: é escopo de clínica (membro), não de vínculo por paciente.
+- **`listPatients`/`getPatientDetail` NÃO filtram status do vínculo.** `src/lib/api/patients.ts`
+  faz `professional_patient_links ( professionals (...) )` sem `status='active'`. Com a
+  desativação em produção, um profissional DESATIVADO continuaria aparecendo como responsável na
+  listagem e no header. Precisa entrar junto com o frontend.
+- **`professional_patient_links.status` é text livre, sem CHECK.** Quem escreve `inactive` é a
+  RPC, mas a policy `ppl_admin_write` (ALL) permite ao admin gravar qualquer string direto. Um
+  `CHECK (status in ('active','inactive'))` é limpeza barata para um WP futuro — fora do escopo
+  do 2b-i.
+- **Desativar MEMBRO da clínica continua pendente.** Este WP desativa o VÍNCULO com UMA paciente.
+  O soft-delete de `professionals` (tirar alguém da clínica inteira) é outro escopo e continua
+  aberto — é o que a nota de `TeamAdminPage.tsx` chama de WP-TEAM-2b.

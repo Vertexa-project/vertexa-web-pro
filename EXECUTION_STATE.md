@@ -575,3 +575,38 @@ Branch `feat/clinic-join-requests-web` (PR base main, **SEM MERGE**). Gate: `ori
 - **Gates:** eslint 0 · tsc 0 · vitest **133/133** · build OK.
 - **Escopo:** só o repo web. `chat_messages_insert`, identidade e os demais helpers **não tocados**.
   `app`/`patient-native` **NÃO tocados**. PARADO para auditoria.
+
+## WP-TEAM-2b-i — desativação do vínculo profissional↔paciente (2026-07-28)
+
+**Estado: migration escrita e PROVADA em transação com ROLLBACK, NÃO aplicada.** Branch
+`feat/team-2bi-link-deactivation`, base `origin/main` = `9709bdb`. PR aberto SEM MERGE.
+**Frontend NÃO entrou neste PR** — sem âncora óbvia na UI; opção reportada, aguardando decisão.
+
+- **A tese, provada por hash:** `is_common_professional_of_patient` E
+  `is_external_professional_of_patient` já filtram `coalesce(status,'active')='active'`. Logo
+  virar o status para `inactive` derruba o acesso clínico inteiro — interno **e** externo —
+  **sem tocar em uma linha de RLS**. GATE do PASSO 0 confirmou o filtro no ramo externo.
+- **Entregue:** 3 colunas de carimbo em `professional_patient_links`; tabela IMUTÁVEL
+  `ppl_status_events` (append-only: só policy de SELECT para admin da clínica, escrita só pelas
+  RPCs); RPCs `deactivate_patient_link`, `reactivate_patient_link` e
+  `patients_without_active_professional` (SECURITY DEFINER, `search_path=''`, EXECUTE só
+  `authenticated`).
+- **DÍVIDA V7 FECHADA:** desativar remove o profissional de `chat_participants` na MESMA
+  transação. Provado: o desativado para de LER o canal (0 mensagens visíveis) **e** recebe
+  42501 ao tentar ESCREVER. Sem esse DELETE a escrita sobreviveria até alguém reabrir a conversa.
+- **PROVAS:** P1 — as **49 tabelas pré-existentes com hash de policy idêntico item a item**;
+  único delta no `HASH_GLOBAL` (`e173eb30…` → `be1e5687…`) é a policy nova
+  `ppl_status_events_select`; 107 → 108. P2 — **48 helpers de private com hash agregado
+  IDÊNTICO** (`18b93d8411d3914247e9056ea4ec207c`), nenhum alterado. P3 — 4 âncoras idênticas
+  (`b79d76307765af2f5efe842d98678cff`). P4 — lint 0029 25 → 28 (+3, as RPCs novas), lint 0008
+  inalterado, `anon` não executa nenhuma. Nenhuma classe nova.
+- **Matriz:** PERDA 1–5 (internas, `can_access_patient`, escrita, `patients_update`, chat),
+  idempotência (2 desativações ⇒ 1 evento), reativação (lê na hora; escreve após reabrir),
+  NÃO-GANHO 8–10 (outro comum ativo, admin e a própria paciente **idênticos item a item**),
+  negativos 11–14 (outra clínica, comum inclusive no próprio vínculo, externo e anon ⇒ 42501),
+  trilha imutável (UPDATE/DELETE/INSERT direto negados) e preservação (linha do vínculo e
+  mensagens com autoria intactas).
+- **Gates:** eslint 0 · tsc 0 · vitest 133/133 · build OK.
+- **Escopo:** só o repo web. Nenhuma policy existente alterada, nenhum helper alterado,
+  identidade e `promote_to_professional` intocados. NÃO faz soft-delete de `professionals`.
+  `app`/`patient-native` NÃO tocados. PARADO para auditoria.
