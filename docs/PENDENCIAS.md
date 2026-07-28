@@ -498,3 +498,31 @@
   commit de README disparou rebuild — variável de build fica latente e invisível até o próximo
   deploy. Um teste que inspecione o bundle publicado e afirme o modo esperado é barato e
   automatizável. Vale para toda `VITE_*`, não só `AUTH_MODE`.
+
+### WP-CHAT-FIX — o que ficou registrado (2026-07-28)
+
+- **Assimetria leitura/escrita é decisão consciente, não descuido.** A leitura passou a ser
+  derivada do vínculo atual (`can_read_channel`), mas a escrita continua exigindo linha em
+  `chat_participants` (`chat_messages_insert` **não** foi alterada). Efeito: quem é vinculado
+  **lê na hora** e **escreve** só depois que a conversa for aberta pela RPC (que sincroniza o
+  roster). Tornar a escrita também instantânea exigiria alterar `chat_messages_insert` — policy de
+  ESCRITA de dado clínico, que **não** entrou neste PR.
+- **Janela do roster desatualizado (limite conhecido, provado no teste V7).** Um profissional que
+  **já estava** no roster e perde o vínculo **continua lendo até a próxima abertura do canal**,
+  quando a RPC reconcilia e remove a linha (V8/V9 provam que aí ele perde leitura E escrita). Ou
+  seja: a revogação é **imediata** pelo caminho derivado e **eventual** pelo caminho do roster.
+  Fechar a janela exigiria um trigger em `professional_patient_links` (ou um job) que limpe o
+  roster no momento da desvinculação — candidato natural para o **WP-TEAM-2b**.
+- **O app do paciente NÃO precisa de correção de criação de canal.** Verificado por leitura:
+  `getMyChannel` (`vertexa-app-paciente/src/lib/api/chat.ts`) é **SELECT puro** e retorna `null`
+  quando não há canal; não existe `INSERT` em `chat_channels` no repo do app.
+  `vertexa-patient-native` não referencia chat. **Não há WP-CHAT-FIX-APP** por esta causa.
+- **Dependência cross-repo a respeitar:** o app lê `chat_participants` com `role='professional'`
+  para montar o seletor de @menção (`listChannelProfessionals`). Qualquer desenho futuro que
+  esvazie esse roster **quebra o seletor** — a reconciliação da RPC existe também por isso.
+- **Seed com vínculo externo.** `Elisa Rocha → Sofia Andrade` tem `is_external = true`; ela
+  **não** lê o canal e **não** entrou no backfill. Está correto pela regra vigente, mas vale
+  confirmar com o cliente se "externo" deve mesmo ficar fora do chat da paciente.
+- **`chat_channels.patient_id` é anulável** e `chat_participants.channel_id`/`profile_id` também.
+  A RPC trata (`if v_channel is null then raise`), mas o modelo permitiria linhas órfãs.
+  `NOT NULL` nessas colunas é limpeza barata para um WP futuro.

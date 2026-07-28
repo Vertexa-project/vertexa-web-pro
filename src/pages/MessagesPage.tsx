@@ -20,13 +20,14 @@ import {
   useUnreadMentions,
 } from "@/hooks/useChat";
 import { useListPatients } from "@/hooks/usePatients";
+import { chatStageOf } from "@/lib/api/chat";
 import { CHAT_ATTACHMENT_MIME, hasChatAttachment, validateChatAttachment } from "@/lib/domain/chatAttachment";
 import { formatRelative, initials } from "@/lib/domain/format";
 import { cn } from "@/lib/utils";
 import type { PatientListItem } from "@/types/db";
 
 function Thread({ patient }: { patient: PatientListItem }) {
-  const { data, isLoading, isError, refetch } = useChatThread(patient.id);
+  const { data, isLoading, isError, error, refetch } = useChatThread(patient.id);
   const sendMessage = useSendChatMessage(patient.id);
   const { data: mentions } = useUnreadMentions();
   const { mutate: markRead } = useMarkMentionsRead();
@@ -45,7 +46,23 @@ function Thread({ patient }: { patient: PatientListItem }) {
   }, [channelId, unreadForPatient, markRead]);
 
   if (isLoading) return <LoadingState />;
-  if (isError) return <ErrorState onRetry={() => refetch()} />;
+  // DOIS modos de falha distintos. Antes, os dois viravam o mesmo "Não foi possível carregar",
+  // o que fez o 42501 da CRIAÇÃO do canal parecer problema de histórico.
+  if (isError) {
+    return chatStageOf(error) === "messages" ? (
+      <ErrorState
+        title="Não foi possível carregar as mensagens"
+        description="A conversa foi aberta, mas o histórico não veio. Tente novamente."
+        onRetry={() => refetch()}
+      />
+    ) : (
+      <ErrorState
+        title="Não foi possível abrir a conversa"
+        description="Não conseguimos abrir ou criar a conversa com este paciente. Verifique se você continua vinculado a ele e tente novamente."
+        onRetry={() => refetch()}
+      />
+    );
+  }
 
   const messages = data?.messages ?? [];
   // Sem profissional atuante configurado (env) não há remetente válido em modo demo.

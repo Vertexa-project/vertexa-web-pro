@@ -17,26 +17,66 @@ interface RawChatMessageRow extends ChatMessage {
 }
 
 /**
- * Garante 1 canal por paciente. O backfill da Etapa 2 já criou um canal para
- * cada paciente do seed; cria sob demanda caso falte (idempotente pelo unique
- * em patient_id). Retorna o id do canal.
+ * Etapa do fluxo de abertura de uma conversa. São DOIS modos de falha diferentes e o
+ * usuário precisa saber qual aconteceu: "não abri a conversa" ≠ "não carreguei as mensagens".
+ */
+export type ChatStage = "channel" | "messages";
+
+/**
+ * Erro de chat carregando a ETAPA que falhou.
+ *
+ * POR QUE EXISTE: `getChatThread` faz duas coisas — resolve o canal e carrega o histórico.
+ * Antes, as duas caíam no mesmo `catch` genérico da tela ("Não foi possível carregar"), o que
+ * escondeu a causa real do 42501 na CRIAÇÃO do canal: quem lia a tela concluía que o problema
+ * era o histórico. Guardar a etapa é o que permite à UI e ao Sentry separarem os dois casos.
+ */
+export class ChatThreadError extends Error {
+  readonly stage: ChatStage;
+  /** Erro original do PostgREST/Supabase. NUNCA exibido cru ao usuário. */
+  readonly cause: unknown;
+
+  constructor(stage: ChatStage, message: string, cause: unknown) {
+    super(message);
+    this.name = "ChatThreadError";
+    this.stage = stage;
+    this.cause = cause;
+  }
+}
+
+/** Etapa que falhou, ou `null` se o erro não veio desta camada. */
+export function chatStageOf(error: unknown): ChatStage | null {
+  return error instanceof ChatThreadError ? error.stage : null;
+}
+
+/**
+ * Garante 1 canal por paciente via RPC `get_or_create_channel` (SECURITY DEFINER).
+ *
+ * POR QUE RPC E NÃO INSERT…RETURNING: o `.insert().select()` anterior falhava com 42501. O
+ * INSERT em si passava — quem falhava era o RETURNING: na MESMA statement, a policy de SELECT
+ * chama `channel_patient()`, que é STABLE e usa o snapshot do início da statement, logo não
+ * enxerga a linha que a própria statement está inserindo. A RPC tira a criação de baixo da RLS
+ * (a autorização continua explícita lá dentro, com o mesmo `can_access_patient_internal` do
+ * WITH CHECK) e ainda reconcilia o roster de participantes. Idempotente pelo unique em patient_id.
  */
 export async function getOrCreateChannel(patientId: string): Promise<string> {
-  const { data: existing, error: selErr } = await supabase
-    .from("chat_channels")
-    .select("id")
-    .eq("patient_id", patientId)
-    .maybeSingle();
-  if (selErr) throw selErr;
-  if (existing) return (existing as { id: string }).id;
-
-  const { data: created, error: insErr } = await supabase
-    .from("chat_channels")
-    .insert({ patient_id: patientId })
-    .select("id")
-    .single();
-  if (insErr) throw insErr;
-  return (created as { id: string }).id;
+  const { data, error } = await supabase.rpc("get_or_create_channel", {
+    p_patient_id: patientId,
+  });
+  if (error) {
+    throw new ChatThreadError(
+      "channel",
+      "Não foi possível abrir a conversa com este paciente.",
+      error,
+    );
+  }
+  if (!data) {
+    throw new ChatThreadError(
+      "channel",
+      "Não foi possível abrir a conversa com este paciente.",
+      null,
+    );
+  }
+  return data as string;
 }
 
 /** Histórico do canal, ordenado, com o nome do remetente já resolvido. */
@@ -64,9 +104,21 @@ export async function getChatThread(
   patientId: string,
   actingProfileId: string | null,
 ): Promise<ChatThread> {
+  // Etapa 1 — abrir/criar o canal. Já lança ChatThreadError("channel").
   const channelId = await getOrCreateChannel(patientId);
-  const messages = await listChatMessages(channelId);
-  return { channelId, actingProfileId, messages };
+
+  // Etapa 2 — carregar o histórico. Falha AQUI significa que a conversa existe e está
+  // acessível, mas o histórico não veio: mensagem de erro (e scope no Sentry) diferentes.
+  try {
+    const messages = await listChatMessages(channelId);
+    return { channelId, actingProfileId, messages };
+  } catch (err) {
+    throw new ChatThreadError(
+      "messages",
+      "Não foi possível carregar as mensagens desta conversa.",
+      err,
+    );
+  }
 }
 
 /**
