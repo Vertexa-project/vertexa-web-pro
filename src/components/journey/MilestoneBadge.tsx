@@ -32,12 +32,14 @@ export function MilestoneBadge({
   return (
     <Badge
       tone={toneFor(milestone, acked)}
-      className={cn("gap-1", highlight && "ring-2 ring-primary/40", className)}
+      className={cn("max-w-full gap-1", highlight && "ring-2 ring-primary/40", className)}
       title={`${milestone.label} · ${formatDate(milestone.date)}${acked ? " · reconhecido" : ""}`}
     >
-      <Icon className="h-3.5 w-3.5" aria-hidden />
-      <span>{milestone.label}</span>
-      <span className="opacity-70">· {formatDate(milestone.date)}</span>
+      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      {/* Em coluna estreita o rótulo encolhe (o texto completo está no title) e a data — que é o
+          dado mais curto e mais objetivo — nunca é cortada. Antes o selo vazava do cartão. */}
+      <span className="min-w-0 truncate">{milestone.label}</span>
+      <span className="shrink-0 opacity-70">· {formatDate(milestone.date)}</span>
     </Badge>
   );
 }
