@@ -31,6 +31,9 @@ export const qk = {
   // RLS já escopa ao chamador, e a sessão troca o cache inteiro no signOut (queryClient.clear()).
   myJoinRequests: ["joinRequests", "mine"] as const,
   pendingJoinRequests: (clinicId: string) => ["joinRequests", "pending", clinicId] as const,
+  // Fila completa (tela de Equipe). Chave separada da contagem: são consultas diferentes
+  // (select de linhas × head+count) e a tela não deve reaproveitar o cache do badge.
+  pendingJoinRequestList: (clinicId: string) => ["joinRequests", "pendingList", clinicId] as const,
   // Sinal REAL "sou admin da clínica?" (RPC am_i_clinic_admin). null = clínica do logado (server-side).
   clinicAdmin: (clinicId: string | null) => ["clinicAdmin", clinicId ?? "self"] as const,
   // Trilha de auditoria de exportação (WP-REPORT B) — lista filtrada/paginada + profissionais p/ filtro.

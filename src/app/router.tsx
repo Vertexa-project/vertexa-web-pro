@@ -21,6 +21,9 @@ const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ de
 const DisciplinesAdminPage = lazy(() =>
   import("@/pages/DisciplinesAdminPage").then((m) => ({ default: m.DisciplinesAdminPage })),
 );
+const TeamAdminPage = lazy(() =>
+  import("@/pages/TeamAdminPage").then((m) => ({ default: m.TeamAdminPage })),
+);
 const JourneyBoardPage = lazy(() =>
   import("@/pages/JourneyBoardPage").then((m) => ({ default: m.JourneyBoardPage })),
 );
@@ -72,6 +75,7 @@ export const router = createBrowserRouter(
         { path: "campanhas", element: <CampaignsPage /> },
         { path: "retencao", element: <RetentionPage /> },
         { path: "configuracoes", element: <SettingsPage /> },
+        { path: "configuracoes/equipe", element: <TeamAdminPage /> },
         { path: "configuracoes/disciplinas", element: <DisciplinesAdminPage /> },
         { path: "configuracoes/jornada", element: <JourneyColumnsAdminPage /> },
         { path: "configuracoes/auditoria", element: <ReportAuditPage /> },
