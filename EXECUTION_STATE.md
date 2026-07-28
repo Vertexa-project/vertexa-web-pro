@@ -522,3 +522,56 @@ Branch `feat/clinic-join-requests-web` (PR base main, **SEM MERGE**). Gate: `ori
 - **Escopo/limite:** SÓ repo web + migration não aplicada. Nenhuma policy existente alterada.
   `promote_to_professional`, `handle_new_user` e a resolução de identidade **não tocados**.
   `app`/`patient-native` NÃO tocados. PARADO para auditoria.
+
+## WP-CHAT-FIX — criação de canal por RPC + leitura por vínculo vivo (2026-07-28)
+
+**Estado: implementada, TESTADA em transação com ROLLBACK, NÃO aplicada.** Branch
+`feat/chat-channel-rpc-web`, base `origin/main` = `626b674`. PR aberto SEM MERGE.
+
+- **Bug 1 (42501 ao abrir conversa de paciente sem canal).** O front fazia `INSERT…RETURNING`
+  (`.insert().select()`) em `chat_channels`. Diagnóstico refinado pela prova: **o INSERT passa**
+  (o `WITH CHECK` é `can_access_patient_internal` e é verdadeiro) — quem falha é **só o
+  RETURNING**. Na mesma statement a policy de SELECT chama `private.channel_patient()`, que é
+  **STABLE** e usa o snapshot do início da statement, logo **não enxerga a linha que a própria
+  statement insere** ⇒ `NULL` ⇒ `is_clinic_admin(NULL)` = false ⇒ `can_read_channel` = false.
+  **Não é recursão de policy: é visibilidade de snapshot.** Provado: num statement SEPARADO a
+  mesma linha É legível.
+- **Bug 2 (profissional comum vinculado não lia).** `can_read_channel` só concedia leitura a
+  participante ou admin, e **nada** populava `chat_participants` além do seed. Já estava vivo:
+  Bruno Salles e Clara Vieira, vinculados ativos a pacientes COM canal, não liam.
+- **Bug 3 (achado durante o WP, não previsto).** `chat_messages_insert` exige
+  `is_channel_participant` e **não tem ramo de admin** — o admin abria e lia o canal novo mas
+  **não conseguia enviar** (42501). Por isso popular o roster não é opcional.
+- **Correção (3 peças).** RPC `public.get_or_create_channel` (SECURITY DEFINER, `search_path=''`,
+  EXECUTE só `authenticated`) autoriza com `can_access_patient_internal` — o MESMO gate do
+  `WITH CHECK` — faz `on conflict (patient_id) do nothing` + SELECT (fora do RETURNING sob RLS) e
+  **reconcilia o roster**. `private.can_read_channel` passa a
+  `is_channel_participant OR can_access_patient_internal(channel_patient(...))` — **aditiva**: o
+  ramo de admin já estava contido no novo predicado. **Escrita intocada** (assimetria deliberada:
+  vinculado LÊ na hora, ESCREVE quando o canal é aberto pela RPC).
+- **Backfill único, só aditivo:** +2 linhas de participante (Bruno e Clara). **Elisa Rocha ficou
+  de fora corretamente — `is_external = true`**, e virou o melhor caso de teste negativo.
+- **Testes (Nível 1, `request.jwt.claims`, ROLLBACK): 11 positivos + 11 negativos + 9 de vínculo
+  vivo + 16 de regressão, todos verdes.** Destaques: comum vinculado LÊ e ESCREVE; idempotência
+  (2ª chamada devolve o mesmo canal); externo ⟂; outra clínica ⟂; não-vinculado ⟂; anon ⟂;
+  auto-inserção no roster ⟂ (42501); **vínculo vivo nos dois sentidos** — vincular ⇒ passa a ler
+  SEM reabrir o canal e SEM linha no roster (prova que a leitura é derivada); desvincular ⇒ para
+  de ler.
+- **Limite honesto (V7):** quem **já estava** no roster continua lendo até a próxima abertura do
+  canal, quando a RPC reconcilia e remove a linha (V8/V9 provam que aí perde leitura E escrita).
+  A leitura derivada é imediata; a do roster é *eventual*. Registrado em PENDENCIAS.
+- **Regressão por HASH:** `POLICIES_CHAT_HASH` **idêntico** (`166048e3…`, 11 policies) — nenhuma
+  policy alterada. `HELPERS_HASH` mudou (`3d1a22c7…` → `54177cae…`) **porque a correção é o corpo
+  de `can_read_channel`**; o hash dos **4 helpers não tocados** é idêntico
+  (`0f54218f453b096a4f9f00bfa9b6ec64`), provando que só ele mudou. ACL, `security definer`,
+  `stable` e `search_path=''` preservados pelo `create or replace`.
+- **Advisors:** lint 0029 (SECURITY DEFINER executável por `authenticated`) 24 → **25**: +1 da
+  classe já aceita para todas as RPCs do produto. Nenhuma classe nova.
+- **Web:** `getOrCreateChannel` chama a RPC; novo `ChatThreadError` com a **etapa**
+  (`channel` | `messages`) — a tela mostra "Não foi possível abrir a conversa" vs "Não foi
+  possível carregar as mensagens" (o erro genérico anterior foi o que escondeu o 42501), e o
+  Sentry recebe `source:"chat"` com scope `open-channel`/`load-messages`, **sem PII**.
+- **Kill switch:** `revoke execute on function public.get_or_create_channel(uuid) from authenticated;`
+- **Gates:** eslint 0 · tsc 0 · vitest **133/133** · build OK.
+- **Escopo:** só o repo web. `chat_messages_insert`, identidade e os demais helpers **não tocados**.
+  `app`/`patient-native` **NÃO tocados**. PARADO para auditoria.

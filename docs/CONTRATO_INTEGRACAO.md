@@ -1091,3 +1091,67 @@ mesmas policies e a mesma tela. Nada aqui é trabalho descartável.
 
 **Cross-repo:** fluxo exclusivo da **web** (superfície profissional). `app`/`patient-native` NÃO
 participam e NÃO foram tocados.
+
+---
+
+## WP-CHAT-FIX — criação de canal, leitura por vínculo vivo e escrita por roster (2026-07-28)
+
+> **Regra de ouro:** a **web** é a única superfície que **cria** canal. O **app do paciente só
+> abre canal que já existe** (`getMyChannel` é SELECT puro) — por isso o app **não** precisa
+> chamar a RPC e **não** foi tocado neste PR.
+
+### Criação/obtenção do canal — SEMPRE por RPC
+`public.get_or_create_channel(p_patient_id uuid) → uuid` (SECURITY DEFINER, `search_path=''`,
+EXECUTE só `authenticated`).
+
+- **Nunca** faça `INSERT…RETURNING` em `chat_channels` no client. Falha com **42501** — não por
+  recursão de policy, mas por **visibilidade de snapshot**: na mesma statement a policy de SELECT
+  chama `private.channel_patient()`, que é `STABLE` e não enxerga a linha que a própria statement
+  está inserindo.
+- Autorização: `private.can_access_patient_internal(p_patient_id)` — o **mesmo** predicado do
+  `WITH CHECK` de `chat_channels_insert`. Sem acesso ⇒ `42501`. Zero superfície nova.
+- **Idempotente** pelo `UNIQUE (patient_id)`: chamar duas vezes devolve o mesmo `id`.
+- Efeito colateral **desejado**: cada chamada **reconcilia o roster** (`chat_participants`) —
+  adiciona os profissionais com vínculo **ativo e não-externo**, e remove linhas
+  `role='professional'` de quem **perdeu** o vínculo. Linhas `patient` e `admin` não são tocadas.
+
+### LEITURA — derivada do vínculo ATUAL (viva)
+`private.can_read_channel(p_channel)` =
+`is_channel_participant(p_channel) OR can_access_patient_internal(channel_patient(p_channel))`.
+
+Governa 4 policies de SELECT: `chat_channels`, `chat_messages`, `chat_participants`, `chat_mentions`.
+
+| Quem | Lê? | Por quê |
+|---|---|---|
+| Paciente dono do canal | **sim** | `is_self_patient` |
+| Profissional com vínculo **ativo, não-externo** | **sim, na hora** | `is_common_professional_of_patient` — derivado do vínculo, **sem precisar reabrir o canal** |
+| Admin da clínica da paciente | **sim** | `is_clinic_admin` (oversight; já valia antes) |
+| Profissional **externo** (`is_external = true`) | **não** | filtro que já existe em `is_common_professional_of_patient` |
+| Vínculo `status ≠ 'active'` | **não** | idem — é isto que dá "perdeu o vínculo, perdeu o chat" |
+| Não vinculado / outra clínica / anon | **não** | nenhum ramo o alcança |
+
+### ESCRITA — continua exigindo estar no roster
+`chat_messages_insert` **não foi alterada**: exige `is_channel_participant` **e**
+`sender_profile_id = current_profile_id()` (anti-forja). Consequência **deliberada**:
+
+> Quem acabou de ser vinculado **lê imediatamente**, mas só **escreve** depois que a conversa for
+> aberta pela RPC (que o coloca no roster). Assimetria aprovada: leitura viva, escrita por roster.
+
+E o inverso: quem perdeu o vínculo **para de ler na hora** se não estava no roster; se estava,
+perde leitura **e** escrita na próxima abertura do canal, quando a RPC reconcilia.
+
+### `chat_participants` continua sendo o roster — não foi abolido
+Além de ser o gate de escrita, é a fonte do **seletor de @menção do app do paciente**
+(`listChannelProfessionals` filtra `role='professional'`). Um desenho "derivar tudo e não manter
+linhas" **esvaziaria esse seletor** — por isso o roster é **reconciliado**, não removido.
+
+### Erro no client — distinguir as duas etapas
+`getChatThread` lança `ChatThreadError` com `stage`:
+
+| `stage` | Significado | Mensagem na tela |
+|---|---|---|
+| `"channel"` | não abriu/criou a conversa | "Não foi possível abrir a conversa" |
+| `"messages"` | conversa OK, histórico não veio | "Não foi possível carregar as mensagens" |
+
+Use `chatStageOf(error)`. Sentry: `source:"chat"`, scope `open-channel` / `load-messages`,
+**sem PII** (nunca conteúdo de mensagem, nome ou id de paciente).

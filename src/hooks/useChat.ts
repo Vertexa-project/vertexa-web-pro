@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  chatStageOf,
   getChatAttachmentSignedUrl,
   getChatThread,
   listUnreadMentionPatientIds,
@@ -32,7 +33,21 @@ export function useChatThread(patientId: string) {
   const { actingProfileId } = useIdentity();
   const query = useQuery({
     queryKey: qk.chatThread(patientId),
-    queryFn: () => getChatThread(patientId, actingProfileId),
+    queryFn: async () => {
+      try {
+        return await getChatThread(patientId, actingProfileId);
+      } catch (err) {
+        // Reporta com a ETAPA no scope para separar "não abri a conversa" de "não carreguei
+        // as mensagens" — foi o erro genérico que escondeu o 42501 da criação de canal.
+        // SEM PII: nada de conteúdo de mensagem, nome ou id de paciente; só a etapa.
+        const stage = chatStageOf(err);
+        captureException(new Error(`chat thread failed at stage: ${stage ?? "unknown"}`), {
+          source: "chat",
+          scope: stage === "messages" ? "load-messages" : "open-channel",
+        });
+        throw err;
+      }
+    },
     enabled: Boolean(patientId),
   });
 
