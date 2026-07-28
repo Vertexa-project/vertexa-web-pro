@@ -71,31 +71,33 @@ export function JourneyCard({
       onDragEnd={() => onDragStateChange(null)}
       aria-label={`Cartão de ${name}. Arraste ou use o menu Mover para trocar de coluna.`}
       className={cn(
-        "group rounded-lg border bg-card p-3 shadow-card transition-shadow",
+        "group rounded-lg border bg-card p-3.5 shadow-card transition-shadow",
         moving ? "opacity-60" : "cursor-grab hover:shadow-md active:cursor-grabbing",
       )}
     >
-      <div className="flex items-start gap-2.5">
+      {/* Linha de identidade: pega de arraste + avatar + NOME (prioridade de leitura) + "Mover para". */}
+      <div className="flex items-start gap-2">
         <GripVertical
-          className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground"
+          className="mt-1 h-4 w-4 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground"
           aria-hidden
         />
-        <Avatar className="h-9 w-9 shrink-0">
+        <Avatar className="h-8 w-8 shrink-0">
           <AvatarFallback className="text-xs">{initials(name)}</AvatarFallback>
         </Avatar>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-foreground">{name}</p>
-          {patient.goal ? (
-            <p className="truncate text-xs text-muted-foreground">{patient.goal}</p>
-          ) : null}
-        </div>
+        {/* Nome em até 2 linhas (não corta em 1 linha curta como antes); nome completo no title. */}
+        <p
+          className="line-clamp-2 min-w-0 flex-1 break-words pt-0.5 text-sm font-semibold leading-snug text-foreground"
+          title={name}
+        >
+          {name}
+        </p>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 shrink-0 text-muted-foreground"
+              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
               aria-label={`Mover ${name} para outra coluna`}
               disabled={moving || otherColumns.length === 0}
             >
@@ -119,18 +121,30 @@ export function JourneyCard({
         </DropdownMenu>
       </div>
 
+      {/* Objetivo/plano em LARGURA TOTAL do cartão (antes dividia a linha com avatar e botão, o que
+          o espremia). Até 2 linhas; o texto completo fica no title. */}
+      {patient.goal ? (
+        <p
+          className="mt-2.5 line-clamp-2 break-words text-xs leading-relaxed text-muted-foreground"
+          title={patient.goal}
+        >
+          {patient.goal}
+        </p>
+      ) : null}
+
+      {/* Rodapé de ações, separado do corpo por uma divisória. */}
       {relevant ? (
-        <div className="mt-2.5 flex flex-wrap items-center gap-2 pl-6">
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-2.5">
           <MilestoneBadge milestone={relevant} acked={acked} />
           {acked ? (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
               <Check className="h-3.5 w-3.5" aria-hidden /> Reconhecido
             </span>
           ) : (
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              className="h-6 px-2 text-xs"
+              className="ml-auto h-7 shrink-0 px-2.5 text-xs"
               onClick={() => onAck(patient.id, relevant.key)}
             >
               Reconhecer
