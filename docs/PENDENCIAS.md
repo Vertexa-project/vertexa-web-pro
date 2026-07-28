@@ -544,9 +544,29 @@
   desativação em produção, um profissional DESATIVADO continuaria aparecendo como responsável na
   listagem e no header. Precisa entrar junto com o frontend.
 - **`professional_patient_links.status` é text livre, sem CHECK.** Quem escreve `inactive` é a
-  RPC, mas a policy `ppl_admin_write` (ALL) permite ao admin gravar qualquer string direto. Um
-  `CHECK (status in ('active','inactive'))` é limpeza barata para um WP futuro — fora do escopo
-  do 2b-i.
+  RPC. Um `CHECK (status in ('active','inactive'))` é limpeza barata para um WP futuro — fora do
+  escopo do 2b-i. **Atualizado pela EMENDA:** o risco prático caiu muito, porque `authenticated`
+  perdeu `update (status)` (ver DÍVIDA-PRIV-1) — o admin não grava mais string arbitrária pelo
+  client; só `service_role`/owner e as RPCs, que escrevem valores fixos. O CHECK vira defesa em
+  profundidade, não a única barreira.
+
+- **DÍVIDA-PRIV-1 — o `revoke update (status)` é apagado por um `grant` de TABELA futuro
+  (EMENDA do 2b-i, migration `20260805090000`; NÃO aplicada).** A trava que obriga toda mudança
+  de status a passar pelas RPCs é um **privilégio de COLUNA**
+  (`revoke update (status) on public.professional_patient_links from authenticated`). Pela regra
+  do Postgres, privilégio de TABELA vale para todas as colunas e se sobrepõe ao recorte por
+  coluna — então **uma linha** como `grant all on all tables in schema public to authenticated;`
+  (ou `grant update on public.professional_patient_links to authenticated;`) **desfaz o revoke
+  SILENCIOSAMENTE**: sem erro, sem aviso, e **sem mexer em nenhuma policy** — logo o HASH_GLOBAL
+  de policies continua idêntico e **nenhuma prova de RLS deste PR detectaria a regressão**.
+  Efeito: o admin volta a virar `status` por UPDATE direto, sem trilha e sem reconciliar o roster
+  do chat (o desativado fica sem acesso a nenhum dado clínico **mas ainda escrevendo na conversa**).
+  **Teste de regressão barato — vale a pena entrar na suíte:**
+  `select has_column_privilege('authenticated','public.professional_patient_links','status','update');`
+  deve ser **FALSE**, e o mesmo para `is_external` deve continuar **TRUE** (o revoke é cirúrgico).
+  Mesma fragilidade vale para os outros recortes de coluna já em produção
+  (`profiles.role`/`auth_user_id`, `professionals`, `patients`, `clinics` — WP-05B Fam1,
+  `20260711095000`): todos morrem junto no mesmo `grant all`.
 - **Desativar MEMBRO da clínica continua pendente.** Este WP desativa o VÍNCULO com UMA paciente.
   O soft-delete de `professionals` (tirar alguém da clínica inteira) é outro escopo e continua
   aberto — é o que a nota de `TeamAdminPage.tsx` chama de WP-TEAM-2b.

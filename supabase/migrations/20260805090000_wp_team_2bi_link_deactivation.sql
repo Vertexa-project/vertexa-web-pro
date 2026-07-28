@@ -22,6 +22,9 @@
 --   2) Tabela NOVA ppl_status_events — trilha IMUTÁVEL. Só ela adiciona policy ao sistema
 --      (1 policy de SELECT), e é o ÚNICO delta esperado no HASH_GLOBAL.
 --   3) 3 RPCs SECURITY DEFINER: desativar, reativar e listar pacientes sem responsável.
+--   4) REVOKE do privilégio de COLUNA `update (status)` para `authenticated` — fecha a porta do
+--      UPDATE direto e torna as RPCs o ÚNICO caminho de mudança de status. É PRIVILÉGIO, NÃO
+--      POLICY: nenhuma policy é criada, alterada ou removida (ver bloco abaixo).
 --
 -- FECHAMENTO DA DÍVIDA V7 (aberta no WP-CHAT-FIX): desativar o vínculo remove o profissional
 -- de chat_participants NA MESMA TRANSAÇÃO. Sem isso, a leitura do chat cairia na hora
@@ -44,14 +47,38 @@
 --     é text livre; quem escreve 'inactive' é a RPC. Um CHECK ('active','inactive') é candidato
 --     natural a um WP de limpeza — registrado em PENDENCIAS.
 --
+-- ⚠️ FRAGILIDADE CONHECIDA DO REVOKE (item 4) — LEIA ANTES DE ESCREVER A PRÓXIMA MIGRATION:
+--   O corte de `update (status)` é um PRIVILÉGIO DE COLUNA, e privilégio de coluna é apagado sem
+--   aviso por qualquer GRANT DE TABELA posterior. Em concreto, UMA linha como
+--
+--       grant all on all tables in schema public to authenticated;
+--       -- (ou `grant update on public.professional_patient_links to authenticated;`)
+--
+--   DESFAZ ESTE REVOKE SILENCIOSAMENTE. Não há erro, não há aviso, e nenhuma policy muda — o
+--   HASH_GLOBAL de policies continua idêntico, então NENHUMA das provas de RLS deste PR
+--   detectaria a regressão. O motivo é a regra do Postgres: privilégio de tabela vale para TODAS
+--   as colunas e se sobrepõe ao recorte por coluna (por isso a Fam1 fez
+--   `revoke update on <tabela>` + `grant update (is_external, status)`, e não o contrário).
+--   Efeito da regressão: o admin volta a poder virar `status` por UPDATE direto, sem trilha e sem
+--   reconciliar o roster do chat — exatamente o buraco que o item 4 fecha.
+--   COMO VERIFICAR (barato, serve de teste de regressão):
+--       select has_column_privilege('authenticated','public.professional_patient_links','status','update');
+--       -- deve ser FALSE;  e is_external deve continuar TRUE.
+--   Registrado em docs/PENDENCIAS.md (DÍVIDA-PRIV-1).
+--
 -- KILL SWITCH (desliga o fluxo sem desfazer nada):
 --   revoke execute on function public.deactivate_patient_link(uuid,uuid,text) from authenticated;
 --   revoke execute on function public.reactivate_patient_link(uuid,uuid,text) from authenticated;
 --   revoke execute on function public.patients_without_active_professional(uuid) from authenticated;
 --   Os vínculos já desativados PERMANECEM desativados (é o estado, não o gatilho). Para
 --   religar acesso sem a RPC: update professional_patient_links set status='active' where …
+--   ⚠️ ATENÇÃO — MUDOU COM O ITEM 4: esse UPDATE de socorro NÃO roda mais pelo client
+--   (`authenticated` perdeu `update (status)`). Ele exige `service_role`/owner, ou seja, SQL
+--   Editor / conexão de serviço. É deliberado: acionar o kill switch das RPCs passa a significar
+--   que ninguém muda status pelo aplicativo — só o dono, pelo banco.
 --
 -- ROLLBACK COMPLETO:
+--   grant update (status) on public.professional_patient_links to authenticated;  -- desfaz o item 4
 --   drop function if exists public.patients_without_active_professional(uuid);
 --   drop function if exists public.reactivate_patient_link(uuid,uuid,text);
 --   drop function if exists public.deactivate_patient_link(uuid,uuid,text);
@@ -336,7 +363,45 @@ revoke all     on function public.patients_without_active_professional(uuid) fro
 grant  execute on function public.patients_without_active_professional(uuid) to   authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
--- 6) Ledger técnico interno
+-- 6) TRAVA DE PRIVILÉGIO — `status` SÓ MUDA PELAS RPCs
+--
+-- POR QUÊ (o buraco que isto fecha):
+--   Até aqui, a policy ppl_admin_write (FOR ALL) autoriza o admin da clínica da paciente a
+--   escrever o vínculo, e a Fam1 (20260711095000) concedeu a ele `update (is_external, status)`.
+--   Ou seja: o admin podia virar `status` para 'inactive' por UPDATE DIRETO, sem passar pelas
+--   RPCs. Nesse caminho o corte de acesso acontece — os helpers filtram
+--   coalesce(status,'active')='active' — MAS as duas coisas que as RPCs fazem NA MESMA TRANSAÇÃO
+--   não acontecem:
+--     (a) NÃO grava trilha em ppl_status_events   ⇒ desativação sem autor, sem motivo, sem data;
+--     (b) NÃO remove o profissional de chat_participants ⇒ o desativado fica no PIOR estado
+--         possível: sem acesso a NENHUM dado clínico, mas AINDA ESCREVENDO NO CHAT da paciente,
+--         porque chat_messages_insert exige linha no roster e a linha continua lá. E fica assim
+--         até alguém reabrir o canal por get_or_create_channel (a "janela do roster
+--         desatualizado" descrita no WP-CHAT-FIX).
+--   Com o revoke abaixo, esse caminho deixa de existir: mudar status passa OBRIGATORIAMENTE
+--   pelas RPCs, que gravam trilha e reconciliam o roster atomicamente.
+--
+-- É CIRÚRGICO — o que NÃO muda:
+--   · `update (is_external)` continua concedido a authenticated: o admin segue trocando um
+--     vínculo de interno↔externo por UPDATE direto (isso não tem RPC e não deve ter).
+--   · SELECT, INSERT e DELETE de authenticated na tabela: INTACTOS (o admin continua criando e
+--     apagando vínculo pela policy ppl_admin_write).
+--   · anon: NADA A PERDER — a Fam1 já o deixou sem UPDATE nenhum nesta tabela
+--     (`revoke update … from authenticated, anon` + grant de coluna só para authenticated).
+--   · service_role e o owner (postgres): INTACTOS — os dois têm UPDATE de TABELA, que não é
+--     recortado por privilégio de coluna. É por isso que as RPCs SECURITY DEFINER (que rodam
+--     como owner) continuam funcionando depois deste revoke.
+--   · NENHUMA POLICY é criada, alterada ou removida aqui. Privilégio e RLS são camadas
+--     distintas: o Postgres cobra o privilégio ANTES de avaliar a policy.
+--
+-- ⚠️ Este recorte é apagado sem aviso por um `grant all on all tables in schema public to
+--    authenticated` futuro — ver o bloco FRAGILIDADE CONHECIDA no cabeçalho e a DÍVIDA-PRIV-1
+--    em docs/PENDENCIAS.md.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+revoke update (status) on public.professional_patient_links from authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- 7) Ledger técnico interno
 -- ─────────────────────────────────────────────────────────────────────────────────────
 insert into public.schema_migration_log (version, filename, description, session)
 values ('20260805090000', '20260805090000_wp_team_2bi_link_deactivation.sql',
@@ -352,7 +417,15 @@ values ('20260805090000', '20260805090000_wp_team_2bi_link_deactivation.sql',
   'idempotentes, autor do servidor) e patients_without_active_professional. Desativar remove o '
   'profissional de chat_participants na MESMA transacao, fechando a divida V7 do WP-CHAT-FIX '
   '(sem isso a leitura caia mas a escrita sobrevivia ate reabrir o canal). Reativar NAO recria o '
-  'roster — assimetria mantida do #36. NENHUMA policy existente alterada, NENHUM helper alterado, '
+  'roster — assimetria mantida do #36. EMENDA (endurecimento): revoke update (status) on '
+  'professional_patient_links from authenticated — privilegio de COLUNA, nenhuma policy tocada; '
+  'torna as RPCs o unico caminho de mudanca de status (UPDATE direto do admin desativava sem '
+  'trilha e deixava o profissional no roster do chat, ou seja, sem acesso a nada MAS ainda '
+  'escrevendo). update (is_external) preservado; SELECT/INSERT/DELETE preservados; anon nada a '
+  'perder; service_role e owner intactos (UPDATE de TABELA nao e recortado por coluna, por isso '
+  'as RPCs SECDEF seguem funcionando). ATENCAO: um "grant all on all tables in schema public to '
+  'authenticated" futuro desfaz este revoke SILENCIOSAMENTE (DIVIDA-PRIV-1 em PENDENCIAS). '
+  'NENHUMA policy existente alterada, NENHUM helper alterado, '
   'identidade e promote_to_professional intocados. NAO faz soft-delete de professionals.',
   'WP-TEAM-2b-i')
 on conflict (version) do nothing;
