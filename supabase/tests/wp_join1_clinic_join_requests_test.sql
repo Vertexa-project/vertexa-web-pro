@@ -22,6 +22,15 @@
 --   (N9) chamador que já é professional NÃO solicita
 --   (N10) terceiro qualquer não vê pedido alheio
 --
+-- DENORMALIZAÇÃO DO SOLICITANTE (WP-JOIN-1b)
+--   (D1) o pedido nasce com requester_name/requester_email do PRÓPRIO chamador
+--   (D2) o admin da clínica LÊ nome+e-mail do pedido da SUA clínica
+--   (D3) ★ o admin de OUTRA clínica NÃO lê nem a linha nem os campos novos
+--   (D4) terceiro qualquer NÃO lê os campos novos
+--   (D5) anon ⟂ (nem linha, nem campos)
+--   (D6) o snapshot NÃO é forjável pelo client (sai do profile do chamador)
+--   (D7) approve/reject seguem funcionando COM as colunas novas, e preservam o snapshot
+--
 -- REGRESSÃO
 --   (R1) create_clinic_with_owner segue funcionando COM a coluna NOT NULL (o fluxo solo)
 --   (R2) promote_to_professional intacta (hash conferido fora deste arquivo)
@@ -41,6 +50,7 @@ declare
   clinicB uuid := gen_random_uuid(); codeB text;
   reqA uuid; reqA2 uuid; reqB uuid;
   v_cnt int; v_status text; v_role text; v_prof uuid; v_code text; v_cl uuid; v_json jsonb;
+  v_rname text; v_remail text;
 begin
   -- ── fixtures ───────────────────────────────────────────────────────────────────────
   insert into public.profiles (id, auth_user_id, role, full_name, email, status) values
@@ -100,6 +110,16 @@ begin
   -- ── (N7) autor NÃO forjável: saiu no nome do CHAMADOR ──────────────────────────────
   if v_prof is distinct from pend1 then fails := fails || 'N7_author_forged '; end if;
 
+  -- ── (D1)(D6) snapshot do solicitante gravado pelo SERVIDOR ─────────────────────────
+  select count(*) into v_cnt from public.clinic_join_requests
+   where id = reqA and requester_name = 'Pendente 1' and requester_email = 'p1@t.test';
+  if v_cnt <> 1 then fails := fails || 'D1_snapshot_missing '; end if;
+  -- não pode ter vindo de outro profile: confere contra o profile do CHAMADOR
+  select count(*) into v_cnt from public.clinic_join_requests r
+   join public.profiles p on p.id = r.profile_id
+   where r.id = reqA and r.requester_name = p.full_name and r.requester_email = p.email;
+  if v_cnt <> 1 then fails := fails || 'D6_snapshot_not_from_caller '; end if;
+
   -- ── (N4) segundo pedido idêntico NÃO duplica ───────────────────────────────────────
   perform set_config('request.jwt.claims', json_build_object('sub', auth_pend1::text)::text, true);
   set local role authenticated;
@@ -123,12 +143,26 @@ begin
   reset role;
   if v_cnt <> 0 then fails := fails || 'N1_CROSS_CLINIC_LEAK('||v_cnt||') '; end if;
 
-  -- ── (P2) o admin da clínica VÊ o pedido da PRÓPRIA clínica ─────────────────────────
+  -- ══ (D3) ★ ADMIN DE A NÃO LÊ NOME/E-MAIL DO PEDIDO DE B ══════════════════════════
+  -- Não basta a linha não aparecer: nenhum dos campos denormalizados pode vazar.
+  perform set_config('request.jwt.claims', json_build_object('sub', auth_adminA::text)::text, true);
+  set local role authenticated;
+  select count(*) into v_cnt from public.clinic_join_requests
+   where requester_email = 'p2@t.test' or requester_name = 'Pendente 2';
+  reset role;
+  if v_cnt <> 0 then fails := fails || 'D3_CROSS_CLINIC_PII_LEAK('||v_cnt||') '; end if;
+
+  -- ── (P2)(D2) o admin da clínica VÊ o pedido E o nome/e-mail do solicitante ─────────
   perform set_config('request.jwt.claims', json_build_object('sub', auth_adminA::text)::text, true);
   set local role authenticated;
   select count(*) into v_cnt from public.clinic_join_requests where id = reqA;
+  select requester_name, requester_email into v_rname, v_remail
+    from public.clinic_join_requests where id = reqA;
   reset role;
   if v_cnt <> 1 then fails := fails || 'P2_admin_blind_to_own_queue '; end if;
+  if v_rname is distinct from 'Pendente 1' or v_remail is distinct from 'p1@t.test' then
+    fails := fails || 'D2_admin_cannot_read_requester('||coalesce(v_rname,'NULL')||') ';
+  end if;
 
   -- ── (P6) o solicitante vê o PRÓPRIO pedido ─────────────────────────────────────────
   perform set_config('request.jwt.claims', json_build_object('sub', auth_pend1::text)::text, true);
@@ -137,12 +171,26 @@ begin
   reset role;
   if v_cnt <> 1 then fails := fails || 'P6_own_request_invisible '; end if;
 
-  -- ── (N10) terceiro qualquer não vê pedido alheio ───────────────────────────────────
+  -- ── (N10)(D4) terceiro qualquer não vê o pedido nem os campos novos ────────────────
   perform set_config('request.jwt.claims', json_build_object('sub', auth_memberM::text)::text, true);
   set local role authenticated;
   select count(*) into v_cnt from public.clinic_join_requests where id = reqA;
   reset role;
   if v_cnt <> 0 then fails := fails || 'N10_third_party_leak('||v_cnt||') '; end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', auth_memberM::text)::text, true);
+  set local role authenticated;
+  select count(*) into v_cnt from public.clinic_join_requests
+   where requester_email in ('p1@t.test','p2@t.test');
+  reset role;
+  if v_cnt <> 0 then fails := fails || 'D4_third_party_pii_leak('||v_cnt||') '; end if;
+
+  -- ── (D5) anon ⟂ linha e campos ─────────────────────────────────────────────────────
+  perform set_config('request.jwt.claims', json_build_object('role','authenticated')::text, true);
+  set local role authenticated;
+  select count(*) into v_cnt from public.clinic_join_requests
+   where requester_email is not null or id is not null;
+  reset role;
+  if v_cnt <> 0 then fails := fails || 'D5_anon_pii_leak('||v_cnt||') '; end if;
 
   -- ── (N8) INSERT / UPDATE direto ⟂ ──────────────────────────────────────────────────
   begin
@@ -213,6 +261,11 @@ begin
   select count(*) into v_cnt from public.clinic_join_requests
    where id = reqA and decided_by = adminA and decided_at is not null;
   if v_cnt <> 1 then fails := fails || 'P3_decided_by_missing '; end if;
+  -- (D7) o snapshot SOBREVIVE à aprovação (é o registro de quem entrou e como)
+  select requester_name, requester_email into v_rname, v_remail
+    from public.clinic_join_requests where id = reqA;
+  if v_rname is distinct from 'Pendente 1' or v_remail is distinct from 'p1@t.test' then
+    fails := fails || 'D7_snapshot_lost_on_approve '; end if;
 
   -- aprovar de novo ⟂
   begin
@@ -246,6 +299,11 @@ begin
     fails := fails || 'P4_profile_changed('||v_role||','||v_status||') '; end if;
   select count(*) into v_cnt from public.professionals where profile_id = pend2;
   if v_cnt <> 0 then fails := fails || 'P4_created_professional('||v_cnt||') '; end if;
+  -- (D7) o snapshot SOBREVIVE à rejeição
+  select requester_name, requester_email into v_rname, v_remail
+    from public.clinic_join_requests where id = reqB;
+  if v_rname is distinct from 'Pendente 2' or v_remail is distinct from 'p2@t.test' then
+    fails := fails || 'D7b_snapshot_lost_on_reject '; end if;
 
   -- ── (P5) rotate ────────────────────────────────────────────────────────────────────
   begin

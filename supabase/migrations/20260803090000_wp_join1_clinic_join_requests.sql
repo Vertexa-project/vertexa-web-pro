@@ -104,20 +104,51 @@ comment on column public.clinics.join_code is
 -- 3) TABELA DE PEDIDOS
 -- ─────────────────────────────────────────────────────────────────────────────────────
 create table if not exists public.clinic_join_requests (
-  id          uuid primary key default gen_random_uuid(),
-  profile_id  uuid not null references public.profiles(id) on delete cascade,
-  clinic_id   uuid not null references public.clinics(id)  on delete cascade,
-  status      text not null default 'pending'
-                check (status in ('pending', 'approved', 'rejected', 'cancelled')),
-  created_at  timestamptz not null default now(),
-  decided_at  timestamptz,
-  decided_by  uuid references public.profiles(id)
+  id              uuid primary key default gen_random_uuid(),
+  profile_id      uuid not null references public.profiles(id) on delete cascade,
+  clinic_id       uuid not null references public.clinics(id)  on delete cascade,
+  status          text not null default 'pending'
+                    check (status in ('pending', 'approved', 'rejected', 'cancelled')),
+  -- IDENTIFICAÇÃO DENORMALIZADA do solicitante (WP-JOIN-1b). Ver bloco abaixo.
+  requester_name  text,
+  requester_email text,
+  created_at      timestamptz not null default now(),
+  decided_at      timestamptz,
+  decided_by      uuid references public.profiles(id)
 );
+
+-- Colunas idempotentes: se a tabela já existir de uma execução anterior, acrescenta sem falhar.
+alter table public.clinic_join_requests add column if not exists requester_name  text;
+alter table public.clinic_join_requests add column if not exists requester_email text;
 
 comment on table public.clinic_join_requests is
   'Pedidos de entrada de profissional numa clínica (WP-JOIN-1). O pedido nasce vinculado ao '
   'clinic_id, então a leitura pelo admin é RLS trivial — sem consulta global. Escrita SOMENTE '
   'pelas RPCs SECURITY DEFINER; nunca INSERT/UPDATE direto do client.';
+
+-- ── IDENTIFICAÇÃO DENORMALIZADA (WP-JOIN-1b) ─────────────────────────────────────────
+-- POR QUE NÃO UM JOIN: private.can_see_profile() é FALSA para um profile 'pending' (os 4 ramos
+-- exigem ser o próprio, um paciente acessível, ou alguém que JÁ tenha linha em professionals).
+-- Um join de clinic_join_requests para public.profiles voltaria VAZIO exatamente no caso que
+-- importa — a fila do admin. As alternativas eram abrir uma exceção em can_see_profile (helper
+-- load-bearing de toda a RLS) ou empurrar a leitura para dentro de outra RPC. Ambas piores.
+--
+-- POR QUE É LEGÍTIMO, e não só conveniente: o que o admin vê é o que o profissional ESCOLHEU
+-- APRESENTAR ao pedir acesso ÀQUELA clínica. O consentimento está embutido no ato do pedido —
+-- não é a clínica bisbilhotando um cadastro alheio. É um SNAPSHOT do momento da solicitação.
+--
+-- PREENCHIDO NO SERVIDOR: request_clinic_access é SECURITY DEFINER e lê o profile do PRÓPRIO
+-- chamador (private.current_profile_id()). O client NUNCA envia nome/e-mail — não é forjável.
+--
+-- SEM SUPERFÍCIE NOVA: os campos vivem na MESMA linha, sob a MESMA policy
+-- clinic_join_requests_select. Quem não podia ler a linha continua não podendo ler nada dela.
+comment on column public.clinic_join_requests.requester_name is
+  'SNAPSHOT do profiles.full_name do solicitante no momento do pedido. Preenchido pelo servidor '
+  'em request_clinic_access (SECURITY DEFINER); nunca pelo client. Existe porque can_see_profile() '
+  'é falsa para um pendente e um join a profiles voltaria vazio para o admin.';
+comment on column public.clinic_join_requests.requester_email is
+  'SNAPSHOT do profiles.email do solicitante no momento do pedido. Mesma justificativa e mesma '
+  'policy de leitura de requester_name — nenhuma superfície nova.';
 
 -- Impede DOIS pedidos 'pending' do mesmo profile para a MESMA clínica (sustenta a idempotência).
 -- Parcial de propósito: depois de decidido, a pessoa pode pedir de novo à mesma clínica.
@@ -128,6 +159,11 @@ create unique index if not exists clinic_join_requests_one_pending
 -- Fila do admin.
 create index if not exists clinic_join_requests_clinic_status
   on public.clinic_join_requests (clinic_id, status);
+
+-- Predicado da RLS do lado do solicitante (`profile_id = current_profile_id()`) e cobertura da FK.
+-- O índice único acima é PARCIAL (só 'pending'), então não serve de cobertura para a FK.
+create index if not exists clinic_join_requests_profile
+  on public.clinic_join_requests (profile_id);
 
 alter table public.clinic_join_requests enable row level security;
 
@@ -166,6 +202,8 @@ declare
   v_caller uuid := private.current_profile_id();   -- AUTOR DO SERVIDOR; jamais parâmetro do client
   v_clinic uuid;
   v_status text;
+  v_name   text;
+  v_email  text;
   v_id     uuid;
 begin
   if v_caller is null then
@@ -183,7 +221,11 @@ begin
     raise exception 'request_clinic_access: invalid join code' using errcode = 'P0002';
   end if;
 
-  select p.status into v_status from public.profiles p where p.id = v_caller;
+  -- Lê o profile DO PRÓPRIO CHAMADOR (v_caller vem do servidor). O nome e o e-mail gravados são,
+  -- portanto, os da pessoa que está pedindo — o client não tem como informar outros.
+  select p.status, p.full_name, p.email
+    into v_status, v_name, v_email
+    from public.profiles p where p.id = v_caller;
   if v_status is distinct from 'pending' then
     raise exception 'request_clinic_access: caller is not pending' using errcode = '22023';
   end if;
@@ -196,8 +238,9 @@ begin
     return v_id;
   end if;
 
-  insert into public.clinic_join_requests (profile_id, clinic_id)
-  values (v_caller, v_clinic)
+  insert into public.clinic_join_requests
+    (profile_id, clinic_id, requester_name, requester_email)
+  values (v_caller, v_clinic, v_name, v_email)
   returning id into v_id;
 
   return v_id;
@@ -360,7 +403,10 @@ values ('20260803090000', '20260803090000_wp_join1_clinic_join_requests.sql',
   'WP-JOIN-1: solicitacao de acesso a clinica com INVERSAO DE DIRECAO — o profissional pede, o '
   'admin aprova. clinics.join_code (base32 sem ambiguos, unico, NOT NULL com DEFAULT — default '
   'OBRIGATORIO porque create_clinic_with_owner nao informa a coluna) + backfill. Tabela '
-  'clinic_join_requests (RLS: le o proprio solicitante OU o admin da clinica; escrita so por RPC). '
+  'clinic_join_requests (RLS: le o proprio solicitante OU o admin da clinica; escrita so por RPC) '
+  'com requester_name/requester_email DENORMALIZADOS (WP-JOIN-1b) preenchidos pelo SERVIDOR dentro '
+  'de request_clinic_access — can_see_profile e falsa para pendente, entao um join a profiles '
+  'voltaria vazio para o admin; os campos vivem sob a MESMA policy, sem superficie nova. '
   'RPCs request_clinic_access (idempotente, erro NEUTRO para codigo inexistente), '
   'approve_join_request (CHAMA promote_to_professional, intocada), reject_join_request e '
   'rotate_clinic_join_code. Nenhuma policy existente alterada; handle_new_user, can_see_profile e '

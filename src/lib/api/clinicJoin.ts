@@ -18,6 +18,14 @@ export interface ClinicJoinRequest {
   status: JoinRequestStatus;
   createdAt: string;
   decidedAt: string | null;
+  /**
+   * SNAPSHOT do nome/e-mail do solicitante no momento do pedido (WP-JOIN-1b). Gravado pelo
+   * SERVIDOR dentro de request_clinic_access, nunca pelo client. Existe porque
+   * `can_see_profile()` é falsa para um profile pendente — um join a `profiles` voltaria vazio
+   * exatamente no caso que importa: a fila do admin.
+   */
+  requesterName: string | null;
+  requesterEmail: string | null;
 }
 
 interface RawRow {
@@ -27,6 +35,8 @@ interface RawRow {
   status: JoinRequestStatus;
   created_at: string;
   decided_at: string | null;
+  requester_name: string | null;
+  requester_email: string | null;
 }
 
 const toRequest = (r: RawRow): ClinicJoinRequest => ({
@@ -36,6 +46,8 @@ const toRequest = (r: RawRow): ClinicJoinRequest => ({
   status: r.status,
   createdAt: r.created_at,
   decidedAt: r.decided_at,
+  requesterName: r.requester_name,
+  requesterEmail: r.requester_email,
 });
 
 /**
@@ -56,7 +68,7 @@ export async function requestClinicAccess(joinCode: string): Promise<string> {
 export async function listMyJoinRequests(): Promise<ClinicJoinRequest[]> {
   const { data, error } = await supabase
     .from("clinic_join_requests")
-    .select("id, profile_id, clinic_id, status, created_at, decided_at")
+    .select("id, profile_id, clinic_id, status, created_at, decided_at, requester_name, requester_email")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return ((data ?? []) as RawRow[]).map(toRequest);
