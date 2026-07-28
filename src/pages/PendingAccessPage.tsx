@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Building2 } from "lucide-react";
+import { Building2, KeyRound } from "lucide-react";
 
 import { Brand } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CreateClinicForm } from "@/components/onboarding/CreateClinicForm";
+import { JoinClinicForm } from "@/components/onboarding/JoinClinicForm";
 import { useAuth } from "@/providers/auth-context";
 import { useIdentity } from "@/hooks/useIdentity";
 
@@ -18,7 +19,12 @@ import { useIdentity } from "@/hooks/useIdentity";
  * Acesso pendente: sessão real válida, mas a conta ainda NÃO está vinculada a um profissional/clínica
  * (1º login sem match por e-mail → profile 'pending'). Não vê dados de ninguém. Dois caminhos claros:
  *   (1) CRIAR a própria clínica → vira administradora na hora (RPC create_clinic_with_owner, WP-ONBOARDING);
- *   (2) AGUARDAR o cadastro por uma clínica que a convidou (comportamento anterior — pacientes/convidados).
+ *   (2) PEDIR acesso a uma clínica existente com o CÓDIGO dela (RPC request_clinic_access, WP-JOIN-1)
+ *       → o admin daquela clínica aprova e o acesso é liberado.
+ *
+ * O caminho (2) era, até o WP-JOIN-1, um texto morto mandando "falar com o administrador": ele não
+ * tinha como atender, porque private.can_see_profile() é falsa para um profile pendente e o tornava
+ * invisível. Com o código, o pedido nasce vinculado ao clinic_id e a fila do admin é RLS trivial.
  */
 export function PendingAccessPage() {
   const navigate = useNavigate();
@@ -65,19 +71,21 @@ export function PendingAccessPage() {
           </CardContent>
         </Card>
 
-        {/* Caminho 2: aguardar cadastro por uma clínica (convidados/pacientes) — comportamento anterior. */}
+        {/* Caminho 2: PEDIR acesso a uma clínica com o código dela (WP-JOIN-1). Antes daqui havia
+            só um texto mandando "falar com o administrador" — que não tinha como atender, porque
+            um profile pendente é invisível para ele. Agora o pedido nasce vinculado à clínica. */}
         <Card>
           <CardHeader>
-            <CardTitle>Fui cadastrada por uma clínica</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-primary" aria-hidden />
+              Entrar em uma clínica
+            </CardTitle>
             <CardDescription>
-              Se uma clínica está te cadastrando como profissional ou paciente, o acesso é liberado por ela.
+              Você foi chamada(o) para a equipe de uma clínica. Informe o código que ela te passou.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Peça ao administrador da sua clínica para concluir seu cadastro. Assim que ele liberar, seu
-              acesso aparece aqui automaticamente.
-            </p>
+            <JoinClinicForm />
             <Button variant="outline" onClick={handleSignOut} className="w-full">
               Sair
             </Button>

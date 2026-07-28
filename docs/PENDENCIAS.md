@@ -464,3 +464,37 @@
     Comando proposto (UPDATE de `version` par a par, dentro de transação, preservando `statements`/
     `rollback`) está no retorno `retorno-seed.txt`. As 2 linhas órfãs precisam de decisão à parte:
     recuperar os arquivos (`supabase db pull`) ou aceitar que rodaram fora do repo.
+
+---
+
+### WP-JOIN-1 — o que ficou registrado (2026-07-28)
+
+- **WP-2 — GESTÃO DE EQUIPE (tela de aprovação).** O WP-JOIN-1 entrega o banco inteiro
+  (`approve_join_request` / `reject_join_request` prontos e testados) mas, na web, só o **indicador
+  de contagem** em Configurações. Falta a tela com a lista e os botões.
+  ⚠️ **Dependência não óbvia, decidir antes de codar:** a tabela `clinic_join_requests` guarda
+  `profile_id`, e a tela vai querer mostrar **nome e e-mail** do solicitante — mas
+  `can_see_profile()` é FALSA para um pendente, então um join a `public.profiles` volta **vazio**.
+  Duas saídas: (a) denormalizar nome/e-mail na solicitação no momento do pedido (snapshot); ou
+  (b) uma RPC `SECURITY DEFINER` que devolva a fila já resolvida, atrás de `is_clinic_admin`.
+  Não foi decidido aqui — é decisão de produto/privacidade.
+- **WP-3 — SUPER-ADMIN (Vertexa).** Visão cross-clínica para suporte: destravar alguém preso,
+  auditar pedidos, reatribuir clínica. Hoje não existe nenhum papel acima do admin de clínica, e
+  qualquer intervenção exige `service_role` no SQL Editor.
+- **Convite por e-mail — NÃO é substituto deste fluxo.** Quando vier, deve apenas **pré-criar um
+  `clinic_join_request` já aprovado** para o e-mail convidado, reusando tabela, policies e tela.
+  O substrato já existe: `supabase/functions/_shared/supabaseAdmin.ts` (service_role), `verify_jwt`
+  por função em `config.toml`, e a primitiva de token de uso único com TTL em
+  `public.calendar_oauth_state`. Falta **entrega de e-mail** (nenhuma dependência de mail no
+  `package.json` hoje) + tabela de convites + UI.
+- **Multi-clínica.** `request_clinic_access` exige `status='pending'`: quem já é professional de uma
+  clínica **não** pode pedir entrada em outra. Pertencer a duas clínicas exigiria repensar
+  `useIdentity` (que assume uma clínica) — fora do escopo, registrado como limite conhecido.
+- **Perda do `?code=` no round-trip de OAuth.** O link de convite pré-preenche o campo via
+  querystring, mas se a pessoa ainda não estiver logada o `AuthCallback` redireciona para `/` e o
+  parâmetro se perde; ela cai na tela e digita o código à mão. Preservar exigiria carregar o código
+  através do OAuth (sessionStorage antes do redirect, ou `redirectTo` parametrizado). Não feito.
+- **Smoke test pós-deploy do modo de auth.** `VITE_AUTH_MODE=real` entrou em produção quando um
+  commit de README disparou rebuild — variável de build fica latente e invisível até o próximo
+  deploy. Um teste que inspecione o bundle publicado e afirme o modo esperado é barato e
+  automatizável. Vale para toda `VITE_*`, não só `AUTH_MODE`.

@@ -4,11 +4,13 @@ import type { LucideIcon } from "lucide-react";
 import { Bell, Building2, CalendarDays, CreditCard, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
 
 import { GoogleCalendarConnection } from "@/components/calendar/GoogleCalendarConnection";
+import { ClinicJoinCodeRow } from "@/components/settings/ClinicJoinCodeRow";
 import { PageHeader } from "@/components/PageHeader";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { usePendingJoinRequestCount } from "@/hooks/useClinicJoin";
 import { useCurrentProfessional, useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
 import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import { initials, shortName } from "@/lib/domain/format";
@@ -82,6 +84,8 @@ export function SettingsPage() {
   const { data: professional } = useCurrentProfessional();
   const { roleLabel } = useRole(); // roleLabel: só DISPLAY. Autoridade de admin vem do sinal real abaixo.
   const { isClinicAdmin } = useIsClinicAdmin(professional?.clinicId ?? null);
+  // Indicador de fila (WP-JOIN-1). Só a CONTAGEM: a tela de aprovação com a lista é o WP-2.
+  const pendingJoinRequests = usePendingJoinRequestCount(professional?.clinicId ?? null, isClinicAdmin);
   const navigate = useNavigate();
 
   // Retorno do OAuth do Google Calendar (.../configuracoes?calendar=connected|error): mostra um aviso
@@ -157,9 +161,22 @@ export function SettingsPage() {
               </Button>
             </SettingRow>
           ) : null}
-          <SettingRow label="Convidar profissional">
-            <SoonButton>Convidar</SoonButton>
-          </SettingRow>
+          {/* WP-JOIN-1: o código É o convite no v1. Compartilhar o código substitui o antigo
+              "Convidar profissional" (SoonButton), que prometia um e-mail que não existe. O envio
+              por e-mail continua sendo outro WP — e vai apenas PRÉ-CRIAR um pedido já aprovado,
+              reusando exatamente este fluxo. */}
+          {isClinicAdmin ? (
+            <SettingRow label="Código de acesso da equipe">
+              <ClinicJoinCodeRow clinicId={professional?.clinicId ?? null} />
+            </SettingRow>
+          ) : null}
+          {isClinicAdmin && (pendingJoinRequests.data ?? 0) > 0 ? (
+            <SettingRow label="Solicitações de acesso">
+              <Badge tone="primary">
+                {pendingJoinRequests.data} aguardando aprovação
+              </Badge>
+            </SettingRow>
+          ) : null}
         </SectionCard>
 
         <SectionCard icon={Sun} title="Aparência" description="Tema do painel (aplica imediatamente).">
