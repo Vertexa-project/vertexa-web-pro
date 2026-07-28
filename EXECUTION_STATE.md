@@ -471,3 +471,54 @@ Branch `feat/test-seed-web` (PR base main, **SEM MERGE**). Gate: `origin/main` `
 - **Rastreabilidade:** âncora = 6 profiles com id determinístico `md5('wp-seed:v2:'||chave)::uuid`; todo o resto por FK. **Idempotente** (guarda pelo profile-âncora) e **reversível** (`wp_seed_test_data_remove.sql`, entregue junto).
 - **Ensaio (ROLLBACK):** seed → contagens/relações → **seed 2ª vez** (snapshot idêntico ⇒ idempotência) → remoção (**volta exatamente ao inicial**) — tudo numa transação revertida. **Policies 116 / hash `d19d55adae35af55fb2b92db3a2adcc8` e hash do schema inalterados.** Relações conferidas: 2 clínicas com dono, 6 vínculos de disciplina, 1 profissional sem disciplina, 1 sem nenhum paciente, 1 vínculo externo, 0 pacientes sem nascimento, 0 menores, 1 com marcos 30/60/90, 1 com marco de 30 na janela, 1 com aniversário em 7 dias, 5 conversas com mensagem dos dois lados, 6 âncoras com `auth_user_id` NULL.
 - **Escopo/limite:** SÓ repo web + dado no banco. Nenhuma migration, policy ou função de produto. `app`/`patient-native` NÃO tocados.
+
+## WP-JOIN-1 · Solicitação de acesso à clínica (o profissional pede, o admin aprova)
+Branch `feat/clinic-join-requests-web` (PR base main, **SEM MERGE**). Gate: `origin/main`
+`939a2ea9471ec620430f19fd00aa32c3afabb1cc` (esperado `4db5789…`; diferença **docs-only**:
+`README.md`, 1 linha — caracterizada e aceita). **Migration NÃO aplicada em produção.**
+- **PR #33 (WP-TEAM-JOIN) FECHADO sem merge** e branch remota `feat/team-join-web` removida: foi
+  desenhado antes da inversão de fluxo. Verificado antes de fechar que **nada dele havia sido
+  aplicado** (join_code, tabela, RPCs e ledger todos ausentes; policies 116). Código NÃO reaproveitado.
+- **Desenho (lei do dono): INVERSÃO DE DIREÇÃO.** O admin nunca descobre um pendente; o profissional
+  pede acesso a UMA clínica com o código dela. O pedido nasce com `clinic_id` ⇒ leitura do admin é
+  RLS trivial. Sem consulta global, sem oráculo de e-mail, sem dependência de envio de e-mail.
+- **Banco (`20260803090000_wp_join1_clinic_join_requests.sql`, ADITIVA):** `private.new_join_code()`
+  (base32 sem `O/0/I/1`, 8 chars) · `clinics.join_code` único, **NOT NULL com DEFAULT** + backfill ·
+  `public.clinic_join_requests` (RLS: próprio solicitante OU `is_clinic_admin(clinic_id)`; escrita só
+  por RPC) · RPCs `request_clinic_access` (idempotente, erro **neutro** para código inexistente),
+  `approve_join_request` (CHAMA `promote_to_professional`, intocada), `reject_join_request`,
+  `rotate_clinic_join_code`.
+- **O DEFAULT não é opcional** — verificado lendo a função em produção: `create_clinic_with_owner`
+  faz `insert into clinics (name, owner_profile_id)` sem informar `join_code`; `NOT NULL` sem
+  `DEFAULT` quebraria a criação de clínica. Coberto pelo teste de regressão R1.
+- **`approve_join_request(p_request_id)` tem UM parâmetro** (assinatura do WP), mas
+  `promote_to_professional` exige `p_type` — adotado `'other'`, o MESMO tipo com que
+  `create_clinic_with_owner` cria o dono. Coerente: `type` é grosso e a capacidade real vem das
+  DISCIPLINAS; o admin ajusta depois (`professionals_admin_write` já concede UPDATE de `type`).
+- **`rotate_clinic_join_code` recebe `p_clinic_id`** (o WP escreveu `()`): um profile pode
+  administrar mais de uma clínica, e sem o parâmetro a função seria ambígua. Gate inalterado.
+- **Dry-run em transação com ROLLBACK contra produção: VERDE.** P1–P6, N1–N10 e R1 passaram.
+  Destaques: **admin de A ⟂ pedido de B (zero linhas)**, admin de outra clínica ⟂ aprovar/rejeitar,
+  código inexistente ⇒ `P0002` com mensagem que não revela existência de clínica, 2º pedido idêntico
+  não duplica, INSERT/UPDATE direto negado, autor não forjável, `create_clinic_with_owner` segue
+  funcionando com a coluna NOT NULL.
+- **Regressão provada por HASH, não por inspeção:** durante a transação as policies foram **117**
+  (= 116 + 1 nova, nenhuma alterada) e `promote_to_professional` manteve o hash
+  `b377d4b1cc40068a50627622e4b230a3`. Após o ROLLBACK: policies **116**, hash do conjunto
+  `344f56bfc05c45eaa2909aaa427b3571`, e `promote_to_professional` / `create_clinic_with_owner` /
+  `handle_new_user` com hashes idênticos ao baseline. Zero resíduo.
+- **Advisors:** inalterados em natureza (4 INFO `rls_enabled_no_policy` pré-existentes + WARNs
+  `authenticated_security_definer_function_executable` + `auth_leaked_password_protection`). As 4
+  RPCs novas somam ao MESMO WARN 0029 já aceito para todas as RPCs do produto — é o padrão da casa
+  (a segurança é a checagem interna `is_clinic_admin`, não a ausência de EXECUTE).
+- **Web:** `PendingAccessPage` — o ramo "fui cadastrada por uma clínica" era **texto morto**; virou
+  campo de código + "Solicitar acesso", com pré-preenchimento por link `?code=`, estado "aguardando
+  aprovação" e retomada após rejeição. `SettingsPage` — código da clínica (copiar código / copiar
+  convite pronto / gerar novo, com confirmação) e indicador de N pedidos pendentes, tudo só para
+  admin; o `SoonButton` "Convidar profissional" foi **substituído** (o código É o convite no v1).
+- **Kill switch:** revogar EXECUTE das 4 RPCs desliga o fluxo sem afetar o resto (documentado no
+  cabeçalho da migration).
+- **Gates:** eslint 0 · tsc 0 · vitest **115/115** (96 + 19 novos em `clinicJoin.test.ts`) · build OK.
+- **Escopo/limite:** SÓ repo web + migration não aplicada. Nenhuma policy existente alterada.
+  `promote_to_professional`, `handle_new_user` e a resolução de identidade **não tocados**.
+  `app`/`patient-native` NÃO tocados. PARADO para auditoria.

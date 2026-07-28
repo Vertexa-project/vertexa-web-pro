@@ -27,6 +27,10 @@ export const qk = {
   profileByAuthUser: (authUserId: string) => ["profileByAuthUser", authUserId] as const,
   clinicProfessionals: (clinicId: string) => ["clinicProfessionals", clinicId] as const,
   clinic: (clinicId: string) => ["clinic", clinicId] as const,
+  // Solicitações de acesso à clínica (WP-JOIN-1). `myJoinRequests` não leva o profile no key: a
+  // RLS já escopa ao chamador, e a sessão troca o cache inteiro no signOut (queryClient.clear()).
+  myJoinRequests: ["joinRequests", "mine"] as const,
+  pendingJoinRequests: (clinicId: string) => ["joinRequests", "pending", clinicId] as const,
   // Sinal REAL "sou admin da clínica?" (RPC am_i_clinic_admin). null = clínica do logado (server-side).
   clinicAdmin: (clinicId: string | null) => ["clinicAdmin", clinicId ?? "self"] as const,
   // Trilha de auditoria de exportação (WP-REPORT B) — lista filtrada/paginada + profissionais p/ filtro.

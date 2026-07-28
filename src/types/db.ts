@@ -42,6 +42,9 @@ export interface Clinic {
   name: string;
   owner_profile_id: string | null;
   created_at: string;
+  // Código de acesso compartilhável (WP-JOIN-1). Migration 20260803090000: NOT NULL no banco, mas
+  // opcional aqui porque um build da web pode rodar contra um banco anterior à migration.
+  join_code?: string | null;
 }
 
 export interface Professional {

@@ -1049,3 +1049,45 @@ Modelo que torna **IMPOSSÍVEL usar uma peça sem consentimento ATIVO** — a ch
 **Regras (lei do cliente + orquestrador):** consentimento por peça+versão+canais selecionados+clínica/profissionais; validade 12m OU até revogação; revogação bloqueia download/edição/duplicação/republicação e tira da biblioteca (derivado da função canônica); auditoria preservada e **NUNCA reutilizável como ativa**. **D1** peça muda ⇒ nova versão+consentimento / uso muda (canal/pago/finalidade) ⇒ novo consentimento na MESMA versão. **D3** três fronteiras: GERIR (staff vê/cria sem consent) · DECIDIR (paciente vê a própria peça p/ consentir — ver ≠ usar) · USAR (baixar/publicar exige consent ativo p/ o canal). **D4** menor OU `birth_date` nula ⇒ concessão NEGADA (requer modelo de responsável legal — etapa C). **D6** link assinado publicável = **300s**; limitação (link já emitido não é revogável, só expira) consta no termo.
 
 **Cross-repo:** quando implementado, o **app** concede/revoga consentimento (RPCs acima, identidade do próprio paciente amarrada pelo servidor); a **web** cria peças/versões e registra presencial; **externo NÃO acessa**. app/patient-native NÃO tocados nesta fase (só banco).
+
+---
+
+## Entrada de profissional na clínica — fluxo de JOIN (WP-JOIN-1)
+
+**A direção do fluxo é o contrato.** O admin **nunca** descobre um profile pendente: quem pede é o
+profissional, apresentando o **código da clínica**. Consequência de desenho: o pedido já nasce com
+`clinic_id`, então a leitura pelo admin é RLS trivial — sem consulta global, sem oráculo de
+enumeração de e-mail, sem depender de envio de e-mail.
+
+**Por que não pode ser o contrário:** `private.can_see_profile()` é FALSA para um profile
+`status='pending'` (os 4 ramos exigem ser o próprio, um paciente acessível, ou alguém que já tenha
+linha em `professionals`). O pendente é invisível até para um `SELECT` do admin — qualquer desenho
+em que o admin "procura" a pessoa exigiria afrouxar esse helper, que é load-bearing em toda a RLS.
+
+| Passo | Quem | Superfície |
+|---|---|---|
+| Compartilha o código (`clinics.join_code`, 8 chars base32 sem `O/0/I/1`) | admin | WEB — Configurações → Clínica |
+| Solicita acesso: `request_clinic_access(p_join_code)` | profissional `pending` | WEB — tela de acesso pendente (campo ou link `?code=`) |
+| Vê a fila da própria clínica (`clinic_join_requests`, RLS) | admin | WEB — indicador no v1; tela de aprovação = WP-2 |
+| Aprova: `approve_join_request(p_request_id)` → chama `promote_to_professional` | admin | WEB (WP-2) |
+| Rejeita: `reject_join_request(p_request_id)` | admin | WEB (WP-2) |
+| Troca o código: `rotate_clinic_join_code(p_clinic_id)` | admin | WEB — Configurações → Clínica |
+
+**Invariantes.** Autor do pedido SEMPRE derivado do servidor (`private.current_profile_id()`), nunca
+parâmetro do client. Escrita nas duas tabelas só por RPC `SECURITY DEFINER` — não há policy de
+INSERT/UPDATE/DELETE. `promote_to_professional` é **reusada sem alteração**. `handle_new_user`,
+`can_see_profile` e `is_clinic_admin` **não são tocados**.
+
+**`join_code` NÃO é segredo.** A segurança está na aprovação explícita do admin. Adivinhar um código
+gera ruído (um pedido pendente), nunca privilégio. Código vazado ⇒ `rotate_clinic_join_code`.
+
+**Erro neutro por desenho:** código inexistente devolve `P0002` com mensagem que **não afirma nada
+sobre a clínica existir**. Se dissesse "clínica não encontrada", a tela viraria um oráculo de
+enumeração de códigos.
+
+**Degrau para o convite por e-mail (WP futuro):** o convite não substitui este fluxo — ele apenas
+**pré-cria um `clinic_join_request` já aprovado** para o e-mail convidado e reusa a mesma tabela, as
+mesmas policies e a mesma tela. Nada aqui é trabalho descartável.
+
+**Cross-repo:** fluxo exclusivo da **web** (superfície profissional). `app`/`patient-native` NÃO
+participam e NÃO foram tocados.
