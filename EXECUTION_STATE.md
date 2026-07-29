@@ -575,3 +575,81 @@ Branch `feat/clinic-join-requests-web` (PR base main, **SEM MERGE**). Gate: `ori
 - **Gates:** eslint 0 · tsc 0 · vitest **133/133** · build OK.
 - **Escopo:** só o repo web. `chat_messages_insert`, identidade e os demais helpers **não tocados**.
   `app`/`patient-native` **NÃO tocados**. PARADO para auditoria.
+
+## WP-TEAM-2b-i — desativação do vínculo profissional↔paciente (2026-07-28)
+
+**Estado: migration escrita e PROVADA em transação com ROLLBACK, NÃO aplicada.** Branch
+`feat/team-2bi-link-deactivation`, base `origin/main` = `9709bdb`. PR aberto SEM MERGE.
+**Frontend NÃO entrou neste PR** — sem âncora óbvia na UI; opção reportada, aguardando decisão.
+
+- **A tese, provada por hash:** `is_common_professional_of_patient` E
+  `is_external_professional_of_patient` já filtram `coalesce(status,'active')='active'`. Logo
+  virar o status para `inactive` derruba o acesso clínico inteiro — interno **e** externo —
+  **sem tocar em uma linha de RLS**. GATE do PASSO 0 confirmou o filtro no ramo externo.
+- **Entregue:** 3 colunas de carimbo em `professional_patient_links`; tabela IMUTÁVEL
+  `ppl_status_events` (append-only: só policy de SELECT para admin da clínica, escrita só pelas
+  RPCs); RPCs `deactivate_patient_link`, `reactivate_patient_link` e
+  `patients_without_active_professional` (SECURITY DEFINER, `search_path=''`, EXECUTE só
+  `authenticated`).
+- **DÍVIDA V7 FECHADA:** desativar remove o profissional de `chat_participants` na MESMA
+  transação. Provado: o desativado para de LER o canal (0 mensagens visíveis) **e** recebe
+  42501 ao tentar ESCREVER. Sem esse DELETE a escrita sobreviveria até alguém reabrir a conversa.
+- **PROVAS:** P1 — as **49 tabelas pré-existentes com hash de policy idêntico item a item**;
+  único delta no `HASH_GLOBAL` (`e173eb30…` → `be1e5687…`) é a policy nova
+  `ppl_status_events_select`; 107 → 108. P2 — **48 helpers de private com hash agregado
+  IDÊNTICO** (`18b93d8411d3914247e9056ea4ec207c`), nenhum alterado. P3 — 4 âncoras idênticas
+  (`b79d76307765af2f5efe842d98678cff`). P4 — lint 0029 25 → 28 (+3, as RPCs novas), lint 0008
+  inalterado, `anon` não executa nenhuma. Nenhuma classe nova.
+- **Matriz:** PERDA 1–5 (internas, `can_access_patient`, escrita, `patients_update`, chat),
+  idempotência (2 desativações ⇒ 1 evento), reativação (lê na hora; escreve após reabrir),
+  NÃO-GANHO 8–10 (outro comum ativo, admin e a própria paciente **idênticos item a item**),
+  negativos 11–14 (outra clínica, comum inclusive no próprio vínculo, externo e anon ⇒ 42501),
+  trilha imutável (UPDATE/DELETE/INSERT direto negados) e preservação (linha do vínculo e
+  mensagens com autoria intactas).
+- **Gates:** eslint 0 · tsc 0 · vitest 133/133 · build OK.
+- **Escopo:** só o repo web. Nenhuma policy existente alterada, nenhum helper alterado,
+  identidade e `promote_to_professional` intocados. NÃO faz soft-delete de `professionals`.
+  `app`/`patient-native` NÃO tocados. PARADO para auditoria.
+
+### EMENDA (endurecimento antes da aplicação) — mesmo PR #37, mesma migration `20260805090000`
+
+**Estado: emenda escrita e PROVADA em transação com ROLLBACK, migration segue NÃO aplicada.**
+
+- **VERIFICAÇÃO QUE PRECEDEU A EMENDA (o filtro de role do DELETE está completo).** O `DELETE`
+  em `chat_participants` dentro de `deactivate_patient_link` filtra `role='professional'`. Medido
+  no banco: **0 linhas** de `chat_participants` cujo `profile_id` é de um profissional com
+  `role <> 'professional'`, e **0 linhas** cujo `profile_id` não é nem a paciente do canal nem
+  profissional. As 16 linhas se dividem em 7 `patient` (todas = a paciente do próprio canal) e
+  9 `professional` (todas = profissional de verdade). `role='admin'` em `chat_participants`: **0**.
+  Nenhum profile é simultaneamente `professionals` e `patients`. **O filtro fica como está.**
+- **A EMENDA:** `revoke update (status) on public.professional_patient_links from authenticated`.
+  Fecha o UPDATE direto e torna as RPCs o **único** caminho de mudança de status. Sem ela, um
+  UPDATE direto do admin (autorizado por `ppl_admin_write`, FOR ALL) cortava o acesso **sem**
+  gravar trilha e **sem** remover o profissional do roster do chat — o desativado ficava sem
+  acesso a nenhum dado clínico **mas ainda escrevendo na conversa** da paciente.
+- **É PRIVILÉGIO, NÃO POLICY.** `HASH_GLOBAL` com a migration emendada aplicada em transação =
+  **`be1e56872bdd6d6fcfb8f2eb937753c5` (108)** — **o mesmo valor** do retorno anterior. 48 helpers
+  `18b93d8411d3914247e9056ea4ec207c` e 4 âncoras `b79d76307765af2f5efe842d98678cff`, ambos
+  idênticos. O `relacl` da tabela é **byte a byte igual** antes/depois; o único delta é o
+  `attacl` da coluna `status` (`{authenticated=w/postgres}` → sem grant).
+- **PROVAS NOVAS (transação + ROLLBACK):** **T-A** admin (que PASSA na RLS — checado) tenta
+  `update … set status` ⇒ **42501 `permission denied for table professional_patient_links`**.
+  **T-B** o mesmo admin faz `update … set is_external` ⇒ **1 linha afetada**; `INSERT`+`DELETE` de
+  vínculo também intactos ⇒ o revoke é cirúrgico, não bloqueio geral. **T-C** a RPC
+  `deactivate_patient_link` **continua funcionando** depois do revoke (SECDEF roda como owner, que
+  tem UPDATE de TABELA): status → `inactive`, 1 evento na trilha com autor do servidor, roster do
+  profissional zerado e a linha da PACIENTE preservada. Extra: as 3 colunas de carimbo também são
+  ingraváveis pelo client (42501).
+- **`anon` não perdeu nada** (a Fam1 já o deixara sem UPDATE nesta tabela); **`service_role` e o
+  owner `postgres` intactos** (UPDATE de TABELA não é recortado por privilégio de coluna).
+- **⚠️ DÍVIDA-PRIV-1 (registrada em `docs/PENDENCIAS.md` e no cabeçalho da migration):** um
+  `grant all on all tables in schema public to authenticated` futuro **desfaz este revoke
+  silenciosamente** — sem erro e **sem alterar policy**, logo nenhuma prova de RLS deste PR
+  detectaria. Teste de regressão barato:
+  `has_column_privilege('authenticated','public.professional_patient_links','status','update')`
+  deve ser **false** (e `is_external` deve seguir **true**). Mesma fragilidade vale para todos os
+  recortes de coluna da WP-05B Fam1 (`20260711095000`).
+- **Resíduo das provas: ZERO** — tabela/RPCs/colunas/ledger inexistentes, fixtures ausentes,
+  10 vínculos todos `active`, 16 participantes, `HASH_GLOBAL` de volta a `e173eb30…` (107).
+- **Gates:** eslint 0 · tsc 0 · vitest 133/133 · build OK. Frontend NÃO tocado (nenhum arquivo
+  em `src/`). `app`/`patient-native` NÃO tocados. PARADO para auditoria.
