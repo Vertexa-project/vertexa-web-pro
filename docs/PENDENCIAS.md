@@ -256,8 +256,16 @@
 26. **Thresholds dos SINAIS DE RISCO — validar clínica com a Juliana (S-RISK).** O painel "Sinais de risco"
     (aba Visão geral, `src/lib/domain/riskSignals.ts`, read-only) usa DEFAULTS não validados clinicamente:
     (a) **sobrecarga muscular** = músculo `fatigued` sustentado ≥3 dias (alta ≥5) — além da janela normal de
-    fadiga (0–2d do `recoveryRule` do app); ⚠️ baseado no `status` PERSISTIDO de `muscle_recovery_states`, que
-    **não decai server-side** (ver #1) → um `fatigued` pode ficar "preso"; sobrecarga CRÔNICA real (recorrência/
+    fadiga (0–2d do `recoveryRule` do app); ⚠️ baseado no `status` PERSISTIDO de `muscle_recovery_states`.
+    **CORREÇÃO DE TEXTO (2026-07-29, WP-METRIC-1a — nenhum código mudou aqui):** a redação anterior dizia
+    que esse status **"não decai server-side (ver #1) → um `fatigued` pode ficar preso"**. Isso está
+    DESATUALIZADO desde o WP-RLS2 (migration `20260722090000`). O decaimento EXISTE e roda: job pg_cron
+    `wp-rls2-recovery-decay`, `5 9 * * *` (09:05 UTC = 06:05 BRT), chamando
+    `private.recompute_recovery_decay()`, que reescreve o status por `last_trained_at`
+    (fatigued→recovering→recovered→weakened). Conferido em produção: **10/10 execuções `succeeded`**, a
+    última em 2026-07-29 09:05 UTC. Logo o `fatigued` **não fica mais preso**. O que sobra é a cadência de
+    1x/dia (um status pode ficar até ~24 h defasado) — registrada como **DÍVIDA-RLS2-1** no fim deste
+    documento. Os thresholds em si (≥3 dias, alta ≥5) seguem sem aval clínico; sobrecarga CRÔNICA real (recorrência/
     carga acumulada) só com **histórico de sessões de treino**, que ainda não existe (dívida #S-EXEC). (b) **meta
     de água = 2,0 L/dia** — **NÃO existe meta por paciente** no banco; é um default. Definir a meta (fixa? por
     peso, ex. 35 ml/kg? por paciente, nova coluna?) e a janela (hoje uso 7 dias completos). (c) **foto ausente**
@@ -613,3 +621,93 @@
   **vazio** — o tipo cai para null, sem erro. A RPC resolve isso **sem alargar policy nenhuma**.
   **Parte B (cross-repo) pendente:** o app da paciente precisa trocar aquele embed pela RPC; até
   lá o seletor continua sem disciplina.
+
+---
+
+## Dívidas NOMEADAS do motor de métricas (WP-METRIC-1a · 2026-07-29)
+
+As duas primeiras **já eram divergências declaradas** no cabeçalho da migration
+`20260722090000_wp_rls2_metrics_engine.sql` (linhas 16-24). O problema é que **não existiam com
+identificador em nenhum arquivo dos três repos** — um `grep` por elas não retornava nada, e viviam
+só no registro do orquestrador. Nomeá-las aqui é o que as torna rastreáveis. Nenhuma delas foi
+tocada pelo WP-METRIC-1a; ele foi explicitamente proibido de mexer nas duas.
+
+- **DÍVIDA-TZ-1 — o "dia local" de TODA métrica é fixo em `America/Sao_Paulo`.**
+  **Origem única:** `private.brt_date(timestamptz)` — `select (p_ts at time zone 'America/Sao_Paulo')::date`.
+  É a única ocorrência desse literal em toda a cadeia de métricas.
+  **Propaga para 6 funções**, ou seja, o motor inteiro: `private.days_ago_brt`,
+  `private.event_streak_brt`, `public.recompute_adherence`, `public.recompute_achievements`,
+  `private.recompute_recovery_on_event`, `private.recompute_recovery_decay`.
+  **Efeito:** paciente com dispositivo fora do BRT pode ter ±1 dia de fronteira — o "hoje" do app
+  e o "hoje" do servidor discordam, o que move sequência de dias, hábitos-do-dia e recência.
+  **Por que segue aberta:** corrigir significa trocar a fonte-de-verdade do fuso (da constante para
+  um fuso da clínica ou da paciente) e isso atravessa as 6 funções de uma vez — é decisão de
+  produto antes de ser de código, não cabe de carona em WP de outra regra.
+  **Primos já registrados, de OUTRO subsistema (não confundir):** #19(b) e #25 tratam do fuso da
+  AGENDA/FullCalendar e não compartilham uma linha com `brt_date`.
+
+- **DÍVIDA-RLS2-1 — o decaimento da recuperação muscular roda 1x/dia.**
+  **Onde mora:** job pg_cron `wp-rls2-recovery-decay` (jobid 1, `5 9 * * *` = 09:05 UTC = 06:05 BRT)
+  + `private.recompute_recovery_decay()`. Só toca `public.muscle_recovery_states`.
+  **Efeito:** entre duas execuções o status persistido pode ficar até ~24 h defasado do que
+  `last_trained_at` já indica. Para a leitura clínica do painel isso é aceitável hoje; para um
+  gatilho de alerta em tempo real, não seria.
+  **O que NÃO é:** não é "o status não decai" — decai, e o job tem 10/10 execuções `succeeded`
+  (última: 2026-07-29 09:05 UTC). Os textos do #26 e do `CONTRATO_INTEGRACAO.md` que afirmavam o
+  contrário foram corrigidos nesta mesma data.
+  **Escopo real:** o job **não recomputa VRI nem conquistas** — não existe NENHUM job para essas
+  duas. Elas só recalculam quando o app chama a RPC. Consequência: o VRI de quem parou de usar o
+  app **congela** no último valor, e mudança de regra de cálculo só alcança cada paciente quando
+  ela voltar a agir.
+
+As duas seguintes são abertas **pelo próprio WP-METRIC-1a** e são consequência direta de decisões
+tomadas nele:
+
+> **DÍVIDA-METRIC-1a — QUITADA na EMENDA do WP-METRIC-1a, antes de qualquer apply.** Ela dizia que
+> o backfill precisava duplicar a fórmula do VRI porque `recompute_adherence()` não aceitava
+> parâmetro. O cálculo foi **extraído** para `private.recompute_adherence_for(uuid)`, a RPC virou
+> invólucro fino e o backfill passou a chamar a mesma função — a cópia deixou de existir. Registro
+> a quitação em vez de apagar a linha em silêncio, porque a dívida chegou a ser publicada no PR #41.
+
+- **DÍVIDA-SNAP-ORDER-1 — "o último snapshot" é ordenado por uma coluna que não é única, sem
+  critério de desempate.** `adherence_snapshots.calculated_at` tem default `now()`, que é o
+  timestamp da TRANSAÇÃO. Duas linhas do mesmo paciente gravadas na mesma transação nascem com
+  `calculated_at` idêntico, e todo `order by calculated_at desc limit 1` passa a escolher
+  arbitrariamente. Não há UNIQUE em `(patient_id, calculated_at)` nem desempate por `id`.
+  **SEIS sítios de leitura em produção dependem dessa ordenação** (nenhum corrigido aqui — o WP
+  proibiu mexer em código de produção nesta emenda):
+    1. `vertexa-web-pro/src/lib/api/adherence.ts:10` — `.order('calculated_at', desc).limit(1)`; é
+       o VRI da ficha do paciente no painel.
+    2. `vertexa-web-pro/src/lib/api/patients.ts:103` — `sort(byDateDesc(calculated_at))[0]`; é o
+       VRI da LISTA de pacientes.
+    3. `vertexa-app-paciente/src/lib/api/adherence.ts:30` — `.order(...).limit(2)`. **É o pior
+       dos seis:** pega DUAS linhas, usa `[0]` como atual e `[1]` como anterior para o badge de
+       variação. Sob empate, o badge pode mostrar a variação com o sinal invertido.
+    4. `public.export_patient_report` (migration `20260728090000:207`) — seção `adherence` do PDF.
+    5. o relatório em lote (migration `20260729090000:170`) — mesma consulta.
+    6. o próprio `skip-if-unchanged` do motor (`20260722090000:279`, e a linha equivalente na
+       `20260807090000`): sob empate ele compara contra a linha errada e pode gravar um snapshot
+       redundante ou pular um que deveria gravar.
+  **TAMANHO HOJE, medido em produção (2026-07-29):** `adherence_snapshots` tem **1 linha**;
+  grupos `(patient_id, calculated_at)` com mais de uma linha: **0**; pacientes com 2+ snapshots:
+  **0**. Ou seja, **nenhuma linha real está ambígua hoje** e nenhum número exibido está errado.
+  **ALCANÇABILIDADE:** pelo caminho normal a ambiguidade é praticamente inalcançável — cada
+  chamada da RPC é uma transação distinta, e `now()` difere entre transações. O empate exige
+  **dois INSERTs para o MESMO paciente dentro de UMA transação**, o que hoje só acontece em
+  fixture de teste (foi exatamente o que reprovou o `wp_rls2_metrics_engine_test.sql`) — e
+  passaria a acontecer em produção no dia em que existir um job que recompute o mesmo paciente
+  duas vezes na mesma transação.
+  **CORREÇÃO QUANDO FOR A HORA:** desempatar por `id` (ou por uma coluna de sequência) em todos
+  os seis sítios, ou trocar o default para `clock_timestamp()`. É mudança de código de produção
+  em dois repos + duas RPCs — merece WP próprio.
+
+- **DÍVIDA-METRIC-1b — os espelhos CLIENT-SIDE ainda contam qualquer tipo de evento.** O
+  WP-METRIC-1a corrigiu só o servidor (proibido tocar no app). Continuam com a regra antiga, no
+  repo `vertexa-app-paciente`:
+  `src/lib/adherenceEngine.ts:261-265` (`mostRecent`, sem filtro de tipo),
+  `src/lib/adherenceEngine.ts:296-306` (`streak`, sem filtro de tipo) e
+  `src/lib/constancy.ts:23-44` (`deriveConstancy`, com o comentário explícito "Qualquer tipo de
+  evento conta"). **Efeito observável:** para uma paciente que use a tela SOS, o número que o APP
+  desenha na Home diverge do snapshot que o SERVIDOR grava e que a WEB lê. Enquanto ninguém tiver
+  `help_requested` no histórico, os dois coincidem — hoje a base tem 0.
+  **Fecha no WP-METRIC-1b.**

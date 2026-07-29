@@ -16,6 +16,15 @@ declare
   acY uuid:='ac000000-0000-0000-0000-000000000002'; daY uuid:='da000000-0000-0000-0000-000000000002';
   planY uuid:='b0000000-0000-0000-0000-000000000002'; mealY uuid:='b1000000-0000-0000-0000-000000000002'; supY uuid:='b2000000-0000-0000-0000-000000000002';
   r record; k int;
+  -- ⚠️ LEITURA DETERMINÍSTICA (corrigido no WP-METRIC-1a EMENDA).
+  -- `adherence_snapshots.calculated_at` tem default `now()`, que é o timestamp da TRANSAÇÃO
+  -- e portanto é CONSTANTE aqui dentro. Quando o mesmo paciente recebe dois recomputes no
+  -- mesmo bloco (é o caso de daX: TYPICAL e depois SATURATED), as duas linhas nascem com
+  -- `calculated_at` IDÊNTICO e `order by calculated_at desc limit 1` passa a escolher uma
+  -- delas ARBITRARIAMENTE — medido: devolvia a linha do TYPICAL na asserção do SATURATED,
+  -- fazendo o teste reprovar um motor correto. Guardamos o id da primeira para excluí-la
+  -- explicitamente na segunda leitura; `id` é PK, então o desempate é exato.
+  v_first_id uuid;
 begin
   insert into public.profiles (id,auth_user_id,role,full_name,status) values
     ('fa000000-0000-0000-0000-000000000001','aa000000-0000-0000-0000-000000000001','admin','A','active'),
@@ -31,6 +40,7 @@ begin
   insert into public.weight_logs (patient_id,weight_kg,measured_at,source) values (daX,80,(private.brt_date(now()) + time '10:00') at time zone 'America/Sao_Paulo','app');
   perform set_config('request.jwt.claims', json_build_object('sub',acX::text)::text, true); set local role authenticated; perform public.recompute_adherence(); reset role;
   select * into r from public.adherence_snapshots where patient_id=daX order by calculated_at desc limit 1;
+  v_first_id := r.id;  -- só existe 1 linha aqui; guardada para desempatar a leitura do SATURATED
   if r.score<>89 or r.level<>'alta' or r.status::text<>'em_acompanhamento' or r.streak<>1 or r.weekly_completion_rate<>20 then fails:=fails||format('TYP=%s/%s/%s/streak%s/wk%s ',r.score,r.level,r.status,r.streak,r.weekly_completion_rate); end if;
   if r.risk_factors<>array['Nenhum hábito registrado hoje','Poucos treinos esta semana','Foto mensal pendente'] then fails:=fails||'TYP_risk '; end if;
   if r.positive_factors<>array['Peso atualizado','Plano acompanhado'] then fails:=fails||'TYP_pos '; end if;
@@ -58,7 +68,9 @@ begin
   insert into public.supplements (id,patient_id,name,order_index,created_at) values (supY,daX,'S',0,now());
   insert into public.supplement_intakes (patient_id,supplement_id,taken_on,taken_at,source) values (daX,supY,private.brt_date(now()),now(),'app');
   perform set_config('request.jwt.claims', json_build_object('sub',acX::text)::text, true); set local role authenticated; perform public.recompute_adherence(); reset role;
-  select * into r from public.adherence_snapshots where patient_id=daX order by calculated_at desc limit 1;
+  -- NÃO usar `order by calculated_at desc`: empata com a linha do TYPICAL (ver o declare).
+  -- A linha do SATURATED é, por construção, a única deste paciente que não é v_first_id.
+  select * into r from public.adherence_snapshots where patient_id=daX and id <> v_first_id;
   if r.score<>100 or r.level<>'alta' or r.streak<>14 then fails:=fails||format('SAT=%s/%s/streak%s ',r.score,r.level,r.streak); end if;
 
   if length(fails)>0 then raise exception 'VRI PARITY FAIL: %', fails; else raise notice 'WP-RLS2 VRI PARITY: PASS'; end if;

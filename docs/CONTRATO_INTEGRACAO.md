@@ -184,8 +184,16 @@ chave canônica (1). Senão o `BodyMap` não pinta. Mapa de tradução:
 `muscle_status` = `fatigued | recovering | recovered | weakened | neutral`. Cor na web:
 - `fatigued` → vermelho · `recovering` → amarelo · `recovered` → azul · `weakened` → verde · `neutral` → cinza.
 - **Recém-treinado = `fatigued`** (vermelho). **NÃO** usar o esquema antigo `neutral/activated`.
-- Persistência é **PROVISÓRIA** até a Juliana confirmar (pendência #1). O status não decai sozinho
-  (não há job de recálculo); ok pra demo de mesma sessão.
+- Persistência é **PROVISÓRIA** até a Juliana confirmar (pendência #1).
+- ⚠️ **CORREÇÃO DE TEXTO (2026-07-29, WP-METRIC-1a — nenhum código mudou aqui).** Esta linha dizia
+  *"o status não decai sozinho (não há job de recálculo); ok pra demo de mesma sessão"*. Está
+  DESATUALIZADA desde o WP-RLS2 (migration `20260722090000`). **O job existe e roda todo dia:**
+  pg_cron `wp-rls2-recovery-decay`, `5 9 * * *` (09:05 UTC = 06:05 BRT), chamando
+  `private.recompute_recovery_decay()` — que recomputa o status a partir de `last_trained_at`
+  (fatigued→recovering→recovered→weakened) e grava apenas as linhas cujo status mudaria.
+  Verificado em produção: **10/10 execuções `succeeded`**, a última em 2026-07-29 09:05 UTC.
+  A cadência de **1x/dia** (um status pode ficar até ~24 h defasado) é a **DÍVIDA-RLS2-1**,
+  registrada em `docs/PENDENCIAS.md`.
 
 ## Segurança / RLS (sprint vs produção)
 - Modo sprint: RLS ligada com policies **permissivas** (`using(true)`) só com seed fictício.
