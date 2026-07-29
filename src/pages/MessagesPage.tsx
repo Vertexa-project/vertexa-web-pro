@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Loader2, MessageSquare, Paperclip, Send, X } from "lucide-react";
+import { AlertTriangle, AtSign, Bot, CornerUpLeft, Loader2, MessageSquare, Paperclip, Send, X } from "lucide-react";
 
 import { ChatAttachment } from "@/components/chat/ChatAttachment";
+import { ChatReplyQuote } from "@/components/chat/ChatReplyQuote";
+import { MentionPicker } from "@/components/chat/MentionPicker";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
@@ -14,17 +16,22 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  useChannelProfessionals,
   useChatThread,
   useMarkMentionsRead,
   useSendChatMessage,
   useUnreadMentions,
 } from "@/hooks/useChat";
+import { useDisciplinesList } from "@/hooks/useDisciplines";
 import { useListPatients } from "@/hooks/usePatients";
 import { chatStageOf } from "@/lib/api/chat";
 import { CHAT_ATTACHMENT_MIME, hasChatAttachment, validateChatAttachment } from "@/lib/domain/chatAttachment";
+import { mentionFailureMessage } from "@/lib/domain/chatMention";
+import { indexById, quotedPreview, resolveQuote } from "@/lib/domain/chatReply";
+import { mentionsProfile } from "@/lib/domain/chatTeam";
 import { formatRelative, initials } from "@/lib/domain/format";
 import { cn } from "@/lib/utils";
-import type { PatientListItem } from "@/types/db";
+import type { ChannelProfessional, ChatMessageView, PatientListItem } from "@/types/db";
 
 function Thread({ patient }: { patient: PatientListItem }) {
   const { data, isLoading, isError, error, refetch } = useChatThread(patient.id);
@@ -34,16 +41,39 @@ function Thread({ patient }: { patient: PatientListItem }) {
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [mention, setMention] = useState<ChannelProfessional | null>(null);
+  const [replyTo, setReplyTo] = useState<ChatMessageView | null>(null);
+  const [mentionWarning, setMentionWarning] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const patientName = patient.profile?.full_name ?? "Paciente";
 
   const channelId = data?.channelId;
+  const actingProfileId = data?.actingProfileId ?? null;
   const unreadForPatient = mentions?.byPatient[patient.id] ?? 0;
 
+  // Equipe do canal pela RPC (item 1). Carregada junto da conversa — não só ao abrir o seletor —
+  // porque o botão de @ precisa responder na hora e o resultado também nomeia quem foi marcado.
+  const professionalsQuery = useChannelProfessionals(channelId);
+  // Rótulos de disciplina vêm do BANCO (public.disciplines), não hardcodados na UI.
+  const { data: disciplines } = useDisciplinesList();
+  const labelByCode = new Map((disciplines ?? []).map((d) => [d.code, d.label]));
+  // O próprio profissional sai da lista: marcar a si mesmo só acenderia o próprio badge.
+  const mentionable = (professionalsQuery.data ?? []).filter((p) => p.profileId !== actingProfileId);
+
   // Ao abrir uma conversa com menções pendentes, marca como lidas (limpa o badge).
+  // É o MESMO caminho de leitura de sempre (item 5 manda reusar, e não abrir um segundo).
   useEffect(() => {
     if (channelId && unreadForPatient > 0) markRead(channelId);
   }, [channelId, unreadForPatient, markRead]);
+
+  // Trocar de conversa não pode carregar marcação, citação nem aviso da conversa anterior.
+  useEffect(() => {
+    setMention(null);
+    setReplyTo(null);
+    setMentionWarning(null);
+    setPickerOpen(false);
+  }, [patient.id]);
 
   if (isLoading) return <LoadingState />;
   // DOIS modos de falha distintos. Antes, os dois viravam o mesmo "Não foi possível carregar",
@@ -69,16 +99,53 @@ function Thread({ patient }: { patient: PatientListItem }) {
   const canSend = Boolean(data?.actingProfileId);
   const hasContent = draft.trim().length > 0 || file !== null;
 
+  // Índice para a citação. A lista carrega o canal INTEIRO (sem paginação), então a mensagem
+  // citada está sempre aqui — a degradação existe para o caso em que não estiver, não como enfeite.
+  const byId = indexById(messages);
+  /**
+   * Autor exibido. Remetente do profissional = nome da clínica/profissional, NUNCA "Vertexa".
+   * ⚠️ `sender_name` do COLEGA chega NULO por RLS (`profiles_select` → `can_see_profile` não tem
+   * ramo para "colega da mesma clínica") e cai neste "Profissional". É defeito PRÉ-EXISTENTE,
+   * relatado no diagnóstico deste WP e NÃO corrigido aqui: fica em UM lugar só, de propósito, para
+   * a bolha e a citação nunca discordarem sobre a mesma pessoa.
+   */
+  const authorOf = (m: ChatMessageView) =>
+    m.sender_role === "patient" ? patientName : m.sender_name ?? "Profissional";
+
   const handleSend = () => {
     const body = draft.trim();
     if ((!body && !file) || !data?.channelId || !data.actingProfileId || sendMessage.isPending) return;
+    // Guardado ANTES do envio: o estado é limpo no sucesso e o aviso precisa do nome de quem o
+    // profissional TENTOU marcar.
+    const marked = mention;
     sendMessage.mutate(
-      { channelId: data.channelId, senderProfileId: data.actingProfileId, body: body || null, file },
       {
-        onSuccess: () => {
+        channelId: data.channelId,
+        senderProfileId: data.actingProfileId,
+        body: body || null,
+        file,
+        mentionedProfileId: marked?.profileId ?? null,
+        // Vai cru: a FK COMPOSTA (reply_to_message_id, channel_id) é quem garante o mesmo canal.
+        replyToMessageId: replyTo?.id ?? null,
+      },
+      {
+        onSuccess: (result) => {
           setDraft("");
           setFile(null);
           setAttachError(null);
+          setMention(null);
+          setReplyTo(null);
+          setPickerOpen(false);
+
+          // A MENSAGEM ENTROU. Se só a marcação falhou, o texto diz isso e nada mais — não manda
+          // tentar de novo (reenviar duplicaria) e não culpa quem escreveu.
+          if (result.mentionFailed && marked) {
+            setMentionWarning(mentionFailureMessage(marked.name, result.mentionFailureReason ?? "unknown"));
+            // A lista que ele usou está VELHA — foi ela que ofereceu alguém que já saiu.
+            void professionalsQuery.refetch();
+          } else {
+            setMentionWarning(null);
+          }
         },
       },
     );
@@ -113,8 +180,11 @@ function Thread({ patient }: { patient: PatientListItem }) {
         ) : (
           messages.map((m) => {
             const fromPatient = m.sender_role === "patient";
-            // Remetente do profissional = nome da clínica/profissional, NUNCA "Vertexa".
-            const author = fromPatient ? patientName : m.sender_name ?? "Profissional";
+            const author = authorOf(m);
+            // Citação resolvida contra a própria lista. `null` = não é resposta; found=false =
+            // degradou para "Mensagem original indisponível" (nunca quebra, nunca some).
+            const quote = resolveQuote(m, byId, authorOf);
+            const mentionsMe = mentionsProfile(m, actingProfileId);
             return (
               <div key={m.id} className={cn("flex flex-col", fromPatient ? "items-start" : "items-end")}>
                 <span className="mb-1 text-xs text-muted-foreground">{author}</span>
@@ -122,8 +192,17 @@ function Thread({ patient }: { patient: PatientListItem }) {
                   className={cn(
                     "max-w-[80%] space-y-2 rounded-lg px-3 py-2 text-sm",
                     fromPatient ? "bg-muted text-foreground" : "bg-primary/10 text-foreground",
+                    // Item 5 — destaque de quem foi marcado. Anel + faixa; não é só cor (contraste).
+                    mentionsMe && "ring-2 ring-primary ring-offset-1 ring-offset-background",
                   )}
                 >
+                  {mentionsMe ? (
+                    <p className="flex items-center gap-1 text-xs font-medium text-primary">
+                      <AtSign className="h-3 w-3" aria-hidden />
+                      Você foi marcado nesta mensagem
+                    </p>
+                  ) : null}
+                  {quote ? <ChatReplyQuote quote={quote} /> : null}
                   {/* body é ANULÁVEL: mensagem só-anexo não tem texto. */}
                   {m.body ? <p className="whitespace-pre-wrap">{m.body}</p> : null}
                   {hasChatAttachment(m) ? (
@@ -136,9 +215,21 @@ function Thread({ patient }: { patient: PatientListItem }) {
                     />
                   ) : null}
                 </div>
-                <time dateTime={m.created_at} className="mt-1 text-xs text-muted-foreground">
-                  {formatRelative(m.created_at)}
-                </time>
+                <div className="mt-1 flex items-center gap-2">
+                  <time dateTime={m.created_at} className="text-xs text-muted-foreground">
+                    {formatRelative(m.created_at)}
+                  </time>
+                  <button
+                    type="button"
+                    onClick={() => setReplyTo(m)}
+                    disabled={!canSend}
+                    className="flex items-center gap-1 rounded text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                    aria-label={`Responder à mensagem de ${author}`}
+                  >
+                    <CornerUpLeft className="h-3 w-3" aria-hidden />
+                    Responder
+                  </button>
+                </div>
               </div>
             );
           })
@@ -146,6 +237,62 @@ function Thread({ patient }: { patient: PatientListItem }) {
       </div>
 
       <div className="border-t p-3">
+        {/* Aviso da MENÇÃO que não entrou. Fica na tela até ser fechado — não é toast: some antes
+            de ser lido e o profissional acharia que marcou alguém que não foi marcado. */}
+        {mentionWarning ? (
+          <div
+            className="mb-2 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs text-amber-900"
+            role="status"
+          >
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="min-w-0 flex-1">{mentionWarning}</span>
+            <button
+              type="button"
+              onClick={() => setMentionWarning(null)}
+              className="shrink-0 rounded p-0.5 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Fechar aviso"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : null}
+
+        {/* Mensagem que está sendo respondida (chip com cancelar) */}
+        {replyTo ? (
+          <div className="mb-2 flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs">
+            <CornerUpLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-foreground">
+              Respondendo a {authorOf(replyTo)}: {quotedPreview(replyTo, 60)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              disabled={sendMessage.isPending}
+              className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Cancelar resposta"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : null}
+
+        {/* Profissional marcado (chip com remover) */}
+        {mention ? (
+          <div className="mb-2 flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs">
+            <AtSign className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-foreground">Marcando {mention.name}</span>
+            <button
+              type="button"
+              onClick={() => setMention(null)}
+              disabled={sendMessage.isPending}
+              className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Remover marcação"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : null}
+
         {/* Anexo selecionado (chip com remover) */}
         {file ? (
           <div className="mb-2 flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs">
@@ -188,6 +335,43 @@ function Thread({ patient }: { patient: PatientListItem }) {
           >
             <Paperclip className="h-4 w-4" />
           </Button>
+
+          {/* Seletor de @ — o painel abre SEMPRE que o botão é clicado, inclusive para mostrar
+              erro. Nunca "o @ não faz nada". */}
+          <div
+            className="relative"
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && pickerOpen) {
+                e.stopPropagation();
+                setPickerOpen(false);
+              }
+            }}
+          >
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setPickerOpen((open) => !open)}
+              disabled={!canSend || sendMessage.isPending}
+              title="Marcar um profissional"
+              aria-label="Marcar um profissional"
+              aria-expanded={pickerOpen}
+            >
+              <AtSign className="h-4 w-4" />
+            </Button>
+            {pickerOpen ? (
+              <MentionPicker
+                professionals={mentionable}
+                isLoading={professionalsQuery.isPending}
+                isError={professionalsQuery.isError}
+                onRetry={() => void professionalsQuery.refetch()}
+                onPick={(p) => {
+                  setMention(p);
+                  setPickerOpen(false);
+                }}
+                labelByCode={labelByCode}
+              />
+            ) : null}
+          </div>
           <Input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
