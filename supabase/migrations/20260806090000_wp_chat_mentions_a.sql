@@ -12,6 +12,9 @@
 --      (id, channel_id). Responder mensagem de OUTRO canal passa a ser impossível por
 --      construção — não por trigger, não por confiança no client.
 --   4) chat_mentions → UNIQUE (message_id, mentioned_profile_id): marcação repetida não duplica.
+--      + as duas colunas viram NOT NULL. Sem isso a UNIQUE não constrange nada: dois nulos nunca
+--      são iguais, então a tabela aceitaria linhas sem sentido (menção sem mensagem, ou sem
+--      ninguém marcado) em quantidade ilimitada. Seguro: a tabela tem 0 linhas.
 --   5) chat_mentions_insert APERTADO: além de o AUTOR ser participante (já era), o PERFIL
 --      MARCADO também precisa ser participante do MESMO canal.
 --   6) RPC channel_professionals(uuid) — leitura, SECURITY DEFINER, portão can_read_channel.
@@ -55,6 +58,8 @@
 --   create policy chat_mentions_insert on public.chat_mentions
 --     for insert to authenticated
 --     with check (private.is_channel_participant(private.message_channel(message_id)));
+--   alter table public.chat_mentions alter column mentioned_profile_id drop not null;
+--   alter table public.chat_mentions alter column message_id           drop not null;
 --   alter table public.chat_mentions drop constraint if exists chat_mentions_message_profile_key;
 --   alter table public.chat_messages drop constraint if exists chat_messages_reply_same_channel_fkey;
 --   alter table public.chat_messages drop column if exists reply_to_message_id;
@@ -116,16 +121,27 @@ create index if not exists idx_chat_messages_reply_to
   where reply_to_message_id is not null;
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
--- 4) MENÇÃO ÚNICA POR (mensagem, perfil)
+-- 4) MENÇÃO ÚNICA POR (mensagem, perfil) — E AS DUAS COLUNAS NOT NULL
 --
 -- Idempotência por CONSTRUÇÃO em vez de por cuidado do cliente. Hoje há 0 duplicatas, então a
 -- constraint entra sem backfill.
--- NOTA: message_id e mentioned_profile_id continuam ANULÁVEIS (assim nasceram). UNIQUE não
--- constrange linhas com nulo — hoje há 0 linhas nulas, e apertar para NOT NULL está FORA do
--- escopo deste WP (registrado em PENDENCIAS).
+--
+-- OS DOIS `SET NOT NULL` NÃO SÃO ENFEITE — SEM ELES A UNIQUE ACIMA NÃO SEGURA NADA:
+-- pela regra do Postgres, dois nulos NUNCA são iguais entre si, então `UNIQUE (message_id,
+-- mentioned_profile_id)` aceita QUANTAS LINHAS QUISER com nulo em qualquer das duas colunas.
+-- Na prática, sem o NOT NULL a tabela continuaria aceitando linha SEM SENTIDO — menção que não
+-- aponta para mensagem nenhuma, ou que não marca ninguém — e ainda por cima em quantidade
+-- ilimitada, driblando exatamente a constraint que o item 4 acabou de criar. As duas colunas
+-- nasceram anuláveis por descuido do desenho original (ambas são FK obrigatória na semântica
+-- real: uma menção é sempre DE uma mensagem PARA um perfil).
+-- SEGURO AGORA: `chat_mentions` tem 0 linhas (verificado imediatamente antes do apply), então
+-- não há backfill nem linha legada para tratar. Adiar isso significaria ter de limpar dado depois.
 -- ─────────────────────────────────────────────────────────────────────────────────────
 alter table public.chat_mentions
   add constraint chat_mentions_message_profile_key unique (message_id, mentioned_profile_id);
+
+alter table public.chat_mentions alter column message_id           set not null;
+alter table public.chat_mentions alter column mentioned_profile_id set not null;
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- 5) APERTO DA ÚNICA POLICY QUE MUDA — chat_mentions_insert
@@ -244,7 +260,10 @@ values ('20260806090000', '20260806090000_wp_chat_mentions_a.sql',
   'coluna reply_to_message_id com FK COMPOSTA (reply_to_message_id, channel_id) -> (id, '
   'channel_id) ON DELETE SET NULL (reply_to_message_id): responder mensagem de OUTRO canal vira '
   'impossivel por construcao, sem trigger. chat_mentions ganha UNIQUE (message_id, '
-  'mentioned_profile_id). UNICA policy alterada no sistema: chat_mentions_insert, so para '
+  'mentioned_profile_id) E as duas colunas viram NOT NULL — sem isso a UNIQUE nao constrange '
+  'nada (dois nulos nunca sao iguais) e a tabela aceitaria linha sem sentido em quantidade '
+  'ilimitada; seguro porque a tabela tinha 0 linhas no apply. UNICA policy alterada no sistema: '
+  'chat_mentions_insert, so para '
   'APERTAR — alem do autor participante (ja era), o PERFIL MARCADO passa a precisar ser '
   'participante do mesmo canal (fecha sondagem de existencia de profile por marcacao). '
   'is_channel_participant NAO pode ser reusado para o marcado (e fixo em current_profile_id) e '
