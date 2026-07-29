@@ -17,6 +17,12 @@ export const qk = {
   patientSupplements: (patientId: string) => ["patient", patientId, "supplements"] as const,
   muscleRecovery: (patientId: string) => ["patient", patientId, "muscleRecovery"] as const,
   adherenceSnapshot: (patientId: string) => ["patient", patientId, "adherenceSnapshot"] as const,
+  // Equipe da paciente (WP-2bi-UI) — a ÚNICA consulta que traz vínculo INATIVO. Chave separada
+  // de `patient(id)` de propósito: aquela é a leitura corrida (só ativos) e não deve servir esta.
+  patientTeam: (patientId: string) => ["patient", patientId, "team"] as const,
+  // Pacientes sem responsável ativo (RPC por CLÍNICA, admin-only) — alimenta o badge da listagem.
+  patientsWithoutProfessional: (clinicId: string) =>
+    ["patients", "withoutActiveProfessional", clinicId] as const,
   chatThread: (patientId: string) => ["patient", patientId, "chat"] as const,
   unreadMentions: (profileId: string) => ["chat", "mentions", profileId] as const,
   // URL assinada de anexo do chat (TTL curto; não cachear além do TTL).

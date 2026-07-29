@@ -10,6 +10,7 @@ import { TableSkeleton } from "@/components/skeletons/TableSkeleton";
 import { StatusBadge } from "@/components/status/StatusBadge";
 import { DataTable, type Column } from "@/components/data-table/DataTable";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,8 +21,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCurrentProfessional } from "@/hooks/useCurrentProfessional";
+import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import { useListPatients } from "@/hooks/usePatients";
+import { usePatientsWithoutActiveProfessional } from "@/hooks/usePatientTeam";
 import { formatPercent, formatRelative, initials, professionalTypeLabel } from "@/lib/domain/format";
+import { patientsWithoutProfessionalIds } from "@/lib/domain/patientTeam";
 import { statusLabel } from "@/lib/domain/vri";
 import type { PatientListItem, PatientStatus } from "@/types/db";
 
@@ -33,17 +38,39 @@ const STATUS_OPTIONS: PatientStatus[] = [
   "inativo",
 ];
 
-function ResponsibleProfessional({ patient }: { patient: PatientListItem }) {
+/**
+ * Responsável da paciente. Desde o WP-2bi-UI, `patient.professionals` já vem SÓ com vínculos
+ * ATIVOS (o filtro mora em lib/api/patients.ts) — um profissional desativado não figura aqui.
+ *
+ * O badge "Sem responsável ativo" NÃO é derivado desta lista: vem da RPC
+ * `patients_without_active_professional`, que é a verdade do servidor para a clínica inteira e
+ * usa o critério certo (nenhum vínculo INTERNO ativo — vínculo só externo não conta como
+ * responsável). Derivar de `professionals.length === 0` daria falso positivo para quem só tem
+ * externo e falso negativo para quem lê a lista sob outra RLS.
+ */
+function ResponsibleProfessional({
+  patient,
+  withoutProfessional,
+}: {
+  patient: PatientListItem;
+  withoutProfessional: boolean;
+}) {
   const first = patient.professionals[0];
-  if (!first) return <span className="text-muted-foreground">—</span>;
   const extra = patient.professionals.length - 1;
   return (
-    <div className="flex flex-col">
-      <span className="text-foreground">{first.full_name ?? "—"}</span>
-      <span className="text-xs text-muted-foreground">
-        {professionalTypeLabel(first.type)}
-        {extra > 0 ? ` +${extra}` : ""}
-      </span>
+    <div className="flex flex-col items-start gap-1">
+      {first ? (
+        <>
+          <span className="text-foreground">{first.full_name ?? "—"}</span>
+          <span className="text-xs text-muted-foreground">
+            {professionalTypeLabel(first.type)}
+            {extra > 0 ? ` +${extra}` : ""}
+          </span>
+        </>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      )}
+      {withoutProfessional ? <Badge tone="warning">Sem responsável ativo</Badge> : null}
     </div>
   );
 }
@@ -51,6 +78,18 @@ function ResponsibleProfessional({ patient }: { patient: PatientListItem }) {
 export function PatientsPage() {
   const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useListPatients();
+
+  // Badge "sem responsável ativo": UMA chamada por CLÍNICA (não uma por paciente). A RPC é
+  // admin-only e responde 42501 aos demais, então só disparamos quando o sinal REAL de admin for
+  // verdadeiro — para o não-admin o badge simplesmente não existe.
+  const { data: me } = useCurrentProfessional();
+  const clinicId = me?.clinicId ?? null;
+  const { isClinicAdmin } = useIsClinicAdmin(clinicId);
+  const withoutProfessional = usePatientsWithoutActiveProfessional(clinicId, isClinicAdmin);
+  const withoutProfessionalIds = useMemo(
+    () => patientsWithoutProfessionalIds(withoutProfessional.data),
+    [withoutProfessional.data],
+  );
 
   const [tab, setTab] = useState<"todos" | "pendentes">("todos");
   const [search, setSearch] = useState("");
@@ -100,7 +139,13 @@ export function PatientsPage() {
         );
       },
     },
-    { key: "professional", header: "Profissional", render: (p) => <ResponsibleProfessional patient={p} /> },
+    {
+      key: "professional",
+      header: "Profissional",
+      render: (p) => (
+        <ResponsibleProfessional patient={p} withoutProfessional={withoutProfessionalIds.has(p.id)} />
+      ),
+    },
     {
       key: "status",
       header: "Status",

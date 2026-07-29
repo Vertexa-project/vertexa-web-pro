@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { activeProfessionalsFromLinks } from "@/lib/domain/patientTeam";
 import type {
   Patient,
   PatientDetail,
@@ -23,6 +24,8 @@ interface RawProfessional {
   profile: { full_name: string | null } | null;
 }
 interface RawLink {
+  /** professional_patient_links.status — text livre no banco; NULO conta como 'active'. */
+  status: string | null;
   professionals: RawProfessional | null;
 }
 interface RawEvent {
@@ -53,11 +56,29 @@ function byDateDesc(a: string | null, b: string | null): number {
   return (b ?? "").localeCompare(a ?? "");
 }
 
+/**
+ * Responsáveis da paciente para LEITURA CORRIDA (listagem e header do perfil): SÓ VÍNCULOS
+ * ATIVOS (WP-2bi-UI).
+ *
+ * POR QUE O FILTRO EXISTE: desde a migration `20260805090000` (aplicada em produção) o admin
+ * pode DESATIVAR um vínculo. O desativado perde o acesso clínico na hora — os helpers de RLS
+ * filtram `coalesce(status,'active')='active'` — mas continuaria aparecendo aqui como
+ * "responsável" se a UI não filtrasse, porque a linha do vínculo é PRESERVADA de propósito (é o
+ * histórico). Ou seja: sem este filtro a tela afirmaria algo que o banco já nega.
+ *
+ * O filtro é do CLIENT, e de propósito: um filtro embutido no PostgREST (`!inner`) removeria a
+ * PACIENTE da listagem quando ela não tivesse nenhum vínculo ativo — exatamente o caso que o
+ * badge "sem responsável ativo" precisa enxergar.
+ *
+ * A ÚNICA superfície que mostra vínculo INATIVO é a seção "Equipe da paciente"
+ * (lib/api/patientTeam.ts), que consulta a tabela por conta própria.
+ */
 function mapProfessionals(links: RawLink[] | null): ProfessionalSummary[] {
-  return (links ?? [])
-    .map((l) => l.professionals)
-    .filter((p): p is RawProfessional => Boolean(p))
-    .map((p) => ({ id: p.id, type: p.type, full_name: p.profile?.full_name ?? null }));
+  return activeProfessionalsFromLinks<RawProfessional>(links).map((p) => ({
+    id: p.id,
+    type: p.type,
+    full_name: p.profile?.full_name ?? null,
+  }));
 }
 
 export async function listPatients(): Promise<PatientListItem[]> {
@@ -67,7 +88,7 @@ export async function listPatients(): Promise<PatientListItem[]> {
       `id, goal, current_weight, start_date, birth_date,
        profile:profiles ( full_name, email, avatar_url ),
        adherence_snapshots ( score, level, status, weekly_completion_rate, calculated_at ),
-       professional_patient_links ( professionals ( id, type, profile:profiles ( full_name ) ) ),
+       professional_patient_links ( status, professionals ( id, type, profile:profiles ( full_name ) ) ),
        activity_events ( type, created_at ),
        weight_logs ( measured_at ),
        progress_photos ( taken_at )`,
@@ -122,7 +143,7 @@ export async function getPatient(id: string): Promise<PatientDetail> {
     .select(
       `*,
        profile:profiles ( * ),
-       professional_patient_links ( professionals ( id, type, profile:profiles ( full_name ) ) )`,
+       professional_patient_links ( status, professionals ( id, type, profile:profiles ( full_name ) ) )`,
     )
     .eq("id", id)
     .single();

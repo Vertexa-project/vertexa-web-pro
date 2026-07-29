@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, Dumbbell, Target, Utensils } from "lucide-react";
 
 import { ExportPointsButton } from "./ExportPointsButton";
+import { PatientTeamSection } from "./PatientTeamSection";
 import { RiskSignalsPanel } from "./RiskSignalsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,11 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
       </div>
 
       <RiskSignalsPanel patientId={patient.id} />
+
+      {/* WP-2bi-UI — âncora da desativação de vínculo. Fica aqui, e não no header nem na tela de
+          Equipe da clínica, porque o objeto é o VÍNCULO com ESTA paciente (não o membro da
+          clínica) e é a única lista do produto que mostra vínculo inativo. */}
+      <PatientTeamSection patientId={patient.id} clinicId={patient.clinic_id ?? null} />
     </div>
   );
 }
