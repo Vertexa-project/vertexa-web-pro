@@ -578,9 +578,14 @@ Branch `feat/clinic-join-requests-web` (PR base main, **SEM MERGE**). Gate: `ori
 
 ## WP-TEAM-2b-i — desativação do vínculo profissional↔paciente (2026-07-28)
 
-**Estado: migration escrita e PROVADA em transação com ROLLBACK, NÃO aplicada.** Branch
-`feat/team-2bi-link-deactivation`, base `origin/main` = `9709bdb`. PR aberto SEM MERGE.
-**Frontend NÃO entrou neste PR** — sem âncora óbvia na UI; opção reportada, aguardando decisão.
+**Estado: ✅ APLICADA EM PRODUÇÃO E MERGEADA (2026-07-29).** Migration `20260805090000` aplicada
+via MCP (catálogo `20260729013856 wp_team_2bi_link_deactivation`) e PR **#37 MERGEADO** —
+merge commit **`d6e40c2`** (pais `9709bdb` + `408b4ed`), branch `feat/team-2bi-link-deactivation`
+deletada e podada. Verificação pós-aplicação: `HASH_GLOBAL` de policies `be1e5687…` (108),
+48 helpers `18b93d84…` e 4 âncoras `b79d7630…` — todos idênticos ao previsto; advisors de
+segurança +3 na classe 0029 (as 3 RPCs) e nenhuma classe nova. **Nenhum dado mudou na
+aplicação**: 10 vínculos seguem `active`, `ppl_status_events` vazia, 16 participantes de chat.
+**Frontend NÃO entrou neste PR** — a UI é o WP-2bi-UI, entregue à parte.
 
 - **A tese, provada por hash:** `is_common_professional_of_patient` E
   `is_external_professional_of_patient` já filtram `coalesce(status,'active')='active'`. Logo
@@ -609,11 +614,13 @@ Branch `feat/clinic-join-requests-web` (PR base main, **SEM MERGE**). Gate: `ori
 - **Gates:** eslint 0 · tsc 0 · vitest 133/133 · build OK.
 - **Escopo:** só o repo web. Nenhuma policy existente alterada, nenhum helper alterado,
   identidade e `promote_to_professional` intocados. NÃO faz soft-delete de `professionals`.
-  `app`/`patient-native` NÃO tocados. PARADO para auditoria.
+  `app`/`patient-native` NÃO tocados.
 
 ### EMENDA (endurecimento antes da aplicação) — mesmo PR #37, mesma migration `20260805090000`
 
-**Estado: emenda escrita e PROVADA em transação com ROLLBACK, migration segue NÃO aplicada.**
+**Estado: ✅ APLICADA junto com a migration (PR #37, merge `d6e40c2`).** O texto abaixo foi
+escrito ANTES da aplicação (provas em transação + ROLLBACK); todas as afirmações foram
+reconfirmadas contra o banco REAL depois do apply — ver o bloco de aplicação no fim.
 
 - **VERIFICAÇÃO QUE PRECEDEU A EMENDA (o filtro de role do DELETE está completo).** O `DELETE`
   em `chat_participants` dentro de `deactivate_patient_link` filtra `role='professional'`. Medido
@@ -652,4 +659,29 @@ Branch `feat/clinic-join-requests-web` (PR base main, **SEM MERGE**). Gate: `ori
 - **Resíduo das provas: ZERO** — tabela/RPCs/colunas/ledger inexistentes, fixtures ausentes,
   10 vínculos todos `active`, 16 participantes, `HASH_GLOBAL` de volta a `e173eb30…` (107).
 - **Gates:** eslint 0 · tsc 0 · vitest 133/133 · build OK. Frontend NÃO tocado (nenhum arquivo
-  em `src/`). `app`/`patient-native` NÃO tocados. PARADO para auditoria.
+  em `src/`). `app`/`patient-native` NÃO tocados.
+
+### APLICAÇÃO EM PRODUÇÃO + MERGE (2026-07-29) — o que passou a ser FATO
+
+- **Aplicada** via MCP `apply_migration` (name `wp_team_2bi_link_deactivation`; o catálogo gerou
+  `version` `20260729013856`, diferente do `20260805090000` do arquivo — é a **DÍVIDA-LEDGER** já
+  diagnosticada, agora com 47 migrations nessa condição). Ledger interno
+  `schema_migration_log '20260805090000'` = 1 linha.
+- **Mergeada:** PR #37, merge commit **`d6e40c2`** (dois pais: `9709bdb` + `408b4ed` ⇒ merge
+  commit de verdade, não rebase/squash). Branch remota deletada e podada.
+- **Os quatro hashes contra o banco real:** policies `be1e56872bdd6d6fcfb8f2eb937753c5` (108) ·
+  48 helpers `18b93d8411d3914247e9056ea4ec207c` · 4 âncoras `b79d76307765af2f5efe842d98678cff` ·
+  **HASH_PRIVILEGIOS** (padrão novo, receita no retorno) `6234813207895554d96d5ae0de7524d4` →
+  `3be93becdb9fa663edb7efb6d441194f`. O delta de privilégios foi provado **contido**:
+  reconstruindo o corpo de antes a partir do de depois (removendo só a tabela nova e as 3 colunas
+  de carimbo, e devolvendo o grant de `status`) volta-se EXATAMENTE ao baseline.
+- **A trava está de pé em produção:**
+  `has_column_privilege('authenticated','public.professional_patient_links','status','update')` =
+  **false**; `is_external` = **true**; `service_role`/owner intactos.
+- **Advisors reais:** segurança 0029 25→28 (+3, as 3 RPCs), 0008 inalterado, **nenhuma classe
+  nova**. Performance: +3 em `0001 unindexed_foreign_keys` (FKs da tabela nova + `status_changed_by`)
+  e +2 em `0005 unused_index` (os 2 índices da migration, tabela ainda vazia) — classes já
+  existentes, nenhuma nova. Índices corretivos NÃO criados (decisão do dono).
+- **Nenhum dado mudou na aplicação:** 10 vínculos todos `active`, `ppl_status_events` vazia,
+  0 carimbos preenchidos, chat 16/7/26 idêntico ao pré-aplicação. Nenhuma RPC de desativação foi
+  chamada em produção.

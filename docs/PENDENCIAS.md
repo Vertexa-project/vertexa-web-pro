@@ -551,7 +551,10 @@
   profundidade, não a única barreira.
 
 - **DÍVIDA-PRIV-1 — o `revoke update (status)` é apagado por um `grant` de TABELA futuro
-  (EMENDA do 2b-i, migration `20260805090000`; NÃO aplicada).** A trava que obriga toda mudança
+  (EMENDA do 2b-i, migration `20260805090000`; ✅ APLICADA em produção em 2026-07-29, PR #37
+  mergeado no commit `d6e40c2` — logo esta dívida está VIVA, não é hipótese de PR).** Conferido
+  em produção depois do apply: `has_column_privilege('authenticated',…,'status','update')` =
+  **false** e `is_external` = **true**. A trava que obriga toda mudança
   de status a passar pelas RPCs é um **privilégio de COLUNA**
   (`revoke update (status) on public.professional_patient_links from authenticated`). Pela regra
   do Postgres, privilégio de TABELA vale para todas as colunas e se sobrepõe ao recorte por
