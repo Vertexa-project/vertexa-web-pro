@@ -580,3 +580,36 @@
 - **Desativar MEMBRO da clínica continua pendente.** Este WP desativa o VÍNCULO com UMA paciente.
   O soft-delete de `professionals` (tirar alguém da clínica inteira) é outro escopo e continua
   aberto — é o que a nota de `TeamAdminPage.tsx` chama de WP-TEAM-2b.
+
+### WP-CHAT-MENTIONS-A — o que ficou registrado (2026-07-29; migration `20260806090000`, em PR SEM MERGE, NÃO aplicada)
+
+- **DÍVIDA-MENTION-1 — a CORRIDA que o aperto de `chat_mentions_insert` torna alcançável.**
+  A policy passou a exigir que o **perfil marcado** seja participante do canal. Nenhum caminho do
+  produto marca não-participante (o seletor do app é alimentado por `chat_participants` daquele
+  canal — verificado no gate), **mas** existe uma janela real: se o profissional for removido do
+  roster entre o carregamento do seletor e o envio (o que a RPC `deactivate_patient_link` faz
+  desde o WP-TEAM-2b-i), o INSERT da menção passa a falhar onde antes passava.
+  **O que piora o sintoma:** `sendPatientMessage`
+  (`vertexa-app-paciente/src/lib/api/chat.ts`) insere a MENSAGEM e depois a MENÇÃO em **duas
+  chamadas separadas, sem transação**. Nesse cenário a mensagem fica gravada e o usuário vê erro —
+  parece que não enviou, mas enviou. Fechar isso exige uma RPC transacional de envio (era o
+  `send_chat_message` do desenho cancelado) ou tratamento do erro no app: **decisão do dono**.
+- **DÍVIDA-MENTION-2 — `chat_mentions.message_id` e `mentioned_profile_id` continuam ANULÁVEIS.**
+  A `UNIQUE (message_id, mentioned_profile_id)` deste WP **não constrange linhas com nulo** (a
+  regra do Postgres), então em tese caberiam N linhas `(null, null)`. Hoje há 0 linhas nulas e o
+  `NOT NULL` ficou FORA do escopo deste WP. Limpeza barata para um WP futuro.
+- **Duas escritas diretas PRESERVADAS de propósito:** este WP **não** revogou o INSERT direto em
+  `chat_messages` nem em `chat_mentions`. O app da paciente escreve por eles hoje e quebraria em
+  produção. A dívida de mover as duas escritas para RPC só pode ser fechada quando os DOIS
+  clientes deixarem de inserir direto.
+- **`chat_mentions` é a tabela ÚNICA de menção — não criar outra.** O desenho original deste WP
+  previa uma `chat_message_mentions` nova; foi cancelado porque `chat_mentions` já existe e está
+  cabeada ponta a ponta (o app insere; a web lê, marca lida e assina o **realtime** para o badge
+  de não-lidas). Uma segunda tabela forkaria o contador silenciosamente.
+- **`channel_professionals(uuid)` existe porque a paciente NÃO lê `professionals` nem
+  `professional_disciplines`.** Medido: `professionals_select` exige ser o próprio ou admin;
+  `professional_disciplines_select` exige ser staff. Consequência que já estava em produção antes
+  deste WP: o seletor de @ do app pede `profiles(...professionals(type, specialty))` e recebe
+  **vazio** — o tipo cai para null, sem erro. A RPC resolve isso **sem alargar policy nenhuma**.
+  **Parte B (cross-repo) pendente:** o app da paciente precisa trocar aquele embed pela RPC; até
+  lá o seletor continua sem disciplina.
