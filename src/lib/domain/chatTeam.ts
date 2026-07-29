@@ -8,10 +8,7 @@
 // (`can_see_profile`) também não, porque nenhum dos 4 ramos cobre "colega da mesma clínica". Embed
 // bloqueado por RLS não devolve erro: devolve VAZIO. A RPC é SECURITY DEFINER com portão
 // `can_read_channel` e é o único caminho que não some com a informação em silêncio.
-// Import RELATIVO de propósito: `vitest.config.ts` não declara o alias `@/`, então um import de
-// RUNTIME por alias quebra o runner (os outros testes só passam porque importam TIPO, que some na
-// compilação). Reportado no retorno; mudar a config do runner está fora deste WP.
-import { professionalTypeLabel } from "./format";
+import { professionalTypeLabel } from "@/lib/domain/format";
 import type { ChannelProfessional, ChatMessageView } from "@/types/db";
 
 /**
