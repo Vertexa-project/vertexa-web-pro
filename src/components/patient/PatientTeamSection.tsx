@@ -55,18 +55,53 @@ interface PatientTeamSectionProps {
   clinicId: string | null;
 }
 
+type LinkAction = "deactivate" | "reactivate";
+
+/**
+ * Texto das DUAS confirmações. Ambas passam pelo MESMO AlertDialog — o que muda é só a cópia e
+ * qual mutação roda. Cada descrição diz o efeito REAL, sem eufemismo:
+ *
+ *  · desativar  — o corte é imediato nos dois canais (dado e conversa), e o histórico fica.
+ *  · reativar   — a leitura volta na hora porque é DERIVADA do vínculo; a escrita no chat volta
+ *                 quando a conversa for aberta pelo painel, que reconcilia o roster. Essa
+ *                 assimetria é do desenho do banco (a RPC de reativação não recria a linha do
+ *                 roster de propósito) e a confirmação avisa em vez de esconder.
+ */
+const ACTION_COPY: Record<
+  LinkAction,
+  { title: (name: string) => string; description: string; confirm: string; reasonHint: string }
+> = {
+  deactivate: {
+    title: (name) => `Desativar o vínculo de ${name}?`,
+    description:
+      "Ao confirmar, esta pessoa perde o acesso aos dados da paciente e à conversa IMEDIATAMENTE. " +
+      "O histórico é preservado: a ficha, os registros e as mensagens já enviadas continuam no " +
+      "sistema, com autoria. Você pode reativar o vínculo depois.",
+    confirm: "Desativar vínculo",
+    reasonHint: "Fica registrado na trilha de auditoria, junto com quem desativou e quando.",
+  },
+  reactivate: {
+    title: (name) => `Reativar o vínculo de ${name}?`,
+    description:
+      "Ao confirmar, esta pessoa volta a ter acesso aos dados da paciente IMEDIATAMENTE e volta a " +
+      "ler a conversa na hora. Para voltar a ESCREVER no chat, basta que a conversa seja aberta " +
+      "pelo painel — é nessa abertura que ela entra de novo na lista de participantes.",
+    confirm: "Reativar vínculo",
+    reasonHint: "Fica registrado na trilha de auditoria, junto com quem reativou e quando.",
+  },
+};
+
 function MemberRow({
   member,
   canManage,
   busy,
-  onDeactivate,
-  onReactivate,
+  onAct,
 }: {
   member: PatientTeamMember;
   canManage: boolean;
   busy: boolean;
-  onDeactivate: (m: PatientTeamMember) => void;
-  onReactivate: (m: PatientTeamMember) => void;
+  /** Abre a confirmação — nenhuma das duas ações dispara direto da linha. */
+  onAct: (m: PatientTeamMember, mode: LinkAction) => void;
 }) {
   const active = isActiveLinkStatus(member.status);
   const name = member.fullName ?? "Profissional";
@@ -115,7 +150,7 @@ function MemberRow({
                 size="sm"
                 variant="outline"
                 disabled={busy}
-                onClick={() => onDeactivate(member)}
+                onClick={() => onAct(member, "deactivate")}
                 aria-label={`Desativar vínculo de ${name}`}
               >
                 <UserMinus className="h-4 w-4" aria-hidden />
@@ -126,14 +161,10 @@ function MemberRow({
                 size="sm"
                 variant="outline"
                 disabled={busy}
-                onClick={() => onReactivate(member)}
+                onClick={() => onAct(member, "reactivate")}
                 aria-label={`Reativar vínculo de ${name}`}
               >
-                {busy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                ) : (
-                  <UserPlus className="h-4 w-4" aria-hidden />
-                )}
+                <UserPlus className="h-4 w-4" aria-hidden />
                 Reativar
               </Button>
             )}
@@ -152,7 +183,10 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
   const deactivate = useDeactivatePatientLink(patientId);
   const reactivate = useReactivatePatientLink(patientId);
 
-  const [toDeactivate, setToDeactivate] = useState<PatientTeamMember | null>(null);
+  // UMA confirmação para as DUAS ações, parametrizada pelo modo — não existe um segundo padrão
+  // de diálogo nesta tela. Só muda o texto e qual mutação é disparada; a mecânica (motivo
+  // opcional → p_reason, vazio vira null) é idêntica nos dois lados.
+  const [pending, setPending] = useState<{ member: PatientTeamMember; mode: LinkAction } | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
@@ -160,44 +194,46 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
   const members = sortPatientTeam(team.data ?? []);
   const summary = summarizePatientTeam(team.data ?? []);
 
-  function handleError(err: unknown, scope: "deactivate" | "reactivate") {
+  const mutation = pending?.mode === "reactivate" ? reactivate : deactivate;
+  const copy = pending ? ACTION_COPY[pending.mode] : null;
+
+  function handleError(err: unknown, scope: LinkAction) {
     setError(linkActionErrorMessage(err));
     // Erro esperado (não é admin / vínculo sumiu / parâmetro faltando) é UX, não incidente.
     // NUNCA anexar nome do profissional ou da paciente: contexto lógico apenas.
     if (!isExpectedLinkActionError(err)) captureException(err, { source: "patientTeam", scope });
   }
 
-  function confirmDeactivate() {
-    if (!toDeactivate) return;
-    const member = toDeactivate;
+  function askConfirmation(member: PatientTeamMember, mode: LinkAction) {
+    setError(null);
+    setReason("");
+    setPending({ member, mode });
+  }
+
+  function closeDialog() {
+    setPending(null);
+    setReason("");
+  }
+
+  function confirmAction() {
+    if (!pending) return;
+    const { member, mode } = pending;
+    const run = mode === "reactivate" ? reactivate : deactivate;
     setError(null);
     setActingId(member.linkId);
-    deactivate.mutate(
+    run.mutate(
       {
         professionalId: member.professionalId,
         patientId,
-        // Motivo é OPCIONAL: vazio vira null e a trilha simplesmente não carimba razão.
+        // Motivo é OPCIONAL nos dois modos: vazio vira null e a trilha não carimba razão.
         reason: reason.trim() || null,
       },
       {
-        onError: (err) => handleError(err, "deactivate"),
+        onError: (err) => handleError(err, mode),
         onSettled: () => {
           setActingId(null);
-          setToDeactivate(null);
-          setReason("");
+          closeDialog();
         },
-      },
-    );
-  }
-
-  function handleReactivate(member: PatientTeamMember) {
-    setError(null);
-    setActingId(member.linkId);
-    reactivate.mutate(
-      { professionalId: member.professionalId, patientId, reason: null },
-      {
-        onError: (err) => handleError(err, "reactivate"),
-        onSettled: () => setActingId(null),
       },
     );
   }
@@ -236,12 +272,7 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
                 member={m}
                 canManage={canManage}
                 busy={actingId === m.linkId}
-                onDeactivate={(x) => {
-                  setError(null);
-                  setReason("");
-                  setToDeactivate(x);
-                }}
-                onReactivate={handleReactivate}
+                onAct={askConfirmation}
               />
             ))}
           </div>
@@ -259,46 +290,37 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
         ) : null}
       </CardContent>
 
-      <AlertDialog
-        open={Boolean(toDeactivate)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setToDeactivate(null);
-            setReason("");
-          }
-        }}
-      >
+      {/* MESMO AlertDialog para desativar E reativar — só a cópia e a mutação mudam. */}
+      <AlertDialog open={Boolean(pending)} onOpenChange={(open) => (!open ? closeDialog() : undefined)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Desativar o vínculo de {toDeactivate?.fullName ?? "este profissional"}?
+              {copy ? copy.title(pending?.member.fullName ?? "este profissional") : ""}
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Ao confirmar, esta pessoa perde o acesso aos dados da paciente e à conversa
-              IMEDIATAMENTE. O histórico é preservado: a ficha, os registros e as mensagens já
-              enviadas continuam no sistema, com autoria. Você pode reativar o vínculo depois.
-            </AlertDialogDescription>
+            <AlertDialogDescription>{copy?.description ?? ""}</AlertDialogDescription>
           </AlertDialogHeader>
 
           <div className="space-y-2">
-            <Label htmlFor="ppl-deactivate-reason">Motivo (opcional)</Label>
+            <Label htmlFor="ppl-link-action-reason">Motivo (opcional)</Label>
             <Textarea
-              id="ppl-deactivate-reason"
+              id="ppl-link-action-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Ex.: saiu da equipe, paciente trocou de responsável…"
+              placeholder={
+                pending?.mode === "reactivate"
+                  ? "Ex.: voltou a acompanhar a paciente, retorno de férias…"
+                  : "Ex.: saiu da equipe, paciente trocou de responsável…"
+              }
               rows={3}
             />
-            <p className="text-xs text-muted-foreground">
-              Fica registrado na trilha de auditoria, junto com quem desativou e quando.
-            </p>
+            <p className="text-xs text-muted-foreground">{copy?.reasonHint ?? ""}</p>
           </div>
 
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deactivate.isPending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeactivate} disabled={deactivate.isPending}>
-              {deactivate.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-              Desativar vínculo
+            <AlertDialogCancel disabled={mutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmAction} disabled={mutation.isPending}>
+              {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+              {copy?.confirm ?? ""}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
