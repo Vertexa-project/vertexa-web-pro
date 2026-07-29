@@ -28,7 +28,7 @@ import { chatStageOf } from "@/lib/api/chat";
 import { CHAT_ATTACHMENT_MIME, hasChatAttachment, validateChatAttachment } from "@/lib/domain/chatAttachment";
 import { mentionFailureMessage } from "@/lib/domain/chatMention";
 import { indexById, quotedPreview, resolveQuote } from "@/lib/domain/chatReply";
-import { mentionsProfile } from "@/lib/domain/chatTeam";
+import { mentionsProfile, namesByProfileId } from "@/lib/domain/chatTeam";
 import { formatRelative, initials } from "@/lib/domain/format";
 import { cn } from "@/lib/utils";
 import type { ChannelProfessional, ChatMessageView, PatientListItem } from "@/types/db";
@@ -104,13 +104,25 @@ function Thread({ patient }: { patient: PatientListItem }) {
   const byId = indexById(messages);
   /**
    * Autor exibido. Remetente do profissional = nome da clínica/profissional, NUNCA "Vertexa".
-   * ⚠️ `sender_name` do COLEGA chega NULO por RLS (`profiles_select` → `can_see_profile` não tem
-   * ramo para "colega da mesma clínica") e cai neste "Profissional". É defeito PRÉ-EXISTENTE,
-   * relatado no diagnóstico deste WP e NÃO corrigido aqui: fica em UM lugar só, de propósito, para
-   * a bolha e a citação nunca discordarem sobre a mesma pessoa.
+   *
+   * ⚠️ POR QUE O `sender_name` NÃO BASTA: o embed `profiles` do remetente chega NULO quando quem
+   * escreveu é um COLEGA — `profiles_select` é `private.can_see_profile(id)`, e nenhum dos seus 4
+   * ramos (sou eu / é paciente que alcanço / sou admin da clínica dele / eu sou a paciente) cobre
+   * "colega da mesma clínica". Verificado em produção. A bolha caía para o genérico "Profissional".
+   *
+   * A RPC `channel_professionals` já devolve nome de TODOS os participantes profissionais e a tela
+   * já a carrega para o seletor de @ — então o nome vem daí, sem nenhuma leitura nova.
+   *
+   * `authorOf` continua sendo UM lugar só, servindo a bolha E a citação: as duas nunca podem
+   * discordar sobre a mesma pessoa.
    */
+  const nameByProfile = namesByProfileId(professionalsQuery.data ?? []);
   const authorOf = (m: ChatMessageView) =>
-    m.sender_role === "patient" ? patientName : m.sender_name ?? "Profissional";
+    m.sender_role === "patient"
+      ? patientName
+      : m.sender_name
+        ?? (m.sender_profile_id ? nameByProfile.get(m.sender_profile_id) : null)
+        ?? "Profissional";
 
   const handleSend = () => {
     const body = draft.trim();
