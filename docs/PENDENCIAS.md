@@ -691,15 +691,25 @@ tomadas nele:
   **TAMANHO HOJE, medido em produção (2026-07-29):** `adherence_snapshots` tem **1 linha**;
   grupos `(patient_id, calculated_at)` com mais de uma linha: **0**; pacientes com 2+ snapshots:
   **0**. Ou seja, **nenhuma linha real está ambígua hoje** e nenhum número exibido está errado.
-  **ALCANÇABILIDADE:** pelo caminho normal a ambiguidade é praticamente inalcançável — cada
-  chamada da RPC é uma transação distinta, e `now()` difere entre transações. O empate exige
-  **dois INSERTs para o MESMO paciente dentro de UMA transação**, o que hoje só acontece em
-  fixture de teste (foi exatamente o que reprovou o `wp_rls2_metrics_engine_test.sql`) — e
-  passaria a acontecer em produção no dia em que existir um job que recompute o mesmo paciente
-  duas vezes na mesma transação.
-  **CORREÇÃO QUANDO FOR A HORA:** desempatar por `id` (ou por uma coluna de sequência) em todos
-  os seis sítios, ou trocar o default para `clock_timestamp()`. É mudança de código de produção
-  em dois repos + duas RPCs — merece WP próprio.
+  **ALCANÇABILIDADE — atacada NA ORIGEM pela EMENDA 2 do WP-METRIC-1a, e só ela.** O empate
+  exigia **dois INSERTs para o MESMO paciente dentro de UMA transação**, porque `now()` é o
+  carimbo da TRANSAÇÃO e não se move dentro dela. A migration `20260807090000` trocou o default
+  de `adherence_snapshots.calculated_at` de `now()` para `clock_timestamp()`, que lê o relógio
+  a cada chamada — então dois INSERTs na mesma transação passam a receber instantes diferentes.
+  Provado antes do apply: dois recomputes do mesmo paciente na mesma transação, que antes
+  produziam `calculated_at` idêntico, passaram a produzir valores distintos, e a leitura por
+  `calculated_at desc` voltou a devolver deterministicamente o último.
+  ⚠️ **ISTO NÃO QUITA A DÍVIDA — dito com todas as letras para ninguém ler errado depois: as
+  seis leituras seguem SEM critério de desempate; o que foi removido é a ALCANÇABILIDADE, na
+  origem.** Não existe UNIQUE em `(patient_id, calculated_at)`, nenhum dos seis sítios foi
+  tocado, e nenhum deles ganhou `id` como segundo critério de ordenação. Se duas linhas
+  voltarem a compartilhar o carimbo por qualquer outro motivo — um backfill que grave
+  `calculated_at` explicitamente, uma importação, um `insert … select` que reuse o valor — as
+  seis leituras erram exatamente como erravam antes. A fragilidade continua nas LEITURAS; a
+  EMENDA 2 só afastou delas o gatilho mais provável.
+  **O QUE AINDA FALTA (o conteúdo real desta dívida):** desempatar por `id` (ou por uma coluna
+  de sequência) nos seis sítios. É código de produção em dois repos + duas RPCs — merece WP
+  próprio.
 
 - **DÍVIDA-METRIC-1b — os espelhos CLIENT-SIDE ainda contam qualquer tipo de evento.** O
   WP-METRIC-1a corrigiu só o servidor (proibido tocar no app). Continuam com a regra antiga, no

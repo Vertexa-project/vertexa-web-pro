@@ -34,8 +34,9 @@
 --     WP-METRIC-1b. Até lá, app e servidor divergem para quem tiver `help_requested`.
 --     Registrado em docs/PENDENCIAS.md como DÍVIDA-METRIC-1b.
 --   · NÃO altera as 3 tabelas de métrica derivada nem o lockdown delas.
---   · NÃO altera a ordenação "último snapshot" de nenhum caminho de produção — a
---     ambiguidade de `order by calculated_at` está registrada como DÍVIDA-SNAP-ORDER-1.
+--   · NÃO altera NENHUM dos seis sítios de leitura que ordenam por `calculated_at`, e NÃO
+--     acrescenta UNIQUE. A seção 4c mexe SÓ no DEFAULT da coluna: remove a ALCANÇABILIDADE
+--     do empate na origem, não o desempate na leitura. DÍVIDA-SNAP-ORDER-1 segue ABERTA.
 --
 -- INVENTÁRIO DE `private` (declarado de antemão, para a prova de hash): 48 → 49.
 --   O delta é EXATAMENTE dois itens: `event_streak_brt` muda de corpo, e
@@ -54,6 +55,7 @@
 --   --    20260722090000); o corpo exato está no retorno-metric-1-diag.txt, blocos D3.1 e D3.2.
 --   --    ATENÇÃO à ORDEM: restituir recompute_adherence (que volta a conter o cálculo inteiro)
 --   --    ANTES de dropar a função extraída, senão o invólucro fica apontando para o vazio.
+--   alter table public.adherence_snapshots alter column calculated_at set default now();
 --   drop function if exists private.recompute_adherence_for(uuid);
 --   alter table public.activity_events drop constraint if exists activity_events_type_fkey;
 --   drop policy if exists activity_event_types_catalog_read on public.activity_event_types;
@@ -409,6 +411,45 @@ end $$;
 
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
+-- 4c) O CARIMBO DO SNAPSHOT DEIXA DE EMPATAR — default now() → clock_timestamp()
+--
+-- `now()` é o carimbo da TRANSAÇÃO: ele é o MESMO durante a transação inteira, por
+-- definição. Logo, dois snapshots do mesmo paciente gravados dentro de UMA transação
+-- nascem com `calculated_at` IDÊNTICO — e aí as seis leituras que fazem
+-- `order by calculated_at desc` deixam de ter critério e escolhem ARBITRARIAMENTE.
+--
+-- A pior das seis é o `.limit(2)` do app (`vertexa-app-paciente/src/lib/api/adherence.ts`):
+-- ele pega duas linhas, usa `[0]` como o VRI atual e `[1]` como o anterior para calcular o
+-- badge de variação. Sob empate, os dois podem vir trocados e o badge mostra o SINAL
+-- INVERTIDO — o app diria "seu índice caiu" no dia em que ele subiu.
+--
+-- `clock_timestamp()` lê o relógio a cada chamada, então dois INSERTs na mesma transação
+-- recebem instantes diferentes e a ordenação volta a ser total.
+--
+-- ⚠️ O QUE ISTO **NÃO** RESOLVE — e é importante não confundir:
+--   As seis leituras continuam SEM critério de desempate, e não existe UNIQUE em
+--   (patient_id, calculated_at). O que esta linha remove é a ALCANÇABILIDADE do empate,
+--   NA ORIGEM — não o desempate na leitura. Se um dia duas linhas voltarem a compartilhar
+--   o carimbo por qualquer outro motivo, as seis leituras erram de novo, exatamente como
+--   antes. Por isso DÍVIDA-SNAP-ORDER-1 continua ABERTA em docs/PENDENCIAS.md.
+--
+-- ESCOPO: só o default da coluna. Verificado antes de escrever esta linha que nada mais
+-- depende dele — 0 índices, 0 constraints e 0 triggers de usuário citando `calculated_at`,
+-- 0 views sobre a tabela; a única policy (`adherence_select`) não menciona a coluna.
+-- Nenhuma linha existente é reescrita: default só vale para INSERT futuro.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+alter table public.adherence_snapshots
+  alter column calculated_at set default clock_timestamp();
+
+comment on column public.adherence_snapshots.calculated_at is
+  'WP-METRIC-1a: default clock_timestamp(), NAO now(). now() e o carimbo da TRANSACAO, entao '
+  'dois snapshots do mesmo paciente gravados na mesma transacao empatavam e as leituras por '
+  '"order by calculated_at desc" escolhiam arbitrariamente (pior caso: o limit(2) do app '
+  'inverte o sinal do badge de variacao). Isto remove a ALCANCABILIDADE do empate na origem; '
+  'as leituras seguem sem desempate — ver DIVIDA-SNAP-ORDER-1 em docs/PENDENCIAS.md.';
+
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
 -- 5) RECÁLCULO DO HISTÓRICO — os snapshots existentes sob a regra nova
 --
 -- Escopo: SÓ pacientes que JÁ TÊM snapshot. Quem nunca teve VRI calculado não ganha um
@@ -480,7 +521,14 @@ values ('20260807090000', '20260807090000_wp_metric_1a_event_type_catalog.sql',
   'private vai de 48 para 49 funcoes, delta exato = event_streak_brt alterada + '
   'recompute_adherence_for criada. NAO toca brt_date/fuso (DIVIDA-TZ-1), job de decaimento '
   '(DIVIDA-RLS2-1), recompute_achievements (herda a correcao via event_streak_brt), trigger '
-  'de recuperacao, export_patient_report, os espelhos client-side (DIVIDA-METRIC-1b), a '
-  'ordenacao por calculated_at (DIVIDA-SNAP-ORDER-1) nem o lockdown das 3 tabelas derivadas.',
+  'de recuperacao, export_patient_report, os espelhos client-side (DIVIDA-METRIC-1b) nem o '
+  'lockdown das 3 tabelas derivadas. EMENDA 2: adherence_snapshots.calculated_at troca o '
+  'default de now() para clock_timestamp(). now() e o carimbo da TRANSACAO, entao dois '
+  'snapshots do mesmo paciente na mesma transacao empatavam e as SEIS leituras por '
+  '"order by calculated_at desc" escolhiam arbitrariamente — a pior e o limit(2) do app, '
+  'que sob empate inverte o sinal do badge de variacao. Muda SO o default da coluna: nenhum '
+  'dos seis sitios de leitura foi tocado e nenhum UNIQUE foi criado. Remove a '
+  'ALCANCABILIDADE do empate NA ORIGEM, nao o desempate na leitura — DIVIDA-SNAP-ORDER-1 '
+  'segue ABERTA.',
   'WP-METRIC-1a')
 on conflict (version) do nothing;
