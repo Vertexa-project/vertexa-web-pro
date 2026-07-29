@@ -730,3 +730,55 @@ em produção desde o PR #37; este WP é 100% client.
   `patientTeam.test.ts`) · build OK.
 - **Escopo:** SÓ repo web, SÓ client. Nenhuma migration, nenhuma policy, nenhuma RPC nova.
   `app`/`patient-native` NÃO tocados. PR aberto, SEM MERGE.
+
+## WP-CHAT-MENTIONS-A — restrições declarativas + RPC de leitura (2026-07-29)
+
+**Estado: migration escrita e PROVADA em transação com ROLLBACK, NÃO aplicada.** Branch
+`feat/chat-mentions-a`, base `origin/main` = `19f01f8`. Migration `20260806090000`. PR SEM MERGE.
+**O desenho original foi CANCELADO pelo próprio gate da rodada anterior** (sem tabela de menção
+nova, sem `channel_id` denormalizado, sem `send_chat_message`).
+
+- **A tese:** as duas garantias que faltavam no chat — "a resposta é do mesmo canal" e "só se
+  marca quem participa" — deixam de depender de disciplina do cliente. Uma vira **constraint**
+  (impossível de violar), a outra vira **RLS**.
+- **GATES:** G1 — `chat_messages` com `channel_id` nulo = **0** (e 0 órfãs) ⇒ `SET NOT NULL`
+  seguro. G2 — `166048e3…` (11), 48 helpers `18b93d84…`, 4 âncoras `b79d7630…`, HASH_GLOBAL
+  `be1e5687…` (108): todos reproduzidos. G3 — **nenhum caminho dos apps marca não-participante**:
+  `listChannelProfessionals` alimenta o seletor a partir de `chat_participants` DAQUELE canal
+  (`role='professional'`), `selectedMention` só é setado a partir dessa lista, e o web **não
+  insere** menção (só lê e marca lida). `patient-native` não referencia chat.
+- **Entregue:** `channel_id` NOT NULL · `UNIQUE (id, channel_id)` · `reply_to_message_id` com **FK
+  COMPOSTA** `(reply_to_message_id, channel_id) → (id, channel_id)` `ON DELETE SET NULL
+  (reply_to_message_id)` · `UNIQUE (message_id, mentioned_profile_id)` em `chat_mentions` ·
+  aperto de `chat_mentions_insert` · RPC `channel_professionals(uuid)`.
+- **⚠️ ONDE A LETRA DA ORDEM NÃO PÔDE SER SEGUIDA (item 5):** o WP mandou reusar
+  `private.is_channel_participant` para testar o PERFIL MARCADO. Não dá: a assinatura é
+  `(p_channel uuid)` e o sujeito é FIXO em `current_profile_id()`. Varri os 48 helpers — é o único
+  que toca `chat_participants` e nenhum aceita `(canal, perfil)`. Criar helper também é proibido
+  pelo WP. Sobrou o `EXISTS` inline com o **mesmo predicado**, trocando só o sujeito;
+  `private.message_channel` segue reusado. Nenhuma regra de autorização nova foi inventada.
+- **⚠️ `ON DELETE SET NULL (reply_to_message_id)` — a forma COM lista de colunas (PG 15+; o
+  projeto roda 17.6).** Sem a lista, o Postgres anularia TODAS as colunas referenciantes,
+  inclusive `channel_id`, que passa a ser NOT NULL: apagar uma mensagem respondida estouraria erro
+  em vez de limpar a citação.
+- **PROVAS.** Policies: `166048e3…` → `432c7be0…` (11) e HASH_GLOBAL `be1e5687…` → `e025289c…`
+  (108); **por RECONSTRUÇÃO**, revertendo SÓ o `with_check` de `chat_mentions_insert`, os dois
+  voltam EXATAMENTE aos valores originais ⇒ **nenhuma das outras 10 policies do chat, e nenhuma
+  das 108 do sistema, variou**. 48 helpers e 4 âncoras IDÊNTICOS. Privilégios: `3be93bec…` (398
+  colunas) → `39e07e62…` (399); removendo só `chat_messages.reply_to_message_id` volta a
+  `3be93bec…` — a coluna nova nasce **sem grant**, e `authenticated` não tem UPDATE de tabela em
+  `chat_messages`, então a citação é gravada no INSERT e não pode ser alterada depois pelo client.
+- **MATRIZ (transação + ROLLBACK):** responder no mesmo canal OK · responder em OUTRO canal
+  **bloqueado pela FK composta (23503)** · paciente marca participante OK (formato EXATO do app) ·
+  profissional marca participante OK · marcar a EXTERNA e alguém de OUTRA CLÍNICA **42501** ·
+  duplicada **bloqueada pela UNIQUE (23505)** · NARROWING caracterizado (antes PASSAVA, depois
+  42501) · RPC: participante lê, paciente lê o canal dela, não-participante/externa/anon **42501**,
+  a externa NÃO aparece na lista, `registry_number` NÃO vaza · NÃO-GANHO: não-vinculado segue
+  0 → 0 em `chat_messages` e `chat_mentions`.
+- **Advisors (equivalente medido em transação):** lint 0029 **28 → 29** (+1, a RPC nova). Nenhuma
+  classe nova; nenhuma entrada sobre objeto pré-existente. Advisors reais só após o apply.
+- **Gates:** tsc 0 · eslint 0 · vitest 164/164 · build OK. Resíduo das provas: ZERO.
+- **Escopo:** SÓ banco. `can_read_channel`, `get_or_create_channel`, roster e as policies de
+  `chat_channels`/`chat_participants`/`chat_messages` **intocados**. INSERT direto em
+  `chat_messages` e `chat_mentions` PRESERVADO (o app da paciente depende dele).
+  `app`/`patient-native` apenas LIDOS (gate G3). PARADO para auditoria.
