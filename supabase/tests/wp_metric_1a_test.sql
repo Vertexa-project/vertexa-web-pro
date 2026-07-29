@@ -251,3 +251,87 @@ begin
   else raise notice 'WP-METRIC-1a LOCKDOWN + NAO-GANHO (7+8): PASS'; end if;
 end $$;
 rollback;
+
+
+-- ───────── (9) A EXTRAÇÃO NÃO ABRE CAMINHO PARA FORJAR O VRI DE OUTRA PACIENTE ─────────
+-- `private.recompute_adherence_for(uuid)` aceita um patient_id no parâmetro. Este bloco
+-- prova que isso NÃO é um buraco, testando as DUAS barreiras separadamente — inclusive
+-- desligando a primeira de propósito para ver a segunda segurar sozinha.
+begin;
+do $$
+declare
+  fails text := '';
+  acA uuid:='a1a00000-0000-0000-0000-000000000021'; daA uuid:='d1a00000-0000-0000-0000-000000000021';
+  acB uuid:='a1a00000-0000-0000-0000-000000000022'; daB uuid:='d1a00000-0000-0000-0000-000000000022';
+  cl  uuid:='c1a00000-0000-0000-0000-000000000004';
+  st_auth text; st_anon text; st_rls text;
+  n_b_antes int; n_b_depois int; n_b_final int; n_a_final int;
+begin
+  insert into public.profiles (id,auth_user_id,role,full_name,status) values
+    ('f1a00000-0000-0000-0000-000000000020','a1a00000-0000-0000-0000-000000000020','admin','A','active'),
+    ('f1a00000-0000-0000-0000-000000000021',acA,'patient','PacienteA','active'),
+    ('f1a00000-0000-0000-0000-000000000022',acB,'patient','PacienteB','active');
+  insert into public.clinics (id,name,owner_profile_id) values (cl,'C','f1a00000-0000-0000-0000-000000000020');
+  insert into public.patients (id,profile_id,clinic_id) values
+    (daA,'f1a00000-0000-0000-0000-000000000021',cl),
+    (daB,'f1a00000-0000-0000-0000-000000000022',cl);
+  insert into public.activity_events (patient_id,type,payload,created_at) values
+    (daA,'workout_checked','{}', (private.brt_date(now()) + time '12:00') at time zone 'America/Sao_Paulo'),
+    (daB,'workout_checked','{}', (private.brt_date(now()) + time '12:00') at time zone 'America/Sao_Paulo');
+
+  -- Linha de base honesta para B, escrita pelo caminho de owner (migration/job).
+  perform private.recompute_adherence_for(daB);
+  select count(*) into n_b_antes from public.adherence_snapshots where patient_id=daB;
+  if n_b_antes < 1 then fails:=fails||'B_sem_baseline '; end if;
+
+  -- BARREIRA 1 — PRIVILÉGIO. A paciente A, autenticada, tenta chamar a função interna
+  -- apontando para a paciente B.
+  perform set_config('request.jwt.claims', json_build_object('sub',acA::text)::text, true);
+  set local role authenticated;
+  st_auth := 'NAO_BARROU';
+  begin perform private.recompute_adherence_for(daB);
+  exception when insufficient_privilege then st_auth:='BARRADO_42501';
+    when others then st_auth:='ERRO_'||sqlstate; end;
+  reset role;
+
+  -- ...e anon, que nem USAGE em `private` tem.
+  set local role anon; perform set_config('request.jwt.claims','{}',true);
+  st_anon := 'NAO_BARROU';
+  begin perform private.recompute_adherence_for(daB);
+  exception when insufficient_privilege then st_anon:='BARRADO_42501';
+    when others then st_anon:='ERRO_'||sqlstate; end;
+  reset role;
+
+  select count(*) into n_b_depois from public.adherence_snapshots where patient_id=daB;
+
+  -- BARREIRA 2 — RLS. Concedemos o EXECUTE DE PROPÓSITO (simulando um `grant` distraído no
+  -- futuro) para provar que a segunda barreira segura sozinha: a função é SECURITY INVOKER,
+  -- então o INSERT roda como `authenticated` e bate na RLS de adherence_snapshots, que só
+  -- tem policy de SELECT desde o lockdown do WP-RLS2.
+  execute 'grant execute on function private.recompute_adherence_for(uuid) to authenticated';
+  perform set_config('request.jwt.claims', json_build_object('sub',acA::text)::text, true);
+  set local role authenticated;
+  st_rls := 'ESCREVEU_SEM_BARREIRA';
+  begin perform private.recompute_adherence_for(daB);
+  exception when others then st_rls:='BARRADO_'||sqlstate; end;
+  reset role;
+  execute 'revoke execute on function private.recompute_adherence_for(uuid) from authenticated';
+
+  -- A RPC PÚBLICA continua recomputando SÓ a própria paciente: A chama, A ganha snapshot,
+  -- B não se move. E não há onde escrever um id — a assinatura é `()`.
+  perform set_config('request.jwt.claims', json_build_object('sub',acA::text)::text, true);
+  set local role authenticated; perform public.recompute_adherence(); reset role;
+  select count(*) into n_a_final from public.adherence_snapshots where patient_id=daA;
+  select count(*) into n_b_final from public.adherence_snapshots where patient_id=daB;
+
+  if st_auth <> 'BARRADO_42501' then fails:=fails||format('AUTH_chamou_interna=%s ',st_auth); end if;
+  if st_anon <> 'BARRADO_42501' then fails:=fails||format('ANON_chamou_interna=%s ',st_anon); end if;
+  if n_b_depois <> n_b_antes    then fails:=fails||format('B_forjado_pela_interna %s->%s ',n_b_antes,n_b_depois); end if;
+  if st_rls = 'ESCREVEU_SEM_BARREIRA' then fails:=fails||'RLS_nao_segurou_com_execute_concedido '; end if;
+  if n_a_final < 1              then fails:=fails||'RPC_nao_recomputou_a_propria '; end if;
+  if n_b_final <> n_b_antes     then fails:=fails||format('RPC_mexeu_em_B %s->%s ',n_b_antes,n_b_final); end if;
+
+  if length(fails)>0 then raise exception 'WP-METRIC-1a EXTRACAO/SEGURANCA FAIL: %', fails;
+  else raise notice 'WP-METRIC-1a EXTRACAO — as duas barreiras (9): PASS'; end if;
+end $$;
+rollback;

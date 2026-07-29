@@ -33,9 +33,13 @@
 --   · NÃO toca os espelhos client-side (adherenceEngine.ts, constancy.ts) — é o
 --     WP-METRIC-1b. Até lá, app e servidor divergem para quem tiver `help_requested`.
 --     Registrado em docs/PENDENCIAS.md como DÍVIDA-METRIC-1b.
---   · NÃO cria helper novo em `private` (os 48 seguem 48; o único que muda de TEXTO é
---     event_streak_brt).
 --   · NÃO altera as 3 tabelas de métrica derivada nem o lockdown delas.
+--   · NÃO altera a ordenação "último snapshot" de nenhum caminho de produção — a
+--     ambiguidade de `order by calculated_at` está registrada como DÍVIDA-SNAP-ORDER-1.
+--
+-- INVENTÁRIO DE `private` (declarado de antemão, para a prova de hash): 48 → 49.
+--   O delta é EXATAMENTE dois itens: `event_streak_brt` muda de corpo, e
+--   `recompute_adherence_for` é criada. Nenhum outro helper é tocado.
 --
 -- ⚠️ NOTA DE FIDELIDADE — LEIA ANTES DE COMPARAR COM A 20260722090000:
 --   Os corpos de `event_streak_brt` e `recompute_adherence` abaixo partem do TEXTO VIVO EM
@@ -46,8 +50,11 @@
 --   (`event_streak_brt` não tem drift: arquivo e produção eram idênticos.)
 --
 -- ROLLBACK COMPLETO:
---   -- 1) devolver as duas funções ao corpo pré-WP (texto vivo de 20260722090000);
---   --    o corpo exato está no retorno-metric-1-diag.txt, blocos D3.1 e D3.2.
+--   -- 1) devolver event_streak_brt e recompute_adherence ao corpo pré-WP (texto vivo de
+--   --    20260722090000); o corpo exato está no retorno-metric-1-diag.txt, blocos D3.1 e D3.2.
+--   --    ATENÇÃO à ORDEM: restituir recompute_adherence (que volta a conter o cálculo inteiro)
+--   --    ANTES de dropar a função extraída, senão o invólucro fica apontando para o vazio.
+--   drop function if exists private.recompute_adherence_for(uuid);
 --   alter table public.activity_events drop constraint if exists activity_events_type_fkey;
 --   drop policy if exists activity_event_types_catalog_read on public.activity_event_types;
 --   drop table if exists public.activity_event_types;
@@ -194,14 +201,44 @@ $$;
 
 
 -- ─────────────────────────────────────────────────────────────────────────────────────
--- 4) public.recompute_adherence — O `max(created_at)` VIRA DUAS GRANDEZAS
+-- 4) O CÁLCULO SAI DA RPC — private.recompute_adherence_for(uuid)
 --
--- MUDA (e só isto):
+-- A RPC pública passa a ser um INVÓLUCRO FINO: deriva a paciente, levanta o MESMO 42501, e
+-- delega. O cálculo vira uma função parametrizada em `private`, reutilizável por migration
+-- e por job — que é o que elimina a cópia da fórmula no backfill da seção 5.
+--
+-- ⚠️ O PONTO DE SEGURANÇA — por que uma função "com patient_id no parâmetro" NÃO é um buraco:
+--   São DUAS barreiras independentes, e nenhuma delas depende da outra.
+--
+--   (1) PRIVILÉGIO — a função nasce SEM EXECUTE para o cliente.
+--       O Postgres concede EXECUTE a PUBLIC por padrão em toda função nova, e `authenticated`
+--       TEM USAGE no schema `private` (medido). Sem o revoke abaixo, um cliente autenticado
+--       poderia chamar `private.recompute_adherence_for('<uuid de outra paciente>')`. O
+--       `revoke all ... from public, anon, authenticated` fecha isso. Não é decoração: é a
+--       linha que impede a escalação.
+--
+--   (2) SECURITY INVOKER — e é DE PROPÓSITO que ela não é DEFINER.
+--       Chamada pelo caminho legítimo (de dentro da RPC pública, que é SECURITY DEFINER de
+--       owner `postgres`), o usuário efetivo já é `postgres` — que é dono da tabela e tem
+--       BYPASSRLS —, então o INSERT funciona exatamente como antes.
+--       Chamada por um cliente (hipótese que a barreira 1 já barra), o usuário efetivo seria
+--       `authenticated`, e o INSERT em `adherence_snapshots` bateria na RLS: a tabela só tem
+--       policy de SELECT desde o lockdown do WP-RLS2, então escrever é NEGADO.
+--       Fosse SECURITY DEFINER, a barreira 1 seria a ÚNICA — um `grant execute` distraído no
+--       futuro viraria forja de VRI de qualquer paciente. Assim, não vira.
+--
+--   Consequência para o advisor 0029 (SECURITY DEFINER executável por authenticated): esta
+--   função NÃO deve aparecer, por três motivos somados — está em `private` (fora do schema
+--   exposto), é INVOKER, e não tem grant. A contagem do 0029 não muda.
+--
+-- O CÁLCULO EM SI — o que MUDA em relação ao corpo vivo em produção (e só isto):
 --   a) +2 declares: v_most_recent_adherence, v_days_without_adherence.
 --   b) o CTE `ev` ganha LEFT JOIN no catálogo e duas colunas booleanas derivadas.
 --   c) o `max(created_at)` vira DOIS: `filter (where is_interaction)` e
 --      `filter (where is_adherence)`.
 --   d) v_plan_viewed passa a olhar a ADESÃO (era interação).
+--   e) `v_patient` deixa de ser derivado de current_patient_id() e passa a vir do parâmetro.
+--      O nome da variável foi PRESERVADO justamente para o resto do corpo não mudar um byte.
 --
 -- NÃO MUDA (byte a byte igual ao corpo vivo):
 --   · v_habits_today, v_workouts_week, v_activity_week — já filtravam tipo corretamente.
@@ -217,10 +254,10 @@ $$;
 -- LEFT + coalesce(false), o conjunto de linhas de `ev` é EXATAMENTE o de antes e o tipo
 -- desconhecido apenas não conta para nenhuma das duas grandezas novas (fail-closed).
 -- ─────────────────────────────────────────────────────────────────────────────────────
-create or replace function public.recompute_adherence()
-returns void language plpgsql security definer set search_path = '' as $$
+create or replace function private.recompute_adherence_for(p_patient uuid)
+returns void language plpgsql security invoker set search_path = '' as $$
 declare
-  v_patient uuid := private.current_patient_id();
+  v_patient uuid := p_patient;
   v_today date := private.brt_date(now());
   v_most_recent timestamptz;
   v_most_recent_adherence timestamptz;
@@ -249,8 +286,10 @@ declare
   v_pos  text[] := array[]::text[];
   v_last_score int; v_last_level text;
 begin
+  -- Guarda de contrato, não de autorização (a autorização é do invólucro). Sem ela, um
+  -- p_patient nulo cairia no caminho "sem eventos" e gravaria um snapshot órfão.
   if v_patient is null then
-    raise exception 'recompute_adherence: not a patient / not authenticated' using errcode = '42501';
+    raise exception 'recompute_adherence_for: p_patient is required' using errcode = '22023';
   end if;
 
   with ev as (
@@ -335,157 +374,73 @@ begin
 end $$;
 
 
+-- A barreira (1) descrita acima. NÃO é decoração: sem ela, `authenticated` — que tem USAGE
+-- em `private` — herdaria o EXECUTE que o Postgres concede a PUBLIC por padrão.
+revoke all on function private.recompute_adherence_for(uuid) from public, anon, authenticated;
+
+comment on function private.recompute_adherence_for(uuid) is
+  'WP-METRIC-1a: motor do VRI, parametrizado. SECURITY INVOKER e SEM execute para '
+  'anon/authenticated — o unico caminho de cliente e a RPC public.recompute_adherence(), que '
+  'deriva a paciente de current_patient_id() e nao aceita parametro. Chamavel tambem por '
+  'migration/job rodando como owner.';
+
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- 4b) public.recompute_adherence — O INVÓLUCRO
+--
+-- Só faz três coisas: deriva a paciente do JWT, levanta o MESMO 42501 de antes quando não
+-- houver, e delega. Nenhum parâmetro — não existe forma de um cliente pedir o recálculo de
+-- OUTRA paciente por este caminho, porque não há onde escrever o id.
+--
+-- Comportamento observável IDÊNTICO ao de antes da extração: mesma assinatura `()`, mesmo
+-- `returns void`, mesmo SECURITY DEFINER, mesmo search_path, mesmo SQLSTATE e mesma
+-- mensagem de erro, mesmas escritas. O md5 do corpo muda (é outro texto); o contrato, não.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+create or replace function public.recompute_adherence()
+returns void language plpgsql security definer set search_path = '' as $$
+declare
+  v_patient uuid := private.current_patient_id();
+begin
+  if v_patient is null then
+    raise exception 'recompute_adherence: not a patient / not authenticated' using errcode = '42501';
+  end if;
+  perform private.recompute_adherence_for(v_patient);
+end $$;
+
+
 -- ─────────────────────────────────────────────────────────────────────────────────────
 -- 5) RECÁLCULO DO HISTÓRICO — os snapshots existentes sob a regra nova
 --
 -- Escopo: SÓ pacientes que JÁ TÊM snapshot. Quem nunca teve VRI calculado não ganha um
 -- aqui — isso seria criar histórico, não recomputá-lo.
 --
--- Semântica: `adherence_snapshots` é APPEND-ONLY por desenho (recompute_adherence nunca
--- faz UPDATE nem DELETE). Portanto "recomputar" = ACRESCENTAR uma linha nova quando o valor
--- muda, preservando a série. Se (score, level) não mudarem, nada é escrito — o MESMO
--- skip-if-unchanged da função. A leitura do produto sempre pega o `calculated_at` mais
--- recente, então a correção passa a valer imediatamente sem apagar o passado.
+-- Semântica: `adherence_snapshots` é APPEND-ONLY por desenho (o motor nunca faz UPDATE nem
+-- DELETE). Portanto "recomputar" = ACRESCENTAR uma linha nova quando o valor muda,
+-- preservando a série. Se (score, level) não mudarem, nada é escrito — é o próprio
+-- skip-if-unchanged do motor que decide, porque é o MESMO código.
 --
--- ⚠️ POR QUE ESTE BLOCO DUPLICA A FÓRMULA (e por que a duplicação é temporária e provada):
---   `public.recompute_adherence()` deriva o paciente de `private.current_patient_id()` — não
---   aceita parâmetro. Numa migration (rodando como postgres, sem JWT) ela levanta 42501.
---   As saídas seriam: (a) extrair `private.recompute_adherence_for(uuid)` e transformar a RPC
---   num invólucro — o desenho correto, MAS que cria um 49º helper em `private` e quebra a
---   prova de hash exigida por este WP ("os 48 mudam só por event_streak_brt"); ou
---   (b) impersonar cada paciente com `request.jwt.claims` dentro da migration — que só
---   funciona para quem tem `auth_user_id` (hoje 1 de 7 pacientes) e é errado por princípio:
---   migration não finge ser usuária.
---   Escolhi replicar o cálculo AQUI, em bloco de execução única, e PROVAR a fidelidade em vez
---   de afirmá-la: no PR, logo após este backfill, a RPC real é chamada para a paciente
---   afetada e tem de ser NO-OP (0 linha nova). Se esta cópia tivesse divergido um único
---   ponto, o skip-if-unchanged falharia e a RPC inseriria uma linha diferente.
---   A extração do helper fica registrada como DÍVIDA-METRIC-1a em docs/PENDENCIAS.md.
+-- ZERO DUPLICAÇÃO: este bloco chama `private.recompute_adherence_for` — a mesma função que
+-- a RPC pública chama. Não existe segunda cópia da fórmula para divergir. (A versão
+-- anterior desta migration replicava o cálculo aqui; a extração da seção 4 eliminou isso.)
+-- Roda como owner da migration, que tem EXECUTE na função e bypassa a RLS.
 -- ─────────────────────────────────────────────────────────────────────────────────────
 do $$
 declare
   r record;
-  v_patient uuid;
-  v_today date := private.brt_date(now());
-  v_most_recent timestamptz;
-  v_most_recent_adherence timestamptz;
-  v_days_without int;
-  v_days_without_adherence int;
-  v_habits_today int := 0;
-  v_workouts_week int := 0;
-  v_activity_week int := 0;
-  v_last_weight timestamptz;
-  v_last_photo timestamptz;
-  v_weight_recent boolean;
-  v_photo_recent boolean;
-  v_plan_viewed boolean;
-  v_streak int;
-  v_meal_total int := 0; v_meal_done int := 0; v_meal_ratio double precision := 0;
-  v_supp_total int := 0; v_supp_taken int := 0; v_supp_ratio double precision := 0;
-  v_engagement int := 0;
-  v_recency int;
-  v_signal double precision;
-  v_normalized double precision;
-  v_score int;
-  v_level text;
-  v_status public.patient_status;
-  v_weekly int;
-  v_risk text[];
-  v_pos  text[];
-  v_last_score int; v_last_level text;
+  v_antes int; v_depois int;
   v_mudou int := 0; v_igual int := 0;
 begin
   for r in select distinct patient_id from public.adherence_snapshots
             where patient_id is not null order by patient_id loop
-    v_patient := r.patient_id;
-    v_risk := array[]::text[];
-    v_pos  := array[]::text[];
-
-    with ev as (
-      select e.type, e.created_at, private.brt_date(e.created_at) as d, private.days_ago_brt(e.created_at, now()) as ago,
-             coalesce(t.counts_as_interaction, false) as is_interaction,
-             coalesce(t.counts_as_adherence,   false) as is_adherence
-      from public.activity_events e
-      left join public.activity_event_types t on t.type = e.type
-      where e.patient_id = v_patient order by e.created_at desc limit 500
-    )
-    select max(created_at) filter (where is_interaction),
-      max(created_at) filter (where is_adherence),
-      count(*) filter (where type in ('hydration_logged','sleep_logged','mood_logged') and d = v_today),
-      count(distinct d) filter (where type = 'workout_checked' and ago <= 6),
-      count(distinct d) filter (where type = 'activity_logged' and ago <= 6)
-    into v_most_recent, v_most_recent_adherence, v_habits_today, v_workouts_week, v_activity_week from ev;
-
-    v_days_without := case when v_most_recent is null then 30 else private.days_ago_brt(v_most_recent, now()) end;
-    v_days_without_adherence := case when v_most_recent_adherence is null then 30 else private.days_ago_brt(v_most_recent_adherence, now()) end;
-    v_streak := private.event_streak_brt(v_patient);
-
-    select max(measured_at) into v_last_weight from public.weight_logs where patient_id = v_patient;
-    select max(taken_at)    into v_last_photo  from public.progress_photos where patient_id = v_patient;
-    v_weight_recent := v_last_weight is not null and private.days_ago_brt(v_last_weight, now()) <= 7;
-    v_photo_recent  := v_last_photo  is not null and private.days_ago_brt(v_last_photo,  now()) <= 30;
-    v_plan_viewed   := v_days_without_adherence <= 3;
-
-    with plan as (select id from public.nutrition_plans where patient_id = v_patient order by created_at desc limit 1),
-    plan_meals as (select m.id from public.meals m where m.nutrition_plan_id = (select id from plan)),
-    done as (select distinct meal_id from public.meal_logs where patient_id = v_patient and consumed_on = v_today)
-    select count(pm.id), count(pm.id) filter (where d.meal_id is not null)
-    into v_meal_total, v_meal_done from plan_meals pm left join done d on d.meal_id = pm.id;
-    v_meal_ratio := case when v_meal_total > 0 then v_meal_done::double precision / v_meal_total else 0 end;
-
-    with lst as (select id from public.supplements where patient_id = v_patient),
-    taken as (select distinct supplement_id from public.supplement_intakes where patient_id = v_patient and taken_on = v_today)
-    select count(l.id), count(l.id) filter (where t.supplement_id is not null)
-    into v_supp_total, v_supp_taken from lst l left join taken t on t.supplement_id = l.id;
-    v_supp_ratio := case when v_supp_total > 0 then v_supp_taken::double precision / v_supp_total else 0 end;
-
-    v_engagement :=
-        least(v_habits_today * 3, 12) + least(v_workouts_week * 4, 16)
-      + (case when v_weight_recent then 5 else 0 end) + (case when v_photo_recent then 5 else 0 end)
-      + (case when v_plan_viewed then 3 else 0 end)
-      + (case when v_streak >= 30 then 10 when v_streak >= 14 then 7 when v_streak >= 7 then 4 else 0 end)
-      + (case when v_meal_ratio > 0 then private.js_round(least(1, v_meal_ratio) * 6) else 0 end)
-      + (case when v_activity_week > 0 then least(v_activity_week, 3) * 2 else 0 end)
-      + (case when v_supp_ratio > 0 then private.js_round(least(1, v_supp_ratio) * 4) else 0 end);
-
-    v_recency := case when v_days_without <= 1 then 12 when v_days_without <= 3 then 8
-                      when v_days_without <= 6 then 4 when v_days_without <= 14 then 1 else 0 end;
-    v_signal := v_recency + v_engagement;
-    v_normalized := least(1, greatest(0, v_signal / 75.0));
-    v_score := greatest(0, least(100, private.js_round(70 + 30 * power(v_normalized, 0.42))));
-    v_level := case when v_score >= 80 then 'alta' when v_score >= 50 then 'moderada' when v_score >= 20 then 'baixa' else 'risco' end;
-    v_status := (case when v_days_without >= 15 then 'inativo' when v_score < 20 then 'em_risco'
-                      when v_score < 50 then 'atencao' else 'em_acompanhamento' end)::public.patient_status;
-    v_weekly := private.js_round((v_workouts_week::double precision / 5) * 100);
-
-    if v_days_without >= 3   then v_risk := array_append(v_risk, v_days_without || ' dias sem interação'); end if;
-    if v_habits_today = 0    then v_risk := array_append(v_risk, 'Nenhum hábito registrado hoje'); end if;
-    if v_workouts_week < 2   then v_risk := array_append(v_risk, 'Poucos treinos esta semana'); end if;
-    if not v_weight_recent   then v_risk := array_append(v_risk, 'Peso não registrado recentemente'); end if;
-    if not v_photo_recent    then v_risk := array_append(v_risk, 'Foto mensal pendente'); end if;
-
-    if v_streak >= 7         then v_pos := array_append(v_pos, 'Sequência de ' || v_streak || ' dias'); end if;
-    if v_habits_today >= 3   then v_pos := array_append(v_pos, 'Hábitos em dia'); end if;
-    if v_workouts_week >= 3  then v_pos := array_append(v_pos, 'Treinos consistentes'); end if;
-    if v_weight_recent       then v_pos := array_append(v_pos, 'Peso atualizado'); end if;
-    if v_plan_viewed         then v_pos := array_append(v_pos, 'Plano acompanhado'); end if;
-    if v_meal_ratio >= 0.6   then v_pos := array_append(v_pos, 'Refeições do dia em dia'); end if;
-    if v_activity_week >= 2  then v_pos := array_append(v_pos, 'Atividades complementares na semana'); end if;
-    if v_supp_ratio >= 0.6   then v_pos := array_append(v_pos, 'Suplementos em dia'); end if;
-
-    select score, level into v_last_score, v_last_level
-    from public.adherence_snapshots where patient_id = v_patient order by calculated_at desc limit 1;
-
-    if v_last_score is not distinct from v_score and v_last_level is not distinct from v_level then
-      v_igual := v_igual + 1;
-      raise notice 'WP-METRIC-1a backfill: paciente % INALTERADO (score % / %)', v_patient, v_score, v_level;
-    else
-      insert into public.adherence_snapshots
-        (patient_id, score, level, status, streak, weekly_completion_rate, risk_factors, positive_factors)
-      values (v_patient, v_score, v_level, v_status, v_streak, v_weekly, v_risk, v_pos);
+    select count(*) into v_antes  from public.adherence_snapshots where patient_id = r.patient_id;
+    perform private.recompute_adherence_for(r.patient_id);
+    select count(*) into v_depois from public.adherence_snapshots where patient_id = r.patient_id;
+    if v_depois > v_antes then
       v_mudou := v_mudou + 1;
-      raise notice 'WP-METRIC-1a backfill: paciente % RECALCULADO % (%) -> % (%)',
-        v_patient, v_last_score, v_last_level, v_score, v_level;
+      raise notice 'WP-METRIC-1a backfill: paciente % RECALCULADO (snapshot novo acrescentado)', r.patient_id;
+    else
+      v_igual := v_igual + 1;
+      raise notice 'WP-METRIC-1a backfill: paciente % INALTERADO (skip-if-unchanged)', r.patient_id;
     end if;
   end loop;
   raise notice 'WP-METRIC-1a backfill concluido: % recalculado(s), % inalterado(s).', v_mudou, v_igual;
@@ -514,11 +469,18 @@ values ('20260807090000', '20260807090000_wp_metric_1a_event_type_catalog.sql',
   'interacao"; max filter(is_adherence) alimenta o bonus de plano acompanhado. Os outros tres '
   'agregados (habitos/treinos/atividade), que ja filtravam tipo, ficam intactos; LEFT JOIN no '
   'catalogo preserva o conjunto de linhas do CTE para nao mexer neles pelas costas. Formula, '
-  'tiers, soft-cap e skip-if-unchanged inalterados. Backfill de execucao unica recomputa os '
-  'snapshots EXISTENTES sob a regra nova (append-only: acrescenta linha so quando muda). '
-  'NAO toca brt_date/fuso (DIVIDA-TZ-1), job de decaimento (DIVIDA-RLS2-1), '
-  'recompute_achievements (herda a correcao via event_streak_brt), trigger de recuperacao, '
-  'export_patient_report, os espelhos client-side (DIVIDA-METRIC-1b) nem o lockdown das 3 '
-  'tabelas derivadas. Nenhum helper novo em private (seguem 48).',
+  'tiers, soft-cap e skip-if-unchanged inalterados. EMENDA: o calculo foi EXTRAIDO para '
+  'private.recompute_adherence_for(uuid) e public.recompute_adherence() virou involucro fino '
+  '(deriva current_patient_id, levanta o MESMO 42501, delega; sem parametro, logo nenhum '
+  'cliente pede o recalculo de OUTRA paciente por este caminho). A extraida e SECURITY '
+  'INVOKER e leva revoke all de public/anon/authenticated: duas barreiras independentes — '
+  'sem EXECUTE para o cliente, e, se houvesse, o INSERT bateria na RLS (a tabela so tem '
+  'policy de SELECT desde o lockdown). Nao aparece no advisor 0029 (esta em private, e '
+  'INVOKER e nao tem grant). O backfill agora CHAMA a extraida: zero duplicacao da formula. '
+  'private vai de 48 para 49 funcoes, delta exato = event_streak_brt alterada + '
+  'recompute_adherence_for criada. NAO toca brt_date/fuso (DIVIDA-TZ-1), job de decaimento '
+  '(DIVIDA-RLS2-1), recompute_achievements (herda a correcao via event_streak_brt), trigger '
+  'de recuperacao, export_patient_report, os espelhos client-side (DIVIDA-METRIC-1b), a '
+  'ordenacao por calculated_at (DIVIDA-SNAP-ORDER-1) nem o lockdown das 3 tabelas derivadas.',
   'WP-METRIC-1a')
 on conflict (version) do nothing;

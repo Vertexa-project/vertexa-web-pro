@@ -663,17 +663,43 @@ tocada pelo WP-METRIC-1a; ele foi explicitamente proibido de mexer nas duas.
 As duas seguintes são abertas **pelo próprio WP-METRIC-1a** e são consequência direta de decisões
 tomadas nele:
 
-- **DÍVIDA-METRIC-1a — `public.recompute_adherence()` não tem seam parametrizável, e por isso o
-  backfill duplicou a fórmula.** A função deriva o paciente de `private.current_patient_id()` e não
-  aceita parâmetro; numa migration (postgres, sem JWT) ela levanta 42501. O desenho correto seria
-  extrair `private.recompute_adherence_for(p_patient uuid)` e deixar a RPC como invólucro fino —
-  **não foi feito porque criaria um 49º helper em `private`**, quebrando a prova de hash agregado
-  exigida pelo WP ("os 48 mudam só por `event_streak_brt`"). O bloco de backfill da migration
-  `20260807090000` portanto **replica a fórmula do VRI** (execução única). A fidelidade da cópia foi
-  provada, não afirmada: logo após o backfill a RPC real foi chamada para a paciente afetada e teve
-  de ser **no-op** (o `skip-if-unchanged` só bate se os dois cálculos coincidirem). Ainda assim, é
-  uma 6ª cópia da fórmula no repositório enquanto a migration existir. **Resolver quando houver um
-  WP autorizado a mexer no inventário de helpers.**
+> **DÍVIDA-METRIC-1a — QUITADA na EMENDA do WP-METRIC-1a, antes de qualquer apply.** Ela dizia que
+> o backfill precisava duplicar a fórmula do VRI porque `recompute_adherence()` não aceitava
+> parâmetro. O cálculo foi **extraído** para `private.recompute_adherence_for(uuid)`, a RPC virou
+> invólucro fino e o backfill passou a chamar a mesma função — a cópia deixou de existir. Registro
+> a quitação em vez de apagar a linha em silêncio, porque a dívida chegou a ser publicada no PR #41.
+
+- **DÍVIDA-SNAP-ORDER-1 — "o último snapshot" é ordenado por uma coluna que não é única, sem
+  critério de desempate.** `adherence_snapshots.calculated_at` tem default `now()`, que é o
+  timestamp da TRANSAÇÃO. Duas linhas do mesmo paciente gravadas na mesma transação nascem com
+  `calculated_at` idêntico, e todo `order by calculated_at desc limit 1` passa a escolher
+  arbitrariamente. Não há UNIQUE em `(patient_id, calculated_at)` nem desempate por `id`.
+  **SEIS sítios de leitura em produção dependem dessa ordenação** (nenhum corrigido aqui — o WP
+  proibiu mexer em código de produção nesta emenda):
+    1. `vertexa-web-pro/src/lib/api/adherence.ts:10` — `.order('calculated_at', desc).limit(1)`; é
+       o VRI da ficha do paciente no painel.
+    2. `vertexa-web-pro/src/lib/api/patients.ts:103` — `sort(byDateDesc(calculated_at))[0]`; é o
+       VRI da LISTA de pacientes.
+    3. `vertexa-app-paciente/src/lib/api/adherence.ts:30` — `.order(...).limit(2)`. **É o pior
+       dos seis:** pega DUAS linhas, usa `[0]` como atual e `[1]` como anterior para o badge de
+       variação. Sob empate, o badge pode mostrar a variação com o sinal invertido.
+    4. `public.export_patient_report` (migration `20260728090000:207`) — seção `adherence` do PDF.
+    5. o relatório em lote (migration `20260729090000:170`) — mesma consulta.
+    6. o próprio `skip-if-unchanged` do motor (`20260722090000:279`, e a linha equivalente na
+       `20260807090000`): sob empate ele compara contra a linha errada e pode gravar um snapshot
+       redundante ou pular um que deveria gravar.
+  **TAMANHO HOJE, medido em produção (2026-07-29):** `adherence_snapshots` tem **1 linha**;
+  grupos `(patient_id, calculated_at)` com mais de uma linha: **0**; pacientes com 2+ snapshots:
+  **0**. Ou seja, **nenhuma linha real está ambígua hoje** e nenhum número exibido está errado.
+  **ALCANÇABILIDADE:** pelo caminho normal a ambiguidade é praticamente inalcançável — cada
+  chamada da RPC é uma transação distinta, e `now()` difere entre transações. O empate exige
+  **dois INSERTs para o MESMO paciente dentro de UMA transação**, o que hoje só acontece em
+  fixture de teste (foi exatamente o que reprovou o `wp_rls2_metrics_engine_test.sql`) — e
+  passaria a acontecer em produção no dia em que existir um job que recompute o mesmo paciente
+  duas vezes na mesma transação.
+  **CORREÇÃO QUANDO FOR A HORA:** desempatar por `id` (ou por uma coluna de sequência) em todos
+  os seis sítios, ou trocar o default para `clock_timestamp()`. É mudança de código de produção
+  em dois repos + duas RPCs — merece WP próprio.
 
 - **DÍVIDA-METRIC-1b — os espelhos CLIENT-SIDE ainda contam qualquer tipo de evento.** O
   WP-METRIC-1a corrigiu só o servidor (proibido tocar no app). Continuam com a regra antiga, no
