@@ -533,16 +533,23 @@
   `chat_participants` na mesma transação, então perder o vínculo passa a cortar leitura **e**
   escrita do chat imediatamente. A janela residual descrita no WP-CHAT-FIX deixa de existir
   para o caminho da RPC de desativação.
-- **FRONTEND NÃO ENTROU — falta âncora de UI (decisão do dono pendente).** O perfil da paciente
-  tem 9 abas e nenhuma de "Equipe"; `ProfileHeader` mostra só `nome · tipo +N` como texto, sem
-  lista nem ação. Não há elemento existente com espaço para a ação de desativar um vínculo
-  individual. Opção recomendada: **nova seção "Equipe da paciente" dentro da aba Visão geral**
-  do perfil, listando os vínculos com ação de desativar/reativar para admin. `TeamAdminPage` NÃO
-  serve: é escopo de clínica (membro), não de vínculo por paciente.
-- **`listPatients`/`getPatientDetail` NÃO filtram status do vínculo.** `src/lib/api/patients.ts`
-  faz `professional_patient_links ( professionals (...) )` sem `status='active'`. Com a
-  desativação em produção, um profissional DESATIVADO continuaria aparecendo como responsável na
-  listagem e no header. Precisa entrar junto com o frontend.
+- **✅ RESOLVIDO (WP-2bi-UI) — FRONTEND ENTREGUE.** A âncora foi decidida pelo dono e é a
+  recomendada: **seção "Equipe da paciente" dentro da aba Visão geral** do perfil
+  (`src/components/patient/PatientTeamSection.tsx`), com desativar/reativar só para admin
+  (fail-closed por `am_i_clinic_admin`), confirmação obrigatória e motivo opcional → `p_reason`.
+  `TeamAdminPage` segue sendo outro escopo (membro da clínica, não vínculo por paciente).
+- **✅ RESOLVIDO (WP-2bi-UI) — `listPatients`/`getPatient` agora filtram status do vínculo.**
+  `src/lib/api/patients.ts` passou a selecionar `status` no embed e a filtrar por
+  `activeProfessionalsFromLinks` (puro, em `lib/domain/patientTeam.ts`), que espelha
+  `coalesce(status,'active')='active'` — **NULO conta como ATIVO**, igual ao banco. O filtro é do
+  CLIENT de propósito: um `!inner` no PostgREST removeria da listagem a paciente sem nenhum
+  vínculo ativo, que é exatamente quem o badge "Sem responsável ativo" precisa mostrar.
+- **⚠️ LIMITE CONHECIDO DA SEÇÃO (é a RLS, não a tela): profissional não-admin vê só o PRÓPRIO
+  vínculo.** `ppl_select` é
+  `owns_professional(professional_id) OR is_self_patient(patient_id) OR is_clinic_admin(patient_clinic(patient_id))`,
+  então o comum recebe uma linha só — não a equipe inteira. Já era assim antes deste WP (o
+  `ProfileHeader` sempre foi alimentado pelo mesmo embed). A seção diz isso ao usuário em vez de
+  fingir lista completa. Mudar exigiria mexer em policy — fora do escopo do WP-2bi-UI.
 - **`professional_patient_links.status` é text livre, sem CHECK.** Quem escreve `inactive` é a
   RPC. Um `CHECK (status in ('active','inactive'))` é limpeza barata para um WP futuro — fora do
   escopo do 2b-i. **Atualizado pela EMENDA:** o risco prático caiu muito, porque `authenticated`

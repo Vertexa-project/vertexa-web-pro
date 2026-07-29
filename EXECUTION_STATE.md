@@ -685,3 +685,48 @@ reconfirmadas contra o banco REAL depois do apply — ver o bloco de aplicação
 - **Nenhum dado mudou na aplicação:** 10 vínculos todos `active`, `ppl_status_events` vazia,
   0 carimbos preenchidos, chat 16/7/26 idêntico ao pré-aplicação. Nenhuma RPC de desativação foi
   chamada em produção.
+
+## WP-2bi-UI — interface da desativação de vínculo (2026-07-29)
+
+**Estado: implementado, gates verdes, PR aberto SEM MERGE.** Branch `feat/team-2bi-ui`, base
+`origin/main` = `e51fbe6`. **NÃO cria migration** — as 3 RPCs e a trava de privilégio já estavam
+em produção desde o PR #37; este WP é 100% client.
+
+- **Companheiro obrigatório (feito PRIMEIRO): `listPatients`/`getPatient` agora filtram status.**
+  O embed passou a trazer `status` e o mapeamento usa `activeProfessionalsFromLinks`
+  (`lib/domain/patientTeam.ts`), espelho de `coalesce(status,'active')='active'` — **NULO conta
+  como ATIVO**, como no banco. Filtro no CLIENT de propósito: `!inner` no PostgREST sumiria com a
+  paciente sem vínculo ativo, justamente quem o badge precisa mostrar.
+- **Inventário de consumidores ANTES de mudar (nenhum quebra, nenhum precisava de inativos):**
+  `PatientsPage` (célula de responsável, opções e filtro do select), `RetentionPanel`
+  ("adesão por profissional"), `ProfileHeader`, e `WorkoutPlanEditor`/`NutritionPlanEditor` —
+  estes dois lêem `patient.professionals[0]?.id` para um campo `professionalId` que
+  `planMutations.ts` **não envia** à RPC (o servidor deriva o autor do chamador), ou seja, campo
+  morto. Mudança de semântica assumida e correta: o painel de retenção deixa de creditar a adesão
+  de uma paciente a quem não a acompanha mais.
+- **Seção "Equipe da paciente"** (`components/patient/PatientTeamSection.tsx`), dentro da aba
+  Visão geral: única superfície do produto que mostra vínculo INATIVO, com status visível, e —
+  quando inativo — quem desativou, quando e o motivo (as colunas de carimbo). Ações
+  Desativar/Reativar só para admin (`canManagePatientTeam`, FAIL-CLOSED enquanto o sinal carrega);
+  para os demais a seção é somente leitura, sem botão. Desativar exige confirmação com o efeito em
+  português claro (perde acesso a dados e conversa IMEDIATAMENTE; histórico e mensagens
+  preservados; dá para reativar) + campo de motivo opcional → `p_reason`.
+- **Badge "Sem responsável ativo"** na listagem, alimentado pela RPC
+  `patients_without_active_professional` — **uma chamada por clínica**, disparada só quando o
+  sinal de admin é verdadeiro (a RPC nega os demais com 42501). Não é derivado da listagem: a RPC
+  usa o critério do banco (nenhum vínculo INTERNO ativo; só-externo não conta como responsável).
+- **Assimetrias preservadas (não "consertadas"):** reativar NÃO recria linha no roster do chat —
+  a leitura volta na hora (derivada) e a escrita quando a conversa for aberta por
+  `get_or_create_channel`. Nada no app do paciente.
+- **Limite conhecido, exposto na tela:** `ppl_select` devolve ao profissional não-admin apenas o
+  PRÓPRIO vínculo — a seção avisa que a visão é parcial em vez de fingir lista completa.
+  Comportamento pré-existente da RLS; mudar exigiria policy, fora do escopo.
+- **Validações que os gates não pegam (feitas contra o banco real):** o embed
+  `changed_by_profile:profiles!professional_patient_links_status_changed_by_fkey` retorna **HTTP
+  200** no PostgREST (embed malformado devolveria 400/PGRST200) e é a **única** FK desta tabela
+  para `profiles`; os nomes de parâmetro das 3 RPCs conferem com o que o client envia
+  (`p_professional_id`, `p_patient_id`, `p_reason`, `p_clinic_id`).
+- **Gates:** tsc 0 · eslint 0 · vitest **164/164** (12 arquivos; +31 testes novos em
+  `patientTeam.test.ts`) · build OK.
+- **Escopo:** SÓ repo web, SÓ client. Nenhuma migration, nenhuma policy, nenhuma RPC nova.
+  `app`/`patient-native` NÃO tocados. PR aberto, SEM MERGE.
