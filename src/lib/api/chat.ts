@@ -4,17 +4,48 @@ import {
   validateChatAttachment,
   type PreparedChatAttachment,
 } from "@/lib/domain/chatAttachment";
+import { classifyMentionFailure, type MentionFailureReason } from "@/lib/domain/chatMention";
 import { supabase } from "@/lib/supabase";
-import type { ChatMessage, ChatMessageView, ChatThread } from "@/types/db";
+import type {
+  ChannelProfessional,
+  ChatMessage,
+  ChatMessageView,
+  ChatThread,
+  ProfessionalType,
+} from "@/types/db";
 
 // Bucket PRIVADO de anexos do chat (Parte A). Sem URL pública: leitura só por createSignedUrl.
 const ATTACHMENT_BUCKET = "chat-attachments";
 const ATTACHMENT_SIGNED_URL_TTL_SECONDS = 600; // 10 min
 
-// Linha de chat_messages com o profile do remetente embutido (join PostgREST).
+// Linha de chat_messages com o profile do remetente e as marcações embutidos (join PostgREST).
 interface RawChatMessageRow extends ChatMessage {
   sender: { full_name: string | null } | null;
+  mentions: { mentioned_profile_id: string }[] | null;
 }
+
+/**
+ * SELECT da lista. O embed de `chat_mentions` nomeia a FK explicitamente e traz APENAS
+ * `mentioned_profile_id` — é o que o destaque do item 5 precisa, e vem na MESMA leitura da lista:
+ * não existe segundo caminho de leitura de menção nesta tela.
+ *
+ * Este embed NÃO cai na armadilha do embed amputado: `chat_mentions_select` é
+ * `mentioned_profile_id = current_profile_id() OR can_read_channel(message_channel(message_id))` —
+ * quem lê a conversa lê as marcações dela.
+ *
+ * `*` já inclui `reply_to_message_id` (coluna de chat_messages desde a migration 20260806090000).
+ */
+const MESSAGE_SELECT = `
+  *,
+  sender:profiles!sender_profile_id ( full_name ),
+  mentions:chat_mentions!chat_mentions_message_id_fkey ( mentioned_profile_id )
+`;
+
+const toMessageView = ({ sender, mentions, ...m }: RawChatMessageRow): ChatMessageView => ({
+  ...m,
+  sender_name: sender?.full_name ?? null,
+  mentioned_profile_ids: (mentions ?? []).map((x) => x.mentioned_profile_id),
+});
 
 /**
  * Etapa do fluxo de abertura de uma conversa. São DOIS modos de falha diferentes e o
@@ -79,19 +110,57 @@ export async function getOrCreateChannel(patientId: string): Promise<string> {
   return data as string;
 }
 
-/** Histórico do canal, ordenado, com o nome do remetente já resolvido. */
+/** Histórico do canal, ordenado, com o nome do remetente e as marcações já resolvidos. */
 export async function listChatMessages(channelId: string): Promise<ChatMessageView[]> {
   const { data, error } = await supabase
     .from("chat_messages")
-    .select(`*, sender:profiles!sender_profile_id ( full_name )`)
+    .select(MESSAGE_SELECT)
     .eq("channel_id", channelId)
     .order("created_at", { ascending: true });
   if (error) throw error;
 
   const rows = (data ?? []) as unknown as RawChatMessageRow[];
-  return rows.map(({ sender, ...m }) => ({
-    ...m,
-    sender_name: sender?.full_name ?? null,
+  return rows.map(toMessageView);
+}
+
+// Linha crua da RPC channel_professionals (nomes de coluna do banco).
+interface RawChannelProfessionalRow {
+  profile_id: string;
+  full_name: string | null;
+  type: ProfessionalType | null;
+  specialty: string | null;
+  disciplines: string[] | null;
+}
+
+/**
+ * Profissionais participantes do canal — pela RPC `public.channel_professionals`, NÃO por embed.
+ *
+ * ⚠️ O EMBED EQUIVALENTE MENTE: `chat_participants -> profiles -> professionals(type, specialty)`
+ * esbarra em DUAS policies. `professionals_select` (`profile_id = current_profile_id() OR
+ * is_clinic_admin(clinic_id)`) esconde a linha do colega de um profissional COMUM, e
+ * `profiles_select` (`can_see_profile`) esconde até o NOME dele — nenhum dos 4 ramos do helper
+ * cobre "colega da mesma clínica". Embed aninhado bloqueado por RLS não devolve erro: devolve
+ * VAZIO. A lista sairia curta, ou com nome e disciplina nulos, sem nenhum sinal de falha.
+ *
+ * A RPC é SECURITY DEFINER com portão fail-closed em `can_read_channel` (42501 antes de ler
+ * qualquer dado), enumera as colunas (NÃO devolve registry_number) e ainda traz `disciplines`, que
+ * o embed nem alcançava.
+ *
+ * O erro NÃO é engolido: propaga para a tela mostrar falha visível em vez de lista vazia.
+ */
+export async function listChannelProfessionals(channelId: string): Promise<ChannelProfessional[]> {
+  const { data, error } = await supabase.rpc("channel_professionals", {
+    p_channel_id: channelId,
+  });
+  if (error) throw error;
+
+  const rows = (data ?? []) as unknown as RawChannelProfessionalRow[];
+  return rows.map((row) => ({
+    profileId: row.profile_id,
+    name: row.full_name?.trim() || "Profissional",
+    type: row.type,
+    specialty: row.specialty,
+    disciplines: row.disciplines ?? [],
   }));
 }
 
@@ -162,18 +231,38 @@ export interface SendChatMessageInput {
   body?: string | null;
   /** Anexo opcional (PDF/imagem). */
   file?: File | null;
+  /** Profissional marcado (WP-CHAT-B item 2). Vem do seletor alimentado pela RPC. */
+  mentionedProfileId?: string | null;
+  /**
+   * Mensagem citada (WP-CHAT-B item 4). Vai CRU para o banco: a FK COMPOSTA com channel_id já
+   * garante que a citada é do mesmo canal. A UI NÃO revalida isso.
+   */
+  replyToMessageId?: string | null;
+}
+
+export interface SendChatMessageResult {
+  message: ChatMessage;
+  /** true quando a MENSAGEM entrou e só a MARCAÇÃO falhou. Não é falha de envio. */
+  mentionFailed: boolean;
+  mentionFailureReason: MentionFailureReason | null;
 }
 
 /**
- * Envia uma mensagem como profissional (remetente = clínica/profissional), com anexo OPCIONAL.
- * Se houver arquivo: valida → sobe → insere. Se o insert falhar, o objeto órfão é removido
- * (sendWithOrphanCleanup). Exige body OU anexo (espelha o CHECK do banco).
+ * Envia uma mensagem como profissional (remetente = clínica/profissional), com anexo, marcação e
+ * citação OPCIONAIS. Se houver arquivo: valida → sobe → insere; se o insert falhar, o objeto órfão
+ * é removido (sendWithOrphanCleanup). Exige body OU anexo (espelha o CHECK do banco).
+ *
+ * ⚠️ A FALHA DA MENÇÃO NÃO É RELANÇADA — vira campo do resultado. São duas chamadas sem transação
+ * e, quando a segunda falha, a mensagem JÁ ESTÁ no banco: relançar faria a tela dizer que o envio
+ * falhou e o caminho de erro convidaria a reenviar, duplicando uma mensagem que a equipe já
+ * recebeu. Nada é apagado (chat_messages é append-only). A falha do INSERT da MENSAGEM continua
+ * sendo erro de verdade e continua sendo relançada. Ver lib/domain/chatMention.ts.
  */
-export async function sendChatMessage(input: SendChatMessageInput): Promise<ChatMessage> {
+export async function sendChatMessage(input: SendChatMessageInput): Promise<SendChatMessageResult> {
   const body = input.body?.trim() ? input.body.trim() : null;
   if (!body && !input.file) throw new Error("Escreva uma mensagem ou anexe um arquivo.");
 
-  return sendWithOrphanCleanup<ChatMessage>({
+  const message = await sendWithOrphanCleanup<ChatMessage>({
     upload: () => (input.file ? uploadChatAttachment(input.channelId, input.file) : Promise.resolve(null)),
     insert: async (attachment) => {
       const { data, error } = await supabase
@@ -187,6 +276,7 @@ export async function sendChatMessage(input: SendChatMessageInput): Promise<Chat
           attachment_name: attachment?.name ?? null,
           attachment_mime: attachment?.mime ?? null,
           attachment_size: attachment?.size ?? null,
+          reply_to_message_id: input.replyToMessageId ?? null,
         })
         .select("*")
         .single();
@@ -195,6 +285,25 @@ export async function sendChatMessage(input: SendChatMessageInput): Promise<Chat
     },
     removeObject: (path) => deleteChatAttachmentObject(path),
   });
+
+  if (!input.mentionedProfileId) {
+    return { message, mentionFailed: false, mentionFailureReason: null };
+  }
+
+  const { error: mentionError } = await supabase.from("chat_mentions").insert({
+    message_id: message.id,
+    mentioned_profile_id: input.mentionedProfileId,
+  });
+
+  if (!mentionError) {
+    return { message, mentionFailed: false, mentionFailureReason: null };
+  }
+
+  return {
+    message,
+    mentionFailed: true,
+    mentionFailureReason: classifyMentionFailure(mentionError),
+  };
 }
 
 // Linha de chat_mentions com o patient_id do canal resolvido pelos joins.

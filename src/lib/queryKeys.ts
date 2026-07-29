@@ -25,6 +25,9 @@ export const qk = {
     ["patients", "withoutActiveProfessional", clinicId] as const,
   chatThread: (patientId: string) => ["patient", patientId, "chat"] as const,
   unreadMentions: (profileId: string) => ["chat", "mentions", profileId] as const,
+  // Profissionais do canal (RPC channel_professionals) — alimenta o seletor de @. Chaveado por
+  // CANAL, não por paciente: é o canal que a RPC recebe e é ele que define quem participa.
+  channelProfessionals: (channelId: string) => ["chat", "professionals", channelId] as const,
   // URL assinada de anexo do chat (TTL curto; não cachear além do TTL).
   chatAttachmentUrl: (path: string) => ["chat", "attachment", path] as const,
   currentProfessional: (profileId: string) => ["currentProfessional", profileId] as const,

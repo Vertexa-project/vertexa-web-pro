@@ -278,6 +278,11 @@ export interface ChatMessage {
   attachment_name: string | null;
   attachment_mime: string | null;
   attachment_size: number | null;
+  /**
+   * Mensagem citada (WP-CHAT-MENTIONS-A). A FK é COMPOSTA com channel_id, então o banco já
+   * garante que a citada é do MESMO canal — a UI não reimplementa essa regra.
+   */
+  reply_to_message_id: string | null;
 }
 
 export interface Campaign {
@@ -423,6 +428,30 @@ export interface NutritionPlanFull extends NutritionPlan {
 // Mensagem com o nome do remetente resolvido (clínica/profissional — NUNCA "Vertexa").
 export interface ChatMessageView extends ChatMessage {
   sender_name: string | null;
+  /**
+   * Perfis marcados NESTA mensagem. Vem do mesmo SELECT da lista (embed de chat_mentions), e não
+   * de uma segunda leitura: a policy chat_mentions_select libera `can_read_channel`, então quem lê
+   * a conversa lê as marcações dela. É a fonte do destaque "você foi marcado aqui".
+   */
+  mentioned_profile_ids: string[];
+}
+
+/**
+ * Profissional participante do canal, como devolvido pela RPC `public.channel_professionals`
+ * (SECURITY DEFINER, portão `private.can_read_channel`).
+ *
+ * ⚠️ NÃO trocar por embed: `professionals_select` exige ser o PRÓPRIO profissional ou admin da
+ * clínica, então um profissional COMUM lê ZERO linha dos colegas — e embed aninhado bloqueado por
+ * RLS não devolve erro, devolve VAZIO. A RPC é o único caminho que não mente.
+ */
+export interface ChannelProfessional {
+  profileId: string;
+  /** Nome do banco; já cai para "Profissional" quando vem nulo/vazio. */
+  name: string;
+  type: ProfessionalType | null;
+  specialty: string | null;
+  /** Codes de public.disciplines (a RPC devolve `{}` quando não há nenhuma). */
+  disciplines: string[];
 }
 
 // Shape completo que a tela de Mensagens precisa: canal resolvido + profissional

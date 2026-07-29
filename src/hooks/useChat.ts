@@ -5,6 +5,7 @@ import {
   chatStageOf,
   getChatAttachmentSignedUrl,
   getChatThread,
+  listChannelProfessionals,
   listUnreadMentionPatientIds,
   markChannelMentionsRead,
   sendChatMessage,
@@ -80,7 +81,23 @@ export function useChatThread(patientId: string) {
   return query;
 }
 
-/** Envia mensagem (texto e/ou anexo) como profissional e revalida a thread ao concluir. */
+/**
+ * Profissionais participantes do canal (RPC channel_professionals) — a fonte do seletor de @.
+ *
+ * SEM `retry: false` e SEM valor de fallback de propósito: erro aqui tem de CHEGAR à tela. Uma
+ * lista vazia silenciosa é exatamente o defeito que a RPC veio matar. `staleTime` curto porque o
+ * roster muda quando um vínculo é desativado — e é essa mudança que provoca a corrida do item 2.
+ */
+export function useChannelProfessionals(channelId: string | null | undefined) {
+  return useQuery({
+    queryKey: qk.channelProfessionals(channelId ?? "none"),
+    queryFn: () => listChannelProfessionals(channelId as string),
+    enabled: Boolean(channelId),
+    staleTime: 30_000,
+  });
+}
+
+/** Envia mensagem (texto e/ou anexo, com marcação e citação opcionais) e revalida a thread. */
 export function useSendChatMessage(patientId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -165,6 +182,14 @@ export function useUnreadMentions() {
         },
         () => {
           queryClient.invalidateQueries({ queryKey: qk.unreadMentions(profileId) });
+          // A MENÇÃO chega DEPOIS da mensagem — são duas chamadas sem transação. O evento de
+          // chat_messages já invalidou a thread, mas naquele instante a linha de chat_mentions
+          // ainda não existia: sem esta segunda invalidação a bolha ficaria SEM o destaque do
+          // item 5 até a próxima troca de conversa. Predicado (e não chave fixa) porque este hook
+          // é global e não sabe de qual paciente é o canal da menção; só a thread montada refaz.
+          queryClient.invalidateQueries({
+            predicate: (q) => q.queryKey[0] === "patient" && q.queryKey[2] === "chat",
+          });
         },
       )
       .subscribe();
