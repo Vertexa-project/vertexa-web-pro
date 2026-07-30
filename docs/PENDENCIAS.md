@@ -711,13 +711,58 @@ tomadas nele:
   de sequência) nos seis sítios. É código de produção em dois repos + duas RPCs — merece WP
   próprio.
 
-- **DÍVIDA-METRIC-1b — os espelhos CLIENT-SIDE ainda contam qualquer tipo de evento.** O
+- **DÍVIDA-METRIC-1b — QUITADA pelo WP-METRIC-1b do app** (PR #16 de `vertexa-app-paciente`,
+  MERGEADO em 2026-07-29 21:33 BRT / 2026-07-30T00:33Z, merge commit `8f73549`). Corrijo o texto
+  em vez de apagar a linha porque a redação anterior foi publicada aqui e é citada nas migrations
+  `20260807090000:35` e `:524` — e porque ela **engana quem lê**: dos três sítios que ela apontava,
+  DOIS não existem mais e o TERCEIRO nunca foi espelho da regra antiga.
+
+  ⚠️ **CORREÇÃO DE TEXTO (2026-07-29, WP-METRIC-1b — nenhum código foi tocado NESTE repo).** A
+  redação anterior dizia: *"os espelhos CLIENT-SIDE ainda contam qualquer tipo de evento. O
   WP-METRIC-1a corrigiu só o servidor (proibido tocar no app). Continuam com a regra antiga, no
-  repo `vertexa-app-paciente`:
-  `src/lib/adherenceEngine.ts:261-265` (`mostRecent`, sem filtro de tipo),
-  `src/lib/adherenceEngine.ts:296-306` (`streak`, sem filtro de tipo) e
-  `src/lib/constancy.ts:23-44` (`deriveConstancy`, com o comentário explícito "Qualquer tipo de
-  evento conta"). **Efeito observável:** para uma paciente que use a tela SOS, o número que o APP
+  repo `vertexa-app-paciente`: `src/lib/adherenceEngine.ts:261-265` (`mostRecent`, sem filtro de
+  tipo), `src/lib/adherenceEngine.ts:296-306` (`streak`, sem filtro de tipo) e
+  `src/lib/constancy.ts:23-44` (`deriveConstancy`, com o comentário explícito 'Qualquer tipo de
+  evento conta'). **Efeito observável:** para uma paciente que use a tela SOS, o número que o APP
   desenha na Home diverge do snapshot que o SERVIDOR grava e que a WEB lê. Enquanto ninguém tiver
-  `help_requested` no histórico, os dois coincidem — hoje a base tem 0.
-  **Fecha no WP-METRIC-1b.**
+  `help_requested` no histórico, os dois coincidem — hoje a base tem 0."* Ponto a ponto:
+
+  **(1) e (2) — `mostRecent` e `streak` NÃO EXISTEM MAIS.** Não foram filtrados por tipo: foram
+  REMOVIDOS. Eram variáveis locais dentro de `deriveAdherenceConfig`, e a função inteira saiu no
+  PR #16 junto com `computeScore`, `recencyPoints`, `getLevel`, `getStatus`, `getRiskFactors`,
+  `getPositiveFactors`, `getAdherenceState`, `MockConfig`, `DEFAULT_CONFIG` e as constantes de
+  calibração. `src/lib/adherenceEngine.ts` caiu de **444 para 169 linhas** — as linhas 261-265 e
+  296-306 não têm mais endereço. O que sobrou não calcula adesão: `adherenceStateFromSnapshot`
+  (MAPEIA a linha de `adherence_snapshots`), `getJourneyPhase`, `getContextualMessage` e
+  `getAutoActions`. Há teste travando a ausência (lista de nomes proibidos + whitelist fechada dos
+  4 exports). O app agora **lê** o número do servidor; não há mais segunda fórmula para divergir.
+
+  **(3) — `src/lib/constancy.ts` NUNCA foi espelho da regra antiga.** O texto acima errou ao
+  colocá-lo na mesma lista dos outros dois. `deriveConstancy` não mede adesão: mede **DIA ATIVO** —
+  "houve ≥1 `activity_event` neste dia local?" — e essa é a grandeza que o catálogo do WP-METRIC-1a
+  chama de **`counts_as_interaction`**, não `counts_as_adherence`. O servidor usa as duas colunas em
+  lugares diferentes, e isso está verificado em produção (2026-07-29):
+  `private.recompute_adherence_for` calcula o `v_most_recent` que alimenta recência e "dias sem
+  interação" com `filter (where is_interaction)`, enquanto `private.event_streak_brt` filtra
+  `type in (select t.type from public.activity_event_types t where t.counts_as_adherence)` para a
+  sequência de dias. E os **10 tipos do catálogo têm `counts_as_interaction = true`** (medido:
+  10/10 true; em `counts_as_adherence` são 9 true e 1 false — só `help_requested`, "socorro não é
+  autocuidado"). Logo "qualquer tipo de evento conta" não é a regra antiga sobrevivendo: é,
+  **hoje, exatamente a regra NOVA do servidor para essa grandeza**. A constância COINCIDE com o
+  servidor — não diverge dele. Também não havia o que ler no lugar: não existe número de constância
+  em `adherence_snapshots`; esse bloco é do app. (Endereço atual, depois do PR #16:
+  `src/lib/constancy.ts:31-52`; o comentário das linhas 18-30 passou a explicar isso no arquivo.)
+
+  ⚠️ **DEPENDÊNCIA LATENTE — registrada porque a coincidência é de DADO, não de código.** A
+  constância **NÃO lê o catálogo**. Ela coincide com o servidor **apenas enquanto todos os tipos
+  tiverem `counts_as_interaction = true`**. No dia em que algum virar `false`, ela **divergirá EM
+  SILÊNCIO**: nada quebra, nenhum teste fica vermelho, e o grid do Progresso simplesmente passa a
+  pintar como "dia ativo" um dia que o servidor não conta. **Se isso acontecer, ou ela passa a ler
+  o catálogo, ou sai da tela.**
+
+  **O "efeito observável" descrito no texto antigo também não sobrevive**, por dois motivos
+  independentes: o app deixou de desenhar número próprio de adesão (itens 1 e 2); e
+  `help_requested` é justamente o tipo que a constância pode contar sem errar — ele tem
+  `counts_as_interaction = true` (a paciente deu sinal de vida) e só `counts_as_adherence = false`.
+  Medição de 2026-07-29: `public.activity_events` em produção tem apenas `hydration_logged` (21) e
+  `progress_photo_uploaded` (1) — **0 `help_requested`**, como o texto antigo já dizia.
