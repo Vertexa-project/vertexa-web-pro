@@ -82,16 +82,26 @@ export function useChatThread(patientId: string) {
 }
 
 /**
- * Profissionais participantes do canal (RPC channel_professionals) — a fonte do seletor de @.
+ * Profissionais de um canal (RPC channel_professionals).
+ *
+ * `includeMessageAuthors` escolhe QUAL PERGUNTA está sendo feita — e as duas têm respostas
+ * diferentes assim que alguém é desativado (WP-FRONT-2bii-A item 2):
+ *   false → ROSTER: "quem eu posso marcar agora". É a fonte do seletor de @.
+ *   true  → ROSTER ∪ AUTORES: "quem escreveu isto". É a fonte do nome na bolha e na citação.
+ * As duas chamadas têm CHAVES DE CACHE distintas de propósito (ver queryKeys) — se dividissem
+ * cache, o seletor passaria a oferecer quem já saiu.
  *
  * SEM `retry: false` e SEM valor de fallback de propósito: erro aqui tem de CHEGAR à tela. Uma
  * lista vazia silenciosa é exatamente o defeito que a RPC veio matar. `staleTime` curto porque o
  * roster muda quando um vínculo é desativado — e é essa mudança que provoca a corrida do item 2.
  */
-export function useChannelProfessionals(channelId: string | null | undefined) {
+export function useChannelProfessionals(
+  channelId: string | null | undefined,
+  includeMessageAuthors = false,
+) {
   return useQuery({
-    queryKey: qk.channelProfessionals(channelId ?? "none"),
-    queryFn: () => listChannelProfessionals(channelId as string),
+    queryKey: qk.channelProfessionals(channelId ?? "none", includeMessageAuthors),
+    queryFn: () => listChannelProfessionals(channelId as string, includeMessageAuthors),
     enabled: Boolean(channelId),
     staleTime: 30_000,
   });

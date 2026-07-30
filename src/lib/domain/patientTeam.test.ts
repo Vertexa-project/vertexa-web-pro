@@ -247,3 +247,48 @@ describe("patientsWithoutProfessionalIds", () => {
     expect(patientsWithoutProfessionalIds([]).size).toBe(0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// WP-FRONT-2bii-A item 4 — O BADGE "SEM RESPONSÁVEL ATIVO" REFLETE A CASCATA SOZINHO.
+//
+// VERIFICAÇÃO, não reimplementação: a cascata do WP-TEAM-2b-ii não inventa estado novo — ela põe
+// os vínculos do desativado em 'inactive' (com o motivo prefixado por [DESATIVACAO_DO_PROFISSIONAL]).
+// Como a listagem já filtra por status do VÍNCULO, e a RPC patients_without_active_professional
+// usa o MESMO critério do banco, nada precisa mudar no front. Estes testes existem para que essa
+// propriedade não regrida em silêncio no dia em que alguém "simplificar" o filtro.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+describe("cascata da desativação do PROFISSIONAL — o badge sai de graça", () => {
+  it("vínculo derrubado pela cascata é descartado como qualquer outro inativo", () => {
+    // Exatamente a linha que a cascata grava: status inactive + motivo com o prefixo de causa.
+    const links = [
+      { status: "inactive", professionals: { id: "quem-saiu" } },
+      { status: "inactive", professionals: { id: "outro-que-saiu" } },
+    ];
+    expect(activeProfessionalsFromLinks(links)).toEqual([]);
+  });
+
+  it("a paciente que só tinha o desativado fica SEM responsável (é o badge)", () => {
+    const antes = activeProfessionalsFromLinks([{ status: "active", professionals: { id: "a1" } }]);
+    const depois = activeProfessionalsFromLinks([{ status: "inactive", professionals: { id: "a1" } }]);
+    expect(antes).toHaveLength(1);
+    expect(depois).toHaveLength(0);
+  });
+
+  it("quem tinha DOIS responsáveis continua com o que sobrou (não vira 'sem responsável')", () => {
+    const out = activeProfessionalsFromLinks([
+      { status: "inactive", professionals: { id: "saiu" } },
+      { status: "active", professionals: { id: "ficou" } },
+    ]);
+    expect(out).toEqual([{ id: "ficou" }]);
+  });
+
+  it("o conjunto do badge vem da RPC por clínica, não de dedução da listagem", () => {
+    const ids = patientsWithoutProfessionalIds([
+      { patientId: "p1", fullName: "A", since: null },
+      { patientId: "p2", fullName: "B", since: null },
+    ]);
+    expect(ids.has("p1")).toBe(true);
+    expect(ids.has("p3")).toBe(false);
+    expect(patientsWithoutProfessionalIds(undefined).size).toBe(0);
+  });
+});

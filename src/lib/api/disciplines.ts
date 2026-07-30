@@ -40,14 +40,24 @@ export async function getMyDisciplines(professionalId: string): Promise<string[]
 /** Um profissional da clínica com suas disciplines (para a administração pelo admin). */
 export interface ProfessionalWithDisciplines {
   professionalId: string;
+  /** profile_id — necessário para saber quem é o DONO da clínica (clinics.owner_profile_id). */
+  profileId: string | null;
   fullName: string | null;
   type: ProfessionalType;
+  /**
+   * Estado da PESSOA na clínica (WP-TEAM-2b-ii). `null` conta como ATIVO — mesma convenção do
+   * banco (`coalesce(status,'active')='active'` nos helpers) e do vínculo em patientTeam.ts.
+   * Opcional no tipo porque um build da web pode rodar contra um banco anterior à migration.
+   */
+  status?: string | null;
   disciplines: string[];
 }
 
 interface RawClinicRow {
   id: string;
+  profile_id: string | null;
   type: ProfessionalType;
+  status: string | null;
   profile: { full_name: string | null } | null;
   professional_disciplines: { discipline: string }[] | null;
 }
@@ -55,19 +65,28 @@ interface RawClinicRow {
 /**
  * Profissionais da clínica + suas disciplinas (uma consulta, join). Escopado por clinic_id; a RLS
  * de professional_disciplines só devolve linhas que o chamador (staff/admin da clínica) pode ler.
+ *
+ * WP-FRONT-2bii-A: passa a trazer `profile_id` e `status`. É a MESMA consulta que a tela de
+ * Disciplinas usa (a convenção da casa é não duplicar leitura) — as duas colunas são aditivas e
+ * quem não precisa delas simplesmente não as lê. `professionals_select` já devolve a linha
+ * inteira para o admin da clínica, então não há leitura nova nem coluna a mais exposta.
  */
 export async function listClinicProfessionalDisciplines(
   clinicId: string,
 ): Promise<ProfessionalWithDisciplines[]> {
   const { data, error } = await supabase
     .from("professionals")
-    .select("id, type, profile:profiles ( full_name ), professional_disciplines ( discipline )")
+    .select(
+      "id, profile_id, type, status, profile:profiles ( full_name ), professional_disciplines ( discipline )",
+    )
     .eq("clinic_id", clinicId);
   if (error) throw error;
   return ((data ?? []) as unknown as RawClinicRow[]).map((r) => ({
     professionalId: r.id,
+    profileId: r.profile_id ?? null,
     fullName: r.profile?.full_name ?? null,
     type: r.type,
+    status: r.status ?? null,
     disciplines: (r.professional_disciplines ?? []).map((d) => d.discipline),
   }));
 }

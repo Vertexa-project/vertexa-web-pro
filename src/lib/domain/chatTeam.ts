@@ -48,8 +48,32 @@ export function professionalQualification(
 }
 
 /**
+ * QUEM PODE SER MARCADO AGORA — e só isso.
+ *
+ * Recebe o ROSTER (`channel_professionals` com `p_include_message_authors = false`), NUNCA a
+ * lista com autores: quem foi desativado sai do roster na cascata da desativação e não pode ser
+ * oferecido no seletor de @, porque a marcação seria recusada pelo banco
+ * (`chat_mentions_insert` exige participante do canal).
+ *
+ * O próprio profissional também sai: marcar a si mesmo só acenderia o próprio badge.
+ *
+ * É a CONTRAPARTE de `namesByProfileId`, que recebe a lista COM autores. As duas funções existem
+ * separadas de propósito — é aqui que "quem posso marcar" e "quem escreveu isto" deixam de ser a
+ * mesma pergunta (WP-FRONT-2bii-A item 2).
+ */
+export function mentionableProfessionals(
+  roster: readonly ChannelProfessional[] | null | undefined,
+  actingProfileId: string | null,
+): ChannelProfessional[] {
+  return (roster ?? []).filter((p) => p.profileId !== actingProfileId);
+}
+
+/**
  * Índice profile_id -> nome, a partir da RPC. É o que permite pôr nome no AUTOR DA CITAÇÃO quando
  * o remetente é um colega — caso em que o embed de `profiles` chega nulo por RLS.
+ *
+ * ⚠️ ALIMENTE ISTO COM A LISTA QUE INCLUI AUTORES (`p_include_message_authors = true`). O roster
+ * sozinho perde o nome de quem saiu, e uma mensagem que existe passaria a exibir "Profissional".
  */
 export function namesByProfileId(professionals: ChannelProfessional[]): Map<string, string> {
   const map = new Map<string, string>();
