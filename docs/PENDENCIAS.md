@@ -766,3 +766,54 @@ tomadas nele:
   `counts_as_interaction = true` (a paciente deu sinal de vida) e só `counts_as_adherence = false`.
   Medição de 2026-07-29: `public.activity_events` em produção tem apenas `hydration_logged` (21) e
   `progress_photo_uploaded` (1) — **0 `help_requested`**, como o texto antigo já dizia.
+
+## Dívidas NOMEADAS do estado do profissional (WP-TEAM-2b-ii · 2026-07-29)
+
+> Migration `20260808090000` em **PR SEM MERGE, NÃO APLICADA**. Tudo abaixo é o que o desenho
+> resolve e o que ele deixa em aberto, medido em transação com ROLLBACK contra produção.
+
+- **✅ DÍVIDA-A1-1 QUITADA (a ausência de `UNIQUE (profile_id, clinic_id)` em `professionals`).**
+  Provado: a segunda linha do mesmo profile na mesma clínica passa a ser barrada com `23505`.
+  ⚠️ **O que a quitação NÃO cobre:** `UNIQUE` do Postgres é `NULLS DISTINCT` por padrão, e as duas
+  colunas seguem anuláveis. Duas linhas com `profile_id` (ou `clinic_id`) **NULO** ainda
+  coexistiriam. Hoje não existe nenhuma (medido: 0 de 9). `NOT NULL` nas duas é limpeza barata
+  para um WP futuro — **DÍVIDA-2bii-1**.
+- **DÍVIDA-PRIV-2 — irmã da DÍVIDA-PRIV-1, agora em `professionals`.** O
+  `revoke update (status, status_changed_at, status_changed_by, status_reason)` é privilégio de
+  **COLUNA**: um `grant update on public.professionals to authenticated` (ou um
+  `grant all on all tables`) futuro apaga o recorte **em silêncio**, sem erro e sem mudar policy —
+  nenhum hash de RLS detecta. Hoje o risco é menor que no 2b-i, porque `authenticated` **não tem
+  UPDATE de tabela** nesta tabela (só grants de coluna em type/registry_number/specialty/
+  clinic_role), então as 4 colunas novas nascem não-escrevíveis mesmo sem o revoke.
+  Verificação barata: `has_column_privilege('authenticated','public.professionals','status','update')`
+  deve ser **false** e `clinic_role` deve continuar **true**.
+- **DÍVIDA-2bii-2 — vínculo religado depois da desativação da pessoa.** `deactivate_professional`
+  é idempotente e **não recascateia**: se um admin religar um vínculo (`reactivate_patient_link`)
+  de alguém que está `inactive`, o vínculo fica `active` apontando para uma pessoa inativa. Não há
+  ganho de acesso — o helper exige as DUAS pontas (provado: TRANCA DUPLA) — mas é **dado que
+  mente** para quem lê a tabela. Candidato natural: `reactivate_patient_link` recusar profissional
+  inativo, ou a listagem tratar o par.
+- **DÍVIDA-2bii-3 — `profiles.status` não é tocado.** Quem é desativado na clínica continua com
+  `profiles.status = 'active'` e `role = 'professional'`. É deliberado (o estado da PESSOA na
+  clínica não é o estado da conta), mas significa que a conta segue autenticando e que
+  `request_clinic_access` continua barrando esse profile por ele **não** estar `pending`. Ou seja:
+  o desativado não consegue nem pedir para voltar — quem o traz de volta é o admin, por
+  `reactivate_professional`.
+- **⚠️ DÍVIDA-2bii-4 — A PACIENTE PERDE O NOME DO PROFISSIONAL DESATIVADO. É DECISÃO DO DONO.**
+  Medido na matriz: depois da desativação, a paciente deixa de ver o `profiles` (o **nome**) de
+  quem a atendia. Causa exata: o ramo **R4** de `private.can_see_profile` exige
+  `coalesce(l.status,'active')='active'`, e a cascata do item 2 derruba o vínculo.
+  `can_see_profile` **não foi tocada** (hash `7a31d3522ef51b7e6b10701a637a2efd` provado byte a
+  byte). **O mecanismo é herdado do 2b-i** — desativar UM vínculo já fazia isso para aquela
+  paciente; o 2b-ii só passa a fazer para todas de uma vez. Efeito prático: no app da paciente, o
+  nome do autor no histórico (chat, planos) fica sem fonte. As duas saídas conhecidas — (a) tirar
+  o filtro de status do R4, (b) servir o nome por RPC SECDEF como `channel_professionals` faz no
+  painel — **exigem tocar a âncora ou o app**, e nenhuma das duas estava no escopo deste WP.
+  Está registrada aqui como a única violação da regra de ouro (`A2..A8 ⇒ DEPOIS == ANTES`) que a
+  matriz encontrou, e ela é PERDA de acesso, não ganho.
+- **`professional_status_events` cascateia com a linha.** A FK é `on delete cascade`, igual à
+  `ppl_status_events` do 2b-i. Como o item 6 tira o DELETE do client, hoje só `service_role`/owner
+  consegue apagar a linha e levar a trilha junto — mesma condição da trilha do vínculo.
+- **A trilha da pessoa é do ADMIN, não do desativado.** Só existe policy de SELECT com
+  `is_clinic_admin(clinic_id)`; o desativado (que perdeu a adminidade) **não** lê a própria
+  trilha. Decisão idêntica à do 2b-i, registrada para não parecer esquecimento.
