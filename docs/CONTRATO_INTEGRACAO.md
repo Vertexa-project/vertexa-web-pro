@@ -1163,3 +1163,52 @@ linhas" **esvaziaria esse seletor** — por isso o roster é **reconciliado**, n
 
 Use `chatStageOf(error)`. Sentry: `source:"chat"`, scope `open-channel` / `load-messages`,
 **sem PII** (nunca conteúdo de mensagem, nome ou id de paciente).
+
+## Estado do PROFISSIONAL na clínica (WP-TEAM-2b-ii — migration 20260808090000, em PR SEM MERGE)
+
+⚠️ **Nada aqui está aplicado em produção ainda.** O contrato fica registrado porque muda a
+superfície de RPC que os dois repos veem.
+
+- **`deactivate_professional(p_professional_id uuid, p_reason text default null) → uuid`** —
+  desativa a PESSOA na clínica. **Admin da clínica DAQUELE profissional**; qualquer outro `42501`.
+  Recusa o **DONO** (`42501`, hint `OWNER_CANNOT_BE_DEACTIVATED` — transferir a posse antes) e a
+  **autodesativação** (`42501`, hint `SELF_DEACTIVATION_NOT_ALLOWED`). Grava trilha imutável em
+  `professional_status_events` com autor do SERVIDOR. **Cascateia**: todos os vínculos ativos caem
+  na MESMA transação, com `reason` prefixado por `[DESATIVACAO_DO_PROFISSIONAL]` na trilha do
+  vínculo, e o profissional sai do roster do chat. **Idempotente** (desativar 2x não erra e não
+  duplica trilha).
+- **`reactivate_professional(p_professional_id uuid, p_reason text default null) → uuid`** —
+  simétrica na autorização e na trilha, com **assimetria deliberada: NÃO religa vínculo nenhum**.
+  Quem volta, volta sem carteira de pacientes; cada vínculo se reconquista por
+  `reactivate_patient_link`. A ESCRITA no chat só volta quando a conversa for reaberta por
+  `get_or_create_channel` (assimetria herdada do 2b-i).
+- **`my_clinic_memberships() → TABLE(clinic_id uuid, clinic_name text, status text)`** — caminho
+  ESTREITO para a interface explicar uma desativação. **Sem parâmetro**: devolve só as linhas do
+  PRÓPRIO chamador. **Nunca** `join_code`, **nunca** `owner_profile_id`, nunca dado de terceiro.
+  Fail-closed: sem profile resolvido devolve **vazio** (não erro). `anon` ⇒ `42501`.
+  Existe porque o desativado deixa de ler `public.clinics` (o registro inteiro incluía o
+  `join_code`, credencial de entrada).
+- **`channel_professionals(p_channel_id uuid, p_include_message_authors boolean default false)`** —
+  a assinatura de 1 argumento **deixa de existir**; a chamada de hoje (`{p_channel_id}`) continua
+  válida e cai no default. Com `false`, resultado **idêntico** ao anterior (provado em 7 canais
+  reais). Com `true`, inclui também os AUTORES de mensagens do canal que são profissionais da
+  clínica, para o nome do histórico não desaparecer quando alguém sai do roster. **Não filtra
+  status de propósito** (identidade preservada). O opt-in do frontend é WP seguinte.
+- **`promote_to_professional(...)`** — passa a **RECUSAR** profile com cadastro `inactive` naquela
+  clínica: `22023`, hint `PROFESSIONAL_INACTIVE`. Consequência: `approve_join_request` **falha** e
+  a solicitação **permanece `pending`** (antes retornava a linha desativada e marcava "approved",
+  ou seja, aprovava sem devolver acesso). Linha existente **ATIVA**: dedup inalterado.
+- **⚠️ REGRA DE USO DO `p_include_message_authors` (vale para o WP de frontend, nos dois repos):**
+  **resolução de NOME no histórico do chat ⇒ `true`; lista do TIME DE CUIDADO ⇒ `false`** (o
+  default). Uma pergunta é *"quem escreveu isto"*, a outra é *"quem cuida de mim hoje"* — e elas
+  têm respostas diferentes assim que alguém é desativado. O nome do autor **não** sai de
+  `private.can_see_profile` (com o vínculo inativo, o ramo R4 dela para de valer para a paciente,
+  e este WP não tocou nessa função): sai desta RPC. Detalhe e histórico em **DÍVIDA-2bii-4**
+  (`docs/PENDENCIAS.md`).
+- **Cross-repo:** `vertexa-app-paciente` e `vertexa-patient-native` **não** chamam nenhuma dessas
+  RPCs hoje. Quem hoje monta lista de profissionais a partir de `chat_participants` e a usa para
+  exibir NOME de histórico é o candidato natural da migração acima.
+- **Advisor `authenticated_security_definer_function_executable` (0029): 29 → 32.** As 3 novas são
+  intencionais, pelo mesmo motivo das RPCs do APP-1: SÃO o endpoint autenticado, e a segurança está
+  na revalidação interna (`is_clinic_admin`) e, no caso da `my_clinic_memberships`, na ausência de
+  parâmetro + `WHERE` no autor.

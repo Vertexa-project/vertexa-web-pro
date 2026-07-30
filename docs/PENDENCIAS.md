@@ -766,3 +766,63 @@ tomadas nele:
   `counts_as_interaction = true` (a paciente deu sinal de vida) e só `counts_as_adherence = false`.
   Medição de 2026-07-29: `public.activity_events` em produção tem apenas `hydration_logged` (21) e
   `progress_photo_uploaded` (1) — **0 `help_requested`**, como o texto antigo já dizia.
+
+## Dívidas NOMEADAS do estado do profissional (WP-TEAM-2b-ii · 2026-07-29)
+
+> Migration `20260808090000` em **PR SEM MERGE, NÃO APLICADA**. Tudo abaixo é o que o desenho
+> resolve e o que ele deixa em aberto, medido em transação com ROLLBACK contra produção.
+
+- **✅ DÍVIDA-A1-1 QUITADA (a ausência de `UNIQUE (profile_id, clinic_id)` em `professionals`).**
+  Provado: a segunda linha do mesmo profile na mesma clínica passa a ser barrada com `23505`.
+  ⚠️ **O que a quitação NÃO cobre:** `UNIQUE` do Postgres é `NULLS DISTINCT` por padrão, e as duas
+  colunas seguem anuláveis. Duas linhas com `profile_id` (ou `clinic_id`) **NULO** ainda
+  coexistiriam. Hoje não existe nenhuma (medido: 0 de 9). `NOT NULL` nas duas é limpeza barata
+  para um WP futuro — **DÍVIDA-2bii-1**.
+- **DÍVIDA-PRIV-2 — irmã da DÍVIDA-PRIV-1, agora em `professionals`.** O
+  `revoke update (status, status_changed_at, status_changed_by, status_reason)` é privilégio de
+  **COLUNA**: um `grant update on public.professionals to authenticated` (ou um
+  `grant all on all tables`) futuro apaga o recorte **em silêncio**, sem erro e sem mudar policy —
+  nenhum hash de RLS detecta. Hoje o risco é menor que no 2b-i, porque `authenticated` **não tem
+  UPDATE de tabela** nesta tabela (só grants de coluna em type/registry_number/specialty/
+  clinic_role), então as 4 colunas novas nascem não-escrevíveis mesmo sem o revoke.
+  Verificação barata: `has_column_privilege('authenticated','public.professionals','status','update')`
+  deve ser **false** e `clinic_role` deve continuar **true**.
+- **DÍVIDA-2bii-2 — vínculo religado depois da desativação da pessoa.** `deactivate_professional`
+  é idempotente e **não recascateia**: se um admin religar um vínculo (`reactivate_patient_link`)
+  de alguém que está `inactive`, o vínculo fica `active` apontando para uma pessoa inativa. Não há
+  ganho de acesso — o helper exige as DUAS pontas (provado: TRANCA DUPLA) — mas é **dado que
+  mente** para quem lê a tabela. Candidato natural: `reactivate_patient_link` recusar profissional
+  inativo, ou a listagem tratar o par.
+- **DÍVIDA-2bii-3 — `profiles.status` não é tocado.** Quem é desativado na clínica continua com
+  `profiles.status = 'active'` e `role = 'professional'`. É deliberado (o estado da PESSOA na
+  clínica não é o estado da conta), mas significa que a conta segue autenticando e que
+  `request_clinic_access` continua barrando esse profile por ele **não** estar `pending`. Ou seja:
+  o desativado não consegue nem pedir para voltar — quem o traz de volta é o admin, por
+  `reactivate_professional`.
+- **✅ DÍVIDA-2bii-4 — NÃO É BURACO EM ABERTO. É REGRA DE USO: "quem escreveu" ≠ "quem cuida".**
+  O nome do autor no histórico do chat **não vem de `private.can_see_profile`** — vem de
+  **`public.channel_professionals`**, que é SECDEF justamente para atravessar a RLS de `profiles`
+  (que nunca cobriu "colega da mesma clínica"; é a razão de a RPC existir desde o WP-CHAT-B). O
+  parâmetro **`p_include_message_authors`**, entregue neste WP, é exatamente o que devolve o autor
+  que saiu do roster. Resolvido na fonte certa.
+  **REGRA DE USO — vale para o WP de frontend:**
+  · **resolução de NOME no histórico do chat ⇒ `p_include_message_authors = TRUE`**
+  · **lista do TIME DE CUIDADO (quem atende hoje) ⇒ `FALSE`** (o default)
+  Uma pergunta é *"quem escreveu isto"*, a outra é *"quem cuida de mim hoje"*. Misturar as duas é
+  o que produz UI que mente: ou um nome somindo de uma mensagem que existe, ou um desativado
+  aparecendo como responsável atual.
+  **O que a matriz mediu, para o registro:** com o vínculo inativo, o ramo **R4** de
+  `can_see_profile` deixa de valer para a paciente, então ela não lê `profiles` **por leitura
+  direta**. `can_see_profile` **não foi tocada** (`7a31d3522ef51b7e6b10701a637a2efd`, byte a byte)
+  e o mecanismo é herdado do 2b-i — desativar UM vínculo já fazia isso para aquela paciente. A
+  leitura direta de `profiles` nunca foi o caminho do nome no chat; o caminho é a RPC.
+  **Estado hoje (factual, não pendência de banco):** nenhuma tela passa `true` ainda — o opt-in é
+  o WP de frontend. O app da paciente monta o seletor de menção a partir de `chat_participants`
+  (dependência cross-repo já registrada na seção do WP-CHAT-FIX), então quem consumir o roster
+  para NOME de histórico é que precisa migrar para a RPC com `true`.
+- **`professional_status_events` cascateia com a linha.** A FK é `on delete cascade`, igual à
+  `ppl_status_events` do 2b-i. Como o item 6 tira o DELETE do client, hoje só `service_role`/owner
+  consegue apagar a linha e levar a trilha junto — mesma condição da trilha do vínculo.
+- **A trilha da pessoa é do ADMIN, não do desativado.** Só existe policy de SELECT com
+  `is_clinic_admin(clinic_id)`; o desativado (que perdeu a adminidade) **não** lê a própria
+  trilha. Decisão idêntica à do 2b-i, registrada para não parecer esquecimento.

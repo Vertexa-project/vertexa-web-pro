@@ -782,3 +782,60 @@ nova, sem `channel_id` denormalizado, sem `send_chat_message`).
   `chat_channels`/`chat_participants`/`chat_messages` **intocados**. INSERT direto em
   `chat_messages` e `chat_mentions` PRESERVADO (o app da paciente depende dele).
   `app`/`patient-native` apenas LIDOS (gate G3). PARADO para auditoria.
+
+## WP-TEAM-2b-ii — O ESTADO DO PROFISSIONAL (migration 20260808090000 · PR sem merge, NÃO aplicada)
+
+- **A tese:** o 2b-i entregou o interruptor do VÍNCULO e não precisou tocar RLS porque os helpers
+  já filtravam o status do vínculo. Aqui o interruptor é da PESSOA, e por isso os helpers **têm**
+  de mudar: nenhuma das 109 policies cita "status" e a única filtragem de estado do grafo era
+  sobre o vínculo (medido na Fase 1, G7.4). Ou entra nos helpers, ou o corte não existe.
+- **GATES antes de escrever:** os 4 hashes reproduzidos (`96dd6fd3…` 109 · `31f48f5b…` 49 ·
+  `b79d7630…` 4 · `0d4d6744…` 55 tab/403 col, sub-hash T `863b1aaf…`); 0 duplicatas em
+  (profile_id, clinic_id) e 0 NULL nas duas colunas; grep de DELETE em `professionals` nos 3 repos
+  = 2 hits, **ambos SQL de ops que rodam como owner/service_role** (migration de purge já aplicada
+  + script manual de seed), portanto fora da RLS: o item 6 não quebra produção.
+- **Entregue:** `professionals.status` (+`status_changed_at/by/reason`) com CHECK ·
+  `UNIQUE (profile_id, clinic_id)` (quita a DÍVIDA-A1-1) · `revoke update` das 4 colunas novas ·
+  tabela IMUTÁVEL `professional_status_events` (só policy de SELECT, admin da clínica) · RPCs
+  `deactivate_professional` (recusa o DONO — L2 — e a autodesativação; cascateia TODOS os vínculos
+  ativos pelo núcleo extraído `private.deactivate_link_core`, herdando trilha e roster do chat, com
+  prefixo `[DESATIVACAO_DO_PROFISSIONAL]` no motivo) e `reactivate_professional` (**não** religa
+  vínculo) · 6 helpers passam a exigir profissional ativo (`is_clinic_admin` com o **ramo do DONO
+  intacto**, `owns_professional`, `is_clinic_staff`, `is_common_professional_of_patient`,
+  `is_external_professional_of_patient`, `is_clinic_member`) · `report_exports_select` com o ramo de
+  AUTORIA exigindo `is_clinic_staff` e o ramo do ADMIN intacto · `professionals_admin_write` (ALL)
+  substituída por `professionals_admin_insert`/`_update` (sai o DELETE) ·
+  `channel_professionals(uuid, boolean)` com `p_include_message_authors` default false ·
+  `my_clinic_memberships()` (clinic_id + nome + o PRÓPRIO status) · `promote_to_professional`
+  recusando cadastro `inactive`.
+- **⚠️ MUDANÇA DE DECISÃO DO DONO NO ITEM 4:** `is_clinic_member` passa a FILTRAR. A Fase 2 parou e
+  reportou que ele governa exatamente 2 policies e que `clinics` carrega o **join_code**, que é
+  credencial de entrada. A tela de explicação do desativado passa a ser servida pela RPC estreita.
+- **⚠️ BUG PEGO PELA PRÓPRIA MATRIZ (e é o motivo de ela existir):** a primeira versão de
+  `channel_professionals` tinha `select profile_id from roster` sem alias. Os nomes de
+  `RETURNS TABLE` são VARIÁVEIS OUT no plpgsql ⇒ `42702 column reference "profile_id" is ambiguous`
+  **em tempo de execução** (a função é criada sem erro e só explode quando chamada). O chat do
+  painel quebraria para todos. Corrigido qualificando os CTEs; reprovado depois: `false` devolve
+  resultado idêntico ao anterior em **7 canais reais** de produção, 0 diferenças.
+- **PROVAS.** Policies `96dd6fd3…` (109) → **`05b43fbc…` (111)**; helpers `31f48f5b…` (49) →
+  **`8babaf7e…` (50)**; âncoras `b79d7630…` → **`2ed1b213…`** (delta EXCLUSIVAMENTE
+  `promote_to_professional`, novo md5 `497fbd32…`; `can_see_profile` fica em `7a31d352…`,
+  `create_clinic_with_owner` em `a8259228…` e `handle_new_user` idêntica); privilégios `0d4d6744…`
+  (55/403) → **`1dbf6abe…` (56/415)**. Os quatro **por RECONSTRUÇÃO**: devolvendo só o que este WP
+  mexe, os quatro voltam EXATAMENTE ao baseline ⇒ nada mais variou. Nenhuma ACL pré-existente (de
+  tabela ou de coluna) mudou. Advisor 0029: **29 → 32** (+3 RPCs SECDEF novas, intencional).
+- **MATRIZ (transação + ROLLBACK, 8 atores × 70 sondas × 5 fases = 2.800 células):** regra de ouro
+  A1 `DEPOIS ⊆ ANTES` sem violação; A2..A8 `DEPOIS == ANTES` com **uma** diferença, e é PERDA de
+  leitura DIRETA, não ganho: com o vínculo inativo a paciente deixa de ler `profiles` pelo ramo R4
+  de `can_see_profile` (não tocada; mecanismo herdado do 2b-i). **Não é buraco:** o nome do autor
+  no histórico do chat vem de `channel_professionals`, e é para isso que serve o
+  `p_include_message_authors` deste WP — regra de uso em DÍVIDA-2bii-4 (`docs/PENDENCIAS.md`):
+  histórico ⇒ `true`, time de cuidado ⇒ `false`. Só a migration, sem desativar ninguém, muda
+  exatamente 4 sondas — as 4 declaradas. Controle negativo (catálogos/21 não alcançadas): zero
+  diferença para todos os atores em todas as fases. `anon` inerte em tudo.
+- **Suíte:** `supabase/tests/wp_team_2bii_professional_status_test.sql` — **verde**, rodada com a
+  migration na MESMA transação + ROLLBACK. Resíduo em produção: ZERO.
+- **Gates:** tsc 0 · eslint 0 (`--max-warnings 0`) · vitest · build OK.
+- **Escopo:** SÓ banco. **Frontend NÃO alterado** — nem o opt-in de `p_include_message_authors`,
+  nem o consumo de `my_clinic_memberships()`: os dois são o WP seguinte, por ordem explícita.
+  `app`/`patient-native` **não acessados**. PARADO no PR para auditoria.
