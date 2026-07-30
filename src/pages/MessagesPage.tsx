@@ -28,7 +28,7 @@ import { chatStageOf } from "@/lib/api/chat";
 import { CHAT_ATTACHMENT_MIME, hasChatAttachment, validateChatAttachment } from "@/lib/domain/chatAttachment";
 import { mentionFailureMessage } from "@/lib/domain/chatMention";
 import { indexById, quotedPreview, resolveQuote } from "@/lib/domain/chatReply";
-import { mentionsProfile, namesByProfileId } from "@/lib/domain/chatTeam";
+import { mentionableProfessionals, mentionsProfile, namesByProfileId } from "@/lib/domain/chatTeam";
 import { formatRelative, initials } from "@/lib/domain/format";
 import { cn } from "@/lib/utils";
 import type { ChannelProfessional, ChatMessageView, PatientListItem } from "@/types/db";
@@ -52,14 +52,21 @@ function Thread({ patient }: { patient: PatientListItem }) {
   const actingProfileId = data?.actingProfileId ?? null;
   const unreadForPatient = mentions?.byPatient[patient.id] ?? 0;
 
-  // Equipe do canal pela RPC (item 1). Carregada junto da conversa — não só ao abrir o seletor —
-  // porque o botão de @ precisa responder na hora e o resultado também nomeia quem foi marcado.
-  const professionalsQuery = useChannelProfessionals(channelId);
+  // ⚠️ DUAS PERGUNTAS, DUAS CHAMADAS (WP-FRONT-2bii-A item 2). Até aqui as duas dividiam UMA
+  // chamada, e isso não sobrevive à desativação de profissional: a mesma lista servia para
+  // "quem posso marcar" e para "quem escreveu isto", que passam a ter respostas diferentes.
+  //   rosterQuery  (false) → SELETOR DE @: só quem participa do canal AGORA.
+  //   authorsQuery (true)  → NOME DO AUTOR: roster ∪ autores das mensagens, para o histórico não
+  //                          perder a autoria de quem saiu.
+  // Carregadas junto da conversa — não só ao abrir o seletor — porque o botão de @ precisa
+  // responder na hora e o nome do autor aparece na primeira bolha.
+  const rosterQuery = useChannelProfessionals(channelId, false);
+  const authorsQuery = useChannelProfessionals(channelId, true);
   // Rótulos de disciplina vêm do BANCO (public.disciplines), não hardcodados na UI.
   const { data: disciplines } = useDisciplinesList();
   const labelByCode = new Map((disciplines ?? []).map((d) => [d.code, d.label]));
   // O próprio profissional sai da lista: marcar a si mesmo só acenderia o próprio badge.
-  const mentionable = (professionalsQuery.data ?? []).filter((p) => p.profileId !== actingProfileId);
+  const mentionable = mentionableProfessionals(rosterQuery.data, actingProfileId);
 
   // Ao abrir uma conversa com menções pendentes, marca como lidas (limpa o badge).
   // É o MESMO caminho de leitura de sempre (item 5 manda reusar, e não abrir um segundo).
@@ -110,13 +117,15 @@ function Thread({ patient }: { patient: PatientListItem }) {
    * ramos (sou eu / é paciente que alcanço / sou admin da clínica dele / eu sou a paciente) cobre
    * "colega da mesma clínica". Verificado em produção. A bolha caía para o genérico "Profissional".
    *
-   * A RPC `channel_professionals` já devolve nome de TODOS os participantes profissionais e a tela
-   * já a carrega para o seletor de @ — então o nome vem daí, sem nenhuma leitura nova.
+   * A RPC `channel_professionals` já devolve nome de TODOS os participantes profissionais — e,
+   * com `p_include_message_authors = true`, também de quem AUTOROU mensagem e não está mais no
+   * roster. É de lá que o nome vem, sem nenhuma leitura nova.
    *
    * `authorOf` continua sendo UM lugar só, servindo a bolha E a citação: as duas nunca podem
-   * discordar sobre a mesma pessoa.
+   * discordar sobre a mesma pessoa. O que mudou é que ele passa a beber SÓ da lista com autores
+   * (`authorsQuery`) — nunca da lista do seletor, que é propositalmente mais curta.
    */
-  const nameByProfile = namesByProfileId(professionalsQuery.data ?? []);
+  const nameByProfile = namesByProfileId(authorsQuery.data ?? []);
   const authorOf = (m: ChatMessageView) =>
     m.sender_role === "patient"
       ? patientName
@@ -153,8 +162,9 @@ function Thread({ patient }: { patient: PatientListItem }) {
           // tentar de novo (reenviar duplicaria) e não culpa quem escreveu.
           if (result.mentionFailed && marked) {
             setMentionWarning(mentionFailureMessage(marked.name, result.mentionFailureReason ?? "unknown"));
-            // A lista que ele usou está VELHA — foi ela que ofereceu alguém que já saiu.
-            void professionalsQuery.refetch();
+            // A lista que ele usou está VELHA — foi ela que ofereceu alguém que já saiu. É o
+            // ROSTER que precisa ser recarregado (a lista de autores não oferece marcação).
+            void rosterQuery.refetch();
           } else {
             setMentionWarning(null);
           }
@@ -373,9 +383,9 @@ function Thread({ patient }: { patient: PatientListItem }) {
             {pickerOpen ? (
               <MentionPicker
                 professionals={mentionable}
-                isLoading={professionalsQuery.isPending}
-                isError={professionalsQuery.isError}
-                onRetry={() => void professionalsQuery.refetch()}
+                isLoading={rosterQuery.isPending}
+                isError={rosterQuery.isError}
+                onRetry={() => void rosterQuery.refetch()}
                 onPick={(p) => {
                   setMention(p);
                   setPickerOpen(false);

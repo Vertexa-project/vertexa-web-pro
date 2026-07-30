@@ -25,9 +25,14 @@ export const qk = {
     ["patients", "withoutActiveProfessional", clinicId] as const,
   chatThread: (patientId: string) => ["patient", patientId, "chat"] as const,
   unreadMentions: (profileId: string) => ["chat", "mentions", profileId] as const,
-  // Profissionais do canal (RPC channel_professionals) — alimenta o seletor de @. Chaveado por
-  // CANAL, não por paciente: é o canal que a RPC recebe e é ele que define quem participa.
-  channelProfessionals: (channelId: string) => ["chat", "professionals", channelId] as const,
+  // Profissionais do canal (RPC channel_professionals). Chaveado por CANAL, não por paciente: é o
+  // canal que a RPC recebe e é ele que define quem participa.
+  // ⚠️ O `includeAuthors` ENTRA NA CHAVE porque as duas chamadas devolvem conjuntos diferentes e
+  // respondem a perguntas diferentes: false = "quem posso marcar agora" (roster), true = "quem
+  // escreveu isto" (roster ∪ autores). Compartilhar cache faria o seletor oferecer um desativado
+  // — ou o histórico perder o nome do autor —, dependendo de quem chegasse primeiro.
+  channelProfessionals: (channelId: string, includeAuthors: boolean) =>
+    ["chat", "professionals", channelId, includeAuthors ? "with-authors" : "roster"] as const,
   // URL assinada de anexo do chat (TTL curto; não cachear além do TTL).
   chatAttachmentUrl: (path: string) => ["chat", "attachment", path] as const,
   currentProfessional: (profileId: string) => ["currentProfessional", profileId] as const,
@@ -52,6 +57,13 @@ export const qk = {
   disciplinesList: ["disciplines", "list"] as const,
   myDisciplines: (professionalId: string) => ["disciplines", "mine", professionalId] as const,
   clinicDisciplines: (clinicId: string) => ["disciplines", "clinic", clinicId] as const,
+  // Trilha imutável de estado do profissional (WP-TEAM-2b-ii). Admin-only pela RLS: para o
+  // não-admin a consulta volta vazia, e "vazia" aqui significaria "ninguém foi desativado" —
+  // por isso a tela só a habilita para admin.
+  professionalStatusEvents: (clinicId: string) => ["professionals", "statusEvents", clinicId] as const,
+  // Minhas clínicas + o MEU status em cada uma (RPC my_clinic_memberships). Sem parâmetro: a
+  // chave não leva profile porque a RPC já é escopada ao chamador e o signOut limpa o cache.
+  myClinicMemberships: ["clinicMemberships", "mine"] as const,
   // Jornada do paciente (WP-KANBAN B): colunas por clínica, estado atual (por paciente) e marcos
   // reconhecidos. `journeyState`/`journeyAcks` são globais (a RLS escopa ao que o usuário acessa).
   journeyColumns: (clinicId: string) => ["journey", "columns", clinicId] as const,

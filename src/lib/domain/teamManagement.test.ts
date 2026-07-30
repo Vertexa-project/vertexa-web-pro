@@ -29,6 +29,8 @@ const req = (over: Partial<ClinicJoinRequest> = {}): ClinicJoinRequest => ({
 
 const prof = (over: Partial<ProfessionalWithDisciplines> = {}): ProfessionalWithDisciplines => ({
   professionalId: "pr1",
+  // profile_id passou a vir na consulta (WP-FRONT-2bii-A): é como a tela sabe quem é o DONO.
+  profileId: "pf1",
   fullName: "Ana Prado",
   type: "doctor",
   disciplines: ["medicina"],

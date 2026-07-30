@@ -133,7 +133,7 @@ interface RawChannelProfessionalRow {
 }
 
 /**
- * Profissionais participantes do canal — pela RPC `public.channel_professionals`, NÃO por embed.
+ * Profissionais de um canal — pela RPC `public.channel_professionals`, NÃO por embed.
  *
  * ⚠️ O EMBED EQUIVALENTE MENTE: `chat_participants -> profiles -> professionals(type, specialty)`
  * esbarra em DUAS policies. `professionals_select` (`profile_id = current_profile_id() OR
@@ -146,11 +146,26 @@ interface RawChannelProfessionalRow {
  * qualquer dado), enumera as colunas (NÃO devolve registry_number) e ainda traz `disciplines`, que
  * o embed nem alcançava.
  *
+ * ⚠️ AS DUAS PERGUNTAS SÃO DIFERENTES, E É O `includeMessageAuthors` QUE AS SEPARA
+ * (WP-TEAM-2b-ii / WP-FRONT-2bii-A):
+ *   · `false` (default) = **"quem eu posso marcar AGORA"** — só o ROSTER do canal. Um profissional
+ *     desativado sai do roster na cascata da desativação, então ele NÃO pode ser oferecido: marcar
+ *     alguém que não participa mais é uma menção que o banco recusa.
+ *   · `true` = **"quem escreveu isto"** — roster ∪ AUTORES das mensagens do canal. Uma mensagem que
+ *     existe tem de continuar tendo autor com nome depois que a pessoa sai; sem isto a bolha cairia
+ *     para o genérico "Profissional" e o histórico perderia a autoria.
+ * De propósito, NENHUM dos dois filtra `status`: identidade não se apaga com a desativação. O que
+ * muda é a PERGUNTA, não o direito de ver o nome.
+ *
  * O erro NÃO é engolido: propaga para a tela mostrar falha visível em vez de lista vazia.
  */
-export async function listChannelProfessionals(channelId: string): Promise<ChannelProfessional[]> {
+export async function listChannelProfessionals(
+  channelId: string,
+  includeMessageAuthors = false,
+): Promise<ChannelProfessional[]> {
   const { data, error } = await supabase.rpc("channel_professionals", {
     p_channel_id: channelId,
+    p_include_message_authors: includeMessageAuthors,
   });
   if (error) throw error;
 
