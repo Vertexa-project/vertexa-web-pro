@@ -825,9 +825,12 @@ nova, sem `channel_id` denormalizado, sem `send_chat_message`).
   mexe, os quatro voltam EXATAMENTE ao baseline ⇒ nada mais variou. Nenhuma ACL pré-existente (de
   tabela ou de coluna) mudou. Advisor 0029: **29 → 32** (+3 RPCs SECDEF novas, intencional).
 - **MATRIZ (transação + ROLLBACK, 8 atores × 70 sondas × 5 fases = 2.800 células):** regra de ouro
-  A1 `DEPOIS ⊆ ANTES` sem violação; A2..A8 `DEPOIS == ANTES` com **uma** violação, e é PERDA
-  (DÍVIDA-2bii-4: a paciente perde o nome de quem a atendia, pelo ramo R4 de `can_see_profile`,
-  que não foi tocada — mecanismo herdado do 2b-i). Só a migration, sem desativar ninguém, muda
+  A1 `DEPOIS ⊆ ANTES` sem violação; A2..A8 `DEPOIS == ANTES` com **uma** diferença, e é PERDA de
+  leitura DIRETA, não ganho: com o vínculo inativo a paciente deixa de ler `profiles` pelo ramo R4
+  de `can_see_profile` (não tocada; mecanismo herdado do 2b-i). **Não é buraco:** o nome do autor
+  no histórico do chat vem de `channel_professionals`, e é para isso que serve o
+  `p_include_message_authors` deste WP — regra de uso em DÍVIDA-2bii-4 (`docs/PENDENCIAS.md`):
+  histórico ⇒ `true`, time de cuidado ⇒ `false`. Só a migration, sem desativar ninguém, muda
   exatamente 4 sondas — as 4 declaradas. Controle negativo (catálogos/21 não alcançadas): zero
   diferença para todos os atores em todas as fases. `anon` inerte em tudo.
 - **Suíte:** `supabase/tests/wp_team_2bii_professional_status_test.sql` — **verde**, rodada com a

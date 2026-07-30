@@ -39,12 +39,14 @@
 --   (I1) o ADMIN e o DONO continuam vendo profile, linha de professionals e disciplinas de A1
 --   (I2) channel_professionals com false = resultado IDÊNTICO ao anterior; com true traz o AUTOR
 --        que saiu do roster
---   (I3) ⚠️ LIMITE CONHECIDO E DECLARADO, NÃO É BUG DESTE ARQUIVO: a PACIENTE deixa de ver o
---        profile (o NOME) de A1, porque o ramo R4 de private.can_see_profile exige VÍNCULO
---        ATIVO e a cascata derruba o vínculo. can_see_profile NÃO foi tocada (hash provado no
---        PR) — o comportamento é herdado do 2b-i, onde desativar UM vínculo já fazia isso para
---        aquela paciente. O teste FIXA esse comportamento para que uma mudança futura seja
---        deliberada, e a decisão está registrada como DÍVIDA-2bii-4 em docs/PENDENCIAS.md.
+--   (I3) A PACIENTE deixa de ler o profile de A1 por LEITURA DIRETA (o ramo R4 de
+--        private.can_see_profile exige vínculo ativo, e a cascata derruba o vínculo).
+--        can_see_profile NÃO foi tocada (hash provado no PR) e o comportamento é herdado do
+--        2b-i. **Isto não é o caminho do nome no chat**: o nome do autor vem de
+--        channel_professionals, e é o que (I2) prova — com p_include_message_authors = true, o
+--        autor que saiu do roster volta. REGRA DE USO (DÍVIDA-2bii-4 em docs/PENDENCIAS.md):
+--        histórico de mensagens ⇒ true; lista de time de cuidado ⇒ false. O teste FIXA os dois
+--        comportamentos para que qualquer mudança futura seja deliberada.
 -- =====================================================================================
 
 begin;
@@ -301,8 +303,10 @@ begin
   set local role authenticated;
   select count(*) into v_n from public.chat_messages where channel_id = ch1;
   if v_n <> 2 then fails := fails || 'A5_perdeu_historico('||v_n::text||') '; end if;
-  -- (I3) LIMITE DECLARADO: a paciente PERDE o profile (o nome) de A1 — ramo R4 exige vínculo
-  -- ativo e a cascata o derrubou. can_see_profile NÃO foi tocada. Ver DÍVIDA-2bii-4.
+  -- (I3) LEITURA DIRETA: a paciente deixa de ler o profile de A1 — ramo R4 exige vínculo ativo e
+  -- a cascata o derrubou. can_see_profile NÃO foi tocada. O NOME no histórico do chat não passa
+  -- por aqui: passa por channel_professionals com p_include_message_authors=true, provado em (I2).
+  -- Regra de uso em DÍVIDA-2bii-4 (docs/PENDENCIAS.md).
   if private.can_see_profile(p_a1) then fails := fails || 'I3_comportamento_mudou_verifique_a_divida '; end if;
   reset role;
   perform set_config('request.jwt.claims', json_build_object('sub',a_ext,'role','authenticated')::text, true);

@@ -1198,10 +1198,16 @@ superfície de RPC que os dois repos veem.
   clínica: `22023`, hint `PROFESSIONAL_INACTIVE`. Consequência: `approve_join_request` **falha** e
   a solicitação **permanece `pending`** (antes retornava a linha desativada e marcava "approved",
   ou seja, aprovava sem devolver acesso). Linha existente **ATIVA**: dedup inalterado.
+- **⚠️ REGRA DE USO DO `p_include_message_authors` (vale para o WP de frontend, nos dois repos):**
+  **resolução de NOME no histórico do chat ⇒ `true`; lista do TIME DE CUIDADO ⇒ `false`** (o
+  default). Uma pergunta é *"quem escreveu isto"*, a outra é *"quem cuida de mim hoje"* — e elas
+  têm respostas diferentes assim que alguém é desativado. O nome do autor **não** sai de
+  `private.can_see_profile` (com o vínculo inativo, o ramo R4 dela para de valer para a paciente,
+  e este WP não tocou nessa função): sai desta RPC. Detalhe e histórico em **DÍVIDA-2bii-4**
+  (`docs/PENDENCIAS.md`).
 - **Cross-repo:** `vertexa-app-paciente` e `vertexa-patient-native` **não** chamam nenhuma dessas
-  RPCs. ⚠️ Mas há um efeito de leitura no app da paciente: ver **DÍVIDA-2bii-4** em
-  `docs/PENDENCIAS.md` — com o vínculo desativado, a paciente deixa de ler o `profiles` (o nome) do
-  profissional pelo ramo R4 de `private.can_see_profile`, que este WP **não** tocou.
+  RPCs hoje. Quem hoje monta lista de profissionais a partir de `chat_participants` e a usa para
+  exibir NOME de histórico é o candidato natural da migração acima.
 - **Advisor `authenticated_security_definer_function_executable` (0029): 29 → 32.** As 3 novas são
   intencionais, pelo mesmo motivo das RPCs do APP-1: SÃO o endpoint autenticado, e a segurança está
   na revalidação interna (`is_clinic_admin`) e, no caso da `my_clinic_memberships`, na ausência de

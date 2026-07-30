@@ -799,18 +799,27 @@ tomadas nele:
   `request_clinic_access` continua barrando esse profile por ele **não** estar `pending`. Ou seja:
   o desativado não consegue nem pedir para voltar — quem o traz de volta é o admin, por
   `reactivate_professional`.
-- **⚠️ DÍVIDA-2bii-4 — A PACIENTE PERDE O NOME DO PROFISSIONAL DESATIVADO. É DECISÃO DO DONO.**
-  Medido na matriz: depois da desativação, a paciente deixa de ver o `profiles` (o **nome**) de
-  quem a atendia. Causa exata: o ramo **R4** de `private.can_see_profile` exige
-  `coalesce(l.status,'active')='active'`, e a cascata do item 2 derruba o vínculo.
-  `can_see_profile` **não foi tocada** (hash `7a31d3522ef51b7e6b10701a637a2efd` provado byte a
-  byte). **O mecanismo é herdado do 2b-i** — desativar UM vínculo já fazia isso para aquela
-  paciente; o 2b-ii só passa a fazer para todas de uma vez. Efeito prático: no app da paciente, o
-  nome do autor no histórico (chat, planos) fica sem fonte. As duas saídas conhecidas — (a) tirar
-  o filtro de status do R4, (b) servir o nome por RPC SECDEF como `channel_professionals` faz no
-  painel — **exigem tocar a âncora ou o app**, e nenhuma das duas estava no escopo deste WP.
-  Está registrada aqui como a única violação da regra de ouro (`A2..A8 ⇒ DEPOIS == ANTES`) que a
-  matriz encontrou, e ela é PERDA de acesso, não ganho.
+- **✅ DÍVIDA-2bii-4 — NÃO É BURACO EM ABERTO. É REGRA DE USO: "quem escreveu" ≠ "quem cuida".**
+  O nome do autor no histórico do chat **não vem de `private.can_see_profile`** — vem de
+  **`public.channel_professionals`**, que é SECDEF justamente para atravessar a RLS de `profiles`
+  (que nunca cobriu "colega da mesma clínica"; é a razão de a RPC existir desde o WP-CHAT-B). O
+  parâmetro **`p_include_message_authors`**, entregue neste WP, é exatamente o que devolve o autor
+  que saiu do roster. Resolvido na fonte certa.
+  **REGRA DE USO — vale para o WP de frontend:**
+  · **resolução de NOME no histórico do chat ⇒ `p_include_message_authors = TRUE`**
+  · **lista do TIME DE CUIDADO (quem atende hoje) ⇒ `FALSE`** (o default)
+  Uma pergunta é *"quem escreveu isto"*, a outra é *"quem cuida de mim hoje"*. Misturar as duas é
+  o que produz UI que mente: ou um nome somindo de uma mensagem que existe, ou um desativado
+  aparecendo como responsável atual.
+  **O que a matriz mediu, para o registro:** com o vínculo inativo, o ramo **R4** de
+  `can_see_profile` deixa de valer para a paciente, então ela não lê `profiles` **por leitura
+  direta**. `can_see_profile` **não foi tocada** (`7a31d3522ef51b7e6b10701a637a2efd`, byte a byte)
+  e o mecanismo é herdado do 2b-i — desativar UM vínculo já fazia isso para aquela paciente. A
+  leitura direta de `profiles` nunca foi o caminho do nome no chat; o caminho é a RPC.
+  **Estado hoje (factual, não pendência de banco):** nenhuma tela passa `true` ainda — o opt-in é
+  o WP de frontend. O app da paciente monta o seletor de menção a partir de `chat_participants`
+  (dependência cross-repo já registrada na seção do WP-CHAT-FIX), então quem consumir o roster
+  para NOME de histórico é que precisa migrar para a RPC com `true`.
 - **`professional_status_events` cascateia com a linha.** A FK é `on delete cascade`, igual à
   `ppl_status_events` do 2b-i. Como o item 6 tira o DELETE do client, hoje só `service_role`/owner
   consegue apagar a linha e levar a trilha junto — mesma condição da trilha do vínculo.
