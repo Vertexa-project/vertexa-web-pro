@@ -1,3 +1,3 @@
 # VERTEXA Web Pro — Pacote Claude Code
 
-build31
+build32
