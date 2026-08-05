@@ -163,9 +163,13 @@ export async function getPatient(id: string): Promise<PatientDetail> {
 // roda pela RPC SECURITY DEFINER `create_patient` (WP-APP-1), que — de forma TRANSACIONAL e
 // com AUTORIZAÇÃO INTERNA (o chamador tem de ser profissional/admin da clínica-alvo) — encadeia
 // profiles(role='patient') -> patients -> professional_patient_links(vínculo amarrado ao
-// chamador) -> body_assessments(anamnese opcional). O paciente entra SEM auth_user_id; o login
-// (Google) liga a identidade depois via match-by-email no handle_new_user. professionalId do
-// input não é mais enviado: o servidor deriva o vínculo do próprio chamador (anti-forja).
+// chamador) -> body_assessments(anamnese opcional). VÍNCULO COM A CONTA (WP-VINCULO-1): os dois
+// sentidos são cobertos, e por mecanismos diferentes. Cadastro ANTES do 1º login -> o paciente
+// entra sem auth_user_id e o handle_new_user liga por match-by-email no login. Conta JÁ existente
+// no momento do cadastro -> a própria create_patient procura em auth.users (mesma normalização
+// lower(btrim(...)) do gatilho) e o profile NASCE vinculado; só reivindica uid LIVRE, nunca um já
+// usado por outro profile. professionalId do input não é mais enviado: o servidor deriva o vínculo
+// do próprio chamador (anti-forja).
 export interface CreatePatientAnamnese {
   method: string | null; // bioimpedancia | adipometro | dexa | manual
   weight: number | null;
