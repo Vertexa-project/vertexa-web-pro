@@ -602,6 +602,35 @@
   chamadas separadas, sem transação**. Nesse cenário a mensagem fica gravada e o usuário vê erro —
   parece que não enviou, mas enviou. Fechar isso exige uma RPC transacional de envio (era o
   `send_chat_message` do desenho cancelado) ou tratamento do erro no app: **decisão do dono**.
+- **DÍVIDA-VINCULO-EMAIL — o gatilho NUNCA atualiza `profiles.email`, então trocar o e-mail no
+  Google deixa o antigo preso no profile — e livre para outra conta reivindicar.
+  (Desenterrada no WP-VINCULO-2, ao provar a realizabilidade do caso "dois candidatos".
+  DIAGNOSTICADA E REPRODUZIDA; NÃO CORRIGIDA.)**
+  `handle_new_user` é `AFTER INSERT OR UPDATE OF email_confirmed_at` e, além disso, sai na PRIMEIRA
+  linha do corpo quando o uid já tem profile (`if exists (… where auth_user_id = new.id) return new`).
+  Ou seja: depois do 1º login, **nada** volta a escrever em `profiles.email`. Se a pessoa troca o
+  e-mail da conta Google, `auth.users.email` muda e `profiles.email` fica com o valor ANTIGO,
+  indefinidamente.
+  **O cenário exato, reproduzido em ensaio (transação + ROLLBACK, gatilho vivo):**
+  1. a pessoa A loga com `x@dominio` → o gatilho cria o placeholder de A com `email = x@dominio`;
+  2. A troca o e-mail da conta Google para `y@dominio` → `auth.users.email` vira `y@dominio`, o
+     gatilho **não dispara** (só olha `email_confirmed_at`) e o profile de A continua `x@dominio`;
+  3. `x@dominio` fica LIVRE em `auth.users` — o índice único é `users_email_partial_key … where
+     is_sso_user = false`, e ele só olha `auth.users`, não `profiles`;
+  4. outra pessoa B cria conta com `x@dominio` → o gatilho cria o placeholder de B, também com
+     `email = x@dominio`. **Duas linhas em `profiles` com o mesmo e-mail, ambas `pending`.**
+  **Por que importa:** `profiles.email` é a chave de casamento de TRÊS mecanismos — o
+  match-by-email do próprio gatilho, o WP-VINCULO-1 (conta livre) e o WP-VINCULO-2 (placeholder).
+  Com o e-mail defasado, o cadastro pelo painel busca por um endereço que não pertence mais àquela
+  pessoa. Hoje o estrago é CONTIDO por desenho: os três exigem **exatamente um** candidato, então o
+  caso acima faz todos recusarem e criarem órfão (medido no caso (d) da matriz do WP-VINCULO-2) —
+  ninguém é vinculado à identidade errada. O preço é que A e B ficam as duas presas em "Acesso
+  pendente", e a clínica não tem como destravá-las pelo produto.
+  **NÃO CORRIGIDO, e as saídas conhecidas (decisão do dono):** (a) o gatilho passar a atualizar
+  `profiles.email` no UPDATE de e-mail — exige mexer numa **ÂNCORA** (H3) e ampliar o evento do
+  trigger; (b) uma RPC de reconciliação que sincroniza `profiles.email` a partir de `auth.users`
+  pelo `auth_user_id`, sem tocar o gatilho — mais barata e auditável; (c) parar de casar por e-mail
+  onde já existe `auth_user_id`, usando o uid como chave. Nenhuma foi implementada.
 - **DÍVIDA-MENTION-2 — `chat_mentions.message_id` e `mentioned_profile_id` continuam ANULÁVEIS.**
   A `UNIQUE (message_id, mentioned_profile_id)` deste WP **não constrange linhas com nulo** (a
   regra do Postgres), então em tese caberiam N linhas `(null, null)`. Hoje há 0 linhas nulas e o
