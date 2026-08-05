@@ -165,7 +165,7 @@ export async function listClinicProfessionalProfiles(
 ): Promise<Array<{ profileId: string; name: string }>> {
   const { data, error } = await supabase
     .from("professionals")
-    .select("profile_id, profile:profiles ( full_name )")
+    .select("profile_id, profile:profiles!professionals_profile_id_fkey ( full_name )")
     .eq("clinic_id", clinicId);
   if (error) throw error;
   return ((data ?? []) as unknown as Array<{ profile_id: string; profile: { full_name: string | null } | null }>).map(

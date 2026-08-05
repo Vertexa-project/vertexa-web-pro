@@ -88,7 +88,7 @@ export async function listPatients(): Promise<PatientListItem[]> {
       `id, goal, current_weight, start_date, birth_date,
        profile:profiles ( full_name, email, avatar_url ),
        adherence_snapshots ( score, level, status, weekly_completion_rate, calculated_at ),
-       professional_patient_links ( status, professionals ( id, type, profile:profiles ( full_name ) ) ),
+       professional_patient_links ( status, professionals ( id, type, profile:profiles!professionals_profile_id_fkey ( full_name ) ) ),
        activity_events ( type, created_at ),
        weight_logs ( measured_at ),
        progress_photos ( taken_at )`,
@@ -143,7 +143,7 @@ export async function getPatient(id: string): Promise<PatientDetail> {
     .select(
       `*,
        profile:profiles ( * ),
-       professional_patient_links ( status, professionals ( id, type, profile:profiles ( full_name ) ) )`,
+       professional_patient_links ( status, professionals ( id, type, profile:profiles!professionals_profile_id_fkey ( full_name ) ) )`,
     )
     .eq("id", id)
     .single();

@@ -77,7 +77,7 @@ export async function listClinicProfessionalDisciplines(
   const { data, error } = await supabase
     .from("professionals")
     .select(
-      "id, profile_id, type, status, profile:profiles ( full_name ), professional_disciplines ( discipline )",
+      "id, profile_id, type, status, profile:profiles!professionals_profile_id_fkey ( full_name ), professional_disciplines ( discipline )",
     )
     .eq("clinic_id", clinicId);
   if (error) throw error;
