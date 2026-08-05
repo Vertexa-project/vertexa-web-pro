@@ -8,7 +8,7 @@ interface RawAppointmentRow extends Appointment {
 }
 
 const SELECT_WITH_NAMES =
-  "*, patient:patients ( profile:profiles ( full_name ) ), professional:professionals ( profile:profiles ( full_name ) )";
+  "*, patient:patients ( profile:profiles ( full_name ) ), professional:professionals ( profile:profiles!professionals_profile_id_fkey ( full_name ) )";
 
 function toView(row: RawAppointmentRow): AppointmentView {
   const { patient, professional, ...appt } = row;

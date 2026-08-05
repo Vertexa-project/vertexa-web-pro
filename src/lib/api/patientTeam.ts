@@ -58,7 +58,7 @@ interface RawTeamRow {
 // futuro segundo caminho para profiles.
 const TEAM_SELECT = `
   id, professional_id, is_external, status, status_changed_at, status_reason,
-  professionals ( id, type, profile:profiles ( full_name ) ),
+  professionals ( id, type, profile:profiles!professionals_profile_id_fkey ( full_name ) ),
   changed_by_profile:profiles!professional_patient_links_status_changed_by_fkey ( full_name )
 `;
 

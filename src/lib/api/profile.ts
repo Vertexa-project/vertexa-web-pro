@@ -55,7 +55,7 @@ interface RawProfessionalRow {
 export async function getCurrentProfessional(profileId: string): Promise<CurrentProfessional | null> {
   const { data, error } = await supabase
     .from("professionals")
-    .select("id, profile_id, clinic_id, type, profile:profiles ( full_name, role )")
+    .select("id, profile_id, clinic_id, type, profile:profiles!professionals_profile_id_fkey ( full_name, role )")
     .eq("profile_id", profileId)
     .maybeSingle();
   if (error) throw error;
@@ -82,7 +82,7 @@ export interface ClinicProfessional {
 export async function listClinicProfessionals(clinicId: string): Promise<ClinicProfessional[]> {
   const { data, error } = await supabase
     .from("professionals")
-    .select("id, type, profile:profiles ( full_name )")
+    .select("id, type, profile:profiles!professionals_profile_id_fkey ( full_name )")
     .eq("clinic_id", clinicId);
   if (error) throw error;
   return ((data ?? []) as unknown as RawProfessionalRow[]).map((r) => ({

@@ -134,7 +134,7 @@ export async function listPatientDocuments(patientId: string): Promise<PatientDo
   if (professionalIds.length > 0) {
     const { data: profs, error: profErr } = await supabase
       .from("professionals")
-      .select("id, profile:profiles ( full_name )")
+      .select("id, profile:profiles!professionals_profile_id_fkey ( full_name )")
       .in("id", professionalIds);
     if (profErr) throw profErr;
     for (const p of (profs ?? []) as unknown as RawProfessionalNameRow[]) {
