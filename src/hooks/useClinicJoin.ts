@@ -14,14 +14,14 @@ import { useAuth } from "@/providers/auth-context";
 
 /**
  * Pedidos de acesso DO USUÁRIO LOGADO (WP-JOIN-1). Alimenta o estado "aguardando aprovação" na
- * tela de acesso pendente. Desabilitado em modo demo (não há sessão real para a RLS resolver).
+ * tela de acesso pendente. Só consulta com sessão real (a RLS resolve o remetente).
  */
 export function useMyJoinRequests() {
-  const { demoMode, session } = useAuth();
+  const { session } = useAuth();
   return useQuery({
     queryKey: qk.myJoinRequests,
     queryFn: listMyJoinRequests,
-    enabled: !demoMode && Boolean(session),
+    enabled: Boolean(session),
     staleTime: 30_000,
   });
 }

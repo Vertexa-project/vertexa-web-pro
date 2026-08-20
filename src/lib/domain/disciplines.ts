@@ -118,21 +118,3 @@ export function writeDeniedMessage(err: unknown, surface?: ScopedSurface): strin
   return "Você não tem a disciplina necessária para editar isto.";
 }
 
-/**
- * Mapeamento SÓ-DEMO: persona do seletor de demonstração → disciplinas. Sob auth REAL, as
- * disciplinas vêm do banco (professional_disciplines), NUNCA daqui (o demo não tem dados no banco).
- */
-export function demoDisciplinesForRole(role: string): DisciplineCode[] {
-  switch (role) {
-    case "doctor":
-      return ["medico"];
-    case "nutritionist":
-      return ["nutricionista"];
-    case "trainer":
-      return ["educador_fisico"];
-    case "physio":
-      return ["fisioterapeuta"];
-    default:
-      return []; // admin / other: sem disciplina clínica
-  }
-}

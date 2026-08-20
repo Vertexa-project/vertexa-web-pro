@@ -4,8 +4,7 @@ import type { ProfessionalType, UserRole } from "@/types/db";
 /**
  * Resolve o profile do usuário autenticado (auth real) por `auth_user_id = auth.uid()`.
  * Retorna null quando ainda não há profile associado (o trigger handle_new_user associa por
- * e-mail ou cria um 'pending' no 1º login — ver migration 20260708120000). Só usado no modo
- * real; no demo a identidade vem do pin de env.
+ * e-mail ou cria um 'pending' no 1º login — ver migration 20260708120000).
  */
 export async function getProfileByAuthUserId(
   authUserId: string,
@@ -31,9 +30,9 @@ export async function getProfileName(profileId: string): Promise<string | null> 
 }
 
 /**
- * Registro do profissional atuante (demo = Dra. Camila via env). Resolve professionals.id
- * + clinic_id a partir do profile_id — necessário para CADASTRAR paciente com isolamento
- * por clínica e vinculá-lo ao profissional. Sob auth real viria de auth.uid() (PENDENCIAS #14).
+ * Registro do profissional atuante. Resolve professionals.id + clinic_id a partir do
+ * profile_id — necessário para CADASTRAR paciente com isolamento por clínica e vinculá-lo
+ * ao profissional. Identidade vem de auth.uid() → profiles.auth_user_id.
  */
 export interface CurrentProfessional {
   id: string; // professionals.id (para o vínculo)

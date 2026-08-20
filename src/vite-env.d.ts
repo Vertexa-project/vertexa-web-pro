@@ -3,9 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;
   readonly VITE_SUPABASE_ANON_KEY: string;
-  // Profissional atuante em modo demo (sem auth real). Ver src/lib/session.ts.
-  readonly VITE_DEMO_PROFESSIONAL_PROFILE_ID?: string;
-  // Modo de autenticação: "demo" (default) | "real". Ver src/lib/auth/authMode.ts.
+  // Legado. Ausente / vazio / "real" = ok. Qualquer outro valor (incl. "demo") falha no boot.
+  // Ver src/lib/auth/authMode.ts. Não remove da Vercel neste WP — lá já está "real" (inócua).
   readonly VITE_AUTH_MODE?: string;
   // Observabilidade (Sentry). Todas OPCIONAIS — sem DSN a observabilidade fica desligada.
   // Ver src/lib/observability/sentry.ts e docs/ops/OBSERVABILITY.md.

@@ -96,7 +96,7 @@ export function PatientCreateDialog({ open, onOpenChange, onCreated }: Props) {
   const [error, setError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const create = useCreatePatient();
-  // Profissional atuante (demo: Dra. Camila via env) → isolamento por clínica + vínculo.
+  // Profissional atuante → isolamento por clínica + vínculo.
   const { data: professional } = useCurrentProfessional();
 
   useEffect(() => {

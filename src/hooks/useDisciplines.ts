@@ -10,7 +10,6 @@ import {
 } from "@/lib/api/disciplines";
 import {
   canWriteSurface,
-  demoDisciplinesForRole,
   derivePermissions,
   WriteForbiddenError,
   type DisciplinePermissions,
@@ -18,14 +17,12 @@ import {
 } from "@/lib/domain/disciplines";
 import { qk } from "@/lib/queryKeys";
 import { useCurrentProfessional } from "@/hooks/useCurrentProfessional";
-import { useAuth } from "@/providers/auth-context";
-import { useRole } from "@/providers/role-context";
 
 /** Lista canônica de disciplinas (rótulos + administração). */
 export const useDisciplinesList = () =>
   useQuery({ queryKey: qk.disciplinesList, queryFn: listDisciplines, staleTime: Infinity });
 
-/** Disciplinas do profissional logado (real). Desligável (demo não busca — usa o mapeamento demo). */
+/** Disciplinas do profissional logado. */
 export const useMyDisciplines = (professionalId: string | null | undefined, enabled = true) =>
   useQuery({
     queryKey: qk.myDisciplines(professionalId ?? "none"),
@@ -69,10 +66,9 @@ export function useRevokeDiscipline(clinicId: string | null | undefined) {
 }
 
 /**
- * Permissões de escrita do profissional logado, DERIVADAS por UNIÃO das suas disciplinas.
- * - Real: disciplinas vêm do banco (professional_disciplines).
- * - Demo: derivadas da persona do seletor de demonstração (mapeamento SÓ-demo; o banco está vazio).
- * Fonte ÚNICA de gating clínico da UI — nunca de `professionals.type`.
+ * Permissões de escrita do profissional logado, DERIVADAS por UNIÃO das suas disciplinas
+ * no banco (professional_disciplines). Fonte ÚNICA de gating clínico da UI — nunca de
+ * `professionals.type`.
  */
 export function useDisciplinePermissions(): {
   perms: DisciplinePermissions;
@@ -80,14 +76,7 @@ export function useDisciplinePermissions(): {
   isLoading: boolean;
 } {
   const { data: professional } = useCurrentProfessional();
-  const { demoMode } = useAuth();
-  const { role } = useRole();
-  const query = useMyDisciplines(professional?.id ?? null, !demoMode);
-
-  if (demoMode) {
-    const demo = demoDisciplinesForRole(role);
-    return { perms: derivePermissions(demo), disciplines: demo, isLoading: false };
-  }
+  const query = useMyDisciplines(professional?.id ?? null);
   const disciplines = query.data ?? [];
   return { perms: derivePermissions(disciplines), disciplines, isLoading: query.isLoading };
 }

@@ -29,3 +29,7 @@ verify_jwt = true
 
 [functions.google-calendar-disconnect]
 verify_jwt = true
+
+# WP-04A: não aplicar supabase/seed.sql em `db reset` local. Catálogos vêm das migrations.
+[db.seed]
+enabled = false

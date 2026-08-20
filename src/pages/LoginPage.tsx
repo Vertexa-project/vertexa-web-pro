@@ -6,7 +6,6 @@ import { Brand, BrandMark } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isRealAuth } from "@/lib/auth/authMode";
 import { useAuth } from "@/providers/auth-context";
 
 /** Logo "G" do Google (inline, sem asset externo). */
@@ -32,7 +31,7 @@ const linkButton =
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, signIn, signInDemo, signInWithGoogle } = useAuth();
+  const { isAuthenticated, signIn, signInWithGoogle } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -61,11 +60,6 @@ export function LoginPage() {
     } finally {
       setSubmitting(false);
     }
-  }
-
-  function handleDemo() {
-    signInDemo();
-    navigate(from, { replace: true });
   }
 
   async function handleGoogle() {
@@ -116,28 +110,23 @@ export function LoginPage() {
             Entre com suas credenciais profissionais.
           </p>
 
-          {/* Login Google (só no modo real). No modo demo a tela fica IDÊNTICA à de hoje. */}
-          {isRealAuth ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-8 w-full gap-2"
-                onClick={handleGoogle}
-                disabled={submitting}
-              >
-                <GoogleGlyph />
-                Entrar com Google
-              </Button>
-              <div className="my-6 flex items-center gap-3">
-                <span className="h-px flex-1 bg-border" />
-                <span className="text-xs text-muted-foreground">ou</span>
-                <span className="h-px flex-1 bg-border" />
-              </div>
-            </>
-          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-8 w-full gap-2"
+            onClick={handleGoogle}
+            disabled={submitting}
+          >
+            <GoogleGlyph />
+            Entrar com Google
+          </Button>
+          <div className="my-6 flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">ou</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
 
-          <form onSubmit={handleSubmit} className={isRealAuth ? "space-y-4" : "mt-8 space-y-4"}>
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
               <Input
@@ -200,13 +189,6 @@ export function LoginPage() {
               {submitting ? "Entrando…" : "Entrar"}
             </Button>
           </form>
-
-          {/* Modo demonstração — só quando VITE_AUTH_MODE=demo (atrás da flag). */}
-          {!isRealAuth ? (
-            <Button variant="outline" className="mt-3 w-full" onClick={handleDemo} disabled={submitting}>
-              Entrar em modo demonstração
-            </Button>
-          ) : null}
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Não tem conta?{" "}

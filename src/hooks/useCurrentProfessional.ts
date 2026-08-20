@@ -6,16 +6,16 @@ import { useIdentity } from "@/hooks/useIdentity";
 
 /**
  * Registro do profissional atuante (professionals.id + clinic_id + role) — usado no cadastro
- * de paciente, RBAC de UI, exports, etc. Deriva da fonte ÚNICA `useIdentity` (real|demo):
- * demo = pin de env; real = auth.uid() → profile → professional. Mesma forma de retorno de
- * antes (`{ data, isLoading }`) para não quebrar os consumidores.
+ * de paciente, RBAC de UI, exports, etc. Deriva da fonte ÚNICA `useIdentity`
+ * (auth.uid() → profile → professional). Mesma forma de retorno (`{ data, isLoading }`)
+ * para não quebrar os consumidores.
  */
 export const useCurrentProfessional = () => {
   const identity = useIdentity();
   return { data: identity.professional ?? undefined, isLoading: identity.status === "loading" };
 };
 
-/** Nome do profissional atuante (para saudação). Real = professional/email; demo = seed. */
+/** Nome do profissional atuante (para saudação). */
 export const useCurrentProfessionalName = () => {
   const identity = useIdentity();
   return { data: identity.displayName ?? null, isLoading: identity.status === "loading" };

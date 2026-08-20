@@ -69,10 +69,3 @@ export function roleLabel(role: Role): string {
 export const EDIT_REASON = {
   calendar: "Apenas o administrador da clínica gerencia a integração com o Google Calendar.",
 } as const;
-
-/** Papéis oferecidos no seletor de DEMONSTRAÇÃO (personas demonstráveis ao vivo). */
-export const DEMO_ROLES: { value: Role; label: string }[] = [
-  { value: "admin", label: "Admin" },
-  { value: "doctor", label: "Médico(a)" },
-  { value: "nutritionist", label: "Nutri" },
-];

@@ -3,16 +3,10 @@ import { createContext, useContext } from "react";
 import type { Role, RolePermissions } from "@/lib/domain/roles";
 
 export interface RoleContextValue {
-  /** Papel EFETIVO (base do profissional logado OU override de demonstração). */
+  /** Papel derivado do profissional logado (profiles.role / professionals.type). Sem override. */
   role: Role;
   perms: RolePermissions;
   roleLabel: string;
-  /** Papel real derivado do profissional logado (sem override). */
-  baseRole: Role;
-  /** Há um override de demonstração ativo? */
-  isDemoOverride: boolean;
-  /** Troca o papel ativo em runtime (modo demonstração; não persiste no banco). `null` = volta ao base. */
-  setDemoRole: (role: Role | null) => void;
 }
 
 export const RoleContext = createContext<RoleContextValue | undefined>(undefined);

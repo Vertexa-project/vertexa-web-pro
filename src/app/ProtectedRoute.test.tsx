@@ -24,7 +24,6 @@ const state = vi.hoisted(() => ({
   askedWith: [] as boolean[],
 }));
 
-vi.mock("@/lib/auth/authMode", () => ({ AUTH_MODE: "real" }));
 vi.mock("@/providers/auth-context", () => ({
   useAuth: () => ({ isAuthenticated: state.isAuthenticated, loading: state.authLoading }),
 }));

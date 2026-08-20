@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/feedback/LoadingState";
-import { AUTH_MODE } from "@/lib/auth/authMode";
 import { captureException } from "@/lib/observability/sentry";
 import { supabase } from "@/lib/supabase";
 
@@ -12,15 +11,12 @@ import { supabase } from "@/lib/supabase";
  * Rota de retorno do OAuth (Google). O client Supabase (detectSessionInUrl = default true)
  * troca o `?code=` por sessão automaticamente; aqui só confirmamos e redirecionamos. Erros do
  * provedor (`?error=`) e falhas de sessão são reportados ao Sentry (source:"auth", sem PII).
- *
- * Fora do modo real esta rota não faz sentido → volta para /login.
  */
 export function AuthCallback() {
   const navigate = useNavigate();
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (AUTH_MODE !== "real") return;
     let active = true;
 
     const params = new URLSearchParams(window.location.search);
@@ -54,8 +50,6 @@ export function AuthCallback() {
       sub.subscription.unsubscribe();
     };
   }, [navigate]);
-
-  if (AUTH_MODE !== "real") return <Navigate to="/login" replace />;
 
   if (failed) {
     return (
