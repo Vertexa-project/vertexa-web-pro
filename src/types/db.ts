@@ -455,7 +455,7 @@ export interface ChannelProfessional {
 }
 
 // Shape completo que a tela de Mensagens precisa: canal resolvido + profissional
-// atuante (remetente em modo demo) + histórico.
+// atuante (remetente) + histórico.
 export interface ChatThread {
   channelId: string;
   actingProfileId: string | null;

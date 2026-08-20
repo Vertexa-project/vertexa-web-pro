@@ -18,15 +18,15 @@
 - Os dois clients leem `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (somente **anon** key no client).
 - **web** = painel do profissional (light). **app** = PWA do paciente (dark). Mesmo brand laranja.
 
-## Pins de demo (sem auth real nesta fase)
+## Pins de demo (legado — app paciente / seed histórico)
+Os IDs abaixo descrevem o **seed histórico** (Clínica Vértice / Camila / Mariana). A **web profissional
+não usa mais demo**: identidade vem só de `auth.uid()`. O pin `VITE_DEMO_PROFESSIONAL_PROFILE_ID` foi
+removido do runtime web (WP-04A). O app paciente pode ainda referenciar o pin de paciente.
 | Var | Repo | Valor | Quem é |
 |---|---|---|---|
 | `VITE_DEMO_PATIENT_PROFILE_ID` | app | `00000000-0000-0000-0000-0000000000b1` | Mariana (paciente) |
-| `VITE_DEMO_PROFESSIONAL_PROFILE_ID` | web | `00000000-0000-0000-0000-0000000000a2` | Dra. Camila (nutri) |
 
-A demo da menção é "@nutri" → a web logada como Camila (`a2`) recebe o badge "mencionado".
-
-### IDs canônicos do seed
+### IDs canônicos do seed histórico (não são runtime da web)
 | Entidade | profile_id | id próprio | papel |
 |---|---|---|---|
 | Mariana Albuquerque | `…b1` | patient `10000000-…-b1` | patient |
@@ -38,13 +38,11 @@ Mariana está vinculada a `e1` (Juliana) **e** `e2` (Camila) → o canal dela te
 > ⚠️ `chat_channels.patient_id` = `patients.id` (`10…b1`), **não** o `profile_id`. Resolver sempre
 > `profile → patients (por profile_id) → chat_channels (por patient_id)`.
 
-## Contrato de identidade (auth real — WP-03 / AUTH-01)
-> **A web tem DOIS modos** (flag `VITE_AUTH_MODE`, default `demo`). O contrato de DADOS abaixo
-> é o mesmo nos dois; muda só de ONDE vem "o profissional logado".
+## Contrato de identidade (auth real — WP-03 / AUTH-01 / WP-04A)
+> **A web é somente autenticação real.** Não há `VITE_AUTH_MODE=demo`. Ausente / vazio / `"real"`
+> sobe; qualquer outro valor falha no boot (`assertAuthMode`). Identidade do profissional logado:
 
-- **demo** (`VITE_AUTH_MODE=demo`): identidade = pin de env `VITE_DEMO_PROFESSIONAL_PROFILE_ID`
-  (Dra. Camila `…a2`). Comportamento de hoje, inalterado.
-- **real** (`VITE_AUTH_MODE=real`): login Google (Supabase Auth). Cadeia canônica:
+- Cadeia canônica:
   `auth.uid() → profiles.auth_user_id → profiles.id → professionals.profile_id → professionals.clinic_id`.
   Resolvido por `useIdentity` (web) reusando `getCurrentProfessional`. **Não** há id novo — é
   `profiles.auth_user_id` (coluna que já existia, agora populada).

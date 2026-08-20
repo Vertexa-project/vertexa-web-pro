@@ -1,9 +1,8 @@
 import { useNavigate } from "react-router-dom";
-import { Check, CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun, UserCog } from "lucide-react";
+import { CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun } from "lucide-react";
 
 import { BrandMark } from "@/components/Brand";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,8 +14,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MobileNav } from "./MobileNav";
-import { DEMO_ROLES } from "@/lib/domain/roles";
-import { cn } from "@/lib/utils";
 import { useIdentity } from "@/hooks/useIdentity";
 import { useAuth } from "@/providers/auth-context";
 import { useRole } from "@/providers/role-context";
@@ -32,16 +29,15 @@ function getInitials(label: string): string {
 
 export function Topbar() {
   const navigate = useNavigate();
-  const { signOut, session, demoMode } = useAuth();
+  const { signOut, session } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
-  const { role, roleLabel, setDemoRole } = useRole();
+  const { roleLabel } = useRole();
   const identity = useIdentity();
 
-  // Auth real (active): nome do profissional resolvido. Demo: rótulo de hoje (IDÊNTICO).
   const userName =
     identity.status === "active"
       ? identity.displayName ?? "Profissional"
-      : session?.user?.email ?? (demoMode ? "Modo demonstração" : "Profissional");
+      : session?.user?.email ?? "Profissional";
   const initials = getInitials(userName);
 
   async function handleSignOut() {
@@ -105,31 +101,6 @@ export function Topbar() {
           <DropdownMenuContent align="end" className="w-60">
             <DropdownMenuLabel>Minha conta</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {/* Seletor de papel — SÓ em modo demonstração (sob auth real, ninguém troca o
-                próprio papel pela UI). Troca a experiência ao vivo (admin/médico/nutri). */}
-            {demoMode ? (
-              <>
-                <DropdownMenuLabel className="flex items-center gap-2 pb-1 text-xs font-medium text-muted-foreground">
-                  <UserCog className="h-3.5 w-3.5" />
-                  Papel
-                  <Badge tone="muted" className="ml-auto">demonstração</Badge>
-                </DropdownMenuLabel>
-                {DEMO_ROLES.map((r) => {
-                  const active = role === r.value;
-                  return (
-                    <DropdownMenuItem
-                      key={r.value}
-                      onClick={() => setDemoRole(r.value)}
-                      aria-label={active ? `${r.label} (papel atual)` : `Ver como ${r.label}`}
-                    >
-                      <Check className={cn("h-4 w-4", active ? "opacity-100" : "opacity-0")} />
-                      {r.label}
-                    </DropdownMenuItem>
-                  );
-                })}
-                <DropdownMenuSeparator />
-              </>
-            ) : null}
             <DropdownMenuItem onClick={() => navigate("/configuracoes")}>
               <Settings />
               Configurações

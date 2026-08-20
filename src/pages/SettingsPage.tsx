@@ -10,10 +10,16 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useClinic } from "@/hooks/useClinic";
 import { usePendingJoinRequestCount } from "@/hooks/useClinicJoin";
-import { useCurrentProfessional, useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
+import {
+  useClinicProfessionals,
+  useCurrentProfessional,
+  useCurrentProfessionalName,
+} from "@/hooks/useCurrentProfessional";
 import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import { initials, shortName } from "@/lib/domain/format";
+import { deriveRole, roleLabel as labelForRole } from "@/lib/domain/roles";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-context";
 import { useRole } from "@/providers/role-context";
@@ -79,11 +85,13 @@ function SoonButton({ children }: { children: React.ReactNode }) {
 
 export function SettingsPage() {
   const { theme, setTheme } = useTheme();
-  const { session, demoMode } = useAuth();
+  const { session } = useAuth();
   const { data: professionalName } = useCurrentProfessionalName();
   const { data: professional } = useCurrentProfessional();
   const { roleLabel } = useRole(); // roleLabel: só DISPLAY. Autoridade de admin vem do sinal real abaixo.
   const { isClinicAdmin } = useIsClinicAdmin(professional?.clinicId ?? null);
+  const clinic = useClinic(professional?.clinicId ?? null);
+  const team = useClinicProfessionals(professional?.clinicId ?? null);
   // Indicador de fila (WP-JOIN-1). Só a CONTAGEM: a tela de aprovação com a lista é o WP-2.
   const pendingJoinRequests = usePendingJoinRequestCount(professional?.clinicId ?? null, isClinicAdmin);
   const navigate = useNavigate();
@@ -102,8 +110,11 @@ export function SettingsPage() {
     }
   }, [searchParams, setSearchParams]);
 
-  const name = shortName(professionalName) ?? (demoMode ? "Dra. Camila Rocha" : "Profissional");
-  const email = session?.user?.email ?? "demo@vertexa.app";
+  const name = shortName(professionalName) ?? "Profissional";
+  const email = session?.user?.email ?? "—";
+  const clinicName = clinic.data?.name ?? "—";
+  const teamLabels = [...new Set((team.data ?? []).map((p) => labelForRole(deriveRole(null, p.type))))];
+  const teamSummary = teamLabels.length > 0 ? teamLabels.join(", ") : "—";
 
   return (
     <div className="space-y-6">
@@ -119,17 +130,11 @@ export function SettingsPage() {
               <p className="truncate font-medium text-foreground">{name}</p>
               <p className="truncate text-sm text-muted-foreground">{email}</p>
             </div>
-            {demoMode ? (
-              <Badge tone="primary" className="ml-auto shrink-0">
-                Modo demonstração
-              </Badge>
-            ) : null}
           </div>
           <SettingRow label="Nome de exibição" value={name} />
           <SettingRow label="Papel">
             <span className="flex items-center gap-2 text-sm font-medium text-foreground">
               {roleLabel}
-              {demoMode ? <Badge tone="muted">troque no menu de conta</Badge> : null}
             </span>
           </SettingRow>
           <SettingRow label="E-mail">
@@ -138,8 +143,8 @@ export function SettingsPage() {
         </SectionCard>
 
         <SectionCard icon={Building2} title="Clínica" description="Dados da clínica e equipe.">
-          <SettingRow label="Clínica" value="Clínica Vértice" />
-          <SettingRow label="Profissionais" value="Médica, Nutricionista" />
+          <SettingRow label="Clínica" value={clinicName} />
+          <SettingRow label="Profissionais" value={teamSummary} />
           {isClinicAdmin ? (
             <SettingRow label="Equipe">
               <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/equipe")}>
@@ -231,9 +236,9 @@ export function SettingsPage() {
 
         <SectionCard icon={CreditCard} title="Plano e assinatura" description="Cobrança é por clínica (B2B).">
           <SettingRow label="Plano atual">
-            <Badge tone="success">Profissional · demo</Badge>
+            <Badge tone="muted">Em breve</Badge>
           </SettingRow>
-          <SettingRow label="Pacientes ativos" value="3 de ilimitados" />
+          <SettingRow label="Pacientes ativos" value="—" />
           <SettingRow label="Gerenciar assinatura">
             <SoonButton>Gerenciar</SoonButton>
           </SettingRow>

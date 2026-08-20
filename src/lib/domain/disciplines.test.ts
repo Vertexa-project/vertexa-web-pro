@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   canWriteSurface,
-  demoDisciplinesForRole,
   derivePermissions,
   DISCIPLINE_WRITE_MAP,
   isDisciplineDenied,
@@ -118,16 +117,7 @@ describe("mapa da UI == mapa do BANCO (espelho travado — migration 20260725090
   });
 });
 
-describe("helpers (demo, guard, detecção de negação)", () => {
-  it("demoDisciplinesForRole mapeia a persona → disciplinas (SÓ demo)", () => {
-    expect(demoDisciplinesForRole("nutritionist")).toEqual(["nutricionista"]);
-    expect(demoDisciplinesForRole("doctor")).toEqual(["medico"]);
-    expect(demoDisciplinesForRole("trainer")).toEqual(["educador_fisico"]);
-    expect(demoDisciplinesForRole("physio")).toEqual(["fisioterapeuta"]);
-    expect(demoDisciplinesForRole("admin")).toEqual([]);
-    expect(demoDisciplinesForRole("other")).toEqual([]);
-  });
-
+describe("helpers (guard, detecção de negação)", () => {
   it("canWriteSurface reflete as permissões derivadas", () => {
     const p = derivePermissions(["educador_fisico"]);
     expect(canWriteSurface(p, "workout")).toBe(true);

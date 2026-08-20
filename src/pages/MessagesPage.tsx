@@ -102,7 +102,7 @@ function Thread({ patient }: { patient: PatientListItem }) {
   }
 
   const messages = data?.messages ?? [];
-  // Sem profissional atuante configurado (env) não há remetente válido em modo demo.
+  // Sem profissional atuante resolvido não há remetente válido.
   const canSend = Boolean(data?.actingProfileId);
   const hasContent = draft.trim().length > 0 || file !== null;
 

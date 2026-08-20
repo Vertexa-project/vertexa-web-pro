@@ -3,24 +3,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "@/lib/supabase";
-import { AUTH_MODE } from "@/lib/auth/authMode";
 import { captureException } from "@/lib/observability/sentry";
 import { AuthContext } from "./auth-context";
 import { queryClient } from "./query-client";
 
-const DEMO_KEY = "vertexa-demo-session";
+const LEGACY_DEMO_KEY = "vertexa-demo-session";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  // demoMode SÓ existe em VITE_AUTH_MODE=demo. Assim um DEMO_KEY estagnado no localStorage
-  // (de um build demo anterior) NÃO reativa o modo demo — nem o seletor de papel de
-  // demonstração — quando o deploy passa a real.
-  const [demoMode, setDemoMode] = useState<boolean>(
-    () => AUTH_MODE === "demo" && localStorage.getItem(DEMO_KEY) === "1",
-  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Chave de um bypass que não existe mais. Não autentica ninguém; só evita lixo no storage.
+    localStorage.removeItem(LEGACY_DEMO_KEY);
+
     let active = true;
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
@@ -47,41 +43,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
     if (error) {
-      // Erro de auth ao Sentry sem PII (só a mensagem do provedor, sem email/nome/uid).
       captureException(error, { source: "auth", scope: "oauth-start" });
       throw error;
     }
   }, []);
 
-  const signInDemo = useCallback(() => {
-    if (AUTH_MODE !== "demo") return; // demo é inerte fora do modo demo
-    localStorage.setItem(DEMO_KEY, "1");
-    setDemoMode(true);
-  }, []);
-
   const signOut = useCallback(async () => {
-    localStorage.removeItem(DEMO_KEY);
-    setDemoMode(false);
+    localStorage.removeItem(LEGACY_DEMO_KEY);
     await supabase.auth.signOut();
-    // Higiene de dados de SAÚDE: descarta o cache do react-query (dados de paciente em memória)
-    // ao sair, para não vazarem para uma sessão seguinte na mesma aba. (WP-HARDENING A7)
     queryClient.clear();
   }, []);
 
   const value = useMemo(
     () => ({
       session,
-      demoMode,
-      // Modo real: só a sessão real autentica (o pin/demo NÃO concede acesso). Modo demo:
-      // sessão OU botão de demonstração (comportamento de hoje).
-      isAuthenticated: Boolean(session) || (AUTH_MODE === "demo" && demoMode),
+      isAuthenticated: Boolean(session),
       loading,
       signIn,
       signInWithGoogle,
-      signInDemo,
       signOut,
     }),
-    [session, demoMode, loading, signIn, signInWithGoogle, signInDemo, signOut],
+    [session, loading, signIn, signInWithGoogle, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -37,17 +37,16 @@ Confirme que na raiz de `vertexa-web-pro/` existem:
 ## Passo 2 — Supabase (ANTES de abrir o Claude Code)
 
 1. Crie um projeto no Supabase (ou use o mesmo do app paciente — ver aviso no fim).
-2. SQL Editor → rode **`docs/SCHEMA.sql`** (cria tabelas + enums).
-3. SQL Editor → rode **`supabase/seed.sql`** (3 pacientes do happy path).
-   - Rode SCHEMA primeiro, seed depois. Se der "duplicate key" no seed, limpe as tabelas
-     ou recrie o schema e rode de novo.
-4. Settings → API → copie `Project URL` e `anon public key`.
-5. Crie `.env` na raiz de `vertexa-web-pro/`:
+2. SQL Editor → rode as **migrations** do repo (`supabase/migrations/`) — schema + catálogos.
+3. Settings → API → copie `Project URL` e `anon public key`.
+4. Crie `.env` na raiz de `vertexa-web-pro/`:
    ```
    VITE_SUPABASE_URL=cole_aqui
    VITE_SUPABASE_ANON_KEY=cole_aqui
    ```
+   Não defina `VITE_AUTH_MODE=demo` (o painel falha no boot). Login é Google/Supabase.
 > NUNCA use a `service_role key` no client. Só a `anon`.
+> Não rode `supabase/seed.sql` — o arquivo está desativado (WP-04A). Catálogos vêm das migrations.
 
 ---
 
@@ -105,8 +104,8 @@ Esse ciclo vivo é o que vende. Ensaie antes de apresentar.
 | `CLAUDE.md` | Regras do projeto (Claude Code lê sozinho) |
 | `docs/PROMPT_MESTRE_CLAUDE_CODE.md` | O prompt para colar (Seção 2) + mapa de telas |
 | `docs/PLANO_DE_IMPLEMENTACAO.md` | As 6 fases, passo a passo |
-| `docs/SCHEMA.sql` | Schema do Supabase |
-| `supabase/seed.sql` | Dados de demonstração (3 pacientes) |
+| `docs/SCHEMA.sql` | Schema histórico (use as migrations atuais) |
+| `supabase/seed.sql` | Desativado (WP-04A). Sem inserts de demo |
 | `docs/COMBINADOS.md` | Escopo real das calls (fonte de verdade) |
 | `docs/PENDENCIAS.md` | O que validar com o cliente |
 | `docs/DESIGN_TOKENS.md` | Cores/identidade VERTEXA (light + dark) |

@@ -1,15 +1,13 @@
-// Modo de autenticação da web. Default = "demo" para NÃO mudar nada hoje (expansão).
-//
-// - demo: identidade vem do pin de env (VITE_DEMO_PROFESSIONAL_PROFILE_ID). App IDÊNTICO ao
-//   de hoje (login demo, seletor de papel de demonstração, mesmos dados).
-// - real: identidade vem da sessão Supabase (auth.uid() → profiles.auth_user_id → profile →
-//   professional → clinic). Login Google real; pending → PendingAccess.
-//
-// ⚠️ RLS ainda é permissiva (sprint) nos dois modos — fechar por papel/clínica é o WP-05.
-export type AuthMode = "demo" | "real";
-
-export const AUTH_MODE: AuthMode =
-  import.meta.env.VITE_AUTH_MODE === "real" ? "real" : "demo";
-
-export const isRealAuth = AUTH_MODE === "real";
-export const isDemoAuth = AUTH_MODE === "demo";
+/**
+ * WP-04A — autenticação única: Supabase/Google real.
+ *
+ * Não há modo demonstração. VITE_AUTH_MODE deixou de escolher comportamento:
+ * - ausente / vazio / "real" → segue (a variável na Vercel ficou inócua);
+ * - "demo" ou qualquer outro valor → falha fechado no boot, nunca habilita bypass.
+ */
+export function assertAuthMode(raw: string | undefined = import.meta.env.VITE_AUTH_MODE): void {
+  if (raw === undefined || raw === "" || raw === "real") return;
+  throw new Error(
+    `VITE_AUTH_MODE=${JSON.stringify(raw)} não é suportado. O painel web usa só autenticação Supabase/Google. Remova a variável ou use VITE_AUTH_MODE=real.`,
+  );
+}
