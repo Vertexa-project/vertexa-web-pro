@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Loader2, ShieldCheck, UserMinus, UserPlus, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Loader2, Plus, ShieldCheck, UserMinus, UserPlus, Users } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
 import {
@@ -16,18 +16,33 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useClinicProfessionalDisciplines, useDisciplinesList } from "@/hooks/useDisciplines";
+import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import {
+  useAssignPatientProfessional,
   useDeactivatePatientLink,
   usePatientTeam,
   useReactivatePatientLink,
 } from "@/hooks/usePatientTeam";
-import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
+import type { PatientTeamMember } from "@/lib/api/patientTeam";
 import { formatDate, formatRelative, initials, professionalTypeLabel } from "@/lib/domain/format";
 import {
+  assignActionErrorMessage,
   canManagePatientTeam,
   changedByLabel,
+  eligibleProfessionalsForAssign,
+  formatAssignCandidateQualification,
   isActiveLinkStatus,
   isExpectedLinkActionError,
   linkActionErrorMessage,
@@ -35,7 +50,6 @@ import {
   sortPatientTeam,
   summarizePatientTeam,
 } from "@/lib/domain/patientTeam";
-import type { PatientTeamMember } from "@/lib/api/patientTeam";
 import { captureException } from "@/lib/observability/sentry";
 
 /**
@@ -62,10 +76,7 @@ type LinkAction = "deactivate" | "reactivate";
  * qual mutação roda. Cada descrição diz o efeito REAL, sem eufemismo:
  *
  *  · desativar  — o corte é imediato nos dois canais (dado e conversa), e o histórico fica.
- *  · reativar   — a leitura volta na hora porque é DERIVADA do vínculo; a escrita no chat volta
- *                 quando a conversa for aberta pelo painel, que reconcilia o roster. Essa
- *                 assimetria é do desenho do banco (a RPC de reativação não recria a linha do
- *                 roster de propósito) e a confirmação avisa em vez de esconder.
+ *  · reativar   — WP-05A1: acesso e roster voltam na hora se o canal já existir.
  */
 const ACTION_COPY: Record<
   LinkAction,
@@ -83,9 +94,9 @@ const ACTION_COPY: Record<
   reactivate: {
     title: (name) => `Reativar o vínculo de ${name}?`,
     description:
-      "Ao confirmar, esta pessoa volta a ter acesso aos dados da paciente IMEDIATAMENTE e volta a " +
-      "ler a conversa na hora. Para voltar a ESCREVER no chat, basta que a conversa seja aberta " +
-      "pelo painel — é nessa abertura que ela entra de novo na lista de participantes.",
+      "Ao confirmar, esta pessoa volta a ter acesso aos dados da paciente e à conversa " +
+      "IMEDIATAMENTE. O histórico permanece. Se a conversa já existir, ela volta à lista de " +
+      "participantes na hora — o banco não cria canal só por reativar.",
     confirm: "Reativar vínculo",
     reasonHint: "Fica registrado na trilha de auditoria, junto com quem reativou e quando.",
   },
@@ -182,17 +193,31 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
 
   const deactivate = useDeactivatePatientLink(patientId);
   const reactivate = useReactivatePatientLink(patientId);
+  const assign = useAssignPatientProfessional(patientId, clinicId);
+  const clinicTeam = useClinicProfessionalDisciplines(canManage ? clinicId : null);
+  const catalog = useDisciplinesList();
 
-  // UMA confirmação para as DUAS ações, parametrizada pelo modo — não existe um segundo padrão
-  // de diálogo nesta tela. Só muda o texto e qual mutação é disparada; a mecânica (motivo
-  // opcional → p_reason, vazio vira null) é idêntica nos dois lados.
+  // UMA confirmação para desativar/reativar. O dialog de ATRIBUIR é outro: escolhe alguém da
+  // clínica e chama assign_patient_professional — não mistura com o motivo das duas ações.
   const [pending, setPending] = useState<{ member: PatientTeamMember; mode: LinkAction } | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [selectedProfessionalId, setSelectedProfessionalId] = useState<string | null>(null);
+  const [assignError, setAssignError] = useState<string | null>(null);
 
   const members = sortPatientTeam(team.data ?? []);
   const summary = summarizePatientTeam(team.data ?? []);
+  const labelByCode = useMemo(
+    () => new Map((catalog.data ?? []).map((d) => [d.code, d.label])),
+    [catalog.data],
+  );
+  const eligible = useMemo(
+    () => eligibleProfessionalsForAssign(clinicTeam.data ?? [], team.data ?? []),
+    [clinicTeam.data, team.data],
+  );
 
   const mutation = pending?.mode === "reactivate" ? reactivate : deactivate;
   const copy = pending ? ACTION_COPY[pending.mode] : null;
@@ -206,6 +231,7 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
 
   function askConfirmation(member: PatientTeamMember, mode: LinkAction) {
     setError(null);
+    setSuccess(null);
     setReason("");
     setPending({ member, mode });
   }
@@ -213,6 +239,43 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
   function closeDialog() {
     setPending(null);
     setReason("");
+  }
+
+  function openAssign() {
+    setError(null);
+    setSuccess(null);
+    setAssignError(null);
+    setSelectedProfessionalId(null);
+    setAssignOpen(true);
+  }
+
+  function closeAssign() {
+    if (assign.isPending) return;
+    setAssignOpen(false);
+    setSelectedProfessionalId(null);
+    setAssignError(null);
+  }
+
+  function confirmAssign() {
+    if (!selectedProfessionalId || assign.isPending) return;
+    setAssignError(null);
+    assign.mutate(
+      { patientId, professionalId: selectedProfessionalId },
+      {
+        onSuccess: () => {
+          setSuccess("Profissional adicionado à equipe.");
+          setAssignOpen(false);
+          setSelectedProfessionalId(null);
+          setAssignError(null);
+        },
+        onError: (err) => {
+          setAssignError(assignActionErrorMessage(err));
+          if (!isExpectedLinkActionError(err)) {
+            captureException(err, { source: "patientTeam", scope: "assign" });
+          }
+        },
+      },
+    );
   }
 
   function confirmAction() {
@@ -244,6 +307,12 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
         <CardTitle>Equipe da paciente</CardTitle>
         {summary.active > 0 ? <Badge tone="success">{summary.active} ativo(s)</Badge> : null}
         {summary.inactive > 0 ? <Badge tone="muted">{summary.inactive} inativo(s)</Badge> : null}
+        {canManage ? (
+          <Button size="sm" className="ml-auto" onClick={openAssign}>
+            <Plus className="h-4 w-4" aria-hidden />
+            Adicionar profissional
+          </Button>
+        ) : null}
       </CardHeader>
 
       <CardContent className="space-y-3">
@@ -256,6 +325,15 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
           </p>
         ) : null}
 
+        {success ? (
+          <p
+            className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200"
+            role="status"
+          >
+            {success}
+          </p>
+        ) : null}
+
         <AsyncSection
           isLoading={team.isLoading}
           isError={team.isError}
@@ -263,7 +341,19 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
           onRetry={() => void team.refetch()}
           emptyIcon={Users}
           emptyTitle="Nenhum profissional vinculado"
-          emptyDescription="Quando um profissional for vinculado a esta paciente, ele aparece aqui."
+          emptyDescription={
+            canManage
+              ? "Adicione profissionais da clínica à equipe desta paciente."
+              : "Quando um profissional for vinculado a esta paciente, ele aparece aqui."
+          }
+          emptyAction={
+            canManage ? (
+              <Button size="sm" onClick={openAssign}>
+                <Plus className="h-4 w-4" aria-hidden />
+                Adicionar profissional
+              </Button>
+            ) : undefined
+          }
         >
           <div className="space-y-3">
             {members.map((m) => (
@@ -289,6 +379,78 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
           </p>
         ) : null}
       </CardContent>
+
+      <Dialog open={assignOpen} onOpenChange={(open) => (!open ? closeAssign() : undefined)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar profissional</DialogTitle>
+            <DialogDescription>
+              Selecione um profissional da clínica para adicionar à equipe deste paciente.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            {assignError ? (
+              <p
+                className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+                role="alert"
+              >
+                {assignError}
+              </p>
+            ) : null}
+            {eligible.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Não há profissionais elegíveis nesta clínica agora.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {eligible.map((p) => {
+                  const name = p.fullName ?? "Profissional";
+                  const selected = selectedProfessionalId === p.professionalId;
+                  return (
+                    <li key={p.professionalId}>
+                      <button
+                        type="button"
+                        disabled={assign.isPending}
+                        aria-pressed={selected}
+                        aria-label={name}
+                        onClick={() => setSelectedProfessionalId(p.professionalId)}
+                        className={
+                          "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors " +
+                          (selected
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:bg-muted/50")
+                        }
+                      >
+                        <Avatar className="h-9 w-9 shrink-0">
+                          <AvatarFallback>{initials(name)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-foreground">{name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatAssignCandidateQualification(p, labelByCode)}
+                          </p>
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeAssign} disabled={assign.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={confirmAssign}
+              disabled={!selectedProfessionalId || assign.isPending}
+            >
+              {assign.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+              Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* MESMO AlertDialog para desativar E reativar — só a cópia e a mutação mudam. */}
       <AlertDialog open={Boolean(pending)} onOpenChange={(open) => (!open ? closeDialog() : undefined)}>

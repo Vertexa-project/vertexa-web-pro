@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  assignPatientProfessional,
   deactivatePatientLink,
   listPatientTeam,
   listPatientsWithoutActiveProfessional,
   reactivatePatientLink,
+  type AssignPatientProfessionalInput,
   type LinkStatusChangeInput,
 } from "@/lib/api/patientTeam";
 import { qk } from "@/lib/queryKeys";
@@ -45,6 +47,23 @@ export const useDeactivatePatientLink = (patientId: string) =>
 
 export const useReactivatePatientLink = (patientId: string) =>
   useLinkStatusMutation(patientId, reactivatePatientLink);
+
+/** Atribuição via RPC. Invalida equipe, ficha, listagem e o catálogo da clínica (elegíveis). */
+export function useAssignPatientProfessional(patientId: string, clinicId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AssignPatientProfessionalInput) => assignPatientProfessional(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.patientTeam(patientId) });
+      void qc.invalidateQueries({ queryKey: qk.patient(patientId) });
+      void qc.invalidateQueries({ queryKey: qk.patients });
+      if (clinicId) {
+        void qc.invalidateQueries({ queryKey: qk.clinicDisciplines(clinicId) });
+        void qc.invalidateQueries({ queryKey: qk.patientsWithoutProfessional(clinicId) });
+      }
+    },
+  });
+}
 
 /**
  * Pacientes sem responsável ativo, da CLÍNICA (uma chamada, não uma por paciente).

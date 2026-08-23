@@ -1,12 +1,16 @@
 // Regras da EQUIPE DA PACIENTE (WP-2bi-UI) — PURAS (sem I/O), testáveis em Node.
 // Mesma convenção de teamManagement.ts / clinicJoin.ts / clinicAdmin.ts.
 //
-// A AUTORIDADE é sempre o banco: as RPCs deactivate/reactivate_patient_link são fail-closed
+// A AUTORIDADE é sempre o banco: as RPCs deactivate/reactivate/assign_patient_professional são fail-closed
 // (42501 para quem não é admin da clínica da paciente) e a migration 20260805090000 revogou
 // `update (status)` de `authenticated`, de modo que não existe caminho de escrita fora delas.
 // O que mora aqui é só o que a UI precisa DECIDIR e EXIBIR — nunca o que ela pode permitir.
 
+import type { ProfessionalWithDisciplines } from "@/lib/api/disciplines";
 import type { PatientTeamMember, PatientWithoutProfessional } from "@/lib/api/patientTeam";
+import { disciplineLabel } from "@/lib/domain/chatTeam";
+import { professionalTypeLabel } from "@/lib/domain/format";
+import { isActiveProfessionalStatus } from "@/lib/domain/professionalStatus";
 
 export const LINK_STATUS_ACTIVE = "active";
 export const LINK_STATUS_INACTIVE = "inactive";
@@ -145,6 +149,40 @@ export function linkActionErrorMessage(error: unknown): string {
     default:
       return "Não foi possível concluir agora. Tente novamente em instantes.";
   }
+}
+
+/**
+ * Quem o seletor PODE oferecer. Fonte: profissionais da MESMA clínica (consulta já escopada).
+ * Fora: inativo na clínica, vínculo já ATIVO. Vínculo inativo ENTRA — assign reativa a linha.
+ * Isto não autoriza: a RPC continua fail-closed.
+ */
+export function eligibleProfessionalsForAssign(
+  clinicProfessionals: readonly ProfessionalWithDisciplines[],
+  team: readonly PatientTeamMember[],
+): ProfessionalWithDisciplines[] {
+  const activeLinked = new Set(
+    team.filter((m) => isActiveLinkStatus(m.status)).map((m) => m.professionalId),
+  );
+  return clinicProfessionals
+    .filter((p) => isActiveProfessionalStatus(p.status) && !activeLinked.has(p.professionalId))
+    .slice()
+    .sort((a, b) => (a.fullName ?? "").localeCompare(b.fullName ?? "", "pt-BR"));
+}
+
+/** Qualificação no seletor: todas as disciplinas reais, ou o tipo se o catálogo vier vazio. */
+export function formatAssignCandidateQualification(
+  professional: Pick<ProfessionalWithDisciplines, "disciplines" | "type">,
+  labelByCode: ReadonlyMap<string, string>,
+): string {
+  const codes = professional.disciplines.filter((c) => c.trim());
+  if (codes.length > 0) return codes.map((c) => disciplineLabel(c, labelByCode)).join(" · ");
+  return professionalTypeLabel(professional.type);
+}
+
+/** Erro do assign. 42501 reusa a tradução já existente; o resto é mensagem genérica segura. */
+export function assignActionErrorMessage(error: unknown): string {
+  if (linkActionErrorCode(error) === "42501") return linkActionErrorMessage(error);
+  return "Não foi possível adicionar este profissional. Atualize a página e tente novamente.";
 }
 
 /**

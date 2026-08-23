@@ -11,7 +11,9 @@
 // inteira. Não é limitação desta tela, é a RLS que já estava em produção antes deste WP; a tela
 // mostra com honestidade o que o servidor devolve (e avisa quando é uma visão parcial).
 //
-// ESCRITA: SEMPRE pelas RPCs SECURITY DEFINER `deactivate_patient_link` / `reactivate_patient_link`
+// ESCRITA: SEMPRE pelas RPCs SECURITY DEFINER
+//   `deactivate_patient_link` / `reactivate_patient_link` / `assign_patient_professional`
+// Nunca INSERT/UPDATE/DELETE direto em professional_patient_links.
 // (migration 20260805090000, aplicada). Não existe caminho de UPDATE direto aqui — e nem poderia:
 // a mesma migration REVOGOU `update (status)` de `authenticated`, então um UPDATE do client
 // receberia 42501 por privilégio. As RPCs gravam a trilha imutável (ppl_status_events) e
@@ -110,16 +112,34 @@ export async function deactivatePatientLink(input: LinkStatusChangeInput): Promi
 }
 
 /**
- * Reativa o vínculo. ASSIMETRIA DELIBERADA (não é bug, não "consertar"): NÃO recria a linha do
- * roster do chat. A LEITURA volta na hora porque é derivada do vínculo (can_read_channel); a
- * ESCRITA volta quando a conversa for aberta pelo painel, que chama get_or_create_channel e
- * reconcilia o roster. Nenhum código do client deve tentar forçar isso.
+ * Reativa o vínculo. WP-05A1: se o canal já existir, a RPC devolve o profissional ao roster na
+ * mesma transação. Não cria canal. Nenhum código do client tenta forçar roster.
  */
 export async function reactivatePatientLink(input: LinkStatusChangeInput): Promise<string> {
   const { data, error } = await supabase.rpc("reactivate_patient_link", {
     p_professional_id: input.professionalId,
     p_patient_id: input.patientId,
     p_reason: input.reason,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+export interface AssignPatientProfessionalInput {
+  patientId: string;
+  professionalId: string;
+}
+
+/**
+ * Atribui um profissional da mesma clínica (WP-05A2). ÚNICA escrita de atribuição:
+ * RPC `assign_patient_professional`. Sem clinic_id. Sem INSERT direto.
+ */
+export async function assignPatientProfessional(
+  input: AssignPatientProfessionalInput,
+): Promise<string> {
+  const { data, error } = await supabase.rpc("assign_patient_professional", {
+    p_patient_id: input.patientId,
+    p_professional_id: input.professionalId,
   });
   if (error) throw error;
   return data as string;

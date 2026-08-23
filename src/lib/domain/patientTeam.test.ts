@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 
+import type { ProfessionalWithDisciplines } from "@/lib/api/disciplines";
+import type { PatientTeamMember } from "@/lib/api/patientTeam";
+
 import {
   activeProfessionalsFromLinks,
+  assignActionErrorMessage,
   canManagePatientTeam,
   changedByLabel,
+  eligibleProfessionalsForAssign,
+  formatAssignCandidateQualification,
   isActiveLinkStatus,
   isExpectedLinkActionError,
   linkActionErrorCode,
@@ -14,7 +20,6 @@ import {
   sortPatientTeam,
   summarizePatientTeam,
 } from "./patientTeam";
-import type { PatientTeamMember } from "@/lib/api/patientTeam";
 
 function member(over: Partial<PatientTeamMember> = {}): PatientTeamMember {
   return {
@@ -245,6 +250,109 @@ describe("patientsWithoutProfessionalIds", () => {
   it("undefined vira conjunto vazio (não-admin: badge simplesmente não aparece)", () => {
     expect(patientsWithoutProfessionalIds(undefined).size).toBe(0);
     expect(patientsWithoutProfessionalIds([]).size).toBe(0);
+  });
+});
+
+function clinicPro(over: Partial<ProfessionalWithDisciplines> = {}): ProfessionalWithDisciplines {
+  return {
+    professionalId: "pr-1",
+    profileId: "pf-1",
+    fullName: "Carlos Lima",
+    type: "nutritionist",
+    status: "active",
+    disciplines: ["nutricionista"],
+    ...over,
+  };
+}
+
+describe("eligibleProfessionalsForAssign — o filtro do seletor (WP-05A2)", () => {
+  it("mostra profissional ativo da clínica que ainda não tem vínculo ativo", () => {
+    const out = eligibleProfessionalsForAssign([clinicPro()], []);
+    expect(out.map((p) => p.professionalId)).toEqual(["pr-1"]);
+  });
+
+  it("esconde quem já tem vínculo ativo", () => {
+    const out = eligibleProfessionalsForAssign(
+      [clinicPro()],
+      [member({ professionalId: "pr-1", status: "active" })],
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("esconde vínculo ativo com status nulo (null = ativo no banco)", () => {
+    const out = eligibleProfessionalsForAssign(
+      [clinicPro()],
+      [member({ professionalId: "pr-1", status: null })],
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("mantém quem tem vínculo INATIVO — a RPC reativa a mesma linha", () => {
+    const out = eligibleProfessionalsForAssign(
+      [clinicPro()],
+      [member({ professionalId: "pr-1", status: "inactive" })],
+    );
+    expect(out.map((p) => p.professionalId)).toEqual(["pr-1"]);
+  });
+
+  it("esconde profissional inativo na clínica", () => {
+    const out = eligibleProfessionalsForAssign([clinicPro({ status: "inactive" })], []);
+    expect(out).toEqual([]);
+  });
+
+  it("trata status nulo do profissional como ATIVO", () => {
+    const out = eligibleProfessionalsForAssign([clinicPro({ status: null })], []);
+    expect(out).toHaveLength(1);
+  });
+
+  it("não inventa quem não veio da lista da clínica", () => {
+    const out = eligibleProfessionalsForAssign([], [member({ professionalId: "pr-x" })]);
+    expect(out).toEqual([]);
+  });
+
+  it("ordena por nome pt-BR e não muta as listas", () => {
+    const clinic = [
+      clinicPro({ professionalId: "z", fullName: "Zoe" }),
+      clinicPro({ professionalId: "a", fullName: "Ábia" }),
+    ];
+    const team = [member()];
+    expect(eligibleProfessionalsForAssign(clinic, []).map((p) => p.professionalId)).toEqual(["a", "z"]);
+    expect(clinic.map((p) => p.professionalId)).toEqual(["z", "a"]);
+    expect(team).toHaveLength(1);
+  });
+});
+
+describe("formatAssignCandidateQualification", () => {
+  const labels = new Map([
+    ["medico", "Médica"],
+    ["nutricionista", "Nutricionista"],
+  ]);
+
+  it("junta TODAS as disciplinas reais com ·", () => {
+    expect(
+      formatAssignCandidateQualification(
+        clinicPro({ disciplines: ["medico", "nutricionista"] }),
+        labels,
+      ),
+    ).toBe("Médica · Nutricionista");
+  });
+
+  it("não inventa disciplina quando a lista vem vazia — cai no tipo", () => {
+    expect(formatAssignCandidateQualification(clinicPro({ disciplines: [] }), labels)).toBe(
+      "Nutricionista",
+    );
+  });
+});
+
+describe("assignActionErrorMessage", () => {
+  it("reusa a tradução de 42501", () => {
+    expect(assignActionErrorMessage({ code: "42501" })).toMatch(/administrador da clínica/i);
+  });
+
+  it("erro genérico não vaza stack nem SQLSTATE", () => {
+    const msg = assignActionErrorMessage(new Error("42501 unique_violation boom"));
+    expect(msg).toBe("Não foi possível adicionar este profissional. Atualize a página e tente novamente.");
+    expect(msg).not.toMatch(/unique_violation|stack|42501 unique/i);
   });
 });
 
