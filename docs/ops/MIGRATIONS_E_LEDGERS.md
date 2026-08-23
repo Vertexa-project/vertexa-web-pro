@@ -2,6 +2,8 @@
 
 Status: `VIGENTE` desde 2026-07-30 (WP-LEDGER-1). Vale para toda migration daqui em diante.
 
+Incidente, restore, isolamento e RPO/RTO: `docs/ops/DISASTER_RECOVERY.md`. Este arquivo cobre só os dois ledgers e o apply.
+
 Este projeto tem **dois** registros de migration, e eles não são intercambiáveis:
 
 | Registro | O que é | Quem escreve |
