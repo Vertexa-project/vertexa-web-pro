@@ -119,8 +119,9 @@ begin
 
   -- ===================== POSITIVOS de ESCRITA =====================
   perform set_config('request.jwt.claims', json_build_object('sub',A_uid)::text, true);
+  -- WP-05A1: INSERT cru em professional_patient_links é negado; o caminho é a RPC assign.
   begin insert into public.professional_patient_links(professional_id,patient_id) values('e2000000-0000-0000-0000-000000000001',Y);
-        exception when others then fails:=fails||'POS_admin_create_link '; end;
+        fails:=fails||'NEG_admin_raw_insert_ainda_passou '; exception when others then null; end;
   perform set_config('request.jwt.claims', json_build_object('sub',X_uid)::text, true);
   begin update public.profiles set full_name='X New' where id='fc000000-0000-0000-0000-000000000001';
         get diagnostics n=row_count; if n<>1 then fails:=fails||'POS_x_update_own_name '; end if; exception when others then fails:=fails||'POS_x_update_own_name_err '; end;
