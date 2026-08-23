@@ -13,8 +13,8 @@
 --   (P3) roster do chat reconciliado (a dívida V7, agora pela desativação da PESSOA)
 --   (P4) idempotência: desativar 2x não erra e não duplica trilha
 --   (P5) reativar a PESSOA devolve o poder na clínica e NÃO religa vínculo (assimetria)
---   (P6) reativar PESSOA + VÍNCULO devolve o conjunto de antes (menos a escrita no chat, que
---        depende do roster — assimetria HERDADA do 2b-i, ver nota em N9)
+--   (P6) reativar PESSOA + VÍNCULO devolve o conjunto de antes, inclusive o roster
+--        (WP-05A1 fechou a assimetria do 2b-i)
 --   (P7) my_clinic_memberships: o desativado enxerga clínica+nome+o PRÓPRIO status
 --   (P8) promote_to_professional: linha ATIVA continua deduplicando (caminho inalterado)
 --
@@ -361,7 +361,7 @@ begin
   if v_n <> 1 then fails := fails || 'P5_export_nao_voltou '; end if;
   reset role;
 
-  -- ── (P6) reativar o VÍNCULO devolve o eixo clínico (menos a escrita no chat) ────────
+  -- ── (P6) reativar o VÍNCULO devolve o eixo clínico E o roster (WP-05A1) ─────────────
   perform set_config('request.jwt.claims', json_build_object('sub',a_adm,'role','authenticated')::text, true);
   set local role authenticated;
   perform public.reactivate_patient_link(prof_a1, pat1, 'religa');
@@ -372,9 +372,8 @@ begin
   select count(*) into v_n from public.patients where id = pat1;
   if v_n <> 1 then fails := fails || 'P6_nao_voltou_paciente '; end if;
   if not private.can_read_channel(ch1) then fails := fails || 'P6_nao_voltou_leitura_do_canal '; end if;
-  -- ASSIMETRIA HERDADA DO 2b-i: a linha do roster NÃO é recriada, então a ESCRITA no chat só
-  -- volta quando a conversa for reaberta por get_or_create_channel. Fixado aqui de propósito.
-  if private.is_channel_participant(ch1) then fails := fails || 'P6_roster_voltou_sozinho(mudou_o_2bi) '; end if;
+  -- WP-05A1 fecha a assimetria do 2b-i: se o canal existe, o profissional volta ao roster.
+  if not private.is_channel_participant(ch1) then fails := fails || 'P6_roster_nao_voltou '; end if;
   reset role;
 
   -- ── (N9) a âncora: cadastro desativado não volta pela porta da frente ──────────────
