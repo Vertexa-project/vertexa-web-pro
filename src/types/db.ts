@@ -462,6 +462,27 @@ export interface ChatThread {
   messages: ChatMessageView[];
 }
 
+/**
+ * Inbox do profissional (WP-07B1/B2). Só referências — sem body/diagnóstico.
+ * Camada tipada local: o repo ainda não gera Database types do Supabase.
+ */
+export type StaffNotificationType = "help_requested";
+export type StaffNotificationSeverity = "critical";
+
+export interface StaffNotification {
+  id: string;
+  clinic_id: string;
+  recipient_profile_id: string;
+  actor_profile_id: string | null;
+  patient_id: string | null;
+  channel_id: string | null;
+  message_id: string;
+  type: StaffNotificationType;
+  severity: StaffNotificationSeverity;
+  created_at: string;
+  read_at: string | null;
+}
+
 export interface PlanListItem {
   id: string;
   type: "treino" | "alimentar";

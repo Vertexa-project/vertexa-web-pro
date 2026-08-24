@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AlertTriangle, AtSign, Bot, CornerUpLeft, Loader2, MessageSquare, Paperclip, Send, X } from "lucide-react";
 
 import { ChatAttachment } from "@/components/chat/ChatAttachment";
@@ -30,6 +31,10 @@ import { mentionFailureMessage } from "@/lib/domain/chatMention";
 import { indexById, quotedPreview, resolveQuote } from "@/lib/domain/chatReply";
 import { mentionableProfessionals, mentionsProfile, namesByProfileId } from "@/lib/domain/chatTeam";
 import { formatRelative, initials } from "@/lib/domain/format";
+import {
+  STAFF_ACCESS_REVOKED_DESCRIPTION,
+  STAFF_ACCESS_REVOKED_TITLE,
+} from "@/lib/domain/staffNotifications";
 import { cn } from "@/lib/utils";
 import type { ChannelProfessional, ChatMessageView, PatientListItem } from "@/types/db";
 
@@ -436,13 +441,22 @@ function Thread({ patient }: { patient: PatientListItem }) {
 export function MessagesPage() {
   const { data, isLoading, isError, refetch } = useListPatients();
   const { data: mentions } = useUnreadMentions();
+  const [searchParams] = useSearchParams();
+  const requestedPatient = searchParams.get("patient");
   const [selectedId, setSelectedId] = useState<string>("");
 
   useEffect(() => {
+    if (requestedPatient) {
+      setSelectedId(requestedPatient);
+      return;
+    }
     if (!selectedId && data && data.length > 0) setSelectedId(data[0].id);
-  }, [data, selectedId]);
+  }, [data, selectedId, requestedPatient]);
 
   const selected = data?.find((p) => p.id === selectedId) ?? null;
+  const requestedUnavailable = Boolean(
+    requestedPatient && data && !data.some((p) => p.id === requestedPatient),
+  );
 
   return (
     <div className="space-y-6">
@@ -454,9 +468,13 @@ export function MessagesPage() {
         <ErrorState onRetry={() => refetch()} />
       ) : !data || data.length === 0 ? (
         <EmptyState
-          icon={MessageSquare}
-          title="Nenhuma conversa"
-          description="As conversas com os seus pacientes aparecerão aqui."
+          icon={requestedPatient ? AlertTriangle : MessageSquare}
+          title={requestedPatient ? STAFF_ACCESS_REVOKED_TITLE : "Nenhuma conversa"}
+          description={
+            requestedPatient
+              ? STAFF_ACCESS_REVOKED_DESCRIPTION
+              : "As conversas com os seus pacientes aparecerão aqui."
+          }
         />
       ) : (
         <Card className="grid h-[32rem] grid-cols-1 overflow-hidden lg:grid-cols-[320px_1fr]">
@@ -503,7 +521,16 @@ export function MessagesPage() {
           </div>
 
           <div className="min-h-0">
-            {selected ? (
+            {requestedUnavailable ? (
+              <div className="flex h-full items-center justify-center p-4">
+                <EmptyState
+                  icon={AlertTriangle}
+                  title={STAFF_ACCESS_REVOKED_TITLE}
+                  description={STAFF_ACCESS_REVOKED_DESCRIPTION}
+                  className="w-full border-0 bg-transparent py-10"
+                />
+              </div>
+            ) : selected ? (
               <Thread patient={selected} />
             ) : (
               <div className="flex h-full items-center justify-center p-6">

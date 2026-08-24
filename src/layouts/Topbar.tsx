@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun } from "lucide-react";
 
 import { BrandMark } from "@/components/Brand";
+import { StaffNotificationsBell } from "@/components/notifications/StaffNotificationsBell";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +68,7 @@ export function Topbar() {
       </div>
 
       <div className="ml-auto flex items-center gap-1">
+        <StaffNotificationsBell />
         <Button
           variant="ghost"
           size="icon"

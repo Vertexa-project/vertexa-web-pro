@@ -25,6 +25,10 @@ export const qk = {
     ["patients", "withoutActiveProfessional", clinicId] as const,
   chatThread: (patientId: string) => ["patient", patientId, "chat"] as const,
   unreadMentions: (profileId: string) => ["chat", "mentions", profileId] as const,
+  // Inbox do profissional (WP-07B2). Escopada por profile — NÃO misturar com mentions.
+  staffNotifications: (profileId: string) => ["staffNotifications", profileId] as const,
+  staffNotificationsUnread: (profileId: string) =>
+    ["staffNotifications", profileId, "unreadCount"] as const,
   // Profissionais do canal (RPC channel_professionals). Chaveado por CANAL, não por paciente: é o
   // canal que a RPC recebe e é ele que define quem participa.
   // ⚠️ O `includeAuthors` ENTRA NA CHAVE porque as duas chamadas devolvem conjuntos diferentes e
