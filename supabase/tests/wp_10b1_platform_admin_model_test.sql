@@ -101,15 +101,19 @@ end;
 $seed$;
 
 
--- T1 T8 grants: anon sem execute; authenticated com execute; PUBLIC revogado.
--- Funções: private.is_platform_admin, public.am_i_platform_admin, public.list_platform_clinics.
+-- T1 T8 grants: helper privado SEM execute para authenticated/anon/PUBLIC.
+-- RPCs públicas: authenticated execute; anon/PUBLIC revogados.
 begin;
 do $$
 declare
   n_pub int;
+  n_auth_priv int;
 begin
   if has_function_privilege('anon', 'private.is_platform_admin()', 'execute') then
     raise exception 'WP-10B1 T1 FAIL: anon execute is_platform_admin';
+  end if;
+  if has_function_privilege('authenticated', 'private.is_platform_admin()', 'execute') then
+    raise exception 'WP-10B1 T1 FAIL: authenticated execute is_platform_admin';
   end if;
   if has_function_privilege('anon', 'public.am_i_platform_admin()', 'execute') then
     raise exception 'WP-10B1 T1 FAIL: anon execute am_i_platform_admin';
@@ -117,14 +121,14 @@ begin
   if has_function_privilege('anon', 'public.list_platform_clinics()', 'execute') then
     raise exception 'WP-10B1 T1 FAIL: anon execute list_platform_clinics';
   end if;
-  if not has_function_privilege('authenticated', 'private.is_platform_admin()', 'execute') then
-    raise exception 'WP-10B1 T1 FAIL: authenticated sem execute is_platform_admin';
-  end if;
   if not has_function_privilege('authenticated', 'public.am_i_platform_admin()', 'execute') then
     raise exception 'WP-10B1 T8 FAIL: authenticated sem execute am_i_platform_admin';
   end if;
   if not has_function_privilege('authenticated', 'public.list_platform_clinics()', 'execute') then
     raise exception 'WP-10B1 T1 FAIL: authenticated sem execute list_platform_clinics';
+  end if;
+  if not has_function_privilege('postgres', 'private.is_platform_admin()', 'execute') then
+    raise exception 'WP-10B1 T1 FAIL: postgres sem execute is_platform_admin';
   end if;
   select count(*) into n_pub
     from information_schema.routine_privileges
@@ -132,8 +136,19 @@ begin
      and routine_name in ('is_platform_admin', 'am_i_platform_admin', 'list_platform_clinics')
      and grantee = 'PUBLIC';
   if n_pub <> 0 then raise exception 'WP-10B1 T1 FAIL: PUBLIC grants=%', n_pub; end if;
+  select count(*) into n_auth_priv
+    from information_schema.routine_privileges
+   where specific_schema = 'private'
+     and routine_name = 'is_platform_admin'
+     and grantee in ('authenticated', 'anon', 'PUBLIC', 'service_role');
+  if n_auth_priv <> 0 then
+    raise exception 'WP-10B1 T1 FAIL: helper privado grants=%', n_auth_priv;
+  end if;
 
-  -- sem JWT: fail-closed false (postgres chama DEFINER que lê current_profile_id → null)
+  -- Runtime SET ROLE authenticated + call private helper omitted: isolador PG 17.6
+  -- SIGSEGV (mesmo padrão do SET ROLE anon). Prova = has_function_privilege + catalog.
+
+  -- sem JWT: fail-closed false (postgres/owner chama o helper)
   if private.is_platform_admin() is not false then
     raise exception 'WP-10B1 T1 FAIL: sem auth deveria ser false';
   end if;
@@ -290,10 +305,8 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', s.a_common, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  v := private.is_platform_admin();
-  if v is not false then raise exception 'WP-10B1 T2 FAIL: common is_platform_admin=%', v; end if;
   v := public.am_i_platform_admin();
-  if v is not false then raise exception 'WP-10B1 T8 FAIL: common am_i=%', v; end if;
+  if v is not false then raise exception 'WP-10B1 T2 T8 FAIL: common am_i=%', v; end if;
   raised := false;
   begin
     perform * from public.list_platform_clinics();
@@ -305,7 +318,7 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', s.a_admin, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  if private.is_platform_admin() is not false then
+  if public.am_i_platform_admin() is not false then
     raise exception 'WP-10B1 T3 FAIL: clinic admin';
   end if;
   if public.am_i_clinic_admin(s.c_a) is not true then
@@ -322,7 +335,7 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', s.a_owner, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  if private.is_platform_admin() is not false then
+  if public.am_i_platform_admin() is not false then
     raise exception 'WP-10B1 T4 FAIL: owner';
   end if;
   raised := false;
@@ -336,7 +349,7 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', s.a_member, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  if private.is_platform_admin() is not false then
+  if public.am_i_platform_admin() is not false then
     raise exception 'WP-10B1 T2 FAIL: member';
   end if;
   reset role;
@@ -344,7 +357,7 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', s.a_pat, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  if private.is_platform_admin() is not false then
+  if public.am_i_platform_admin() is not false then
     raise exception 'WP-10B1 T5 FAIL: patient';
   end if;
   if public.am_i_platform_admin() is not false then
@@ -386,7 +399,7 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', s.a_rev, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  if private.is_platform_admin() is not false then
+  if public.am_i_platform_admin() is not false then
     raise exception 'WP-10B1 T7 FAIL: revoked true';
   end if;
   if public.am_i_platform_admin() is not false then
@@ -404,7 +417,7 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', s.a_plat, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  if private.is_platform_admin() is not true then
+  if public.am_i_platform_admin() is not true then
     raise exception 'WP-10B1 T6 FAIL: active false';
   end if;
   if public.am_i_platform_admin() is not true then
@@ -468,7 +481,7 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', s.a_plat, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  if private.is_platform_admin() is not false then
+  if public.am_i_platform_admin() is not false then
     raise exception 'WP-10B1 T19 FAIL: ainda active após revoke';
   end if;
   if public.am_i_platform_admin() is not false then

@@ -6,7 +6,8 @@
 --
 -- Superfície V1:
 --   private.platform_admins          (autoridade interna, schema NÃO exposto ao PostgREST)
---   private.is_platform_admin()      (JWT → current_profile_id; zero args; fail-closed)
+--   private.is_platform_admin()      (JWT → current_profile_id; zero args; fail-closed;
+--                                     EXECUTE só owner — NÃO authenticated)
 --   public.am_i_platform_admin()     (boolean para o frontend)
 --   public.list_platform_clinics()   (projeção administrativa; DEFINER após o check)
 --
@@ -67,10 +68,10 @@ $$;
 
 comment on function private.is_platform_admin() is
   'WP-10B1: JWT → current_profile_id() → platform_admins active. Zero args. Fail-closed '
-  '(sem auth / sem profile / revoked / ausente → false). NÃO aceita profile_id do client.';
+  '(sem auth / sem profile / revoked / ausente → false). NÃO aceita profile_id do client. '
+  'EXECUTE só owner; authenticated chama só via RPCs públicas DEFINER.';
 
-revoke all on function private.is_platform_admin() from public, anon;
-grant execute on function private.is_platform_admin() to authenticated;
+revoke all on function private.is_platform_admin() from public, anon, authenticated, service_role;
 
 
 create or replace function public.am_i_platform_admin()
@@ -137,8 +138,9 @@ insert into public.schema_migration_log (version, filename, description, session
 values (
   '20260818090000',
   '20260818090000_wp_10b1_platform_admin_model.sql',
-  'WP-10B1: private.platform_admins + is_platform_admin + am_i_platform_admin + '
-  'list_platform_clinics (read-only, 42501 fail-closed, zero bootstrap, zero policy clínica).',
+  'WP-10B1: private.platform_admins + is_platform_admin (EXECUTE só owner) + '
+  'am_i_platform_admin + list_platform_clinics (read-only, 42501 fail-closed, '
+  'zero bootstrap, zero policy clínica).',
   'WP-10B1'
 )
 on conflict (version) do nothing;
