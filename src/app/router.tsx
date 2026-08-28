@@ -2,7 +2,11 @@ import { lazy, Suspense } from "react";
 import { createBrowserRouter } from "react-router-dom";
 
 import { AppShell } from "@/layouts/AppShell";
+import { PlatformShell } from "@/layouts/PlatformShell";
 import { LoadingState } from "@/components/feedback/LoadingState";
+import { AccessResolver } from "./AccessResolver";
+import { AuthGate } from "./AuthGate";
+import { PlatformAdminGate } from "./PlatformAdminGate";
 import { ProtectedRoute } from "./ProtectedRoute";
 
 // Code-splitting por rota: cada página vira um chunk próprio (recharts/editores fora do bundle inicial).
@@ -37,6 +41,9 @@ const ReportAuditPage = lazy(() =>
   import("@/pages/ReportAuditPage").then((m) => ({ default: m.ReportAuditPage })),
 );
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
+const PlatformClinicsPage = lazy(() =>
+  import("@/pages/PlatformClinicsPage").then((m) => ({ default: m.PlatformClinicsPage })),
+);
 
 export const router = createBrowserRouter(
   [
@@ -56,6 +63,27 @@ export const router = createBrowserRouter(
           <AuthCallback />
         </Suspense>
       ),
+    },
+    {
+      // Destino único pós-login: decide Platform Admin vs fluxo clínico. Irmão de `/` e `/platform`.
+      path: "/access",
+      element: (
+        <AuthGate>
+          <AccessResolver />
+        </AuthGate>
+      ),
+    },
+    {
+      // Área global read-only. NÃO é filha do AppShell clínico e NÃO exige membership.
+      path: "/platform",
+      element: (
+        <AuthGate>
+          <PlatformAdminGate>
+            <PlatformShell />
+          </PlatformAdminGate>
+        </AuthGate>
+      ),
+      children: [{ index: true, element: <PlatformClinicsPage /> }],
     },
     {
       // AppShell envolve o <Outlet/> num Suspense — cobre todas as páginas lazy protegidas.

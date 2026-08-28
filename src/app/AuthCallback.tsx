@@ -38,11 +38,11 @@ export function AuthCallback() {
         setFailed(true);
         return;
       }
-      navigate(data.session ? "/" : "/login", { replace: true });
+      navigate(data.session ? "/access" : "/login", { replace: true });
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
-      if (next && active) navigate("/", { replace: true });
+      if (next && active) navigate("/access", { replace: true });
     });
 
     return () => {

@@ -1,17 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import type { ClinicMembership } from "@/lib/api/professionalStatus";
 import type { ResolvedIdentity } from "@/lib/auth/identity";
 
 /**
- * O DESVIO DO ProtectedRoute (WP-FRONT-2bii-A item 3) — cobertura de FIAÇÃO.
+ * O DESVIO DO ProtectedRoute (WP-FRONT-2bii-A item 3 + WP-10B2B intercept de Platform Admin).
  *
- * A DECISÃO já é testada por função pura (`resolveClinicAccess`). O que só a montagem prova é o
+ * A DECISÃO clínica já é testada por função pura (`resolveClinicAccess`). O que só a montagem prova é o
  * `if` que a consome: que o painel NÃO monta quando a resposta é "desativado", que monta quando
  * é "ok", que ESPERA em vez de piscar a listagem vazia, e — o mais importante — que em ERRO ele
  * abre (fail-open deliberado: esta tela é explicação, não portão; o portão é a RLS).
+ *
+ * WP-10B2B: identidade pending NÃO pode montar onboarding clínico se a RPC de Platform Admin
+ * for true ou estiver em erro.
  */
 
 const state = vi.hoisted(() => ({
@@ -22,6 +25,10 @@ const state = vi.hoisted(() => ({
   membershipsLoading: false,
   membershipsError: false,
   askedWith: [] as boolean[],
+  platformAdminEnabled: [] as boolean[],
+  platformAdminLoading: false,
+  platformAdminError: false,
+  isPlatformAdmin: false as boolean | undefined,
 }));
 
 vi.mock("@/providers/auth-context", () => ({
@@ -38,6 +45,17 @@ vi.mock("@/hooks/useProfessionalStatus", () => ({
     };
   },
 }));
+vi.mock("@/hooks/useAmIPlatformAdmin", () => ({
+  useAmIPlatformAdmin: (enabled = true) => {
+    state.platformAdminEnabled.push(enabled);
+    return {
+      isPlatformAdmin: state.isPlatformAdmin,
+      isLoading: state.platformAdminLoading,
+      isError: state.platformAdminError,
+      refetch: vi.fn(),
+    };
+  },
+}));
 // As telas viram marcadores: o que se testa AQUI é o desvio, não o texto delas (que tem arquivo
 // próprio). Assim uma mudança de cópia não quebra o teste do roteamento.
 vi.mock("@/pages/ClinicAccessRevokedPage", () => ({
@@ -47,17 +65,30 @@ vi.mock("@/pages/ClinicAccessRevokedPage", () => ({
   NoClinicMembershipPage: () => <div data-testid="tela-sem-clinica" />,
 }));
 vi.mock("@/pages/PendingAccessPage", () => ({
-  PendingAccessPage: () => <div data-testid="tela-pendente" />,
+  PendingAccessPage: () => (
+    <div data-testid="tela-pendente">
+      <div data-testid="create-clinic-form" />
+    </div>
+  ),
 }));
 
 const { ProtectedRoute } = await import("./ProtectedRoute");
 
 function renderRoute() {
   return render(
-    <MemoryRouter>
-      <ProtectedRoute>
-        <div data-testid="painel">Painel montado</div>
-      </ProtectedRoute>
+    <MemoryRouter initialEntries={["/"]}>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <div data-testid="painel">Painel montado</div>
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/login" element={<div data-testid="login" />} />
+        <Route path="/platform" element={<div data-testid="plataforma" />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -74,6 +105,10 @@ beforeEach(() => {
   state.membershipsLoading = false;
   state.membershipsError = false;
   state.askedWith = [];
+  state.platformAdminEnabled = [];
+  state.platformAdminLoading = false;
+  state.platformAdminError = false;
+  state.isPlatformAdmin = false;
 });
 
 describe("ProtectedRoute — o desvio das duas telas novas", () => {
@@ -147,6 +182,7 @@ describe("ProtectedRoute — a pergunta só é feita quando faz sentido", () => 
     state.isAuthenticated = false;
     renderRoute();
 
+    expect(screen.getByTestId("login")).toBeInTheDocument();
     expect(screen.queryByTestId("painel")).not.toBeInTheDocument();
     expect(screen.queryByTestId("tela-desativado")).not.toBeInTheDocument();
   });
@@ -154,5 +190,58 @@ describe("ProtectedRoute — a pergunta só é feita quando faz sentido", () => 
   it("com identidade ATIVA, a consulta é habilitada", () => {
     renderRoute();
     expect(state.askedWith.some((enabled) => enabled === true)).toBe(true);
+  });
+});
+
+describe("ProtectedRoute — intercept Platform Admin (WP-10B2B)", () => {
+  it("T5 — PA true + identity pending NÃO monta PendingAccess/CreateClinicForm e vai a /platform", () => {
+    state.identity = { status: "pending" } as unknown as ResolvedIdentity;
+    state.isPlatformAdmin = true;
+    renderRoute();
+
+    expect(screen.getByTestId("plataforma")).toBeInTheDocument();
+    expect(screen.queryByTestId("tela-pendente")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("create-clinic-form")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("painel")).not.toBeInTheDocument();
+  });
+
+  it("T7 — erro em am_i_platform_admin no pending NÃO mostra onboarding (fail closed)", () => {
+    state.identity = { status: "pending" } as unknown as ResolvedIdentity;
+    state.platformAdminError = true;
+    state.isPlatformAdmin = undefined;
+    renderRoute();
+
+    expect(screen.getByTestId("platform-authority-error")).toBeInTheDocument();
+    expect(screen.queryByTestId("tela-pendente")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("create-clinic-form")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("painel")).not.toBeInTheDocument();
+  });
+
+  it("T9 — usuário clínico ativo + PA false continua no painel clínico", () => {
+    state.isPlatformAdmin = false;
+    renderRoute();
+    expect(screen.getByTestId("painel")).toBeInTheDocument();
+    expect(screen.queryByTestId("plataforma")).not.toBeInTheDocument();
+  });
+
+  it("T10 — pending + PA false preserva PendingAccessPage", () => {
+    state.identity = { status: "pending" } as unknown as ResolvedIdentity;
+    state.isPlatformAdmin = false;
+    renderRoute();
+
+    expect(screen.getByTestId("tela-pendente")).toBeInTheDocument();
+    expect(screen.getByTestId("create-clinic-form")).toBeInTheDocument();
+    expect(screen.queryByTestId("plataforma")).not.toBeInTheDocument();
+  });
+
+  it("identidade ativa não habilita a RPC de Platform Admin no gate clínico", () => {
+    renderRoute();
+    expect(state.platformAdminEnabled.some((enabled) => enabled === true)).toBe(false);
+  });
+
+  it("identidade pending habilita a RPC de Platform Admin antes do onboarding", () => {
+    state.identity = { status: "pending" } as unknown as ResolvedIdentity;
+    renderRoute();
+    expect(state.platformAdminEnabled.some((enabled) => enabled === true)).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 import { Brand, BrandMark } from "@/components/Brand";
@@ -20,17 +20,12 @@ function GoogleGlyph() {
   );
 }
 
-interface LocationState {
-  from?: { pathname: string };
-}
-
 // Estilo de botão-link acessível (foco visível) reutilizado nos links do form.
 const linkButton =
   "font-medium text-primary hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { isAuthenticated, signIn, signInWithGoogle } = useAuth();
 
   const [email, setEmail] = useState("");
@@ -40,10 +35,8 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const from = (location.state as LocationState | null)?.from?.pathname ?? "/";
-
   if (isAuthenticated) {
-    return <Navigate to={from} replace />;
+    return <Navigate to="/access" replace />;
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -53,7 +46,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await signIn(email, password);
-      navigate(from, { replace: true });
+      navigate("/access", { replace: true });
     } catch {
       // Mensagem genérica — não vazar detalhes de auth.
       setError("E-mail ou senha inválidos. Verifique seus dados e tente novamente.");
