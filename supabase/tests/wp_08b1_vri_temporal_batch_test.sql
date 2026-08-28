@@ -476,29 +476,35 @@ end $$;
 rollback;
 
 
--- T20 H6 cron inalterado. Nenhum job VRI.
+-- T20 H6 recovery invariável.
+-- WP-08B1 não cria job VRI. WP-08B2 instala exatamente wp-vri-recompute-daily.
+-- Qualquer outro job VRI/adherence continua indevido.
 begin;
 do $$
 declare
-  n_rec int; n_vri int; sched text; cmd text;
+  n_rec int; n_vri int; n_canon int; sched text; cmd text;
 begin
   if to_regclass('cron.job') is null then
     raise exception 'WP-08B1 T20 FAIL: cron.job ausente';
   end if;
   select count(*) into n_rec from cron.job where jobname = 'wp-rls2-recovery-decay';
+  select count(*) into n_canon from cron.job
+   where jobname = 'wp-vri-recompute-daily';
   select count(*) into n_vri from cron.job
-   where jobname like 'wp-vri-%' or jobname like '%adherence%';
+   where (jobname like 'wp-vri-%' or jobname like '%adherence%')
+     and jobname is distinct from 'wp-vri-recompute-daily';
   select schedule, command into sched, cmd
     from cron.job where jobname = 'wp-rls2-recovery-decay';
   if n_rec <> 1 then raise exception 'WP-08B1 T20 FAIL: recovery jobs=%', n_rec; end if;
   if n_vri <> 0 then raise exception 'WP-08B1 T20 FAIL: job VRI indevido n=%', n_vri; end if;
+  if n_canon > 1 then raise exception 'WP-08B1 T20 FAIL: VRI canônico n=%', n_canon; end if;
   if sched is distinct from '5 9 * * *' then
     raise exception 'WP-08B1 T20 FAIL: schedule=%', sched;
   end if;
   if cmd is distinct from 'select private.recompute_recovery_decay();' then
     raise exception 'WP-08B1 T20 FAIL: command=%', cmd;
   end if;
-  raise notice 'WP-08B1 T20: PASS';
+  raise notice 'WP-08B1 T20: PASS canon=%', n_canon;
 end $$;
 rollback;
 
