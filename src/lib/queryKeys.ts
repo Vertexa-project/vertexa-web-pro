@@ -82,4 +82,7 @@ export const qk = {
   calendarConnection: (clinicId: string) => ["calendarConnection", clinicId] as const,
   calendarEvents: (clinicId: string, fromISO: string, toISO: string) =>
     ["calendarEvents", clinicId, fromISO, toISO] as const,
+  // Platform Admin (WP-10B2B) — isolado do cache clínico. NÃO misturar com clinicAdmin.
+  platformAccess: ["platform", "access"] as const,
+  platformClinics: ["platform", "clinics"] as const,
 };
