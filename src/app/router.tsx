@@ -6,12 +6,19 @@ import { PlatformShell } from "@/layouts/PlatformShell";
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { AccessResolver } from "./AccessResolver";
 import { AuthGate } from "./AuthGate";
+import { AuthRecoveryRedirect } from "./AuthRecoveryRedirect";
 import { PlatformAdminGate } from "./PlatformAdminGate";
 import { ProtectedRoute } from "./ProtectedRoute";
 
 // Code-splitting por rota: cada página vira um chunk próprio (recharts/editores fora do bundle inicial).
 const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const AuthCallback = lazy(() => import("@/app/AuthCallback").then((m) => ({ default: m.AuthCallback })));
+const ForgotPasswordPage = lazy(() =>
+  import("@/pages/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })),
+);
+const UpdatePasswordPage = lazy(() =>
+  import("@/pages/UpdatePasswordPage").then((m) => ({ default: m.UpdatePasswordPage })),
+);
 const DashboardPage = lazy(() => import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
 const PatientsPage = lazy(() => import("@/pages/PatientsPage").then((m) => ({ default: m.PatientsPage })));
 const PatientProfilePage = lazy(() =>
@@ -48,67 +55,89 @@ const PlatformClinicsPage = lazy(() =>
 export const router = createBrowserRouter(
   [
     {
-      path: "/login",
-      element: (
-        <Suspense fallback={<LoadingState />}>
-          <LoginPage />
-        </Suspense>
-      ),
-    },
-    {
-      // Retorno do OAuth (Google) — pública; confirma a sessão e redireciona.
-      path: "/auth/callback",
-      element: (
-        <Suspense fallback={<LoadingState />}>
-          <AuthCallback />
-        </Suspense>
-      ),
-    },
-    {
-      // Destino único pós-login: decide Platform Admin vs fluxo clínico. Irmão de `/` e `/platform`.
-      path: "/access",
-      element: (
-        <AuthGate>
-          <AccessResolver />
-        </AuthGate>
-      ),
-    },
-    {
-      // Área global read-only. NÃO é filha do AppShell clínico e NÃO exige membership.
-      path: "/platform",
-      element: (
-        <AuthGate>
-          <PlatformAdminGate>
-            <PlatformShell />
-          </PlatformAdminGate>
-        </AuthGate>
-      ),
-      children: [{ index: true, element: <PlatformClinicsPage /> }],
-    },
-    {
-      // AppShell envolve o <Outlet/> num Suspense — cobre todas as páginas lazy protegidas.
-      path: "/",
-      element: (
-        <ProtectedRoute>
-          <AppShell />
-        </ProtectedRoute>
-      ),
+      element: <AuthRecoveryRedirect />,
       children: [
-        { index: true, element: <DashboardPage /> },
-        { path: "pacientes", element: <PatientsPage /> },
-        { path: "pacientes/:id", element: <PatientProfilePage /> },
-        { path: "jornada", element: <JourneyBoardPage /> },
-        { path: "planos", element: <PlansPage /> },
-        { path: "mensagens", element: <MessagesPage /> },
-        { path: "campanhas", element: <CampaignsPage /> },
-        { path: "retencao", element: <RetentionPage /> },
-        { path: "configuracoes", element: <SettingsPage /> },
-        { path: "configuracoes/equipe", element: <TeamAdminPage /> },
-        { path: "configuracoes/disciplinas", element: <DisciplinesAdminPage /> },
-        { path: "configuracoes/jornada", element: <JourneyColumnsAdminPage /> },
-        { path: "configuracoes/auditoria", element: <ReportAuditPage /> },
-        { path: "relatorios/lote", element: <BatchReportPage /> },
-        { path: "*", element: <NotFoundPage /> },
+        {
+          path: "/login",
+          element: (
+            <Suspense fallback={<LoadingState />}>
+              <LoginPage />
+            </Suspense>
+          ),
+        },
+        {
+          // Retorno do OAuth (Google) — pública; confirma a sessão e redireciona.
+          path: "/auth/callback",
+          element: (
+            <Suspense fallback={<LoadingState />}>
+              <AuthCallback />
+            </Suspense>
+          ),
+        },
+        {
+          path: "/auth/forgot-password",
+          element: (
+            <Suspense fallback={<LoadingState />}>
+              <ForgotPasswordPage />
+            </Suspense>
+          ),
+        },
+        {
+          // Auth-special: recovery/update. Sem AppShell, PlatformShell, clinic ou PA.
+          path: "/auth/update-password",
+          element: (
+            <Suspense fallback={<LoadingState />}>
+              <UpdatePasswordPage />
+            </Suspense>
+          ),
+        },
+        {
+          // Destino único pós-login: decide Platform Admin vs fluxo clínico. Irmão de `/` e `/platform`.
+          path: "/access",
+          element: (
+            <AuthGate>
+              <AccessResolver />
+            </AuthGate>
+          ),
+        },
+        {
+          // Área global read-only. NÃO é filha do AppShell clínico e NÃO exige membership.
+          path: "/platform",
+          element: (
+            <AuthGate>
+              <PlatformAdminGate>
+                <PlatformShell />
+              </PlatformAdminGate>
+            </AuthGate>
+          ),
+          children: [{ index: true, element: <PlatformClinicsPage /> }],
+        },
+        {
+          // AppShell envolve o <Outlet/> num Suspense — cobre todas as páginas lazy protegidas.
+          path: "/",
+          element: (
+            <ProtectedRoute>
+              <AppShell />
+            </ProtectedRoute>
+          ),
+          children: [
+            { index: true, element: <DashboardPage /> },
+            { path: "pacientes", element: <PatientsPage /> },
+            { path: "pacientes/:id", element: <PatientProfilePage /> },
+            { path: "jornada", element: <JourneyBoardPage /> },
+            { path: "planos", element: <PlansPage /> },
+            { path: "mensagens", element: <MessagesPage /> },
+            { path: "campanhas", element: <CampaignsPage /> },
+            { path: "retencao", element: <RetentionPage /> },
+            { path: "configuracoes", element: <SettingsPage /> },
+            { path: "configuracoes/equipe", element: <TeamAdminPage /> },
+            { path: "configuracoes/disciplinas", element: <DisciplinesAdminPage /> },
+            { path: "configuracoes/jornada", element: <JourneyColumnsAdminPage /> },
+            { path: "configuracoes/auditoria", element: <ReportAuditPage /> },
+            { path: "relatorios/lote", element: <BatchReportPage /> },
+            { path: "*", element: <NotFoundPage /> },
+          ],
+        },
       ],
     },
   ],
