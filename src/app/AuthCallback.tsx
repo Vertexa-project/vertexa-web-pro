@@ -4,6 +4,7 @@ import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/feedback/LoadingState";
+import { isPasswordRecoveryEvent, PASSWORD_RESET_PATH } from "@/lib/auth/passwordRecovery";
 import { captureException } from "@/lib/observability/sentry";
 import { supabase } from "@/lib/supabase";
 
@@ -41,8 +42,13 @@ export function AuthCallback() {
       navigate(data.session ? "/access" : "/login", { replace: true });
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
-      if (next && active) navigate("/access", { replace: true });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      if (!active) return;
+      if (isPasswordRecoveryEvent(event)) {
+        navigate(PASSWORD_RESET_PATH, { replace: true });
+        return;
+      }
+      if (next) navigate("/access", { replace: true });
     });
 
     return () => {

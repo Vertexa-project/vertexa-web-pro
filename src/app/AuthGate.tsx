@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 
 import { LoadingState } from "@/components/feedback/LoadingState";
+import { PASSWORD_RESET_PATH } from "@/lib/auth/passwordRecovery";
 import { useAuth } from "@/providers/auth-context";
 
 /**
@@ -9,7 +10,7 @@ import { useAuth } from "@/providers/auth-context";
  * Reutilizado por `/access` e `/platform`.
  */
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, isPasswordRecovery } = useAuth();
 
   if (loading) {
     return (
@@ -17,6 +18,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
         <LoadingState />
       </div>
     );
+  }
+
+  if (isPasswordRecovery) {
+    return <Navigate to={PASSWORD_RESET_PATH} replace />;
   }
 
   if (!isAuthenticated) {

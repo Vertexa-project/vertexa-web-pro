@@ -2,6 +2,8 @@ import * as React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
+import { requestPasswordReset as requestPasswordResetApi, updatePassword as updatePasswordApi } from "@/lib/api/authPassword";
+import { isPasswordRecoveryEvent } from "@/lib/auth/passwordRecovery";
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/observability/sentry";
 import { AuthContext } from "./auth-context";
@@ -12,6 +14,7 @@ const LEGACY_DEMO_KEY = "vertexa-demo-session";
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   useEffect(() => {
     // Chave de um bypass que não existe mais. Não autentica ninguém; só evita lixo no storage.
@@ -23,8 +26,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(data.session);
       setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
+      if (isPasswordRecoveryEvent(event)) setIsPasswordRecovery(true);
+      if (event === "SIGNED_OUT") setIsPasswordRecovery(false);
     });
     return () => {
       active = false;
@@ -54,16 +59,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     queryClient.clear();
   }, []);
 
+  const requestPasswordReset = useCallback((email: string) => requestPasswordResetApi(email), []);
+  const updatePassword = useCallback((password: string) => updatePasswordApi(password), []);
+
   const value = useMemo(
     () => ({
       session,
       isAuthenticated: Boolean(session),
       loading,
+      isPasswordRecovery,
       signIn,
       signInWithGoogle,
       signOut,
+      requestPasswordReset,
+      updatePassword,
     }),
-    [session, loading, signIn, signInWithGoogle, signOut],
+    [
+      session,
+      loading,
+      isPasswordRecovery,
+      signIn,
+      signInWithGoogle,
+      signOut,
+      requestPasswordReset,
+      updatePassword,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

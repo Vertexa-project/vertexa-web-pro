@@ -26,7 +26,7 @@ const linkButton =
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, signIn, signInWithGoogle } = useAuth();
+  const { isAuthenticated, isPasswordRecovery, signIn, signInWithGoogle } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,6 +34,10 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  if (isPasswordRecovery) {
+    return <Navigate to="/auth/update-password" replace />;
+  }
 
   if (isAuthenticated) {
     return <Navigate to="/access" replace />;
@@ -139,7 +143,7 @@ export function LoginPage() {
                 <button
                   type="button"
                   className={`text-xs ${linkButton}`}
-                  onClick={() => showSoon("Recuperação de senha disponível em breve.")}
+                  onClick={() => navigate("/auth/forgot-password")}
                 >
                   Esqueceu a senha?
                 </button>
