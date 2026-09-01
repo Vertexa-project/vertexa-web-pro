@@ -52,6 +52,7 @@ interface ClinicOnboardingStateRow {
     requested_at?: string;
     decided_at?: string | null;
     rejection_reason?: string | null;
+    grant_is_active?: boolean | null;
   } | null;
 }
 
@@ -65,6 +66,12 @@ function mapRequest(
   ) {
     return null;
   }
+  const grantIsActive =
+    row.status === "approved"
+      ? row.grant_is_active === false
+        ? false
+        : true
+      : null;
   return {
     id: row.id,
     requestedClinicName: row.requested_clinic_name,
@@ -72,6 +79,7 @@ function mapRequest(
     requestedAt: row.requested_at ?? "",
     decidedAt: row.decided_at ?? null,
     rejectionReason: row.rejection_reason ?? null,
+    grantIsActive,
   };
 }
 

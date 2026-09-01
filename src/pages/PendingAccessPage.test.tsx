@@ -91,11 +91,31 @@ describe("PendingAccessPage — política sem flash de vazio", () => {
         requestedAt: "2026-09-01T00:00:00Z",
         decidedAt: "2026-09-01T01:00:00Z",
         rejectionReason: null,
+        grantIsActive: true,
       },
     };
     renderPage();
     expect(screen.getByText(/nome analisado/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /criar minha clínica/i })).toBeInTheDocument();
+  });
+
+  it("manual approved com grant expirado volta a solicitar (S15)", () => {
+    state.data = {
+      mode: "manual_review",
+      request: {
+        id: "r1",
+        requestedClinicName: "Alfa",
+        status: "approved",
+        requestedAt: "2026-09-01T00:00:00Z",
+        decidedAt: "2026-09-01T01:00:00Z",
+        rejectionReason: null,
+        grantIsActive: false,
+      },
+    };
+    renderPage();
+    expect(screen.getByText(/autorização anterior expirou/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /solicitar criação da clínica/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /criar minha clínica/i })).not.toBeInTheDocument();
   });
 
   it("manual pending não oferece criar", () => {
@@ -108,6 +128,7 @@ describe("PendingAccessPage — política sem flash de vazio", () => {
         requestedAt: "2026-09-01T00:00:00Z",
         decidedAt: null,
         rejectionReason: null,
+        grantIsActive: null,
       },
     };
     renderPage();

@@ -40,6 +40,36 @@ describe("clinic onboarding client", () => {
     expect(JSON.stringify(rpc.mock.calls[0])).not.toMatch(/channel_id|patient_id/);
   });
 
+  it("mapeia grant_is_active da request aprovada", async () => {
+    rpc.mockResolvedValue({
+      data: {
+        mode: "manual_review",
+        request: {
+          id: "r1",
+          requested_clinic_name: "Alfa",
+          status: "approved",
+          requested_at: "2026-09-01T00:00:00Z",
+          decided_at: "2026-09-01T01:00:00Z",
+          rejection_reason: null,
+          grant_is_active: false,
+        },
+      },
+      error: null,
+    });
+    await expect(getClinicOnboardingState()).resolves.toEqual({
+      mode: "manual_review",
+      request: {
+        id: "r1",
+        requestedClinicName: "Alfa",
+        status: "approved",
+        requestedAt: "2026-09-01T00:00:00Z",
+        decidedAt: "2026-09-01T01:00:00Z",
+        rejectionReason: null,
+        grantIsActive: false,
+      },
+    });
+  });
+
   it("erro da policy é throw — não vira request vazio", async () => {
     const err = { message: "down", code: "57014" };
     rpc.mockResolvedValue({ data: null, error: err });

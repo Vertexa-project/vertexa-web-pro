@@ -75,6 +75,7 @@ describe("classificação para o Sentry (só o inesperado é reportado)", () => 
 describe("resolveCreateClinicSurface — 0/1/N e política", () => {
   const req = (
     status: "pending" | "approved" | "rejected",
+    extra?: Partial<import("./clinicOnboarding").MyClinicCreationRequest>,
   ): import("./clinicOnboarding").MyClinicCreationRequest => ({
     id: "r1",
     requestedClinicName: "Alfa",
@@ -82,6 +83,8 @@ describe("resolveCreateClinicSurface — 0/1/N e política", () => {
     requestedAt: "2026-09-01T00:00:00Z",
     decidedAt: null,
     rejectionReason: null,
+    grantIsActive: status === "approved" ? true : null,
+    ...extra,
   });
 
   it("closed ignora pedido existente", () => {
@@ -98,6 +101,11 @@ describe("resolveCreateClinicSurface — 0/1/N e política", () => {
   });
   it("manual approved ⇒ criar", () => {
     expect(resolveCreateClinicSurface("manual_review", req("approved"))).toBe("approved");
+  });
+  it("manual approved com grant expirado ⇒ solicitar de novo (S15)", () => {
+    expect(
+      resolveCreateClinicSurface("manual_review", req("approved", { grantIsActive: false })),
+    ).toBe("expired");
   });
   it("manual rejected ⇒ recusado (pode pedir de novo)", () => {
     expect(resolveCreateClinicSurface("manual_review", req("rejected"))).toBe("rejected");

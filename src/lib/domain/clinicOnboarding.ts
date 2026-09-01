@@ -32,6 +32,8 @@ export interface MyClinicCreationRequest {
   requestedAt: string;
   decidedAt: string | null;
   rejectionReason: string | null;
+  /** Grant SEC-02 ainda válido e não consumido. Só relevante quando status=approved. */
+  grantIsActive: boolean | null;
 }
 
 export type CreateClinicSurface =
@@ -40,6 +42,7 @@ export type CreateClinicSurface =
   | "request"
   | "pending"
   | "approved"
+  | "expired"
   | "rejected";
 
 /** Superfície esquerda do PendingAccess — política + pedido do usuário, sem I/O. */
@@ -50,7 +53,9 @@ export function resolveCreateClinicSurface(
   if (mode === "closed") return "closed";
   if (mode === "automatic") return "automatic";
   if (request?.status === "pending") return "pending";
-  if (request?.status === "approved") return "approved";
+  if (request?.status === "approved") {
+    return request.grantIsActive === false ? "expired" : "approved";
+  }
   if (request?.status === "rejected") return "rejected";
   return "request";
 }

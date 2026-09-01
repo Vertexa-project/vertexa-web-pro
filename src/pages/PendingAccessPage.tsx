@@ -122,6 +122,28 @@ function CreateClinicCard() {
     );
   }
 
+  if (surface === "expired") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" aria-hidden />
+            Solicitar criação da clínica
+          </CardTitle>
+          <CardDescription>A autorização anterior expirou.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            O prazo da aprovação de{" "}
+            <span className="font-medium text-foreground">{request?.requestedClinicName}</span>{" "}
+            acabou. Envie um novo pedido para análise.
+          </p>
+          <RequestClinicForm defaultName={request?.requestedClinicName ?? ""} />
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (surface === "request") {
     return (
       <Card>
