@@ -91,6 +91,10 @@ const HINT_MESSAGES: Record<string, string> = {
   REQUEST_NOT_FOUND: "Não encontramos esta solicitação.",
   NOT_PLATFORM_ADMIN: "Esta ação é restrita à administração da plataforma.",
   INVALID_POLICY_MODE: "Modo de entrada inválido.",
+  APPROVED_CLINIC_NAME_MISMATCH:
+    "A criação deve usar o nome aprovado na análise. Para outro nome, é preciso uma nova análise.",
+  REQUEST_ALREADY_APPROVED:
+    "Você já tem uma solicitação aprovada. Conclua a criação da clínica com o nome aprovado.",
 };
 
 /** Extrai um `hint` CONHECIDO de um erro de RPC (PostgrestError expõe `hint`). Senão, null. */

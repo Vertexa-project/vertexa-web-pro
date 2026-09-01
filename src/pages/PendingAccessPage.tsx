@@ -150,12 +150,15 @@ function CreateClinicCard() {
         </CardTitle>
         <CardDescription>
           {surface === "approved"
-            ? "Sua solicitação foi aprovada. Confirme o nome e conclua a criação."
+            ? "Sua solicitação foi aprovada. Conclua a criação com o nome analisado."
             : "Você é profissional e vai administrar a própria clínica. Crie agora e entre como administradora."}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <CreateClinicForm defaultName={surface === "approved" ? (request?.requestedClinicName ?? "") : ""} />
+        <CreateClinicForm
+          defaultName={surface === "approved" ? (request?.requestedClinicName ?? "") : ""}
+          nameLocked={surface === "approved"}
+        />
       </CardContent>
     </Card>
   );

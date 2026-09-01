@@ -81,6 +81,23 @@ describe("PendingAccessPage — política sem flash de vazio", () => {
     expect(screen.getByRole("button", { name: /solicitar criação da clínica/i })).toBeInTheDocument();
   });
 
+  it("manual approved trava o nome analisado", () => {
+    state.data = {
+      mode: "manual_review",
+      request: {
+        id: "r1",
+        requestedClinicName: "Alfa",
+        status: "approved",
+        requestedAt: "2026-09-01T00:00:00Z",
+        decidedAt: "2026-09-01T01:00:00Z",
+        rejectionReason: null,
+      },
+    };
+    renderPage();
+    expect(screen.getByText(/nome analisado/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /criar minha clínica/i })).toBeInTheDocument();
+  });
+
   it("manual pending não oferece criar", () => {
     state.data = {
       mode: "manual_review",

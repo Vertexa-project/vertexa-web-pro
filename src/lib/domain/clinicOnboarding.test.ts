@@ -45,6 +45,14 @@ describe("onboardingErrorMessage — traduz o hint da RPC (nunca erro cru, sem P
   it("ONBOARDING_CLOSED ⇒ indisponível, sem parecer empty de equipe", () => {
     expect(onboardingErrorMessage({ hint: "ONBOARDING_CLOSED" })).toMatch(/indisponíveis/i);
   });
+  it("APPROVED_CLINIC_NAME_MISMATCH ⇒ exige o nome aprovado", () => {
+    expect(onboardingErrorMessage({ hint: "APPROVED_CLINIC_NAME_MISMATCH" })).toMatch(/nome aprovado/i);
+    expect(isExpectedOnboardingError({ hint: "APPROVED_CLINIC_NAME_MISMATCH" })).toBe(true);
+  });
+  it("REQUEST_ALREADY_APPROVED ⇒ pede para concluir a criação", () => {
+    expect(onboardingErrorMessage({ hint: "REQUEST_ALREADY_APPROVED" })).toMatch(/aprovada/i);
+    expect(isExpectedOnboardingError({ hint: "REQUEST_ALREADY_APPROVED" })).toBe(true);
+  });
   it("erro desconhecido/sem hint ⇒ mensagem genérica (não vaza detalhe)", () => {
     expect(onboardingErrorMessage(new Error("pg boom xyz"))).toMatch(/tente novamente/i);
     expect(onboardingErrorMessage(null)).toMatch(/tente novamente/i);
