@@ -72,6 +72,11 @@ begin
   if codeA is null or length(codeA) <> 8 then fails := fails || 'FIX_no_default_code '; end if;
   if codeA = codeB then fails := fails || 'FIX_codes_collided '; end if;
   if codeA ~ '[OI01]' then fails := fails || 'FIX_ambiguous_chars('||codeA||') '; end if;
+  if to_regclass('private.clinic_onboarding_policy') is not null then
+    insert into private.clinic_onboarding_policy (id, mode, updated_at)
+    values (true, 'automatic', clock_timestamp())
+    on conflict (id) do update set mode = excluded.mode;
+  end if;
 
   -- ── (N6) anon ⟂ tudo ───────────────────────────────────────────────────────────────
   begin

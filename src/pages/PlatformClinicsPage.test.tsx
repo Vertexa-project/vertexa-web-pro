@@ -58,7 +58,7 @@ beforeEach(() => {
 });
 
 describe("PlatformClinicsPage — catálogo V1", () => {
-  it("T11/T12 — cards agregam os counts da lista e mostram a tabela", () => {
+  it("T11/T12 — catálogo mostra as clínicas sem ids internos", () => {
     clinicsState.data = [
       clinic({ clinicId: "a", clinicName: "Alfa", professionalCount: 1, patientCount: 2 }),
       clinic({
@@ -74,10 +74,7 @@ describe("PlatformClinicsPage — catálogo V1", () => {
 
     render(<PlatformClinicsPage />);
 
-    expect(screen.getByText("Dashboard da plataforma")).toBeInTheDocument();
-    expect(screen.getByText("Total de clínicas").parentElement).toHaveTextContent("2");
-    expect(screen.getByText("Total de profissionais").parentElement).toHaveTextContent("3");
-    expect(screen.getByText("Total de pacientes").parentElement).toHaveTextContent("5");
+    expect(screen.getByText("Clínicas")).toBeInTheDocument();
     expect(screen.getByText("Alfa")).toBeInTheDocument();
     expect(screen.getByText("Beta")).toBeInTheDocument();
     expect(clinicsState.enabled).toBe(true);
@@ -121,6 +118,9 @@ describe("PlatformClinicsPage — T14 fronteira de dados", () => {
       path.join(root, "hooks", "usePlatformClinics.ts"),
       path.join(root, "lib", "api", "platformAdmin.ts"),
       path.join(root, "layouts", "PlatformShell.tsx"),
+      path.join(dir, "PlatformDashboardPage.tsx"),
+      path.join(dir, "PlatformRequestsPage.tsx"),
+      path.join(dir, "PlatformSettingsPage.tsx"),
     ];
     const forbidden = [
       "useListPatients",
@@ -147,6 +147,8 @@ describe("PlatformClinicsPage — T14 fronteira de dados", () => {
     const api = readFileSync(path.join(root, "lib", "api", "platformAdmin.ts"), "utf8");
     expect(api).toContain("am_i_platform_admin");
     expect(api).toContain("list_platform_clinics");
+    expect(api).toContain("list_clinic_creation_requests");
+    expect(api).toContain("set_clinic_onboarding_policy");
     expect(api).not.toContain(".from(");
   });
 });

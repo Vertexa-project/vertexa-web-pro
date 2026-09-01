@@ -22,8 +22,8 @@ import {
  * Erros da RPC viram mensagem compreensível (por `hint`); só o INESPERADO vai ao Sentry
  * (source:"onboarding", sem PII — nunca o nome da clínica).
  */
-export function CreateClinicForm() {
-  const [name, setName] = useState("");
+export function CreateClinicForm({ defaultName = "" }: { defaultName?: string }) {
+  const [name, setName] = useState(defaultName);
   const [formError, setFormError] = useState<string | null>(null);
   const [created, setCreated] = useState(false);
   const create = useCreateOwnClinic();

@@ -124,9 +124,15 @@ with pa as (
   insert into private.platform_admins (profile_id, status, granted_at, revoked_at)
   select pa.id, 'active', now(), null from pa
 )
+, pol as (
+  update private.clinic_onboarding_policy
+     set mode = 'manual_review'
+   where id = true
+  returning 1
+)
 select pa.id || '|' || pa.auth_user_id || '|' || tgt.id || '|' || tgt.auth_user_id
     || '|' || staff.id || '|' || staff.auth_user_id
-  from pa, tgt, staff;
+  from pa, tgt, staff, pol;
 `);
   const [pfPa, aPa, pfTgt, aTgt, pfStaff, aStaff] = seed.split("|");
   if (!aPa || !aTgt || !aStaff) fail("seed", seed);

@@ -48,8 +48,17 @@ const ReportAuditPage = lazy(() =>
   import("@/pages/ReportAuditPage").then((m) => ({ default: m.ReportAuditPage })),
 );
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
+const PlatformDashboardPage = lazy(() =>
+  import("@/pages/PlatformDashboardPage").then((m) => ({ default: m.PlatformDashboardPage })),
+);
 const PlatformClinicsPage = lazy(() =>
   import("@/pages/PlatformClinicsPage").then((m) => ({ default: m.PlatformClinicsPage })),
+);
+const PlatformRequestsPage = lazy(() =>
+  import("@/pages/PlatformRequestsPage").then((m) => ({ default: m.PlatformRequestsPage })),
+);
+const PlatformSettingsPage = lazy(() =>
+  import("@/pages/PlatformSettingsPage").then((m) => ({ default: m.PlatformSettingsPage })),
 );
 
 export const router = createBrowserRouter(
@@ -110,7 +119,12 @@ export const router = createBrowserRouter(
               </PlatformAdminGate>
             </AuthGate>
           ),
-          children: [{ index: true, element: <PlatformClinicsPage /> }],
+          children: [
+            { index: true, element: <PlatformDashboardPage /> },
+            { path: "solicitacoes", element: <PlatformRequestsPage /> },
+            { path: "clinicas", element: <PlatformClinicsPage /> },
+            { path: "configuracoes", element: <PlatformSettingsPage /> },
+          ],
         },
         {
           // AppShell envolve o <Outlet/> num Suspense — cobre todas as páginas lazy protegidas.

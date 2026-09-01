@@ -2,6 +2,10 @@ import { useNavigate } from "react-router-dom";
 import { Building2, KeyRound } from "lucide-react";
 
 import { Brand } from "@/components/Brand";
+import { CreateClinicForm } from "@/components/onboarding/CreateClinicForm";
+import { JoinClinicForm } from "@/components/onboarding/JoinClinicForm";
+import { RequestClinicForm } from "@/components/onboarding/RequestClinicForm";
+import { ErrorState } from "@/components/feedback/ErrorState";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,21 +14,157 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { CreateClinicForm } from "@/components/onboarding/CreateClinicForm";
-import { JoinClinicForm } from "@/components/onboarding/JoinClinicForm";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/providers/auth-context";
+import { useClinicOnboardingState } from "@/hooks/useClinicOnboardingState";
 import { useIdentity } from "@/hooks/useIdentity";
+import { resolveCreateClinicSurface } from "@/lib/domain/clinicOnboarding";
+
+function CreateClinicCard() {
+  const state = useClinicOnboardingState(true);
+
+  if (state.isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" aria-hidden />
+            Clínica
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (state.isError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" aria-hidden />
+            Clínica
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ErrorState
+            title="Não foi possível verificar a política de entrada"
+            description="Tente novamente. Não assumimos que você está sem equipe."
+            onRetry={() => void state.refetch()}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const surface = resolveCreateClinicSurface(state.data?.mode ?? "closed", state.data?.request ?? null);
+  const request = state.data?.request ?? null;
+
+  if (surface === "closed") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" aria-hidden />
+            Criar minha clínica
+          </CardTitle>
+          <CardDescription>
+            Novos cadastros de clínicas estão temporariamente indisponíveis.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  if (surface === "pending") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" aria-hidden />
+            Solicitar criação da clínica
+          </CardTitle>
+          <CardDescription>Solicitação aguardando análise</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            Pedido para{" "}
+            <span className="font-medium text-foreground">{request?.requestedClinicName}</span>.
+          </p>
+          <p>Você recebe a liberação aqui quando a plataforma concluir a análise.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (surface === "rejected") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" aria-hidden />
+            Solicitar criação da clínica
+          </CardTitle>
+          <CardDescription>A solicitação anterior foi recusada.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {request?.rejectionReason ? (
+            <p className="text-sm text-muted-foreground">Motivo: {request.rejectionReason}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Você pode enviar um novo pedido.</p>
+          )}
+          <RequestClinicForm defaultName={request?.requestedClinicName ?? ""} />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (surface === "request") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" aria-hidden />
+            Solicitar criação da clínica
+          </CardTitle>
+          <CardDescription>
+            Envie o nome da clínica. A plataforma analisa antes de liberar a criação.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RequestClinicForm />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Building2 className="h-5 w-5 text-primary" aria-hidden />
+          Criar minha clínica
+        </CardTitle>
+        <CardDescription>
+          {surface === "approved"
+            ? "Sua solicitação foi aprovada. Confirme o nome e conclua a criação."
+            : "Você é profissional e vai administrar a própria clínica. Crie agora e entre como administradora."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <CreateClinicForm defaultName={surface === "approved" ? (request?.requestedClinicName ?? "") : ""} />
+      </CardContent>
+    </Card>
+  );
+}
 
 /**
- * Acesso pendente: sessão real válida, mas a conta ainda NÃO está vinculada a um profissional/clínica
- * (1º login sem match por e-mail → profile 'pending'). Não vê dados de ninguém. Dois caminhos claros:
- *   (1) CRIAR a própria clínica → vira administradora na hora (RPC create_clinic_with_owner, WP-ONBOARDING);
- *   (2) PEDIR acesso a uma clínica existente com o CÓDIGO dela (RPC request_clinic_access, WP-JOIN-1)
- *       → o admin daquela clínica aprova e o acesso é liberado.
- *
- * O caminho (2) era, até o WP-JOIN-1, um texto morto mandando "falar com o administrador": ele não
- * tinha como atender, porque private.can_see_profile() é falsa para um profile pendente e o tornava
- * invisível. Com o código, o pedido nasce vinculado ao clinic_id e a fila do admin é RLS trivial.
+ * Acesso pendente: sessão válida, sem profissional/clínica.
+ * Criar clínica agora respeita a política global (PLATFORM-01).
+ * Entrar numa clínica existente (join code) é independente.
  */
 export function PendingAccessPage() {
   const navigate = useNavigate();
@@ -55,25 +195,8 @@ export function PendingAccessPage() {
       </div>
 
       <div className="grid w-full max-w-3xl gap-4 md:grid-cols-2">
-        {/* Caminho 1: criar a própria clínica (profissional que administra a própria clínica). */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-primary" aria-hidden />
-              Criar minha clínica
-            </CardTitle>
-            <CardDescription>
-              Você é profissional e vai administrar a própria clínica. Crie agora e entre como administradora.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <CreateClinicForm />
-          </CardContent>
-        </Card>
+        <CreateClinicCard />
 
-        {/* Caminho 2: PEDIR acesso a uma clínica com o código dela (WP-JOIN-1). Antes daqui havia
-            só um texto mandando "falar com o administrador" — que não tinha como atender, porque
-            um profile pendente é invisível para ele. Agora o pedido nasce vinculado à clínica. */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

@@ -1,4 +1,9 @@
 import { supabase } from "@/lib/supabase";
+import {
+  isClinicOnboardingMode,
+  type ClinicOnboardingMode,
+  type MyClinicCreationRequest,
+} from "@/lib/domain/clinicOnboarding";
 import type { Clinic } from "@/types/db";
 
 /**
@@ -31,4 +36,75 @@ export async function createClinicWithOwner(name: string): Promise<CreateClinicR
   if (error) throw error;
   const row = (data ?? {}) as { clinic_id?: string; professional_id?: string };
   return { clinicId: row.clinic_id ?? "", professionalId: row.professional_id ?? "" };
+}
+
+export interface ClinicOnboardingState {
+  mode: ClinicOnboardingMode;
+  request: MyClinicCreationRequest | null;
+}
+
+interface ClinicOnboardingStateRow {
+  mode?: string;
+  request?: {
+    id?: string;
+    requested_clinic_name?: string;
+    status?: string;
+    requested_at?: string;
+    decided_at?: string | null;
+    rejection_reason?: string | null;
+  } | null;
+}
+
+function mapRequest(
+  row: NonNullable<ClinicOnboardingStateRow["request"]>,
+): MyClinicCreationRequest | null {
+  if (
+    typeof row.id !== "string" ||
+    typeof row.requested_clinic_name !== "string" ||
+    (row.status !== "pending" && row.status !== "approved" && row.status !== "rejected")
+  ) {
+    return null;
+  }
+  return {
+    id: row.id,
+    requestedClinicName: row.requested_clinic_name,
+    status: row.status,
+    requestedAt: row.requested_at ?? "",
+    decidedAt: row.decided_at ?? null,
+    rejectionReason: row.rejection_reason ?? null,
+  };
+}
+
+/** Estado de onboarding do chamador. Sem patient_id / channel_id. */
+export async function getClinicOnboardingState(): Promise<ClinicOnboardingState> {
+  const { data, error } = await supabase.rpc("get_clinic_onboarding_state");
+  if (error) throw error;
+  const row = (data ?? {}) as ClinicOnboardingStateRow;
+  const rawMode = row.mode ?? "";
+  const mode = isClinicOnboardingMode(rawMode) ? rawMode : "closed";
+  return {
+    mode,
+    request: row.request ? mapRequest(row.request) : null,
+  };
+}
+
+export interface ClinicCreationRequestResult {
+  requestId: string;
+  status: "pending";
+  requestedClinicName: string;
+}
+
+export async function requestClinicCreation(name: string): Promise<ClinicCreationRequestResult> {
+  const { data, error } = await supabase.rpc("request_clinic_creation", { p_name: name });
+  if (error) throw error;
+  const row = (data ?? {}) as {
+    request_id?: string;
+    status?: string;
+    requested_clinic_name?: string;
+  };
+  return {
+    requestId: row.request_id ?? "",
+    status: "pending",
+    requestedClinicName: row.requested_clinic_name ?? name,
+  };
 }

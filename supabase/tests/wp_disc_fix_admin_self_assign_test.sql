@@ -45,6 +45,11 @@ begin
   insert into public.professionals (profile_id,clinic_id,type,clinic_role) values (p_adm ,clA,'other','admin')  returning id into pr_adm;
   insert into public.professionals (profile_id,clinic_id,type,clinic_role) values (p_mem ,clA,'other','member') returning id into pr_mem;
   insert into public.professionals (profile_id,clinic_id,type,clinic_role) values (p_admB,clB,'other','admin')  returning id into pr_admB;
+  if to_regclass('private.clinic_onboarding_policy') is not null then
+    insert into private.clinic_onboarding_policy (id, mode, updated_at)
+    values (true, 'automatic', clock_timestamp())
+    on conflict (id) do update set mode = excluded.mode;
+  end if;
 
   -- ═══════════════ POSITIVOS ═══════════════
 
