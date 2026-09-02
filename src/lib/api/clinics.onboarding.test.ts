@@ -11,14 +11,21 @@ const { getClinicOnboardingState, requestClinicCreation, createClinicWithOwner }
 
 beforeEach(() => {
   rpc.mockReset();
+  rpc.mockImplementation((name: string) => {
+    if (name === "ensure_my_profile") return Promise.resolve({ data: null, error: null });
+    return Promise.resolve({ data: null, error: null });
+  });
 });
 
 describe("clinic onboarding client", () => {
   it("get_clinic_onboarding_state é chamado com zero argumentos", async () => {
-    rpc.mockResolvedValue({ data: { mode: "closed", request: null }, error: null });
+    rpc.mockImplementation((name: string) => {
+      if (name === "ensure_my_profile") return Promise.resolve({ data: null, error: null });
+      return Promise.resolve({ data: { mode: "closed", request: null }, error: null });
+    });
     await expect(getClinicOnboardingState()).resolves.toEqual({ mode: "closed", request: null });
+    expect(rpc).toHaveBeenCalledWith("ensure_my_profile");
     expect(rpc).toHaveBeenCalledWith("get_clinic_onboarding_state");
-    expect(rpc.mock.calls[0]?.length).toBe(1);
   });
 
   it("request_clinic_creation envia só o nome", async () => {
@@ -41,20 +48,23 @@ describe("clinic onboarding client", () => {
   });
 
   it("mapeia grant_is_active da request aprovada", async () => {
-    rpc.mockResolvedValue({
-      data: {
-        mode: "manual_review",
-        request: {
-          id: "r1",
-          requested_clinic_name: "Alfa",
-          status: "approved",
-          requested_at: "2026-09-01T00:00:00Z",
-          decided_at: "2026-09-01T01:00:00Z",
-          rejection_reason: null,
-          grant_is_active: false,
+    rpc.mockImplementation((name: string) => {
+      if (name === "ensure_my_profile") return Promise.resolve({ data: null, error: null });
+      return Promise.resolve({
+        data: {
+          mode: "manual_review",
+          request: {
+            id: "r1",
+            requested_clinic_name: "Alfa",
+            status: "approved",
+            requested_at: "2026-09-01T00:00:00Z",
+            decided_at: "2026-09-01T01:00:00Z",
+            rejection_reason: null,
+            grant_is_active: false,
+          },
         },
-      },
-      error: null,
+        error: null,
+      });
     });
     await expect(getClinicOnboardingState()).resolves.toEqual({
       mode: "manual_review",
@@ -72,7 +82,10 @@ describe("clinic onboarding client", () => {
 
   it("erro da policy é throw — não vira request vazio", async () => {
     const err = { message: "down", code: "57014" };
-    rpc.mockResolvedValue({ data: null, error: err });
+    rpc.mockImplementation((name: string) => {
+      if (name === "ensure_my_profile") return Promise.resolve({ data: null, error: null });
+      return Promise.resolve({ data: null, error: err });
+    });
     await expect(getClinicOnboardingState()).rejects.toEqual(err);
   });
 });

@@ -1,5 +1,6 @@
-import { useNavigate } from "react-router-dom";
-import { Building2, KeyRound } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Building2, KeyRound } from "lucide-react";
 
 import { Brand } from "@/components/Brand";
 import { CreateClinicForm } from "@/components/onboarding/CreateClinicForm";
@@ -12,31 +13,75 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/providers/auth-context";
+import { useMyJoinRequests } from "@/hooks/useClinicJoin";
 import { useClinicOnboardingState } from "@/hooks/useClinicOnboardingState";
 import { useIdentity } from "@/hooks/useIdentity";
 import {
   onboardingErrorHint,
   onboardingErrorMessage,
   resolveCreateClinicSurface,
+  type CreateClinicSurface,
 } from "@/lib/domain/clinicOnboarding";
 
-function CreateClinicCard() {
+type Step = "choose" | "clinic" | "join";
+
+function isClinicStatusSurface(surface: CreateClinicSurface | null): boolean {
+  return surface === "pending" || surface === "approved" || surface === "rejected" || surface === "expired";
+}
+
+const stepHeadingClass = "font-display text-lg font-semibold tracking-tight outline-none";
+
+function SituationChoice({
+  title,
+  description,
+  cta,
+  icon,
+  onSelect,
+}: {
+  title: string;
+  description: string;
+  cta: string;
+  icon: ReactNode;
+  onSelect: () => void;
+}) {
+  return (
+    <article className="flex flex-col rounded-2xl border border-border/80 bg-card p-6 shadow-card">
+      <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        {icon}
+      </div>
+      <h2 className="font-display text-lg font-semibold text-foreground">{title}</h2>
+      <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
+      <Button type="button" className="mt-6 w-full" onClick={onSelect}>
+        {cta}
+      </Button>
+    </article>
+  );
+}
+
+function ClinicOnboardingPanel({
+  onBack,
+  headingRef,
+}: {
+  onBack: () => void;
+  headingRef: Ref<HTMLHeadingElement>;
+}) {
   const state = useClinicOnboardingState(true);
 
   if (state.isLoading) {
     return (
-      <Card>
+      <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <BackButton onBack={onBack} />
+          <h2 ref={headingRef} tabIndex={-1} className={`${stepHeadingClass} flex items-center gap-2`}>
             <Building2 className="h-5 w-5 text-primary" aria-hidden />
             Clínica
-          </CardTitle>
+          </h2>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3" aria-busy="true" aria-live="polite">
+          <span className="sr-only">Carregando política de cadastro</span>
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </CardContent>
@@ -46,12 +91,13 @@ function CreateClinicCard() {
 
   if (state.isError) {
     return (
-      <Card>
+      <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <BackButton onBack={onBack} />
+          <h2 ref={headingRef} tabIndex={-1} className={`${stepHeadingClass} flex items-center gap-2`}>
             <Building2 className="h-5 w-5 text-primary" aria-hidden />
             Clínica
-          </CardTitle>
+          </h2>
         </CardHeader>
         <CardContent>
           <ErrorState
@@ -71,183 +117,282 @@ function CreateClinicCard() {
   const surface = resolveCreateClinicSurface(state.data?.mode ?? "closed", state.data?.request ?? null);
   const request = state.data?.request ?? null;
 
-  if (surface === "closed") {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" aria-hidden />
-            Criar minha clínica
-          </CardTitle>
-          <CardDescription>
-            Novos cadastros de clínicas estão temporariamente indisponíveis.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
-  if (surface === "pending") {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" aria-hidden />
-            Solicitar criação da clínica
-          </CardTitle>
-          <CardDescription>Solicitação aguardando análise</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            Pedido para{" "}
-            <span className="font-medium text-foreground">{request?.requestedClinicName}</span>.
-          </p>
-          <p>Você recebe a liberação aqui quando a plataforma concluir a análise.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (surface === "rejected") {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" aria-hidden />
-            Solicitar criação da clínica
-          </CardTitle>
-          <CardDescription>A solicitação anterior foi recusada.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {request?.rejectionReason ? (
-            <p className="text-sm text-muted-foreground">Motivo: {request.rejectionReason}</p>
-          ) : (
-            <p className="text-sm text-muted-foreground">Você pode enviar um novo pedido.</p>
-          )}
-          <RequestClinicForm defaultName={request?.requestedClinicName ?? ""} />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (surface === "expired") {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" aria-hidden />
-            Solicitar criação da clínica
-          </CardTitle>
-          <CardDescription>A autorização anterior expirou.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            O prazo da aprovação de{" "}
-            <span className="font-medium text-foreground">{request?.requestedClinicName}</span>{" "}
-            acabou. Envie um novo pedido para análise.
-          </p>
-          <RequestClinicForm defaultName={request?.requestedClinicName ?? ""} />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (surface === "request") {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" aria-hidden />
-            Solicitar criação da clínica
-          </CardTitle>
-          <CardDescription>
-            Envie o nome da clínica. A plataforma analisa antes de liberar a criação.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <RequestClinicForm />
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Building2 className="h-5 w-5 text-primary" aria-hidden />
-          Criar minha clínica
-        </CardTitle>
-        <CardDescription>
-          {surface === "approved"
-            ? "Sua solicitação foi aprovada. Conclua a criação com o nome analisado."
-            : "Você é profissional e vai administrar a própria clínica. Crie agora e entre como administradora."}
-        </CardDescription>
+    <Card className="w-full max-w-lg">
+      <CardHeader className="space-y-3">
+        <BackButton onBack={onBack} />
+        <ClinicPanelHeader surface={surface} headingRef={headingRef} />
       </CardHeader>
       <CardContent>
-        <CreateClinicForm
-          defaultName={surface === "approved" ? (request?.requestedClinicName ?? "") : ""}
-          nameLocked={surface === "approved"}
-        />
+        <ClinicPanelBody surface={surface} requestName={request?.requestedClinicName ?? ""} rejectionReason={request?.rejectionReason} />
       </CardContent>
     </Card>
   );
 }
 
+function BackButton({ onBack }: { onBack: () => void }) {
+  return (
+    <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit text-muted-foreground" onClick={onBack}>
+      <ArrowLeft className="h-4 w-4" aria-hidden />
+      Voltar
+    </Button>
+  );
+}
+
+function ClinicPanelHeader({
+  surface,
+  headingRef,
+}: {
+  surface: CreateClinicSurface;
+  headingRef: Ref<HTMLHeadingElement>;
+}) {
+  if (surface === "closed") {
+    return (
+      <>
+        <h2 ref={headingRef} tabIndex={-1} className={stepHeadingClass}>
+          Novos cadastros estão temporariamente fechados
+        </h2>
+        <CardDescription>
+          No momento, a Vertexa não está recebendo novos cadastros de clínicas.
+        </CardDescription>
+      </>
+    );
+  }
+  if (surface === "pending") {
+    return (
+      <>
+        <h2 ref={headingRef} tabIndex={-1} className={stepHeadingClass}>Solicitação enviada</h2>
+        <CardDescription>
+          Seu cadastro está sendo analisado. Avisaremos aqui assim que ele for aprovado.
+        </CardDescription>
+      </>
+    );
+  }
+  if (surface === "rejected") {
+    return (
+      <>
+        <h2 ref={headingRef} tabIndex={-1} className={stepHeadingClass}>Cadastro não aprovado</h2>
+        <CardDescription>Você pode enviar um novo pedido com outro nome, se quiser tentar de novo.</CardDescription>
+      </>
+    );
+  }
+  if (surface === "expired") {
+    return (
+      <>
+        <h2 ref={headingRef} tabIndex={-1} className={stepHeadingClass}>Solicitar cadastro da clínica</h2>
+        <CardDescription>
+          O prazo da aprovação anterior acabou. Envie um novo pedido para análise.
+        </CardDescription>
+      </>
+    );
+  }
+  if (surface === "request") {
+    return (
+      <>
+        <h2 ref={headingRef} tabIndex={-1} className={stepHeadingClass}>Solicitar cadastro da clínica</h2>
+        <CardDescription>
+          Informe o nome da clínica. A equipe Vertexa analisará o cadastro antes da ativação.
+        </CardDescription>
+      </>
+    );
+  }
+  if (surface === "approved") {
+    return (
+      <>
+        <h2 ref={headingRef} tabIndex={-1} className={stepHeadingClass}>Cadastro aprovado</h2>
+        <CardDescription>Sua clínica foi aprovada. Confirme para concluir o cadastro.</CardDescription>
+      </>
+    );
+  }
+  return (
+    <>
+      <h2 ref={headingRef} tabIndex={-1} className={stepHeadingClass}>Cadastrar minha clínica</h2>
+      <CardDescription>Informe o nome da clínica para começar.</CardDescription>
+    </>
+  );
+}
+
+function ClinicPanelBody({
+  surface,
+  requestName,
+  rejectionReason,
+}: {
+  surface: CreateClinicSurface;
+  requestName: string;
+  rejectionReason: string | null | undefined;
+}) {
+  if (surface === "closed") {
+    return null;
+  }
+  if (surface === "pending") {
+    return requestName ? (
+      <p className="text-sm text-muted-foreground">
+        Pedido para <span className="font-medium text-foreground">{requestName}</span>.
+      </p>
+    ) : null;
+  }
+  if (surface === "rejected") {
+    return (
+      <div className="space-y-4">
+        {rejectionReason ? (
+          <p className="text-sm text-muted-foreground">Motivo: {rejectionReason}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">Nenhum detalhe adicional foi informado.</p>
+        )}
+        <RequestClinicForm defaultName={requestName} />
+      </div>
+    );
+  }
+  if (surface === "expired") {
+    return (
+      <div className="space-y-4">
+        {requestName ? (
+          <p className="text-sm text-muted-foreground">
+            A aprovação de <span className="font-medium text-foreground">{requestName}</span> expirou.
+          </p>
+        ) : null}
+        <RequestClinicForm defaultName={requestName} />
+      </div>
+    );
+  }
+  if (surface === "request") {
+    return <RequestClinicForm />;
+  }
+  return (
+    <CreateClinicForm
+      defaultName={surface === "approved" ? requestName : ""}
+      nameLocked={surface === "approved"}
+      submitLabel={surface === "approved" ? "Concluir cadastro" : "Criar minha clínica"}
+    />
+  );
+}
+
 /**
  * Acesso pendente: sessão válida, sem profissional/clínica.
- * Criar clínica agora respeita a política global (PLATFORM-01).
- * Entrar numa clínica existente (join code) é independente.
+ * Primeiro a pessoa escolhe a situação; o formulário só aparece depois.
  */
 export function PendingAccessPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { signOut } = useAuth();
   const { email } = useIdentity();
+  const state = useClinicOnboardingState(true);
+  const mine = useMyJoinRequests();
+  const inviteCode = Boolean(searchParams.get("code")?.trim());
+  const pendingJoin = (mine.data ?? []).some((row) => row.status === "pending");
+  const [step, setStep] = useState<Step>(inviteCode ? "join" : "choose");
+  const [autoRouted, setAutoRouted] = useState(inviteCode);
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  const skipInitialChooseFocus = useRef(true);
+
+  const surface = state.data
+    ? resolveCreateClinicSurface(state.data.mode, state.data.request)
+    : null;
+
+  useEffect(() => {
+    if (autoRouted) return;
+    if (step !== "choose") return;
+    if (isClinicStatusSurface(surface)) {
+      setStep("clinic");
+      setAutoRouted(true);
+      return;
+    }
+    if (pendingJoin) {
+      setStep("join");
+      setAutoRouted(true);
+    }
+  }, [autoRouted, pendingJoin, step, surface]);
+
+  useLayoutEffect(() => {
+    if (skipInitialChooseFocus.current && step === "choose") {
+      skipInitialChooseFocus.current = false;
+      return;
+    }
+    skipInitialChooseFocus.current = false;
+    if (step === "choose") {
+      document.getElementById("onboarding-title")?.focus();
+      return;
+    }
+    stepHeadingRef.current?.focus();
+  }, [step, surface]);
 
   async function handleSignOut() {
     await signOut();
     navigate("/login", { replace: true });
   }
 
+  function goToChoose() {
+    setStep("choose");
+  }
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-6 py-10">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background px-6 py-10">
       <Brand markClassName="h-10 w-10" wordmarkClassName="text-xl" />
 
-      <div className="max-w-md space-y-1 text-center">
-        <h1 className="text-lg font-semibold text-foreground">Falta um passo para começar</h1>
-        <p className="text-sm text-muted-foreground">
-          Seu login foi concluído
+      <header className="max-w-lg space-y-2 text-center">
+        <h1
+          id="onboarding-title"
+          tabIndex={-1}
+          className="font-display text-2xl font-semibold tracking-tight text-foreground outline-none"
+        >
+          Vamos configurar seu acesso
+        </h1>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Você entrou
           {email ? (
             <>
               {" "}
               como <span className="font-medium text-foreground">{email}</span>
             </>
           ) : null}
-          , mas sua conta ainda não está vinculada a uma clínica. Escolha como continuar:
+          {step === "choose" ? ". Agora escolha como fará parte do Vertexa." : "."}
         </p>
-      </div>
+      </header>
 
-      <div className="grid w-full max-w-3xl gap-4 md:grid-cols-2">
-        <CreateClinicCard />
+      {step === "choose" ? (
+        <div
+          data-testid="onboarding-choices"
+          className="grid w-full max-w-3xl grid-cols-1 gap-4 md:grid-cols-2"
+        >
+          <SituationChoice
+            title="Sou responsável por uma clínica"
+            description="Quero cadastrar minha clínica e administrar minha equipe no Vertexa."
+            cta="Cadastrar minha clínica"
+            icon={<Building2 className="h-5 w-5" aria-hidden />}
+            onSelect={() => setStep("clinic")}
+          />
+          <SituationChoice
+            title="Fui convidado para uma clínica"
+            description="Já existe uma clínica no Vertexa e recebi um código para entrar na equipe."
+            cta="Entrar com código"
+            icon={<KeyRound className="h-5 w-5" aria-hidden />}
+            onSelect={() => setStep("join")}
+          />
+        </div>
+      ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <KeyRound className="h-5 w-5 text-primary" aria-hidden />
+      {step === "clinic" ? (
+        <ClinicOnboardingPanel onBack={goToChoose} headingRef={stepHeadingRef} />
+      ) : null}
+
+      {step === "join" ? (
+        <Card className="w-full max-w-lg">
+          <CardHeader className="space-y-3">
+            <BackButton onBack={goToChoose} />
+            <h2 ref={stepHeadingRef} tabIndex={-1} className={stepHeadingClass}>
               Entrar em uma clínica
-            </CardTitle>
-            <CardDescription>
-              Você foi chamada(o) para a equipe de uma clínica. Informe o código que ela te passou.
-            </CardDescription>
+            </h2>
+            <CardDescription>Digite o código que você recebeu da clínica.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent>
             <JoinClinicForm />
-            <Button variant="outline" onClick={handleSignOut} className="w-full">
-              Sair
-            </Button>
           </CardContent>
         </Card>
-      </div>
+      ) : null}
+
+      <Button type="button" variant="outline" onClick={() => void handleSignOut()}>
+        Sair
+      </Button>
     </div>
   );
 }

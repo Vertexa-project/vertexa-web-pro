@@ -14,7 +14,7 @@ vi.mock("@/hooks/useCreateOwnClinic", () => ({
 
 const { CreateClinicForm } = await import("./CreateClinicForm");
 
-function renderForm(props: { defaultName?: string; nameLocked?: boolean }) {
+function renderForm(props: { defaultName?: string; nameLocked?: boolean; submitLabel?: string }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -31,5 +31,10 @@ describe("CreateClinicForm", () => {
     const input = screen.getByLabelText(/nome da clínica/i);
     expect(input).toHaveAttribute("readonly");
     expect(screen.getByText(/nome aprovado na análise/i)).toBeInTheDocument();
+  });
+
+  it("aceita CTA de concluir cadastro", () => {
+    renderForm({ defaultName: "Clínica Alpha", nameLocked: true, submitLabel: "Concluir cadastro" });
+    expect(screen.getByRole("button", { name: /concluir cadastro/i })).toBeInTheDocument();
   });
 });

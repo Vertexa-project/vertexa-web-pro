@@ -63,11 +63,11 @@ export function RequestClinicForm({ defaultName = "" }: { defaultName?: string }
       <Button type="submit" className="w-full" disabled={request.isPending}>
         {request.isPending ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Enviando…
           </>
         ) : (
-          "Solicitar criação da clínica"
+          "Enviar para análise"
         )}
       </Button>
     </form>

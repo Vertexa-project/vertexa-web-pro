@@ -25,9 +25,11 @@ import {
 export function CreateClinicForm({
   defaultName = "",
   nameLocked = false,
+  submitLabel = "Criar minha clínica",
 }: {
   defaultName?: string;
   nameLocked?: boolean;
+  submitLabel?: string;
 }) {
   const [name, setName] = useState(defaultName);
   const [formError, setFormError] = useState<string | null>(null);
@@ -133,11 +135,11 @@ export function CreateClinicForm({
       <Button type="submit" className="w-full" disabled={create.isPending}>
         {create.isPending ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Criando…
           </>
         ) : (
-          "Criar minha clínica"
+          submitLabel
         )}
       </Button>
     </form>

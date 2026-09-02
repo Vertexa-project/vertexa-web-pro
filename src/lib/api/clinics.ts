@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { ensureMyProfile } from "@/lib/api/ensureMyProfile";
 import {
   isClinicOnboardingMode,
   type ClinicOnboardingMode,
@@ -85,6 +86,7 @@ function mapRequest(
 
 /** Estado de onboarding do chamador. Sem patient_id / channel_id. */
 export async function getClinicOnboardingState(): Promise<ClinicOnboardingState> {
+  await ensureMyProfile();
   const { data, error } = await supabase.rpc("get_clinic_onboarding_state");
   if (error) throw error;
   const row = (data ?? {}) as ClinicOnboardingStateRow;
