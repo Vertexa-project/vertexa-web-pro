@@ -75,6 +75,6 @@ export function useMyClinicMemberships(enabled = true) {
     queryFn: listMyClinicMemberships,
     enabled,
     retry: false,
-    staleTime: 60_000,
+    staleTime: 15_000,
   });
 }

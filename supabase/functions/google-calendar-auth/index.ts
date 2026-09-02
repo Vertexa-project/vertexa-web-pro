@@ -5,6 +5,7 @@
 // O gating de admin é de UI; a barreira real de tokens é a tabela deny-all + service_role.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { jsonResponse, preflight } from "../_shared/cors.ts";
+import { rejectIfClinicNotOperational } from "../_shared/clinicOperational.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import {
   buildConsentUrl,
@@ -41,6 +42,9 @@ Deno.serve(async (req: Request) => {
   }
 
   const db = supabaseAdmin();
+
+  const blocked = await rejectIfClinicNotOperational(db, clinicId);
+  if (blocked) return blocked;
 
   // Integridade (não é segurança): o profissional informado pertence à clínica informada?
   if (professionalId) {

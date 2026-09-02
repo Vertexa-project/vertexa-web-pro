@@ -64,6 +64,11 @@ vi.mock("@/pages/ClinicAccessRevokedPage", () => ({
   ),
   NoClinicMembershipPage: () => <div data-testid="tela-sem-clinica" />,
 }));
+vi.mock("@/pages/ClinicSuspendedPage", () => ({
+  ClinicSuspendedPage: ({ clinics }: { clinics: ClinicMembership[] }) => (
+    <div data-testid="tela-suspensa">{clinics.map((c) => c.clinicName).join(",")}</div>
+  ),
+}));
 vi.mock("@/pages/PendingAccessPage", () => ({
   PendingAccessPage: () => (
     <div data-testid="tela-pendente">
@@ -166,6 +171,38 @@ describe("ProtectedRoute — o desvio das duas telas novas", () => {
     state.memberships = [membership("inactive", "Alfa"), membership("active", "Beta")];
     renderRoute();
     expect(screen.getByTestId("painel")).toBeInTheDocument();
+  });
+
+  it("S29/S36 — só clínica suspensa mostra UX própria, não PendingAccess nem criar clínica", () => {
+    state.memberships = [
+      {
+        clinicId: "susp",
+        clinicName: "Clínica Pausada",
+        status: "active",
+        clinicStatus: "suspended",
+      },
+    ];
+    renderRoute();
+    expect(screen.getByTestId("tela-suspensa")).toBeInTheDocument();
+    expect(screen.queryByTestId("painel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tela-pendente")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tela-sem-clinica")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("create-clinic-form")).not.toBeInTheDocument();
+  });
+
+  it("S35 — ACTIVE + SUSPENDED monta o painel da ACTIVE", () => {
+    state.memberships = [
+      {
+        clinicId: "susp",
+        clinicName: "Pausada",
+        status: "active",
+        clinicStatus: "suspended",
+      },
+      { clinicId: "ok", clinicName: "Aberta", status: "active", clinicStatus: "active" },
+    ];
+    renderRoute();
+    expect(screen.getByTestId("painel")).toBeInTheDocument();
+    expect(screen.queryByTestId("tela-suspensa")).not.toBeInTheDocument();
   });
 });
 

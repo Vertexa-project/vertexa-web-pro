@@ -79,6 +79,7 @@ export function aggregatePlatformClinicStats(clinics: PlatformClinicCounts[]): P
 export const PLATFORM_CLINIC_VISIBLE_COLUMNS = [
   "clinicName",
   "createdAt",
+  "status",
   "professionalCount",
   "patientCount",
 ] as const;

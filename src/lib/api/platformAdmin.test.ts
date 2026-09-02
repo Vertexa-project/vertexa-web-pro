@@ -14,6 +14,8 @@ const {
   listClinicCreationRequests,
   approveClinicCreationRequest,
   rejectClinicCreationRequest,
+  suspendPlatformClinic,
+  reactivatePlatformClinic,
 } = await import("./platformAdmin");
 
 beforeEach(() => {
@@ -51,6 +53,9 @@ describe("listPlatformClinics — T11 projection da RPC", () => {
           owner_profile_id: "owner-hidden-id",
           professional_count: "2",
           patient_count: 3,
+          status: "suspended",
+          status_changed_at: "2026-09-02T00:00:00Z",
+          status_reason: "inadimplencia de teste",
         },
       ],
       error: null,
@@ -64,6 +69,9 @@ describe("listPlatformClinics — T11 projection da RPC", () => {
         ownerProfileId: "owner-hidden-id",
         professionalCount: 2,
         patientCount: 3,
+        status: "suspended",
+        statusChangedAt: "2026-09-02T00:00:00Z",
+        statusReason: "inadimplencia de teste",
       },
     ]);
     expect(rpc).toHaveBeenCalledWith("list_platform_clinics");
@@ -158,5 +166,31 @@ describe("platform onboarding RPCs", () => {
     const err = { message: "NOT_PLATFORM_ADMIN", code: "42501" };
     rpc.mockResolvedValue({ data: null, error: err });
     await expect(getPlatformClinicOnboardingSettings()).rejects.toEqual(err);
+  });
+});
+
+describe("clinic lifecycle RPCs", () => {
+  it("suspende só com clinic_id e reason", async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    await suspendPlatformClinic("c1", "inadimplencia de teste");
+    expect(rpc).toHaveBeenCalledWith("suspend_platform_clinic", {
+      p_clinic_id: "c1",
+      p_reason: "inadimplencia de teste",
+    });
+  });
+
+  it("reativa com reason opcional", async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    await reactivatePlatformClinic("c1");
+    expect(rpc).toHaveBeenCalledWith("reactivate_platform_clinic", {
+      p_clinic_id: "c1",
+      p_reason: null,
+    });
+  });
+
+  it("erro de suspend é throw", async () => {
+    const err = { message: "NOT_PLATFORM_ADMIN", code: "42501" };
+    rpc.mockResolvedValue({ data: null, error: err });
+    await expect(suspendPlatformClinic("c1", "motivo")).rejects.toEqual(err);
   });
 });

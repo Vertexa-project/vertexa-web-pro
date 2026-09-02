@@ -62,6 +62,9 @@ describe("PlatformDashboardPage", () => {
         ownerProfileId: "o1",
         professionalCount: 1,
         patientCount: 2,
+        status: "active",
+        statusChangedAt: null,
+        statusReason: null,
       },
       {
         clinicId: "b",
@@ -70,6 +73,9 @@ describe("PlatformDashboardPage", () => {
         ownerProfileId: "o2",
         professionalCount: 2,
         patientCount: 3,
+        status: "suspended",
+        statusChangedAt: "2026-09-02T00:00:00Z",
+        statusReason: "teste",
       },
     ];
     render(<PlatformDashboardPage />);
