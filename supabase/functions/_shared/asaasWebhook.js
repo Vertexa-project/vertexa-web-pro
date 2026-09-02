@@ -1,0 +1,174 @@
+// WP-ASAAS-02 — parser/auth do webhook Asaas (Deno + Node).
+// Sem fetch para api.asaas.com. Sem log de token.
+//
+// Idempotência oficial = Asaas body.id (external_event_id).
+// payload_hash = integridade/auditoria. NÃO substitui external_event_id.
+// Environment vem SÓ de ASAAS_WEBHOOK_ENVIRONMENT (exato: sandbox|production).
+// Sem fallback, sem lowercase, sem escolha via body/header.
+
+const PAYMENT_PREFIX = "PAYMENT_";
+
+export function parseWebhookEnvironment(raw) {
+  if (raw === "sandbox" || raw === "production") {
+    return { ok: true, environment: raw };
+  }
+  return { ok: false };
+}
+
+export function resolveWebhookSecretName(environment) {
+  if (environment === "production") return "ASAAS_WEBHOOK_AUTH_TOKEN_PRODUCTION";
+  if (environment === "sandbox") return "ASAAS_WEBHOOK_AUTH_TOKEN_SANDBOX";
+  return null;
+}
+
+export function normalizeEnvironment(raw) {
+  return parseWebhookEnvironment(raw);
+}
+
+export function tokensEqual(received, expected) {
+  if (typeof received !== "string" || typeof expected !== "string") return false;
+  const a = received;
+  const b = expected;
+  const max = Math.max(a.length, b.length, 1);
+  let diff = a.length === b.length ? 0 : 1;
+  for (let i = 0; i < max; i += 1) {
+    const ca = i < a.length ? a.charCodeAt(i) : 0;
+    const cb = i < b.length ? b.charCodeAt(i) : 0;
+    diff |= ca ^ cb;
+  }
+  return diff === 0 && a.length === b.length && a.length > 0;
+}
+
+export async function sha256Hex(text) {
+  const data = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function parseEventCreatedAt(raw) {
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+  const normalized = raw.trim().includes("T") ? raw.trim() : raw.trim().replace(" ", "T");
+  const ms = Date.parse(normalized);
+  if (Number.isNaN(ms)) return null;
+  return new Date(ms).toISOString();
+}
+
+export function parseEnvelope(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, reason: "invalid_json" };
+  }
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  const event = typeof body.event === "string" ? body.event.trim() : "";
+  if (!id || !event) return { ok: false, reason: "invalid_envelope" };
+  return {
+    ok: true,
+    id,
+    event,
+    dateCreated: parseEventCreatedAt(body.dateCreated),
+  };
+}
+
+export function extractResource(event, body) {
+  if (typeof event === "string" && event.startsWith(PAYMENT_PREFIX)) {
+    const payment = body && typeof body === "object" ? body.payment : null;
+    if (payment && typeof payment === "object" && typeof payment.id === "string" && payment.id.trim()) {
+      return { type: "payment", id: payment.id.trim() };
+    }
+  }
+  return { type: null, id: null };
+}
+
+function jsonResponse(status, body) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export function webhookMisconfiguredResponse() {
+  return jsonResponse(503, { error: "webhook_not_configured" });
+}
+
+/**
+ * Autentica pelo header asaas-access-token, persiste via ingest, responde 2xx.
+ * environment vem só do server config — nunca do body.
+ * conflict (hash divergente) = HTTP 200 ACK de transporte; original intacto.
+ */
+export async function handleAsaasWebhook(req, ctx) {
+  if (req.method !== "POST") {
+    return jsonResponse(405, { error: "method_not_allowed" });
+  }
+
+  const expected = ctx.expectedToken;
+  if (typeof expected !== "string" || expected.length === 0) {
+    return webhookMisconfiguredResponse();
+  }
+
+  const received = req.headers.get("asaas-access-token");
+  if (received == null || received === "") {
+    return jsonResponse(401, { error: "unauthorized" });
+  }
+  if (!tokensEqual(received, expected)) {
+    return jsonResponse(403, { error: "forbidden" });
+  }
+
+  let raw = "";
+  try {
+    raw = await req.text();
+  } catch {
+    return jsonResponse(400, { error: "invalid_body" });
+  }
+
+  let parsed;
+  try {
+    parsed = raw ? JSON.parse(raw) : null;
+  } catch {
+    return jsonResponse(400, { error: "invalid_json" });
+  }
+
+  const envelope = parseEnvelope(parsed);
+  if (!envelope.ok) {
+    return jsonResponse(400, { error: envelope.reason });
+  }
+
+  const resource = extractResource(envelope.event, parsed);
+  const payloadHash = await sha256Hex(raw);
+  const result = await ctx.ingest({
+    provider: "asaas",
+    environment: ctx.environment,
+    externalEventId: envelope.id,
+    eventType: envelope.event,
+    eventCreatedAt: envelope.dateCreated,
+    externalResourceType: resource.type,
+    externalResourceId: resource.id,
+    payloadHash,
+  });
+
+  if (
+    result.outcome !== "inserted" &&
+    result.outcome !== "duplicate" &&
+    result.outcome !== "conflict"
+  ) {
+    return jsonResponse(500, { error: "ingest_failed" });
+  }
+
+  return jsonResponse(200, { received: true });
+}
+
+/**
+ * Env server-side escolhe environment + secret. Sem fallback sandbox.
+ * Secret do outro ambiente nunca autentica.
+ */
+export async function dispatchAsaasWebhook(req, cfg) {
+  const parsed = parseWebhookEnvironment(cfg.environmentRaw);
+  if (!parsed.ok) {
+    return webhookMisconfiguredResponse();
+  }
+  const expectedToken =
+    parsed.environment === "production" ? cfg.productionToken : cfg.sandboxToken;
+  return handleAsaasWebhook(req, {
+    environment: parsed.environment,
+    expectedToken: typeof expectedToken === "string" ? expectedToken : "",
+    ingest: cfg.ingest,
+  });
+}

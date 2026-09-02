@@ -30,6 +30,11 @@ verify_jwt = true
 [functions.google-calendar-disconnect]
 verify_jwt = true
 
+# WP-ASAAS-02: caller = Asaas (POST sem JWT de usuário). Auth = header asaas-access-token.
+# NÃO mudar as funções google-calendar-*.
+[functions.asaas-webhook]
+verify_jwt = false
+
 # WP-04A: não aplicar supabase/seed.sql em `db reset` local. Catálogos vêm das migrations.
 [db.seed]
 enabled = false
