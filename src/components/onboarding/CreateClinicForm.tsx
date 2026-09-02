@@ -22,8 +22,16 @@ import {
  * Erros da RPC viram mensagem compreensível (por `hint`); só o INESPERADO vai ao Sentry
  * (source:"onboarding", sem PII — nunca o nome da clínica).
  */
-export function CreateClinicForm() {
-  const [name, setName] = useState("");
+export function CreateClinicForm({
+  defaultName = "",
+  nameLocked = false,
+  submitLabel = "Criar minha clínica",
+}: {
+  defaultName?: string;
+  nameLocked?: boolean;
+  submitLabel?: string;
+}) {
+  const [name, setName] = useState(defaultName);
   const [formError, setFormError] = useState<string | null>(null);
   const [created, setCreated] = useState(false);
   const create = useCreateOwnClinic();
@@ -96,15 +104,28 @@ export function CreateClinicForm() {
         <Input
           id="clinic-name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            if (!nameLocked) setName(e.target.value);
+          }}
           maxLength={CLINIC_NAME_MAX}
           placeholder="Ex.: Clínica Vida Ativa"
-          autoFocus
+          autoFocus={!nameLocked}
+          readOnly={nameLocked}
           aria-required="true"
           aria-invalid={Boolean(errorMessage)}
-          aria-describedby={errorMessage ? "clinic-form-error" : undefined}
+          aria-readonly={nameLocked || undefined}
+          aria-describedby={
+            [errorMessage ? "clinic-form-error" : null, nameLocked ? "clinic-name-locked" : null]
+              .filter(Boolean)
+              .join(" ") || undefined
+          }
           disabled={create.isPending}
         />
+        {nameLocked ? (
+          <p id="clinic-name-locked" className="text-xs text-muted-foreground">
+            Este é o nome aprovado na análise. A criação precisa usá-lo.
+          </p>
+        ) : null}
       </div>
       {errorMessage ? (
         <p id="clinic-form-error" role="alert" className="text-sm text-destructive">
@@ -114,11 +135,11 @@ export function CreateClinicForm() {
       <Button type="submit" className="w-full" disabled={create.isPending}>
         {create.isPending ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Criando…
           </>
         ) : (
-          "Criar minha clínica"
+          submitLabel
         )}
       </Button>
     </form>

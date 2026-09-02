@@ -11,6 +11,24 @@ vi.mock("@/providers/auth-context", () => ({
   useAuth: () => ({ signOut: auth.signOut }),
 }));
 
+vi.mock("@/hooks/useAmIPlatformAdmin", () => ({
+  useAmIPlatformAdmin: () => ({
+    isPlatformAdmin: true,
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+}));
+
+vi.mock("@/hooks/usePlatformOnboarding", () => ({
+  usePlatformOnboardingSettings: () => ({
+    data: { pendingRequestCount: 0, mode: "closed" },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+}));
+
 const { PlatformShell } = await import("./PlatformShell");
 
 describe("PlatformShell", () => {
@@ -34,13 +52,17 @@ describe("PlatformShell", () => {
     });
   });
 
-  it("não monta Sidebar clínica, Topbar, SOS nem mentions", () => {
-    const { container } = render(
-      <MemoryRouter>
+  it("navega a área da plataforma sem chrome clínico", () => {
+    render(
+      <MemoryRouter initialEntries={["/platform"]}>
         <PlatformShell />
       </MemoryRouter>,
     );
-    expect(container.querySelector("nav")).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Área da plataforma" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Solicitações" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Clínicas" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Configurações" })).toBeInTheDocument();
     expect(screen.queryByLabelText(/whatsapp/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/pacientes/i)).not.toBeInTheDocument();
   });

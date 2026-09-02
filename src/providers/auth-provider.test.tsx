@@ -19,6 +19,7 @@ vi.mock("@/lib/supabase", () => ({
       signInWithPassword: vi.fn(),
       signInWithOAuth: vi.fn(),
     },
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
   },
 }));
 

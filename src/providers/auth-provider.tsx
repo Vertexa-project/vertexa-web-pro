@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
 import { requestPasswordReset as requestPasswordResetApi, updatePassword as updatePasswordApi } from "@/lib/api/authPassword";
+import { ensureMyProfile } from "@/lib/api/ensureMyProfile";
 import { isPasswordRecoveryEvent } from "@/lib/auth/passwordRecovery";
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/observability/sentry";
@@ -21,12 +22,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(LEGACY_DEMO_KEY);
 
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (data.session) {
+        await ensureMyProfile().catch(() => undefined);
+      }
       if (!active) return;
       setSession(data.session);
       setLoading(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      if (next && event !== "SIGNED_OUT") {
+        void ensureMyProfile().catch(() => undefined);
+      }
       setSession(next);
       if (isPasswordRecoveryEvent(event)) setIsPasswordRecovery(true);
       if (event === "SIGNED_OUT") setIsPasswordRecovery(false);

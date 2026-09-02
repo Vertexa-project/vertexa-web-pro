@@ -129,7 +129,7 @@ export function JoinClinicForm() {
           disabled={request.isPending}
         />
         <p id="join-code-help" className="text-xs text-muted-foreground">
-          Peça o código ao administrador da clínica. São {JOIN_CODE_LENGTH} caracteres.
+          O código possui {JOIN_CODE_LENGTH} caracteres.
         </p>
       </div>
 
@@ -146,7 +146,7 @@ export function JoinClinicForm() {
             Enviando…
           </>
         ) : (
-          "Solicitar acesso"
+          "Entrar na clínica"
         )}
       </Button>
     </form>

@@ -42,6 +42,14 @@ begin
   insert into private.platform_admins (profile_id, status, granted_at, revoked_at)
     values (v_pf_plat, 'active', now(), null);
 
+  -- PLATFORM-01 default remoto é closed. SEC-02 prova o grant/consumo em manual_review.
+  insert into private.clinic_onboarding_policy (id, mode, updated_at, updated_by_profile_id)
+  values (true, 'manual_review', clock_timestamp(), v_pf_plat)
+  on conflict (id) do update
+    set mode = excluded.mode,
+        updated_at = excluded.updated_at,
+        updated_by_profile_id = excluded.updated_by_profile_id;
+
   return query select
     v_a_plat, v_a_pend, v_a_pat, v_a_staff, v_a_own, v_a_tgt, v_a_oth,
     v_pf_plat, v_pf_pend, v_pf_pat, v_pf_staff, v_pf_own, v_pf_tgt, v_pf_oth,

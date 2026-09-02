@@ -38,6 +38,11 @@ begin
     (ptx,au_ptx,'patient','TX Test'  ,'pending'),
     (pf ,au_pf ,'patient','Forja'    ,'pending');
   insert into public.clinics (id,name,owner_profile_id) values (clB,'Clinica B',po);
+  if to_regclass('private.clinic_onboarding_policy') is not null then
+    insert into private.clinic_onboarding_policy (id, mode, updated_at)
+    values (true, 'automatic', clock_timestamp())
+    on conflict (id) do update set mode = excluded.mode;
+  end if;
 
   -- ══ POSITIVO: perfil PENDENTE cria a SUA clínica ══
   perform set_config('request.jwt.claims', json_build_object('sub',au_pn::text)::text, true); set local role authenticated;
