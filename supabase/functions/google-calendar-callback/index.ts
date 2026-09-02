@@ -48,6 +48,13 @@ Deno.serve(async (req: Request) => {
   if (new Date(stateRow.expires_at).getTime() < Date.now()) return backToApp(redirectBase, "error");
   if (oauthError || !code) return backToApp(redirectBase, "error");
 
+  const { data: clinicRow } = await db
+    .from("clinics")
+    .select("status")
+    .eq("id", stateRow.clinic_id)
+    .maybeSingle();
+  if (clinicRow?.status !== "active") return backToApp(redirectBase, "error");
+
   try {
     const creds = readGoogleCredentials();
     const tokens = await exchangeCode(creds, code);

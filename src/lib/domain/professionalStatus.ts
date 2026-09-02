@@ -7,6 +7,7 @@
 // UI precisa DECIDIR e EXIBIR — nunca o que ela pode permitir.
 
 import type { ClinicMembership, ProfessionalStatusEvent } from "@/lib/api/professionalStatus";
+import { isOperationalClinicStatus } from "@/lib/domain/clinicLifecycle";
 
 export const PROFESSIONAL_STATUS_ACTIVE = "active";
 export const PROFESSIONAL_STATUS_INACTIVE = "inactive";
@@ -201,14 +202,14 @@ export function memberStatusErrorMessage(error: unknown): string {
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * `ok`           — tem pelo menos UMA clínica ativa: o painel abre normalmente.
- * `deactivated`  — TEM cadastro, e em nenhuma clínica ele está ativo: foi desativado.
- * `no-clinic`    — a RPC não devolveu clínica nenhuma: estado honesto e DIFERENTE do anterior
- *                  (aqui não houve corte; nunca houve vínculo com clínica).
- * `unknown`      — não deu para saber (erro na RPC). Ver a nota de fail-open abaixo.
- * `loading`      — ainda perguntando.
+ * `ok`                 — tem pelo menos UMA clínica operacional com profissional ativo.
+ * `clinic-suspended`   — tem cadastro ativo, mas só em clínicas suspensas. NÃO é PendingAccess.
+ * `deactivated`        — TEM cadastro, e em nenhuma clínica o profissional está ativo.
+ * `no-clinic`          — a RPC não devolveu clínica nenhuma.
+ * `unknown`            — não deu para saber (erro na RPC). Fail-open: o portão é a RLS.
+ * `loading`            — ainda perguntando.
  */
-export type ClinicAccess = "loading" | "ok" | "deactivated" | "no-clinic" | "unknown";
+export type ClinicAccess = "loading" | "ok" | "clinic-suspended" | "deactivated" | "no-clinic" | "unknown";
 
 export interface ClinicAccessInput {
   memberships: readonly ClinicMembership[] | undefined;
@@ -232,7 +233,47 @@ export function resolveClinicAccess(input: ClinicAccessInput): ClinicAccess {
   const rows = input.memberships;
   if (!rows) return "unknown";
   if (rows.length === 0) return "no-clinic";
-  return rows.some((m) => isActiveProfessionalStatus(m.status)) ? "ok" : "deactivated";
+  if (
+    rows.some(
+      (m) =>
+        isActiveProfessionalStatus(m.status) && isOperationalClinicStatus(m.clinicStatus),
+    )
+  ) {
+    return "ok";
+  }
+  if (rows.some((m) => isActiveProfessionalStatus(m.status))) {
+    return "clinic-suspended";
+  }
+  return "deactivated";
+}
+
+/** Membership operacional: profissional ativo E clínica active. */
+export function pickActingMembership(
+  memberships: readonly ClinicMembership[],
+): ClinicMembership | null {
+  return (
+    memberships.find(
+      (m) =>
+        isActiveProfessionalStatus(m.status) && isOperationalClinicStatus(m.clinicStatus),
+    ) ?? null
+  );
+}
+
+/**
+ * Escolhe a linha de `professionals` da clínica operacional.
+ * Se nenhuma clínica estiver operacional, ainda devolve UMA linha — a identidade
+ * permanece ativa (não vira pending / criar clínica).
+ */
+export function pickActingProfessional<T extends { id: string; clinicId: string | null }>(
+  rows: readonly T[],
+  memberships: readonly ClinicMembership[],
+): T | null {
+  if (rows.length === 0) return null;
+  const acting = pickActingMembership(memberships);
+  if (acting) {
+    return rows.find((r) => r.clinicId === acting.clinicId) ?? rows[0];
+  }
+  return rows[0];
 }
 
 /**

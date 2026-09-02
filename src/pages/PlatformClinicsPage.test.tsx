@@ -15,6 +15,13 @@ const clinicsState = vi.hoisted(() => ({
   enabled: undefined as boolean | undefined,
 }));
 
+const lifecycleState = vi.hoisted(() => ({
+  suspend: vi.fn(),
+  reactivate: vi.fn(),
+  suspendPending: false,
+  reactivatePending: false,
+}));
+
 vi.mock("@/hooks/useAmIPlatformAdmin", () => ({
   useAmIPlatformAdmin: () => ({
     isPlatformAdmin: true,
@@ -34,6 +41,14 @@ vi.mock("@/hooks/usePlatformClinics", () => ({
       refetch: clinicsState.refetch,
     };
   },
+  useSuspendPlatformClinic: () => ({
+    mutateAsync: lifecycleState.suspend,
+    isPending: lifecycleState.suspendPending,
+  }),
+  useReactivatePlatformClinic: () => ({
+    mutateAsync: lifecycleState.reactivate,
+    isPending: lifecycleState.reactivatePending,
+  }),
 }));
 
 const { PlatformClinicsPage } = await import("./PlatformClinicsPage");
@@ -46,6 +61,9 @@ function clinic(over: Partial<PlatformClinic> = {}): PlatformClinic {
     ownerProfileId: "owner-SHOULD-NOT-APPEAR-xyz",
     professionalCount: 1,
     patientCount: 2,
+    status: "active",
+    statusChangedAt: null,
+    statusReason: null,
     ...over,
   };
 }
@@ -55,6 +73,10 @@ beforeEach(() => {
   clinicsState.isLoading = false;
   clinicsState.isError = false;
   clinicsState.enabled = undefined;
+  lifecycleState.suspend.mockReset();
+  lifecycleState.reactivate.mockReset();
+  lifecycleState.suspendPending = false;
+  lifecycleState.reactivatePending = false;
 });
 
 describe("PlatformClinicsPage — catálogo V1", () => {
@@ -149,6 +171,34 @@ describe("PlatformClinicsPage — T14 fronteira de dados", () => {
     expect(api).toContain("list_platform_clinics");
     expect(api).toContain("list_clinic_creation_requests");
     expect(api).toContain("set_clinic_onboarding_policy");
+    expect(api).toContain("suspend_platform_clinic");
+    expect(api).toContain("reactivate_platform_clinic");
     expect(api).not.toContain(".from(");
+  });
+});
+
+describe("PlatformClinicsPage — lifecycle S27/S28", () => {
+  it("mostra badge Ativa e ação Suspender", () => {
+    clinicsState.data = [clinic({ clinicName: "Horizonte", status: "active" })];
+    render(<PlatformClinicsPage />);
+    expect(screen.getByText("Ativa")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Suspender" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reativar" })).not.toBeInTheDocument();
+  });
+
+  it("mostra badge Suspensa, motivo e ação Reativar", () => {
+    clinicsState.data = [
+      clinic({
+        clinicName: "Horizonte",
+        status: "suspended",
+        statusChangedAt: "2026-09-02T00:00:00Z",
+        statusReason: "inadimplencia de teste",
+      }),
+    ];
+    render(<PlatformClinicsPage />);
+    expect(screen.getByText("Suspensa")).toBeInTheDocument();
+    expect(screen.getByText(/inadimplencia de teste/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reativar" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Suspender" })).not.toBeInTheDocument();
   });
 });

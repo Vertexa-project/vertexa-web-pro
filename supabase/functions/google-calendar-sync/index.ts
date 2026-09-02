@@ -3,6 +3,7 @@
 // Trata: invalid_grant → status='revoked'; agenda 404 → status='stale'; outras falhas → status='error'.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { jsonResponse, preflight } from "../_shared/cors.ts";
+import { rejectIfClinicNotOperational } from "../_shared/clinicOperational.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { listEvents, readGoogleCredentials, refreshAccessToken, syncWindow } from "../_shared/google.ts";
 
@@ -29,6 +30,9 @@ Deno.serve(async (req: Request) => {
   }
 
   const db = supabaseAdmin();
+
+  const blocked = await rejectIfClinicNotOperational(db, clinicId);
+  if (blocked) return blocked;
 
   // Conexão alvo: por id, ou a mais recente da clínica (+ profissional se informado).
   let connQuery = db

@@ -8,6 +8,8 @@ import {
   type ClinicOnboardingMode,
 } from "@/lib/domain/clinicOnboarding";
 
+export type ClinicLifecycleStatus = "active" | "suspended";
+
 export interface PlatformClinic {
   clinicId: string;
   clinicName: string;
@@ -15,6 +17,9 @@ export interface PlatformClinic {
   ownerProfileId: string;
   professionalCount: number;
   patientCount: number;
+  status: ClinicLifecycleStatus;
+  statusChangedAt: string | null;
+  statusReason: string | null;
 }
 
 interface PlatformClinicRow {
@@ -24,6 +29,9 @@ interface PlatformClinicRow {
   owner_profile_id: string;
   professional_count: number | string | null;
   patient_count: number | string | null;
+  status?: string | null;
+  status_changed_at?: string | null;
+  status_reason?: string | null;
 }
 
 function toCount(value: number | string | null | undefined): number {
@@ -43,6 +51,9 @@ function mapClinic(row: PlatformClinicRow): PlatformClinic {
     ownerProfileId: row.owner_profile_id,
     professionalCount: toCount(row.professional_count),
     patientCount: toCount(row.patient_count),
+    status: row.status === "suspended" ? "suspended" : "active",
+    statusChangedAt: row.status_changed_at ?? null,
+    statusReason: row.status_reason ?? null,
   };
 }
 
@@ -166,6 +177,27 @@ export async function rejectClinicCreationRequest(
 ): Promise<void> {
   const { error } = await supabase.rpc("reject_clinic_creation_request", {
     p_request_id: requestId,
+    p_reason: reason ?? null,
+  });
+  if (error) throw error;
+}
+
+/** Suspende uma clínica active. Motivo obrigatório. Não apaga dado. */
+export async function suspendPlatformClinic(clinicId: string, reason: string): Promise<void> {
+  const { error } = await supabase.rpc("suspend_platform_clinic", {
+    p_clinic_id: clinicId,
+    p_reason: reason,
+  });
+  if (error) throw error;
+}
+
+/** Reativa uma clínica suspended. Motivo opcional. Não altera lifecycle interno. */
+export async function reactivatePlatformClinic(
+  clinicId: string,
+  reason?: string | null,
+): Promise<void> {
+  const { error } = await supabase.rpc("reactivate_platform_clinic", {
+    p_clinic_id: clinicId,
     p_reason: reason ?? null,
   });
   if (error) throw error;

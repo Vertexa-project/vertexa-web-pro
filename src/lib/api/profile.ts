@@ -1,4 +1,6 @@
 import { supabase } from "@/lib/supabase";
+import { listMyClinicMemberships } from "@/lib/api/professionalStatus";
+import { pickActingProfessional } from "@/lib/domain/professionalStatus";
 import type { ProfessionalType, UserRole } from "@/types/db";
 
 /**
@@ -51,15 +53,7 @@ interface RawProfessionalRow {
   profile: { full_name: string | null; role: UserRole | null } | null;
 }
 
-export async function getCurrentProfessional(profileId: string): Promise<CurrentProfessional | null> {
-  const { data, error } = await supabase
-    .from("professionals")
-    .select("id, profile_id, clinic_id, type, profile:profiles!professionals_profile_id_fkey ( full_name, role )")
-    .eq("profile_id", profileId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-  const row = data as unknown as RawProfessionalRow;
+function mapProfessional(row: RawProfessionalRow, profileId: string): CurrentProfessional {
   return {
     id: row.id,
     profileId: row.profile_id ?? profileId,
@@ -68,6 +62,27 @@ export async function getCurrentProfessional(profileId: string): Promise<Current
     type: row.type,
     profileRole: row.profile?.role ?? null,
   };
+}
+
+export async function getCurrentProfessional(profileId: string): Promise<CurrentProfessional | null> {
+  const { data, error } = await supabase
+    .from("professionals")
+    .select("id, profile_id, clinic_id, type, profile:profiles!professionals_profile_id_fkey ( full_name, role )")
+    .eq("profile_id", profileId);
+  if (error) throw error;
+  const rows = ((data ?? []) as unknown as RawProfessionalRow[]).map((row) =>
+    mapProfessional(row, profileId),
+  );
+  if (rows.length === 0) return null;
+
+  let memberships = [];
+  try {
+    memberships = await listMyClinicMemberships();
+  } catch {
+    if (rows.length === 1) return rows[0];
+    return pickActingProfessional(rows, []);
+  }
+  return pickActingProfessional(rows, memberships);
 }
 
 /** Resumo de um profissional para selects (ex.: atribuir um compromisso da agenda). */

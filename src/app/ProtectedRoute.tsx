@@ -14,6 +14,7 @@ import {
   ClinicAccessRevokedPage,
   NoClinicMembershipPage,
 } from "@/pages/ClinicAccessRevokedPage";
+import { ClinicSuspendedPage } from "@/pages/ClinicSuspendedPage";
 import { PendingAccessPage } from "@/pages/PendingAccessPage";
 
 import { AuthGate } from "./AuthGate";
@@ -76,6 +77,9 @@ function ClinicAccessGate({ children }: { children: React.ReactNode }) {
     }
     if (clinicAccess === "deactivated") {
       return <ClinicAccessRevokedPage clinics={memberships.data ?? []} />;
+    }
+    if (clinicAccess === "clinic-suspended") {
+      return <ClinicSuspendedPage clinics={memberships.data ?? []} />;
     }
     if (clinicAccess === "no-clinic") {
       return <NoClinicMembershipPage />;

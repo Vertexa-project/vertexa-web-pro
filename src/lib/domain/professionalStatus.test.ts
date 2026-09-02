@@ -8,6 +8,8 @@ import {
   latestStatusEventByProfessional,
   memberStatusErrorMessage,
   noActionExplanation,
+  pickActingMembership,
+  pickActingProfessional,
   professionalStatusLabel,
   resolveClinicAccess,
   resolveMemberAction,
@@ -261,5 +263,116 @@ describe("resolveClinicAccess — a decisão da tela que EXPLICA", () => {
     const out = deactivatedClinics([c("active"), c("inactive", "Clínica Beta")]);
     expect(out.map((m) => m.clinicName)).toEqual(["Clínica Beta"]);
     expect(deactivatedClinics(undefined)).toEqual([]);
+  });
+
+  it("S35 — membership ACTIVE + SUSPENDED usa a ACTIVE (não trava o painel)", () => {
+    expect(
+      resolveClinicAccess({
+        memberships: [
+          {
+            clinicId: "susp",
+            clinicName: "Clínica Pausada",
+            status: "active",
+            clinicStatus: "suspended",
+          },
+          { clinicId: "ok", clinicName: "Clínica Aberta", status: "active", clinicStatus: "active" },
+        ],
+        isLoading: false,
+        isError: false,
+      }),
+    ).toBe("ok");
+  });
+
+  it("S36 — só clínica suspensa NÃO vira no-clinic nem deactivated", () => {
+    expect(
+      resolveClinicAccess({
+        memberships: [
+          {
+            clinicId: "susp",
+            clinicName: "Clínica Pausada",
+            status: "active",
+            clinicStatus: "suspended",
+          },
+        ],
+        isLoading: false,
+        isError: false,
+      }),
+    ).toBe("clinic-suspended");
+  });
+
+  it("profissional inativo numa clínica suspensa continua deactivated", () => {
+    expect(
+      resolveClinicAccess({
+        memberships: [
+          {
+            clinicId: "susp",
+            clinicName: "Clínica Pausada",
+            status: "inactive",
+            clinicStatus: "suspended",
+          },
+        ],
+        isLoading: false,
+        isError: false,
+      }),
+    ).toBe("deactivated");
+  });
+});
+
+describe("pickActingMembership — multi-membership operacional", () => {
+  it("escolhe a membership ACTIVE+operational e ignora a suspensa", () => {
+    const acting = pickActingMembership([
+      {
+        clinicId: "susp",
+        clinicName: "Pausada",
+        status: "active",
+        clinicStatus: "suspended",
+      },
+      { clinicId: "ok", clinicName: "Aberta", status: "active", clinicStatus: "active" },
+    ]);
+    expect(acting?.clinicId).toBe("ok");
+  });
+
+  it("só suspensa ⇒ null (não inventa clínica operacional)", () => {
+    expect(
+      pickActingMembership([
+        {
+          clinicId: "susp",
+          clinicName: "Pausada",
+          status: "active",
+          clinicStatus: "suspended",
+        },
+      ]),
+    ).toBeNull();
+  });
+
+  it("lista vazia ⇒ null", () => {
+    expect(pickActingMembership([])).toBeNull();
+  });
+});
+
+describe("pickActingProfessional — identidade permanece mesmo só com suspensa", () => {
+  const rows = [
+    { id: "pr-susp", clinicId: "susp" },
+    { id: "pr-ok", clinicId: "ok" },
+  ];
+
+  it("múltiplas linhas: prefere a clínica operacional", () => {
+    const picked = pickActingProfessional(rows, [
+      { clinicId: "susp", clinicName: "Pausada", status: "active", clinicStatus: "suspended" },
+      { clinicId: "ok", clinicName: "Aberta", status: "active", clinicStatus: "active" },
+    ]);
+    expect(picked?.id).toBe("pr-ok");
+  });
+
+  it("só suspensa: ainda devolve UMA linha (identidade ativa, não pending)", () => {
+    const picked = pickActingProfessional(
+      [{ id: "pr-susp", clinicId: "susp" }],
+      [{ clinicId: "susp", clinicName: "Pausada", status: "active", clinicStatus: "suspended" }],
+    );
+    expect(picked?.id).toBe("pr-susp");
+  });
+
+  it("zero linhas ⇒ null", () => {
+    expect(pickActingProfessional([], [])).toBeNull();
   });
 });

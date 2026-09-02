@@ -99,13 +99,17 @@ export async function listProfessionalStatusEvents(
 export interface ClinicMembership {
   clinicId: string;
   clinicName: string;
+  /** Status do PROFISSIONAL nesta clínica (active/inactive). */
   status: string;
+  /** Status da CLÍNICA (active/suspended). Ausente = active (RPC anterior). */
+  clinicStatus?: string;
 }
 
 interface RawMembershipRow {
   clinic_id: string;
   clinic_name: string | null;
   status: string | null;
+  clinic_status?: string | null;
 }
 
 /**
@@ -125,5 +129,6 @@ export async function listMyClinicMemberships(): Promise<ClinicMembership[]> {
     clinicId: r.clinic_id,
     clinicName: r.clinic_name?.trim() || "sua clínica",
     status: r.status ?? "active",
+    clinicStatus: r.clinic_status ?? "active",
   }));
 }

@@ -104,6 +104,7 @@ describe("colunas visíveis da V1", () => {
     expect(PLATFORM_CLINIC_VISIBLE_COLUMNS).toEqual([
       "clinicName",
       "createdAt",
+      "status",
       "professionalCount",
       "patientCount",
     ]);
