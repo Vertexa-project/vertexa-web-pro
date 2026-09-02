@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   data: undefined as ClinicOnboardingState | undefined,
   isLoading: false,
   isError: false,
+  error: null as unknown,
   refetch: vi.fn(),
 }));
 
@@ -36,6 +37,7 @@ beforeEach(() => {
   state.data = undefined;
   state.isLoading = false;
   state.isError = false;
+  state.error = null;
 });
 
 function renderPage() {
@@ -60,6 +62,13 @@ describe("PendingAccessPage — política sem flash de vazio", () => {
     renderPage();
     expect(screen.getByText(/não foi possível verificar a política/i)).toBeInTheDocument();
     expect(screen.queryByText(/temporariamente indisponíveis/i)).not.toBeInTheDocument();
+  });
+
+  it("PROFILE_NOT_FOUND explica sessão sem perfil", () => {
+    state.isError = true;
+    state.error = { hint: "PROFILE_NOT_FOUND" };
+    renderPage();
+    expect(screen.getByText(/perfil Vertexa não foi encontrado/i)).toBeInTheDocument();
   });
 
   it("closed mostra bloqueio e mantém join", () => {

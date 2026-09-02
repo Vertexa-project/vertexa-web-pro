@@ -18,7 +18,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/providers/auth-context";
 import { useClinicOnboardingState } from "@/hooks/useClinicOnboardingState";
 import { useIdentity } from "@/hooks/useIdentity";
-import { resolveCreateClinicSurface } from "@/lib/domain/clinicOnboarding";
+import {
+  onboardingErrorHint,
+  onboardingErrorMessage,
+  resolveCreateClinicSurface,
+} from "@/lib/domain/clinicOnboarding";
 
 function CreateClinicCard() {
   const state = useClinicOnboardingState(true);
@@ -52,7 +56,11 @@ function CreateClinicCard() {
         <CardContent>
           <ErrorState
             title="Não foi possível verificar a política de entrada"
-            description="Tente novamente. Não assumimos que você está sem equipe."
+            description={
+              onboardingErrorHint(state.error)
+                ? onboardingErrorMessage(state.error)
+                : "Tente novamente. Não assumimos que você está sem equipe."
+            }
             onRetry={() => void state.refetch()}
           />
         </CardContent>

@@ -49,6 +49,10 @@ describe("onboardingErrorMessage — traduz o hint da RPC (nunca erro cru, sem P
     expect(onboardingErrorMessage({ hint: "APPROVED_CLINIC_NAME_MISMATCH" })).toMatch(/nome aprovado/i);
     expect(isExpectedOnboardingError({ hint: "APPROVED_CLINIC_NAME_MISMATCH" })).toBe(true);
   });
+  it("PROFILE_NOT_FOUND ⇒ sessão ok, perfil ausente", () => {
+    expect(onboardingErrorMessage({ hint: "PROFILE_NOT_FOUND" })).toMatch(/perfil Vertexa não foi encontrado/i);
+    expect(isExpectedOnboardingError({ hint: "PROFILE_NOT_FOUND" })).toBe(true);
+  });
   it("REQUEST_ALREADY_APPROVED ⇒ pede para concluir a criação", () => {
     expect(onboardingErrorMessage({ hint: "REQUEST_ALREADY_APPROVED" })).toMatch(/aprovada/i);
     expect(isExpectedOnboardingError({ hint: "REQUEST_ALREADY_APPROVED" })).toBe(true);

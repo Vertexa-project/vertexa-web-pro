@@ -87,6 +87,8 @@ const HINT_MESSAGES: Record<string, string> = {
   NAME_TOO_SHORT: `O nome precisa ter ao menos ${CLINIC_NAME_MIN} caracteres.`,
   NAME_TOO_LONG: `O nome pode ter no máximo ${CLINIC_NAME_MAX} caracteres.`,
   NOT_AUTHENTICATED: "Sua sessão expirou. Entre novamente para criar a clínica.",
+  PROFILE_NOT_FOUND:
+    "Sua sessão foi autenticada, mas o perfil Vertexa não foi encontrado.",
   ONBOARDING_NOT_ALLOWED: "A criação de clínicas ainda não está liberada para esta conta.",
   ONBOARDING_CLOSED: "Novos cadastros de clínicas estão temporariamente indisponíveis.",
   REQUEST_ALREADY_PENDING: "Você já tem uma solicitação aguardando análise.",
