@@ -40,6 +40,11 @@ verify_jwt = false
 [functions.asaas-outbound]
 verify_jwt = true
 
+# WP-ASAAS-04: caller = Vertexa authenticated (platform_admin nesta WP). Drena e normaliza os
+# eventos financeiros já ingeridos pelo asaas-webhook. Nunca Asaas, nunca browser anônimo.
+[functions.asaas-processor]
+verify_jwt = true
+
 # WP-04A: não aplicar supabase/seed.sql em `db reset` local. Catálogos vêm das migrations.
 [db.seed]
 enabled = false
