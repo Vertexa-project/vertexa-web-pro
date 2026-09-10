@@ -35,6 +35,11 @@ verify_jwt = true
 [functions.asaas-webhook]
 verify_jwt = false
 
+# WP-ASAAS-03: caller = Vertexa authenticated (platform_admin nesta WP). Nunca Asaas, nunca
+# browser anônimo. NÃO mudar asaas-webhook nem google-calendar-*.
+[functions.asaas-outbound]
+verify_jwt = true
+
 # WP-04A: não aplicar supabase/seed.sql em `db reset` local. Catálogos vêm das migrations.
 [db.seed]
 enabled = false
