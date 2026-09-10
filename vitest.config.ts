@@ -45,6 +45,13 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // ASAAS-03C: segunda entrada cobre as funções puras de decisão/reconciliação outbound
+    // Asaas (supabase/functions/_shared/asaas/**) — Deno em produção (o entrypoint importa
+    // "jsr:@supabase/functions-js/edge-runtime.d.ts" e usa Deno.serve/Deno.env), mas os
+    // arquivos testados aqui só importam supabase-js como `import type` (apagado pelo esbuild
+    // em runtime) e usam fetch/AbortController/setTimeout, todos disponíveis no Node deste
+    // runner — por isso rodam sob Vitest sem precisar de Docker/Deno CLI (indisponíveis neste
+    // ambiente). setupFiles/jsdom acima não afetam esses testes (não usam DOM).
+    include: ["src/**/*.{test,spec}.{ts,tsx}", "supabase/functions/_shared/asaas/**/*.{test,spec}.ts"],
   },
 });

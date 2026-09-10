@@ -2,8 +2,18 @@
 // subscription primary. subscriptionId/customerId/paymentId NUNCA vêm do client: sempre
 // resolvidos a partir do que o próprio ASAAS-03 persistiu (resolve_primary_asaas_subscription).
 // Mais de 1 payment candidato = FAIL CLOSED (nunca escolhe automaticamente).
+//
+// ASAAS-03C — por que list_subscription_payments/checkWebhookReceipt NÃO são sandbox-only
+// (diferente de confirmSandboxPayment): o endpoint POST /sandbox/payment/{id}/confirm é uma
+// ferramenta de homologação exclusiva do Sandbox Asaas — não existe equivalente em produção,
+// por isso confirmSandboxPayment tem o guard explícito. GET /subscriptions/{id}/payments é um
+// endpoint normal, válido em qualquer ambiente — restringi-lo a sandbox seria arbitrário e
+// quebraria o uso futuro dessas duas actions como ferramenta operacional (suporte/ops
+// consultando "esse payment chegou?" em produção). Ambas já falham fechado hoje em produção
+// pela ausência de ASAAS_API_KEY_PRODUCTION (gate no topo de index.ts) — essa é a justificativa
+// arquitetural para mantê-las ambiente-agnósticas em vez de travadas em sandbox.
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
-import { asaasFetch, type AsaasCredentials, type AsaasEnvironment } from "./client.ts";
+import { asaasFetch, hasStringId, type AsaasCredentials, type AsaasEnvironment } from "./client.ts";
 
 interface AsaasPayment {
   id: string;
@@ -56,7 +66,9 @@ async function fetchSubscriptionPayments(
     "GET",
     `/subscriptions/${encodeURIComponent(externalSubscriptionId)}/payments`,
   );
-  if (!res.ok) {
+  // Read-only: qualquer outcome que não seja "success" (timeout, 5xx, 2xx vazio/malformado,
+  // 4xx) é tratado igual aqui — não há POST a proteger, só reportamos que a leitura falhou.
+  if (res.outcome !== "success") {
     return { ok: false, payments: [] };
   }
   return { ok: true, payments: res.data?.data ?? [] };
@@ -92,6 +104,9 @@ async function resolveSingleCandidatePayment(params: {
   }
 
   const payment = payments[0];
+  if (!hasStringId(payment) || typeof payment.status !== "string") {
+    return { ok: false, result: { ok: false, errorCode: "invalid_success_shape", httpStatus: 502 } };
+  }
   const customerMatch = resolved.external_customer_id ? payment.customer === resolved.external_customer_id : false;
   return { ok: true, payment, customerMatch };
 }
@@ -191,8 +206,17 @@ export async function confirmSandboxPayment(params: {
     "POST",
     `/sandbox/payment/${encodeURIComponent(payment.id)}/confirm`,
   );
-  if (!confirmRes.ok || !confirmRes.data) {
-    return { ok: false, errorCode: "provider_error", httpStatus: 502 };
+  if (confirmRes.outcome === "deterministic_rejection") {
+    return { ok: false, errorCode: "provider_rejected", httpStatus: 502 };
+  }
+  if (confirmRes.outcome === "unknown" || !confirmRes.data || !hasStringId(confirmRes.data)) {
+    // 2xx vazio/malformado/sem id: não sabemos se a confirmação foi aplicada. Nunca reportado
+    // como sucesso — o caller deve reconsultar (list_subscription_payments) antes de confiar
+    // no status, nunca reconfirmar às cegas assumindo falha.
+    return { ok: false, errorCode: "outcome_unknown_requires_reconciliation", httpStatus: 502 };
+  }
+  if (typeof confirmRes.data.status !== "string") {
+    return { ok: false, errorCode: "invalid_success_shape", httpStatus: 502 };
   }
 
   return { ok: true, count: 1, paymentId: confirmRes.data.id, status: confirmRes.data.status, customerMatch: true };
