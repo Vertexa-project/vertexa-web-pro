@@ -84,6 +84,7 @@ export function AgendaCard({
 
   const { items, isFetching, isError, googleError, refetch } = useAgenda(
     clinicId,
+    defaultProfessionalId,
     range?.from ?? null,
     range?.to ?? null,
   );

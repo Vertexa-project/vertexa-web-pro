@@ -1,8 +1,9 @@
-// Camada de dados da integração Google Calendar (Sessão 10) — read-only, multi-tenant.
+// Camada de dados da integração Google Calendar — read-only, dono = professional autenticado.
 // Leituras (connection/cache) vão direto às tabelas (só METADADO — tokens são DENY-ALL no banco).
-// Connect/sync/disconnect chamam as Edge Functions (Deno) via supabase.functions.invoke —
-// é lá (service_role) que os tokens são trocados/guardados. O client NUNCA vê client_secret/refresh_token.
+// Connect/sync/disconnect chamam as Edge Functions (Deno) via supabase.functions.invoke.
+// clinicId/professionalId no body são HINTS validados no servidor contra o JWT.
 import { supabase } from "@/lib/supabase";
+import { selectOwnGoogleConnection } from "@/lib/domain/calendarPolicy";
 import type { CalendarConnection, CalendarEventCache } from "@/types/db";
 
 /** Invoca uma Edge Function e normaliza o erro para um código legível (ex.: "google_not_configured"). */
@@ -24,31 +25,36 @@ async function invokeFn<T>(name: string, body: Record<string, unknown>): Promise
   return data as T;
 }
 
-/** Conexão (metadado) da clínica, se existir. Mais recente primeiro. Nunca expõe token. */
-export async function getCalendarConnection(clinicId: string): Promise<CalendarConnection | null> {
+const CONNECTION_SELECT =
+  "id, clinic_id, professional_id, provider, google_account_email, google_calendar_id, calendar_name, scopes, status, last_synced_at, created_at, updated_at";
+
+/** Conexão Google do PRÓPRIO profissional. Nunca a de outro membro da clínica. Sem token. */
+export async function getCalendarConnection(
+  clinicId: string,
+  professionalId: string,
+): Promise<CalendarConnection | null> {
   const { data, error } = await supabase
     .from("calendar_connections")
-    .select(
-      "id, clinic_id, professional_id, provider, google_account_email, google_calendar_id, calendar_name, scopes, status, last_synced_at, created_at, updated_at",
-    )
+    .select(CONNECTION_SELECT)
     .eq("clinic_id", clinicId)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq("professional_id", professionalId)
+    .eq("provider", "google");
   if (error) throw error;
-  return (data as CalendarConnection | null) ?? null;
+  const chosen = selectOwnGoogleConnection(data ?? [], professionalId, clinicId);
+  if (!chosen) return null;
+  return (data ?? []).find((row) => row.id === chosen.id) as CalendarConnection | null;
 }
 
-/** Eventos espelhados do Google na janela [from, to), escopados por clínica e ordenados por início. */
+/** Eventos do cache da conexão do caller (não a clínica inteira). */
 export async function listCalendarEvents(
-  clinicId: string,
+  connectionId: string,
   fromISO: string,
   toISO: string,
 ): Promise<CalendarEventCache[]> {
   const { data, error } = await supabase
     .from("calendar_event_cache")
     .select("id, connection_id, clinic_id, google_event_id, title, starts_at, ends_at, all_day, status, synced_at")
-    .eq("clinic_id", clinicId)
+    .eq("connection_id", connectionId)
     .gte("starts_at", fromISO)
     .lt("starts_at", toISO)
     .order("starts_at", { ascending: true });
@@ -58,12 +64,11 @@ export async function listCalendarEvents(
 
 export interface StartConnectInput {
   clinicId: string;
-  professionalId: string | null;
-  /** Origem do SPA p/ o callback voltar (ex.: window.location.origin). */
+  professionalId: string;
   redirectTo: string;
 }
 
-/** Inicia o OAuth: a Edge Function gera o state e devolve a URL de consentimento do Google. */
+/** Inicia o OAuth. Hints são validados no servidor contra o JWT. */
 export async function startGoogleCalendarConnect(input: StartConnectInput): Promise<{ url: string }> {
   return invokeFn<{ url: string }>("google-calendar-auth", {
     clinicId: input.clinicId,
@@ -74,25 +79,23 @@ export async function startGoogleCalendarConnect(input: StartConnectInput): Prom
 
 export interface CalendarTargetInput {
   clinicId: string;
-  professionalId?: string | null;
+  professionalId: string;
 }
 
-/** Sincroniza (read-only) os eventos da agenda conectada para o cache. */
 export async function syncGoogleCalendar(
   input: CalendarTargetInput,
 ): Promise<{ synced: number; status: string }> {
   return invokeFn<{ synced: number; status: string }>("google-calendar-sync", {
     clinicId: input.clinicId,
-    professionalId: input.professionalId ?? null,
+    professionalId: input.professionalId,
   });
 }
 
-/** Desconecta: revoga no Google (best-effort) e apaga conexão + tokens + cache (cascade). */
 export async function disconnectGoogleCalendar(
   input: CalendarTargetInput,
 ): Promise<{ disconnected: boolean; removed: number }> {
   return invokeFn<{ disconnected: boolean; removed: number }>("google-calendar-disconnect", {
     clinicId: input.clinicId,
-    professionalId: input.professionalId ?? null,
+    professionalId: input.professionalId,
   });
 }

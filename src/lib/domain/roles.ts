@@ -10,7 +10,7 @@ import type { ProfessionalType, UserRole } from "@/types/db";
 export type Role = "admin" | "doctor" | "nutritionist" | "trainer" | "physio" | "other";
 
 export interface RolePermissions {
-  /** Gestão administrativa da clínica (ex.: integração de calendário, administração de disciplinas). */
+  /** Gestão administrativa da clínica (ex.: equipe, disciplinas, jornada). Calendar pessoal NÃO usa isto. */
   isAdmin: boolean;
 }
 
@@ -63,9 +63,9 @@ export function roleLabel(role: Role): string {
 }
 
 /**
- * Motivo PT-BR de bloqueio ADMINISTRATIVO (calendário). Os motivos CLÍNICOS por disciplina vivem em
- * `DISCIPLINE_REASON` (src/lib/domain/disciplines.ts).
+ * Motivo PT-BR quando o caller não tem cadastro profissional ativo (Google Calendar pessoal).
+ * Os motivos CLÍNICOS por disciplina vivem em `DISCIPLINE_REASON`.
  */
 export const EDIT_REASON = {
-  calendar: "Apenas o administrador da clínica gerencia a integração com o Google Calendar.",
+  calendar: "Conecte com um cadastro profissional ativo para gerenciar a sua Google Agenda.",
 } as const;

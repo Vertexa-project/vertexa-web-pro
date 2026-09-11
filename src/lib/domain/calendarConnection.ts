@@ -24,8 +24,24 @@ export function connectionErrorMessage(code: string | undefined): string {
   switch (code) {
     case "google_not_configured":
       return "Integração ainda não configurada neste ambiente.";
+    case "redirect_not_configured":
+      return "Integração ainda não configurada neste ambiente.";
+    case "redirect_origin_denied":
+      return "Origem de retorno não autorizada para esta integração.";
+    case "unauthenticated":
+      return "Sessão expirada. Entre novamente.";
+    case "not_professional":
+      return "Somente um profissional ativo pode conectar a própria agenda.";
+    case "professional_inactive":
+      return "Seu cadastro profissional está inativo.";
+    case "clinic_suspended":
+      return "A clínica está suspensa. Não é possível conectar a agenda.";
+    case "tenant_mismatch":
+      return "Você só pode gerenciar a sua própria agenda do Google.";
+    case "ambiguous_membership":
+      return "Há mais de uma clínica ativa. Abra a agenda pela clínica em que você está atuando.";
     case "professional_clinic_mismatch":
-      return "Profissional não pertence a esta clínica.";
+      return "Você só pode gerenciar a sua própria agenda do Google.";
     case "no_connection":
       return "Nenhuma agenda conectada para sincronizar.";
     case "revoked":

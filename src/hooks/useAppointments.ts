@@ -9,6 +9,7 @@ import {
   type AppointmentInput,
 } from "@/lib/api/appointments";
 import { listCalendarEvents } from "@/lib/api/calendar";
+import { useCalendarConnection } from "@/hooks/useCalendarConnection";
 import { qk } from "@/lib/queryKeys";
 import type { AgendaItem, AppointmentView, CalendarEventCache } from "@/types/db";
 
@@ -33,16 +34,23 @@ export function useAppointments(
   });
 }
 
-/** Eventos do Google espelhados no cache, na MESMA janela da agenda interna. Read-only. */
+/** Eventos do Google da conexão do PRÓPRIO profissional, na MESMA janela da agenda interna. */
 export function useCalendarEvents(
   clinicId: string | null | undefined,
+  professionalId: string | null | undefined,
+  connectionId: string | null | undefined,
   fromISO: string | null,
   toISO: string | null,
 ) {
   return useQuery({
-    queryKey: qk.calendarEvents(clinicId ?? "none", fromISO ?? "none", toISO ?? "none"),
-    queryFn: () => listCalendarEvents(clinicId as string, fromISO as string, toISO as string),
-    enabled: Boolean(clinicId && fromISO && toISO),
+    queryKey: qk.calendarEvents(
+      clinicId ?? "none",
+      professionalId ?? "none",
+      fromISO ?? "none",
+      toISO ?? "none",
+    ),
+    queryFn: () => listCalendarEvents(connectionId as string, fromISO as string, toISO as string),
+    enabled: Boolean(clinicId && professionalId && connectionId && fromISO && toISO),
     placeholderData: keepPreviousData,
   });
 }
@@ -83,11 +91,19 @@ function mergeAgenda(appts: AppointmentView[], events: CalendarEventCache[]): Ag
  */
 export function useAgenda(
   clinicId: string | null | undefined,
+  professionalId: string | null | undefined,
   fromISO: string | null,
   toISO: string | null,
 ) {
   const appts = useAppointments(clinicId, fromISO, toISO);
-  const events = useCalendarEvents(clinicId, fromISO, toISO);
+  const connection = useCalendarConnection(clinicId, professionalId);
+  const events = useCalendarEvents(
+    clinicId,
+    professionalId,
+    connection.data?.id ?? null,
+    fromISO,
+    toISO,
+  );
 
   const items = useMemo(
     () => mergeAgenda(appts.data ?? [], events.data ?? []),

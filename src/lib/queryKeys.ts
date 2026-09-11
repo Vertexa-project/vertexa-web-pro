@@ -78,10 +78,11 @@ export const qk = {
   // Agenda interna (Sessão 6/12) — escopada por clínica + faixa visível do calendário [from, to).
   appointments: (clinicId: string, fromISO: string, toISO: string) =>
     ["appointments", clinicId, fromISO, toISO] as const,
-  // Integração Google Calendar (Sessão 10/12) — escopada por clínica.
-  calendarConnection: (clinicId: string) => ["calendarConnection", clinicId] as const,
-  calendarEvents: (clinicId: string, fromISO: string, toISO: string) =>
-    ["calendarEvents", clinicId, fromISO, toISO] as const,
+  // Integração Google Calendar — escopada por clínica + profissional dono da conexão.
+  calendarConnection: (clinicId: string, professionalId: string) =>
+    ["calendarConnection", clinicId, professionalId] as const,
+  calendarEvents: (clinicId: string, professionalId: string, fromISO: string, toISO: string) =>
+    ["calendarEvents", clinicId, professionalId, fromISO, toISO] as const,
   // Platform Admin (WP-10B2B) — isolado do cache clínico. NÃO misturar com clinicAdmin.
   platformAccess: ["platform", "access"] as const,
   platformClinics: ["platform", "clinics"] as const,

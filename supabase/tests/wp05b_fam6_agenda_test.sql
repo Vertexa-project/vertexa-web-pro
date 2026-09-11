@@ -39,7 +39,17 @@ begin
   insert into public.calendar_event_cache (id, connection_id, clinic_id, google_event_id, starts_at, title) values
     ('74000000-0000-0000-0000-000000000001',CONNP1,caA,'g1',now(),'Consulta - X'),
     ('74000000-0000-0000-0000-000000000002','73000000-0000-0000-0000-000000000002',caB,'g2',now(),'Consulta B');
-  insert into public.calendar_connection_tokens (connection_id, refresh_token) values (CONNP1,'secret');
+  -- WP-A2 / CALENDAR-02A: tokens só existem cifrados (bytea). Colunas plaintext NÃO devem existir.
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='calendar_connection_tokens' and column_name='refresh_token'
+  ) then fails:=fails||'PLAINTEXT_REFRESH_COL '; end if;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='calendar_connection_tokens' and column_name='access_token'
+  ) then fails:=fails||'PLAINTEXT_ACCESS_COL '; end if;
+  insert into public.calendar_connection_tokens (connection_id, refresh_token_enc)
+    values (CONNP1, decode('deadbeef','hex'));
   insert into public.calendar_oauth_state (state, clinic_id, expires_at) values ('st1',caA,now()+interval '1 hour');
 
   execute 'set local role authenticated';
@@ -52,10 +62,12 @@ begin
   if (select count(*) from public.campaigns)<>1 then fails:=fails||'P1_camp1 '; end if;
   begin select count(*) into n from public.calendar_connection_tokens; if n>0 then fails:=fails||'TOKENS_VISIBLE '; end if; exception when insufficient_privilege then null; end;
   begin select count(*) into n from public.calendar_oauth_state; if n>0 then fails:=fails||'OAUTH_VISIBLE '; end if; exception when insufficient_privilege then null; end;
+  begin perform public.get_calendar_refresh_token(CONNP1); fails:=fails||'CLIENT_RPC_TOKEN '; exception when insufficient_privilege then null; end;
   perform set_config('request.jwt.claims','{"sub":"aa000000-0000-0000-0000-000000000001"}',true); -- admin A
   if (select count(*) from public.appointments)<>2 then fails:=fails||'ADMIN_appt2 '; end if;
   if (select count(*) from public.campaigns)<>1 then fails:=fails||'ADMIN_camp1 '; end if;
   if (select count(*) from public.calendar_event_cache)<>1 then fails:=fails||'ADMIN_cache1 '; end if;
+  begin select count(*) into n from public.calendar_connection_tokens; if n>0 then fails:=fails||'ADMIN_TOKENS_VISIBLE '; end if; exception when insufficient_privilege then null; end;
   perform set_config('request.jwt.claims','{"sub":"a2000000-0000-0000-0000-000000000001"}',true); -- P2 (não vinculado, não dono)
   if (select count(*) from public.appointments)<>0 then fails:=fails||'P2_NONLINKED_appt0 '; end if; -- mesma clínica não basta
   if (select count(*) from public.calendar_event_cache)<>0 then fails:=fails||'P2_SIDEDOOR_cache0 '; end if; -- porta lateral Google fechada
