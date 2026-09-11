@@ -66,7 +66,9 @@ begin
   perform set_config('request.jwt.claims','{"sub":"aa000000-0000-0000-0000-000000000001"}',true); -- admin A
   if (select count(*) from public.appointments)<>2 then fails:=fails||'ADMIN_appt2 '; end if;
   if (select count(*) from public.campaigns)<>1 then fails:=fails||'ADMIN_camp1 '; end if;
-  if (select count(*) from public.calendar_event_cache)<>1 then fails:=fails||'ADMIN_cache1 '; end if;
+  -- CALENDAR-02A-R1: clinic admin NÃO lê conexão/cache Google de outro profissional.
+  if (select count(*) from public.calendar_connections)<>0 then fails:=fails||'ADMIN_conn0 '; end if;
+  if (select count(*) from public.calendar_event_cache)<>0 then fails:=fails||'ADMIN_cache0 '; end if;
   begin select count(*) into n from public.calendar_connection_tokens; if n>0 then fails:=fails||'ADMIN_TOKENS_VISIBLE '; end if; exception when insufficient_privilege then null; end;
   perform set_config('request.jwt.claims','{"sub":"a2000000-0000-0000-0000-000000000001"}',true); -- P2 (não vinculado, não dono)
   if (select count(*) from public.appointments)<>0 then fails:=fails||'P2_NONLINKED_appt0 '; end if; -- mesma clínica não basta

@@ -142,6 +142,15 @@ describe("CAL02A — OAuth callback params / state TTL", () => {
 });
 
 describe("CAL02A — connection ownership", () => {
+  it("CAL02AR1-10: caminho de leitura da UI continua escolhendo só a conexão própria", () => {
+    const rows = [
+      conn({ id: "mine", professional_id: PROF_A }),
+      conn({ id: "theirs", professional_id: PROF_B, updated_at: "2026-09-12T00:00:00Z" }),
+    ];
+    expect(selectOwnGoogleConnection(rows, PROF_A, CLINIC_A)?.id).toBe("mine");
+    expect(selectOwnGoogleConnection(rows, PROF_B, CLINIC_A)?.id).toBe("theirs");
+  });
+
   it("CAL02A-09/20: sync/read escolhe só a conexão do próprio professional", () => {
     const rows = [
       conn({ id: "b", professional_id: PROF_B, updated_at: "2026-09-11T00:00:00Z" }),
