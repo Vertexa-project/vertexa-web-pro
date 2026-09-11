@@ -1,6 +1,12 @@
 // Helpers da API do Google (OAuth + Calendar) para as Edge Functions (S10).
 // READ-ONLY: escopos só de leitura; nunca criamos/editamos/excluímos no Google. Sem Google Meet.
 // Segredos (client_id/secret/redirect_uri) vêm de Supabase Secrets — NUNCA do client Vite.
+import {
+  GOOGLE_CALENDAR_SCOPES,
+  GOOGLE_CALENDAR_LIST_FIELDS,
+  GOOGLE_EVENT_LIST_FIELDS,
+  resolveSafeRedirectOrigin,
+} from "./calendarPolicy.ts";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -8,10 +14,7 @@ const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 
 // Read-only: eventos + lista de agendas. access_type=offline + prompt=consent garante refresh_token.
-export const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.events.readonly",
-  "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
-];
+export const GOOGLE_SCOPES = [...GOOGLE_CALENDAR_SCOPES];
 
 export interface GoogleCredentials {
   clientId: string;
@@ -39,7 +42,7 @@ export function buildConsentUrl(creds: GoogleCredentials, state: string): string
     scope: GOOGLE_SCOPES.join(" "),
     access_type: "offline",
     prompt: "consent",
-    include_granted_scopes: "true",
+    include_granted_scopes: "false",
     state,
   });
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
@@ -111,9 +114,10 @@ export interface PrimaryCalendar {
 
 /** Lê a agenda primária da conta (id = e-mail; summary = nome). Read-only. */
 export async function getPrimaryCalendar(accessToken: string): Promise<PrimaryCalendar | null> {
-  const res = await fetch(`${CALENDAR_API}/users/me/calendarList`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const res = await fetch(
+    `${CALENDAR_API}/users/me/calendarList?fields=${encodeURIComponent(GOOGLE_CALENDAR_LIST_FIELDS)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
   if (!res.ok) return null;
   const data = (await res.json()) as { items?: Array<{ id: string; summary?: string; primary?: boolean }> };
   const primary = (data.items ?? []).find((c) => c.primary) ?? (data.items ?? [])[0];
@@ -158,6 +162,7 @@ export async function listEvents(
     singleEvents: "true",
     orderBy: "startTime",
     maxResults: "250",
+    fields: GOOGLE_EVENT_LIST_FIELDS,
   });
   const res = await fetch(
     `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
@@ -186,12 +191,15 @@ export async function listEvents(
   return { ok: true, notFound: false, events };
 }
 
-/** Revoga o token no Google (best-effort; usado no disconnect). */
-export async function revokeToken(token: string): Promise<void> {
+/** Revoga o token no Google. Não lança; o caller decide se o disconnect local segue. Nunca loga o token. */
+export async function revokeToken(token: string): Promise<boolean> {
   try {
-    await fetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(token)}`, { method: "POST" });
+    const res = await fetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(token)}`, {
+      method: "POST",
+    });
+    return res.ok;
   } catch (_e) {
-    // best-effort: se falhar, ainda assim apagamos a conexão localmente.
+    return false;
   }
 }
 
@@ -212,22 +220,12 @@ export function syncWindow(days = 30): { timeMin: string; timeMax: string } {
 }
 
 /**
- * Valida o redirect_to do SPA. Exige http(s) e, se ALLOWED_REDIRECT_ORIGINS estiver setado
- * (origens separadas por vírgula), só permite as origens listadas (anti open-redirect). Sem o
- * env, cai no filtro de protocolo (fallback de dev). Em produção, configure a allowlist.
+ * Valida o redirect_to do SPA. FAIL-CLOSED: sem ALLOWED_REDIRECT_ORIGINS o connect recusa.
+ * Origem fora da allowlist é negada. Nunca aceita origem arbitrária.
  */
-export function safeRedirectBase(redirectTo: string | null | undefined): string | null {
-  if (!redirectTo) return null;
-  try {
-    const u = new URL(redirectTo);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-    const allow = (Deno.env.get("ALLOWED_REDIRECT_ORIGINS") ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (allow.length > 0 && !allow.includes(u.origin)) return null;
-    return u.origin;
-  } catch (_e) {
-    return null;
-  }
+export function safeRedirectBase(redirectTo: string | null | undefined): {
+  ok: true;
+  origin: string;
+} | { ok: false; error: "redirect_not_configured" | "redirect_origin_denied" } {
+  return resolveSafeRedirectOrigin(redirectTo, Deno.env.get("ALLOWED_REDIRECT_ORIGINS"));
 }

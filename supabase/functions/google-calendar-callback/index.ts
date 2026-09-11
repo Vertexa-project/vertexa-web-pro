@@ -5,6 +5,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import {
+  isOAuthStateExpired,
+  oauthStateHasProfessional,
+  parseOAuthCallbackSearch,
+  resolveSafeRedirectOrigin,
+} from "../_shared/calendarPolicy.ts";
+import {
   exchangeCode,
   getPrimaryCalendar,
   GOOGLE_SCOPES,
@@ -24,29 +30,36 @@ function backToApp(base: string | null, status: "connected" | "error"): Response
 
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
-  const code = url.searchParams.get("code");
-  const stateParam = url.searchParams.get("state");
-  const oauthError = url.searchParams.get("error");
+  // Tenant IDs no query string NÃO são autoridade. Só state/code/error do Google.
+  const parsed = parseOAuthCallbackSearch(url.searchParams);
 
   const db = supabaseAdmin();
 
-  // 1) Resolve o state (anti-CSRF). Sem state válido não há para onde redirecionar com confiança.
+  if (!parsed.ok && parsed.reason === "missing_state") return backToApp(null, "error");
+  const stateParam = parsed.ok ? parsed.state : url.searchParams.get("state");
   if (!stateParam) return backToApp(null, "error");
+
   const { data: stateRow } = await db
     .from("calendar_oauth_state")
     .select("state, clinic_id, professional_id, redirect_to, expires_at")
     .eq("state", stateParam)
     .maybeSingle();
 
-  // 2) Single-use: apaga o state assim que resolvido (mesmo em erro).
+  // Single-use: apaga o state assim que resolvido (mesmo em erro).
   if (stateRow) {
     await db.from("calendar_oauth_state").delete().eq("state", stateParam);
   }
 
-  const redirectBase: string | null = stateRow?.redirect_to ?? null;
+  const storedRedirect = stateRow?.redirect_to ?? null;
+  const redirectCheck = storedRedirect
+    ? resolveSafeRedirectOrigin(storedRedirect, Deno.env.get("ALLOWED_REDIRECT_ORIGINS"))
+    : { ok: false as const };
+  const redirectBase: string | null = redirectCheck.ok ? redirectCheck.origin : null;
   if (!stateRow) return backToApp(null, "error");
-  if (new Date(stateRow.expires_at).getTime() < Date.now()) return backToApp(redirectBase, "error");
-  if (oauthError || !code) return backToApp(redirectBase, "error");
+  if (!oauthStateHasProfessional(stateRow.professional_id)) return backToApp(redirectBase, "error");
+  if (isOAuthStateExpired(stateRow.expires_at, Date.now())) return backToApp(redirectBase, "error");
+  if (!parsed.ok) return backToApp(redirectBase, "error");
+  const code = parsed.code;
 
   const { data: clinicRow } = await db
     .from("clinics")
@@ -54,6 +67,16 @@ Deno.serve(async (req: Request) => {
     .eq("id", stateRow.clinic_id)
     .maybeSingle();
   if (clinicRow?.status !== "active") return backToApp(redirectBase, "error");
+
+  const { data: profRow } = await db
+    .from("professionals")
+    .select("id, status, clinic_id")
+    .eq("id", stateRow.professional_id)
+    .maybeSingle();
+  const profActive = (profRow?.status ?? "active") === "active";
+  if (!profRow || !profActive || profRow.clinic_id !== stateRow.clinic_id) {
+    return backToApp(redirectBase, "error");
+  }
 
   try {
     const creds = readGoogleCredentials();

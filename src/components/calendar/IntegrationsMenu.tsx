@@ -17,7 +17,6 @@ import {
   useDisconnectGoogleCalendar,
   useSyncGoogleCalendar,
 } from "@/hooks/useCalendarConnection";
-import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import {
   CONNECTION_STATUS_META,
   connectionErrorMessage,
@@ -26,10 +25,7 @@ import {
 import { EDIT_REASON } from "@/lib/domain/roles";
 
 /**
- * Dropdown "Integrações" no topo da agenda (Sessão 12) — substitui o card de rodapé da S10.
- * Mostra o status da conexão Google + ações Conectar/Atualizar/Desconectar, cada uma admin-gated
- * via GatedAction + EDIT_REASON.calendar. Reusa os hooks da S10 (a CHAMADA às Edge Functions não é
- * duplicada). A gestão detalhada continua em Configurações (variant="full" do GoogleCalendarConnection).
+ * Dropdown "Integrações" no topo da agenda — status + ações da Google Agenda do PRÓPRIO profissional.
  */
 export function IntegrationsMenu({
   clinicId,
@@ -38,29 +34,28 @@ export function IntegrationsMenu({
   clinicId: string | null;
   professionalId: string | null;
 }) {
-  // Admin da clínica pelo SINAL REAL do banco (dono OU clinic_role='admin'), não por profiles.role.
-  const { isClinicAdmin: isAdmin } = useIsClinicAdmin(clinicId);
-  const { data: conn, isLoading } = useCalendarConnection(clinicId);
+  const canManageOwn = Boolean(clinicId && professionalId);
+  const { data: conn, isLoading } = useCalendarConnection(clinicId, professionalId);
   const connect = useConnectGoogleCalendar();
-  const sync = useSyncGoogleCalendar(clinicId ?? "none");
-  const disconnect = useDisconnectGoogleCalendar(clinicId ?? "none");
+  const sync = useSyncGoogleCalendar(clinicId ?? "none", professionalId ?? "none");
+  const disconnect = useDisconnectGoogleCalendar(clinicId ?? "none", professionalId ?? "none");
   const [redirecting, setRedirecting] = useState(false);
 
   async function handleConnect() {
-    if (!clinicId) return;
+    if (!clinicId || !professionalId) return;
     try {
       const { url } = await connect.mutateAsync({ clinicId, professionalId, redirectTo: window.location.origin });
       setRedirecting(true);
-      window.location.href = url; // navega para o consentimento do Google
+      window.location.href = url;
     } catch (_e) {
       // erro exibido via connect.isError abaixo
     }
   }
   function handleSync() {
-    if (clinicId) sync.mutate({ clinicId, professionalId });
+    if (clinicId && professionalId) sync.mutate({ clinicId, professionalId });
   }
   function handleDisconnect() {
-    if (!clinicId) return;
+    if (!clinicId || !professionalId) return;
     if (window.confirm("Desconectar o Google Calendar? Os eventos sincronizados saem do painel.")) {
       disconnect.mutate({ clinicId, professionalId });
     }
@@ -97,35 +92,35 @@ export function IntegrationsMenu({
         <p className="mb-2 truncate text-xs text-muted-foreground">
           {connected && conn
             ? `${conn.google_account_email ?? "conta conectada"} · ${lastSyncLabel(conn.last_synced_at)}`
-            : "Conecte (somente leitura) para ver os eventos do Google na agenda."}
+            : "Conecte a sua agenda (somente leitura) para ver os seus eventos do Google."}
         </p>
 
         <DropdownMenuSeparator />
 
         <div className="flex flex-col gap-1.5 pt-2">
           <GatedAction
-            canEdit={isAdmin}
+            canEdit={canManageOwn}
             reason={EDIT_REASON.calendar}
             variant="outline"
             size="sm"
             wrapperClassName="w-full"
             className="w-full justify-center"
             onClick={handleConnect}
-            disabled={isAdmin && (connectBusy || !clinicId)}
+            disabled={canManageOwn && (connectBusy || !clinicId)}
           >
             {connectBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
             {connected ? "Reconectar" : "Conectar Google Agenda"}
           </GatedAction>
           {connected ? (
             <GatedAction
-              canEdit={isAdmin}
+              canEdit={canManageOwn}
               reason={EDIT_REASON.calendar}
               variant="outline"
               size="sm"
               wrapperClassName="w-full"
               className="w-full justify-center"
               onClick={handleSync}
-              disabled={isAdmin && (sync.isPending || !clinicId)}
+              disabled={canManageOwn && (sync.isPending || !clinicId)}
             >
               {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Atualizar agenda
@@ -133,14 +128,14 @@ export function IntegrationsMenu({
           ) : null}
           {connected ? (
             <GatedAction
-              canEdit={isAdmin}
+              canEdit={canManageOwn}
               reason={EDIT_REASON.calendar}
               variant="outline"
               size="sm"
               wrapperClassName="w-full"
               className="w-full justify-center text-destructive hover:text-destructive"
               onClick={handleDisconnect}
-              disabled={isAdmin && (disconnect.isPending || !clinicId)}
+              disabled={canManageOwn && (disconnect.isPending || !clinicId)}
             >
               {disconnect.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               Desconectar

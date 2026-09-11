@@ -10,7 +10,6 @@ import {
   useDisconnectGoogleCalendar,
   useSyncGoogleCalendar,
 } from "@/hooks/useCalendarConnection";
-import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import {
   CONNECTION_STATUS_META,
   connectionErrorMessage,
@@ -19,10 +18,8 @@ import {
 import { EDIT_REASON } from "@/lib/domain/roles";
 
 /**
- * Integração Google Calendar (Sessão 10) — read-only, multi-tenant. Todas as ações são admin-gated
- * (RBAC de UI da S7); a barreira real fica no servidor (tokens deny-all + Edge Function/service_role).
- * `compact` = rodapé do AgendaCard (status + conectar/atualizar + link p/ gerenciar);
- * `full` = card de Integrações em Configurações (status + conta/agenda + conectar/atualizar/desconectar).
+ * Integração Google Calendar — read-only, dono = professional autenticado.
+ * Ações exigem cadastro profissional ativo (não clinic admin). A barreira real é o JWT na Edge.
  */
 export function GoogleCalendarConnection({
   clinicId,
@@ -33,17 +30,17 @@ export function GoogleCalendarConnection({
   professionalId: string | null;
   variant: "compact" | "full";
 }) {
-  // Admin da clínica pelo SINAL REAL do banco (dono OU clinic_role='admin'), não por profiles.role.
-  const { isClinicAdmin: isAdmin } = useIsClinicAdmin(clinicId);
-  const { data: conn, isLoading } = useCalendarConnection(clinicId);
+  const canManageOwn = Boolean(clinicId && professionalId);
+  const { data: conn, isLoading } = useCalendarConnection(clinicId, professionalId);
   const connect = useConnectGoogleCalendar();
-  const sync = useSyncGoogleCalendar(clinicId ?? "none");
-  const disconnect = useDisconnectGoogleCalendar(clinicId ?? "none");
+  const sync = useSyncGoogleCalendar(clinicId ?? "none", professionalId ?? "none");
+  const disconnect = useDisconnectGoogleCalendar(clinicId ?? "none", professionalId ?? "none");
   const [redirecting, setRedirecting] = useState(false);
 
   async function handleConnect() {
     if (!clinicId) return;
     try {
+      if (!professionalId) return;
       const { url } = await connect.mutateAsync({ clinicId, professionalId, redirectTo: window.location.origin });
       setRedirecting(true);
       window.location.href = url; // navega para o consentimento do Google
@@ -52,10 +49,10 @@ export function GoogleCalendarConnection({
     }
   }
   function handleSync() {
-    if (clinicId) sync.mutate({ clinicId, professionalId });
+    if (clinicId && professionalId) sync.mutate({ clinicId, professionalId });
   }
   function handleDisconnect() {
-    if (!clinicId) return;
+    if (!clinicId || !professionalId) return;
     if (window.confirm("Desconectar o Google Calendar? Os eventos sincronizados saem do painel.")) {
       disconnect.mutate({ clinicId, professionalId });
     }
@@ -72,7 +69,7 @@ export function GoogleCalendarConnection({
   // ---- Botões reutilizados ----
   const connectButton = (
     <GatedAction
-      canEdit={isAdmin}
+      canEdit={canManageOwn}
       reason={EDIT_REASON.calendar}
       variant="outline"
       size="sm"
@@ -85,7 +82,7 @@ export function GoogleCalendarConnection({
   );
   const syncButton = (
     <GatedAction
-      canEdit={isAdmin}
+      canEdit={canManageOwn}
       reason={EDIT_REASON.calendar}
       variant="outline"
       size="sm"
@@ -116,9 +113,7 @@ export function GoogleCalendarConnection({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {/* Sync só para admin no rodapé compacto (evita o bloco de motivo do GatedAction inflar a
-                  linha p/ não-admin). Não-admin gerencia em Configurações, onde o motivo aparece. */}
-              {isAdmin ? syncButton : null}
+              {syncButton}
               <Link to="/configuracoes" className="text-xs font-medium text-primary hover:underline">
                 Gerenciar
               </Link>
@@ -128,7 +123,7 @@ export function GoogleCalendarConnection({
           <div className="flex flex-col items-center gap-1.5">
             {connectButton}
             <p className="text-center text-xs text-muted-foreground">
-              Veja seus compromissos do Google aqui (somente leitura). Google Meet não entra.
+              Veja os seus compromissos do Google aqui (somente leitura). Google Meet não entra.
             </p>
           </div>
         )}
@@ -174,7 +169,7 @@ export function GoogleCalendarConnection({
         </>
       ) : (
         <p className="text-sm text-muted-foreground">
-          Conecte a agenda do Google (somente leitura) para ver os compromissos no Dashboard. Google Meet não entra.
+          Conecte a sua agenda do Google (somente leitura) para ver os seus compromissos no Dashboard. Google Meet não entra.
         </p>
       )}
 
@@ -183,7 +178,7 @@ export function GoogleCalendarConnection({
         {connected ? syncButton : null}
         {connected ? (
           <GatedAction
-            canEdit={isAdmin}
+            canEdit={canManageOwn}
             reason={EDIT_REASON.calendar}
             variant="outline"
             size="sm"

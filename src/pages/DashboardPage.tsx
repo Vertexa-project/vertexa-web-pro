@@ -155,8 +155,7 @@ export function DashboardPage() {
             </Card>
           </div>
 
-          {/* Agenda interna (Review §3): compromissos do dia/semana da clínica com CRUD real.
-              Escopada por clínica do profissional logado. "Conectar Google Agenda" = placeholder. */}
+          {/* Agenda interna + Google do próprio profissional (read-only). */}
           <AgendaCard
             clinicId={professional?.clinicId ?? null}
             defaultProfessionalId={professional?.id ?? null}

@@ -1,12 +1,12 @@
-// Edge Function: google-calendar-auth (INIT do OAuth) — S10.
-// Chamada pelo SPA (admin) via supabase.functions.invoke. Gera state anti-CSRF (TTL 10min, single-use),
-// guarda (state, clinic_id, professional_id, redirect_to) e devolve a URL de consentimento do Google.
-// Pré-S9: NÃO há auth.uid(); a identidade (clinicId/professionalId) vem do client (dívida #11–#14).
-// O gating de admin é de UI; a barreira real de tokens é a tabela deny-all + service_role.
+// Edge Function: google-calendar-auth (INIT do OAuth) — CALENDAR-02A.
+// Autoridade = JWT → professional do caller. clinicId/professionalId do body são hints.
+// State anti-CSRF (TTL 10min, single-use) grava clinic/professional SERVER-DERIVED.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { jsonResponse, preflight } from "../_shared/cors.ts";
 import { rejectIfClinicNotOperational } from "../_shared/clinicOperational.ts";
+import { readHints, resolveCalendarCaller } from "../_shared/calendarCaller.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { calendarAuthHttpStatus } from "../_shared/calendarPolicy.ts";
 import {
   buildConsentUrl,
   GOOGLE_SCOPES,
@@ -15,7 +15,7 @@ import {
   safeRedirectBase,
 } from "../_shared/google.ts";
 
-const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutos
+const STATE_TTL_MS = 10 * 60 * 1000;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return preflight();
@@ -28,46 +28,36 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "invalid_body" }, 400);
   }
 
-  const clinicId = (body.clinicId ?? "").trim();
-  const professionalId = (body.professionalId ?? "").trim() || null;
-  const redirectBase = safeRedirectBase(body.redirectTo);
-  if (!clinicId) return jsonResponse({ error: "missing_clinic" }, 400);
+  const db = supabaseAdmin();
+  const resolved = await resolveCalendarCaller(req, db, readHints(body));
+  if (!resolved.ok) return resolved.response;
+
+  const redirect = safeRedirectBase(body.redirectTo);
+  if (!redirect.ok) {
+    return jsonResponse({ error: redirect.error }, calendarAuthHttpStatus(redirect.error));
+  }
 
   let creds;
   try {
     creds = readGoogleCredentials();
   } catch (_e) {
-    // Segredos do Google ainda não configurados (ex.: modo demo). Erro amigável p/ a UI.
     return jsonResponse({ error: "google_not_configured" }, 503);
   }
 
-  const db = supabaseAdmin();
-
-  const blocked = await rejectIfClinicNotOperational(db, clinicId);
+  const blocked = await rejectIfClinicNotOperational(db, resolved.caller.clinicId);
   if (blocked) return blocked;
-
-  // Integridade (não é segurança): o profissional informado pertence à clínica informada?
-  if (professionalId) {
-    const { data: prof } = await db
-      .from("professionals")
-      .select("id, clinic_id")
-      .eq("id", professionalId)
-      .maybeSingle();
-    if (prof && prof.clinic_id !== clinicId) {
-      return jsonResponse({ error: "professional_clinic_mismatch" }, 400);
-    }
-  }
 
   const state = randomState();
   const expiresAt = new Date(Date.now() + STATE_TTL_MS).toISOString();
   const { error: stErr } = await db.from("calendar_oauth_state").insert({
     state,
-    clinic_id: clinicId,
-    professional_id: professionalId,
-    redirect_to: redirectBase,
+    clinic_id: resolved.caller.clinicId,
+    professional_id: resolved.caller.professionalId,
+    redirect_to: redirect.origin,
     expires_at: expiresAt,
   });
   if (stErr) return jsonResponse({ error: "state_persist_failed" }, 500);
 
+  // Só a URL de consentimento — nenhum token no browser.
   return jsonResponse({ url: buildConsentUrl(creds, state), scopes: GOOGLE_SCOPES.join(" ") });
 });
