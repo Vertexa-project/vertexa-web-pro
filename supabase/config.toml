@@ -45,6 +45,12 @@ verify_jwt = true
 [functions.asaas-processor]
 verify_jwt = true
 
+# WP-ASAAS-04C: caller = máquina (pg_net). Auth = named secret `asaas_processor_cron` via
+# withSupabase({ auth: "secret:asaas_processor_cron" }). Sem a key / publishable / JWT de
+# usuário → 401. NÃO é pública. NÃO misturar com o drain humano (asaas-processor).
+[functions.asaas-processor-cron]
+verify_jwt = false
+
 # WP-04A: não aplicar supabase/seed.sql em `db reset` local. Catálogos vêm das migrations.
 [db.seed]
 enabled = false
