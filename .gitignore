@@ -19,6 +19,13 @@ dist-ssr
 .playwright-mcp/
 /fase*.png
 
+# AUTH-EMAIL-05 local QA / Playwright
+.tmp/
+playwright/.auth/
+test-results/
+playwright-report/
+blob-report/
+
 # Artefatos repomix (pack do repo para LLM — gerado, não versionar)
 repomix-*.xml
 repomix.xml

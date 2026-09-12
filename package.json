@@ -7,6 +7,11 @@
     "dev": "vite",
     "dev:local-auth": "vite --mode authemail02 --port 5173",
     "env:local-auth": "node scripts/use-local-authemail-env.mjs",
+    "e2e:guard": "node scripts/qa/prove-remote-guard.mjs && node --test scripts/qa/localTarget.test.mjs",
+    "e2e:fixtures": "node scripts/qa/create-e2e-fixtures.mjs",
+    "e2e:cleanup": "node scripts/qa/cleanup-e2e-fixtures.mjs",
+    "e2e": "node scripts/qa/create-e2e-fixtures.mjs && playwright test -c e2e/playwright.config.ts",
+    "dev:e2e": "vite --mode authemail02 --port 5177 --strictPort --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
@@ -47,6 +52,7 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
