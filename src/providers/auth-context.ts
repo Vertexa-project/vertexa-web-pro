@@ -1,6 +1,8 @@
 import { createContext, useContext } from "react";
 import type { Session } from "@supabase/supabase-js";
 
+import type { PasswordResetRequestResult } from "@/lib/api/authPassword";
+
 export interface AuthContextValue {
   session: Session | null;
   isAuthenticated: boolean;
@@ -10,7 +12,7 @@ export interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
-  requestPasswordReset: (email: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<PasswordResetRequestResult>;
   updatePassword: (password: string) => Promise<void>;
 }
 

@@ -9,9 +9,10 @@ import { captureException } from "@/lib/observability/sentry";
 import { supabase } from "@/lib/supabase";
 
 /**
- * Rota de retorno do OAuth (Google). O client Supabase (detectSessionInUrl = default true)
- * troca o `?code=` por sessão automaticamente; aqui só confirmamos e redirecionamos. Erros do
- * provedor (`?error=`) e falhas de sessão são reportados ao Sentry (source:"auth", sem PII).
+ * Retorno único de Auth: OAuth Google e confirmação de e-mail.
+ * O client (detectSessionInUrl = default true) troca `?code=` por sessão; daí /access.
+ * AuthProvider chama ensure_my_profile() ao receber a sessão — sem callback paralelo.
+ * Recovery (`PASSWORD_RECOVERY`) vai para /auth/update-password. Sem PII no Sentry.
  */
 export function AuthCallback() {
   const navigate = useNavigate();

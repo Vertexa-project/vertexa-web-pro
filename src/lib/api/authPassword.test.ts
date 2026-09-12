@@ -34,8 +34,17 @@ afterEach(() => {
 });
 
 describe("requestPasswordReset", () => {
+  it("rate limit devolve kind sem enumerar conta", async () => {
+    resetPasswordForEmail.mockResolvedValue({
+      data: {},
+      error: { message: "email rate limit exceeded", status: 429, code: "over_email_send_rate_limit" },
+    });
+    await expect(requestPasswordReset("alguem@clinica.com")).resolves.toEqual({ kind: "rate_limited" });
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
   it("R3/R4 — envia o e-mail e redirectTo termina em /auth/update-password", async () => {
-    await requestPasswordReset("pessoa@clinica.com");
+    await expect(requestPasswordReset("pessoa@clinica.com")).resolves.toEqual({ kind: "sent" });
 
     expect(resetPasswordForEmail).toHaveBeenCalledTimes(1);
     const [email, options] = resetPasswordForEmail.mock.calls[0] as [
@@ -64,7 +73,7 @@ describe("requestPasswordReset", () => {
 
   it("erro do GoTrue é engolido (anti-enumeration) e reportado sem e-mail", async () => {
     resetPasswordForEmail.mockResolvedValue({ data: {}, error: { message: "User not found" } });
-    await expect(requestPasswordReset("alguem@clinica.com")).resolves.toBeUndefined();
+    await expect(requestPasswordReset("alguem@clinica.com")).resolves.toEqual({ kind: "sent" });
     expect(captureException).toHaveBeenCalledTimes(1);
     const ctx = captureException.mock.calls[0]?.[1] as { source: string; scope: string };
     expect(ctx).toEqual({ source: "auth", scope: "password-reset-request" });

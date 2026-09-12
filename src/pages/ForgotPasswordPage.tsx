@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AUTH_RATE_LIMIT_MESSAGE } from "@/lib/auth/authClientErrors";
 import { isValidResetEmail, PASSWORD_RESET_NOTICE } from "@/lib/auth/passwordRecovery";
 import { useAuth } from "@/providers/auth-context";
 
@@ -15,13 +16,19 @@ export function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!isValidResetEmail(email) || submitting) return;
     setSubmitting(true);
+    setRateLimited(false);
     try {
-      await requestPasswordReset(email);
+      const result = await requestPasswordReset(email);
+      if (result.kind === "rate_limited") {
+        setRateLimited(true);
+        return;
+      }
       setSent(true);
     } finally {
       setSubmitting(false);
@@ -46,6 +53,11 @@ export function ForgotPasswordPage() {
           />
         </div>
 
+        {rateLimited ? (
+          <p className="text-sm text-destructive" role="alert">
+            {AUTH_RATE_LIMIT_MESSAGE}
+          </p>
+        ) : null}
         {sent ? (
           <p className="text-sm text-info" role="status">
             {PASSWORD_RESET_NOTICE}

@@ -192,12 +192,12 @@ describe("validateNewPassword — R11", () => {
     expect(validateNewPassword("abcdef", "abcdeg")).toEqual({ ok: false, reason: "mismatch" });
   });
 
-  it("abaixo do mínimo GoTrue (6) não passa", () => {
-    expect(validateNewPassword("abc", "abc")).toEqual({ ok: false, reason: "too_short" });
+  it("abaixo do mínimo GoTrue (8) não passa", () => {
+    expect(validateNewPassword("abcdefg", "abcdefg")).toEqual({ ok: false, reason: "too_short" });
   });
 
   it("iguais e com tamanho mínimo passam", () => {
-    expect(validateNewPassword("abcdef", "abcdef")).toEqual({ ok: true });
+    expect(validateNewPassword("abcdefgh", "abcdefgh")).toEqual({ ok: true });
   });
 });
 
