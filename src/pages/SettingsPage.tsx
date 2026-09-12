@@ -5,6 +5,7 @@ import { Bell, Building2, CalendarDays, CreditCard, Monitor, Moon, ShieldCheck, 
 
 import { OwnAvatarControl } from "@/components/avatar/OwnAvatarControl";
 import { GoogleCalendarConnection } from "@/components/calendar/GoogleCalendarConnection";
+import { AccountAccessSection } from "@/components/settings/AccountAccessSection";
 import { ClinicJoinCodeRow } from "@/components/settings/ClinicJoinCodeRow";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -293,6 +294,7 @@ export function SettingsPage() {
           title="Segurança e LGPD"
           description="Dados de saúde são tratados com rigor."
         >
+          <AccountAccessSection user={session?.user ?? null} />
           <SettingRow label="Dados sensíveis" value="Storage privado (pós-MVP)" />
           <SettingRow label="Acesso por papel/clínica" value="Em implantação" />
           <SettingRow label="Política de privacidade">
