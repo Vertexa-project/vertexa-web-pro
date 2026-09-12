@@ -22,6 +22,12 @@ vi.mock("@/hooks/useChat", () => ({
 vi.mock("@/hooks/useDisciplines", () => ({
   useDisciplinesList: () => ({ data: [] }),
 }));
+vi.mock("@/hooks/useProfileAvatar", () => ({
+  useSignedAvatarUrl: () => ({ data: undefined }),
+  useProfileAvatarUrls: () => ({ data: new Map(), isLoading: false }),
+  ProfileAvatarUrlScope: ({ children }: { children: React.ReactNode }) => children,
+  ProfileAvatarUrlContext: { Provider: ({ children }: { children: React.ReactNode }) => children },
+}));
 vi.mock("@/hooks/usePatients", () => ({
   useListPatients: () => ({
     data: [patient()],

@@ -5,11 +5,12 @@ import { Download, Eye, Search, UserPlus, Users } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
+import { ProfileAvatarUrlScope } from "@/components/avatar/ProfileAvatarUrlScope";
+import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { PatientCreateDialog } from "@/components/patient/PatientCreateDialog";
 import { TableSkeleton } from "@/components/skeletons/TableSkeleton";
 import { StatusBadge } from "@/components/status/StatusBadge";
 import { DataTable, type Column } from "@/components/data-table/DataTable";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,7 @@ import { useCurrentProfessional } from "@/hooks/useCurrentProfessional";
 import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import { useListPatients } from "@/hooks/usePatients";
 import { usePatientsWithoutActiveProfessional } from "@/hooks/usePatientTeam";
-import { formatPercent, formatRelative, initials, professionalTypeLabel } from "@/lib/domain/format";
+import { formatPercent, formatRelative, professionalTypeLabel } from "@/lib/domain/format";
 import { patientsWithoutProfessionalIds } from "@/lib/domain/patientTeam";
 import { statusLabel } from "@/lib/domain/vri";
 import type { PatientListItem, PatientStatus } from "@/types/db";
@@ -128,9 +129,12 @@ export function PatientsPage() {
         const name = p.profile?.full_name ?? "Sem nome";
         return (
           <div className="flex items-center gap-3">
-            <Avatar>
-              <AvatarFallback>{initials(name)}</AvatarFallback>
-            </Avatar>
+            <ProfilePhoto
+              name={name}
+              avatarPath={p.profile?.avatar_path}
+              legacyUrl={p.profile?.avatar_url}
+              className="h-9 w-9"
+            />
             <div className="flex flex-col">
               <span className="font-medium text-foreground">{name}</span>
               {p.goal ? <span className="text-xs text-muted-foreground">{p.goal}</span> : null}
@@ -282,13 +286,15 @@ export function PatientsPage() {
           description="Ajuste a busca ou os filtros para encontrar pacientes."
         />
       ) : (
-        <DataTable
-          columns={columns}
-          rows={filtered}
-          getRowId={(p) => p.id}
-          onRowClick={(p) => navigate(`/pacientes/${p.id}`)}
-          ariaLabel="Lista de pacientes"
-        />
+        <ProfileAvatarUrlScope paths={(data ?? []).map((p) => p.profile?.avatar_path)}>
+          <DataTable
+            columns={columns}
+            rows={filtered}
+            getRowId={(p) => p.id}
+            onRowClick={(p) => navigate(`/pacientes/${p.id}`)}
+            ariaLabel="Lista de pacientes"
+          />
+        </ProfileAvatarUrlScope>
       )}
 
       <PatientCreateDialog

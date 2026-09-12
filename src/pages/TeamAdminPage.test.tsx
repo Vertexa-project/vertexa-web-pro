@@ -72,6 +72,19 @@ vi.mock("@/hooks/useProfessionalStatus", () => ({
   useReactivateProfessional: () => ({ mutate: reactivateMutate, isPending: false }),
 }));
 vi.mock("@/lib/observability/sentry", () => ({ captureException: vi.fn() }));
+vi.mock("@/hooks/useProfileAvatar", () => ({
+  useSignedAvatarUrl: (path?: string | null) => ({
+    data: path ? `https://signed.test/${path}` : undefined,
+  }),
+  useProfileAvatarUrls: (paths: Array<string | null | undefined>) => ({
+    data: new Map(
+      paths.filter((p): p is string => Boolean(p)).map((p) => [p, `https://signed.test/${p}`]),
+    ),
+    isLoading: false,
+  }),
+  ProfileAvatarUrlScope: ({ children }: { children: React.ReactNode }) => children,
+  ProfileAvatarUrlContext: { Provider: ({ children }: { children: React.ReactNode }) => children },
+}));
 vi.mock("react-router-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-router-dom")>()),
   useNavigate: () => vi.fn(),
@@ -87,6 +100,8 @@ function member(over: Partial<ProfessionalWithDisciplines> = {}): ProfessionalWi
     type: "nutritionist",
     status: "active",
     disciplines: ["nutricionista"],
+    avatarPath: null,
+    avatarUrl: null,
     ...over,
   };
 }
@@ -130,6 +145,20 @@ beforeEach(() => {
   state.deactivatePending = false;
   deactivateMutate.mockClear();
   reactivateMutate.mockClear();
+});
+
+describe("Equipe atual — avatar", () => {
+  it("avatar_path → foto; sem path → iniciais", () => {
+    state.team = [
+      member({ fullName: "Neemias Costa", avatarPath: "pf-n/a.webp" }),
+      member({ professionalId: "pr-2", profileId: "pf-2", fullName: "Vanda Costa", avatarPath: null }),
+    ];
+    renderPage();
+    const photos = screen.getAllByTestId("profile-photo");
+    expect(photos[0]).toHaveAttribute("data-photo", "signed");
+    expect(photos[1]).toHaveAttribute("data-photo", "fallback");
+    expect(screen.getByText("VC")).toBeInTheDocument();
+  });
 });
 
 describe("linha da equipe — o badge de status", () => {

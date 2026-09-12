@@ -3,14 +3,16 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import { Bell, Building2, CalendarDays, CreditCard, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
 
+import { OwnAvatarControl } from "@/components/avatar/OwnAvatarControl";
 import { GoogleCalendarConnection } from "@/components/calendar/GoogleCalendarConnection";
 import { ClinicJoinCodeRow } from "@/components/settings/ClinicJoinCodeRow";
 import { PageHeader } from "@/components/PageHeader";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useClinic } from "@/hooks/useClinic";
+import { useIdentity } from "@/hooks/useIdentity";
+import { useMyProfileAvatar } from "@/hooks/useProfileAvatar";
 import { usePendingJoinRequestCount } from "@/hooks/useClinicJoin";
 import {
   useClinicProfessionals,
@@ -18,7 +20,7 @@ import {
   useCurrentProfessionalName,
 } from "@/hooks/useCurrentProfessional";
 import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
-import { initials, shortName } from "@/lib/domain/format";
+import { shortName } from "@/lib/domain/format";
 import { deriveRole, roleLabel as labelForRole } from "@/lib/domain/roles";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-context";
@@ -86,8 +88,10 @@ function SoonButton({ children }: { children: React.ReactNode }) {
 export function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { session } = useAuth();
+  const identity = useIdentity();
   const { data: professionalName } = useCurrentProfessionalName();
   const { data: professional } = useCurrentProfessional();
+  const myAvatar = useMyProfileAvatar(identity.actingProfileId);
   const { roleLabel } = useRole(); // roleLabel: só DISPLAY. Autoridade de admin vem do sinal real abaixo.
   const { isClinicAdmin } = useIsClinicAdmin(professional?.clinicId ?? null);
   const clinic = useClinic(professional?.clinicId ?? null);
@@ -122,14 +126,22 @@ export function SettingsPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <SectionCard icon={UserRound} title="Sua conta" description="Identidade do profissional logado.">
-          <div className="flex items-center gap-3 py-3">
-            <Avatar className="h-11 w-11">
-              <AvatarFallback>{initials(name)}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <p className="truncate font-medium text-foreground">{name}</p>
-              <p className="truncate text-sm text-muted-foreground">{email}</p>
-            </div>
+          <div className="py-3">
+            {identity.actingProfileId ? (
+              <OwnAvatarControl
+                profileId={identity.actingProfileId}
+                name={name}
+                avatarPath={myAvatar.data?.avatar_path ?? null}
+                legacyUrl={myAvatar.data?.avatar_url ?? null}
+                sizeClassName="h-16 w-16"
+              />
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="h-16 w-16 animate-pulse rounded-full bg-muted" aria-hidden />
+                <p className="truncate font-medium text-foreground">{name}</p>
+              </div>
+            )}
+            <p className="mt-2 truncate text-sm text-muted-foreground">{email}</p>
           </div>
           <SettingRow label="Nome de exibição" value={name} />
           <SettingRow label="Papel">

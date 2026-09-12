@@ -31,6 +31,8 @@ export interface PatientTeamMember {
   fullName: string | null;
   /** Vínculo de profissional EXTERNO convidado (is_external). */
   isExternal: boolean;
+  avatarPath: string | null;
+  avatarUrl: string | null;
   /** Texto livre no banco (sem CHECK). NULO conta como 'active' — ver isActiveLinkStatus. */
   status: string | null;
   /** Carimbo da última mudança de status — preenchido pelo SERVIDOR dentro da RPC. */
@@ -49,7 +51,7 @@ interface RawTeamRow {
   professionals: {
     id: string;
     type: ProfessionalType;
-    profile: { full_name: string | null } | null;
+    profile: { full_name: string | null; avatar_path: string | null; avatar_url: string | null } | null;
   } | null;
   changed_by_profile: { full_name: string | null } | null;
 }
@@ -60,7 +62,7 @@ interface RawTeamRow {
 // futuro segundo caminho para profiles.
 const TEAM_SELECT = `
   id, professional_id, is_external, status, status_changed_at, status_reason,
-  professionals ( id, type, profile:profiles!professionals_profile_id_fkey ( full_name ) ),
+  professionals ( id, type, profile:profiles!professionals_profile_id_fkey ( full_name, avatar_path, avatar_url ) ),
   changed_by_profile:profiles!professional_patient_links_status_changed_by_fkey ( full_name )
 `;
 
@@ -69,6 +71,8 @@ const toMember = (r: RawTeamRow): PatientTeamMember => ({
   professionalId: r.professional_id,
   type: r.professionals?.type ?? "other",
   fullName: r.professionals?.profile?.full_name ?? null,
+  avatarPath: r.professionals?.profile?.avatar_path ?? null,
+  avatarUrl: r.professionals?.profile?.avatar_url ?? null,
   isExternal: r.is_external ?? false,
   status: r.status,
   statusChangedAt: r.status_changed_at,

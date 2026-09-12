@@ -1,7 +1,7 @@
 import { useMemo, type DragEvent } from "react";
 import { Check, GripVertical, MoveRight } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,7 +11,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { initials } from "@/lib/domain/format";
 import { sortColumns, type JourneyColumn } from "@/lib/domain/journeyBoard";
 import { computeMilestones, pickRelevantMilestone } from "@/lib/domain/journeyMilestones";
 import { cn } from "@/lib/utils";
@@ -81,9 +80,12 @@ export function JourneyCard({
           className="mt-1 h-4 w-4 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground"
           aria-hidden
         />
-        <Avatar className="h-8 w-8 shrink-0">
-          <AvatarFallback className="text-xs">{initials(name)}</AvatarFallback>
-        </Avatar>
+        <ProfilePhoto
+          name={name}
+          avatarPath={patient.profile?.avatar_path}
+          legacyUrl={patient.profile?.avatar_url}
+          className="h-8 w-8 shrink-0"
+        />
         {/* Nome em até 2 linhas (não corta em 1 linha curta como antes); nome completo no title. */}
         <p
           className="line-clamp-2 min-w-0 flex-1 break-words pt-0.5 text-sm font-semibold leading-snug text-foreground"

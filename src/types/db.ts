@@ -31,6 +31,8 @@ export interface Profile {
   full_name: string;
   email: string | null;
   avatar_url: string | null;
+  /** Path canónico em profile-avatars. Ausente em bancos anteriores à AVATAR-01. */
+  avatar_path?: string | null;
   // active | pending — pending = profissional criado no 1o login sem match por e-mail
   // (sem professional/clinic; web mostra PendingAccess). Migration 20260708120000.
   status: string;
@@ -394,7 +396,7 @@ export interface PatientListItem {
   // corrente). A RLS já limita quais pacientes cada um enxerga — é o MESMO caminho de leitura, só
   // acrescido de uma coluna (sem novo acesso).
   birth_date: string | null;
-  profile: Pick<Profile, "full_name" | "email" | "avatar_url"> | null;
+  profile: Pick<Profile, "full_name" | "email" | "avatar_url" | "avatar_path"> | null;
   snapshot:
     | Pick<AdherenceSnapshot, "score" | "level" | "status" | "weekly_completion_rate" | "calculated_at">
     | null;

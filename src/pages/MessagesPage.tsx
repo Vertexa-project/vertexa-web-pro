@@ -10,7 +10,8 @@ import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/status/StatusBadge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ProfileAvatarUrlScope } from "@/components/avatar/ProfileAvatarUrlScope";
+import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -30,7 +31,7 @@ import { CHAT_ATTACHMENT_MIME, hasChatAttachment, validateChatAttachment } from 
 import { mentionFailureMessage } from "@/lib/domain/chatMention";
 import { indexById, quotedPreview, resolveQuote } from "@/lib/domain/chatReply";
 import { mentionableProfessionals, mentionsProfile, namesByProfileId } from "@/lib/domain/chatTeam";
-import { formatRelative, initials } from "@/lib/domain/format";
+import { formatRelative } from "@/lib/domain/format";
 import {
   STAFF_ACCESS_REVOKED_DESCRIPTION,
   STAFF_ACCESS_REVOKED_TITLE,
@@ -194,9 +195,17 @@ function Thread({ patient }: { patient: PatientListItem }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b px-5 py-3">
-        <p className="font-medium text-foreground">{patientName}</p>
-        <p className="text-xs text-muted-foreground">Conversa com o paciente</p>
+      <div className="flex items-center gap-3 border-b px-5 py-3">
+        <ProfilePhoto
+          name={patientName}
+          avatarPath={patient.profile?.avatar_path}
+          legacyUrl={patient.profile?.avatar_url}
+          className="h-9 w-9"
+        />
+        <div className="min-w-0">
+          <p className="font-medium text-foreground">{patientName}</p>
+          <p className="text-xs text-muted-foreground">Conversa com o paciente</p>
+        </div>
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-5">
@@ -477,6 +486,7 @@ export function MessagesPage() {
           }
         />
       ) : (
+        <ProfileAvatarUrlScope paths={(data ?? []).map((p) => p.profile?.avatar_path)}>
         <Card className="grid h-[32rem] grid-cols-1 overflow-hidden lg:grid-cols-[320px_1fr]">
           <div className="max-h-48 overflow-y-auto border-b lg:max-h-none lg:border-b-0 lg:border-r">
             {(data ?? []).map((p) => {
@@ -497,9 +507,12 @@ export function MessagesPage() {
                     p.id === selectedId && "bg-muted/60",
                   )}
                 >
-                  <Avatar>
-                    <AvatarFallback>{initials(name)}</AvatarFallback>
-                  </Avatar>
+                  <ProfilePhoto
+                    name={name}
+                    avatarPath={p.profile?.avatar_path}
+                    legacyUrl={p.profile?.avatar_url}
+                    className="h-9 w-9"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-foreground">{name}</p>
                     <div className="mt-0.5">
@@ -542,6 +555,7 @@ export function MessagesPage() {
             )}
           </div>
         </Card>
+        </ProfileAvatarUrlScope>
       )}
     </div>
   );

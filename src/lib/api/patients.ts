@@ -44,7 +44,7 @@ interface RawPatientListRow {
   current_weight: number | null;
   start_date: string | null;
   birth_date: string | null;
-  profile: Pick<Profile, "full_name" | "email" | "avatar_url"> | null;
+  profile: Pick<Profile, "full_name" | "email" | "avatar_url" | "avatar_path"> | null;
   adherence_snapshots: RawSnap[] | null;
   professional_patient_links: RawLink[] | null;
   activity_events: RawEvent[] | null;
@@ -86,7 +86,7 @@ export async function listPatients(): Promise<PatientListItem[]> {
     .from("patients")
     .select(
       `id, goal, current_weight, start_date, birth_date,
-       profile:profiles ( full_name, email, avatar_url ),
+       profile:profiles ( full_name, email, avatar_url, avatar_path ),
        adherence_snapshots ( score, level, status, weekly_completion_rate, calculated_at ),
        professional_patient_links ( status, professionals ( id, type, profile:profiles!professionals_profile_id_fkey ( full_name ) ) ),
        activity_events ( type, created_at ),
