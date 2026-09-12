@@ -33,3 +33,22 @@ export function parseAsaasAmountToCents(value: unknown): number | null {
   if (!Number.isSafeInteger(rounded)) return null;
   return rounded;
 }
+
+/**
+ * WP-ASAAS-05D — centavos inteiros → decimal Asaas sem divisão float ambígua.
+ * 39000 → 390. 146700 → 1467. Rejeita não-inteiro / negativo / unsafe.
+ */
+export function centsToAsaasAmount(cents: number): number {
+  const formatted = centsToAsaasAmountString(cents);
+  return Number(formatted);
+}
+
+/** Sempre duas casas: 24700 → "247.00". */
+export function centsToAsaasAmountString(cents: number): string {
+  if (!Number.isInteger(cents) || cents < 0 || !Number.isSafeInteger(cents)) {
+    throw new Error("invalid_cents");
+  }
+  const reais = Math.trunc(cents / 100);
+  const fraction = cents % 100;
+  return `${reais}.${String(fraction).padStart(2, "0")}`;
+}
