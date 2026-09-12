@@ -63,6 +63,19 @@ vi.mock("@/hooks/useDisciplines", () => ({
   }),
 }));
 vi.mock("@/lib/observability/sentry", () => ({ captureException: vi.fn() }));
+vi.mock("@/hooks/useProfileAvatar", () => ({
+  useSignedAvatarUrl: (path?: string | null) => ({
+    data: path ? `https://signed.test/${path}` : undefined,
+  }),
+  useProfileAvatarUrls: (paths: Array<string | null | undefined>) => ({
+    data: new Map(
+      paths.filter((p): p is string => Boolean(p)).map((p) => [p, `https://signed.test/${p}`]),
+    ),
+    isLoading: false,
+  }),
+  ProfileAvatarUrlScope: ({ children }: { children: React.ReactNode }) => children,
+  ProfileAvatarUrlContext: { Provider: ({ children }: { children: React.ReactNode }) => children },
+}));
 
 const { PatientTeamSection } = await import("./PatientTeamSection");
 
@@ -77,6 +90,8 @@ function teamMember(over: Partial<PatientTeamMember> = {}): PatientTeamMember {
     statusChangedAt: null,
     statusChangedByName: null,
     statusReason: null,
+    avatarPath: null,
+    avatarUrl: null,
     ...over,
   };
 }
@@ -211,6 +226,25 @@ describe("dialog de atribuição", () => {
     await user.click(screen.getByRole("button", { name: /carlos lima/i }));
     expect(screen.getByRole("button", { name: /^adicionar$/i })).toBeDisabled();
     expect(assignMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("Equipe da paciente — avatar", () => {
+  it("avatar_path → foto; sem path → iniciais", () => {
+    state.team = [
+      teamMember({ fullName: "Neemias Costa", avatarPath: "pf-n/a.webp" }),
+      teamMember({
+        linkId: "l2",
+        professionalId: "pr-v",
+        fullName: "Vanda Costa",
+        avatarPath: null,
+      }),
+    ];
+    renderSection();
+    const photos = screen.getAllByTestId("profile-photo");
+    expect(photos[0]).toHaveAttribute("data-photo", "signed");
+    expect(photos[1]).toHaveAttribute("data-photo", "fallback");
+    expect(screen.getByText("VC")).toBeInTheDocument();
   });
 });
 

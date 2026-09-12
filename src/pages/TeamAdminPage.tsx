@@ -12,6 +12,8 @@ import {
   X,
 } from "lucide-react";
 
+import { ProfileAvatarUrlScope } from "@/components/avatar/ProfileAvatarUrlScope";
+import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { AsyncSection } from "@/components/patient/AsyncSection";
 import { PageHeader } from "@/components/PageHeader";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -401,6 +403,7 @@ export function TeamAdminPage() {
           ) : null}
         </div>
 
+        <ProfileAvatarUrlScope paths={members.map((p) => p.avatarPath)}>
         <AsyncSection
           isLoading={team.isLoading}
           isError={team.isError}
@@ -437,9 +440,12 @@ export function TeamAdminPage() {
                 <Card key={p.professionalId}>
                   <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-3">
-                      <Avatar className="h-10 w-10 shrink-0">
-                        <AvatarFallback>{initials(p.fullName ?? "?")}</AvatarFallback>
-                      </Avatar>
+                      <ProfilePhoto
+                        name={p.fullName}
+                        avatarPath={p.avatarPath}
+                        legacyUrl={p.avatarUrl}
+                        className="h-10 w-10 shrink-0"
+                      />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="truncate font-medium text-foreground">
@@ -533,6 +539,7 @@ export function TeamAdminPage() {
             })}
           </div>
         </AsyncSection>
+        </ProfileAvatarUrlScope>
 
         <p className="text-xs text-muted-foreground">
           Para conceder ou remover disciplinas, use{" "}

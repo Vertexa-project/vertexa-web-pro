@@ -51,6 +51,7 @@ const state = vi.hoisted(() => ({
   roster: { data: [] as unknown[], isPending: false, isError: false },
   authors: { data: [] as unknown[], isPending: false, isError: false },
   messages: [] as unknown[],
+  patients: [] as PatientListItem[],
 }));
 
 vi.mock("@/hooks/useChat", () => ({
@@ -79,7 +80,20 @@ vi.mock("@/hooks/useDisciplines", () => ({
   }),
 }));
 vi.mock("@/hooks/usePatients", () => ({
-  useListPatients: () => ({ data: [patient()], isLoading: false, isError: false, refetch: vi.fn() }),
+  useListPatients: () => ({ data: state.patients, isLoading: false, isError: false, refetch: vi.fn() }),
+}));
+vi.mock("@/hooks/useProfileAvatar", () => ({
+  useSignedAvatarUrl: (path?: string | null) => ({
+    data: path ? `https://signed.test/${path}` : undefined,
+  }),
+  useProfileAvatarUrls: (paths: Array<string | null | undefined>) => ({
+    data: new Map(
+      paths.filter((p): p is string => Boolean(p)).map((p) => [p, `https://signed.test/${p}`]),
+    ),
+    isLoading: false,
+  }),
+  ProfileAvatarUrlScope: ({ children }: { children: React.ReactNode }) => children,
+  ProfileAvatarUrlContext: { Provider: ({ children }: { children: React.ReactNode }) => children },
 }));
 
 const { MessagesPage } = await import("./MessagesPage");
@@ -142,6 +156,7 @@ beforeEach(() => {
   state.roster = { data: [EU, ATIVA], isPending: false, isError: false };
   state.authors = { data: [EU, ATIVA, DESATIVADO], isPending: false, isError: false };
   state.messages = [message()];
+  state.patients = [patient()];
 });
 
 describe("MessagesPage — as duas chamadas", () => {
@@ -206,6 +221,26 @@ describe("MessagesPage — o seletor de @ e a bolha, no MESMO render", () => {
 
     // O nome dela aparece no cabeçalho da conversa E como autora da bolha.
     expect(screen.getAllByText("Marina Alves").length).toBeGreaterThan(1);
+  });
+});
+
+describe("MessagesPage — avatar da conversa", () => {
+  it("avatar_path → foto; sem path → iniciais", () => {
+    state.patients = [
+      {
+        ...patient(),
+        id: "pac-foto",
+        profile: { full_name: "Luana dos Santos Costa", email: null, avatar_url: null, avatar_path: "pf-lu/a.webp" },
+      },
+    ];
+    renderPage();
+    expect(screen.getAllByTestId("profile-photo")[0]).toHaveAttribute("data-photo", "signed");
+  });
+
+  it("sem avatar_path cai em iniciais", () => {
+    renderPage();
+    expect(screen.getAllByTestId("profile-photo")[0]).toHaveAttribute("data-photo", "fallback");
+    expect(screen.getAllByText("MA").length).toBeGreaterThan(0);
   });
 });
 

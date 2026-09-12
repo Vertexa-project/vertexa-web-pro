@@ -50,6 +50,8 @@ export interface ProfessionalWithDisciplines {
    * Opcional no tipo porque um build da web pode rodar contra um banco anterior à migration.
    */
   status?: string | null;
+  avatarPath?: string | null;
+  avatarUrl?: string | null;
   disciplines: string[];
 }
 
@@ -58,7 +60,7 @@ interface RawClinicRow {
   profile_id: string | null;
   type: ProfessionalType;
   status: string | null;
-  profile: { full_name: string | null } | null;
+  profile: { full_name: string | null; avatar_path: string | null; avatar_url: string | null } | null;
   professional_disciplines: { discipline: string }[] | null;
 }
 
@@ -77,7 +79,7 @@ export async function listClinicProfessionalDisciplines(
   const { data, error } = await supabase
     .from("professionals")
     .select(
-      "id, profile_id, type, status, profile:profiles!professionals_profile_id_fkey ( full_name ), professional_disciplines ( discipline )",
+      "id, profile_id, type, status, profile:profiles!professionals_profile_id_fkey ( full_name, avatar_path, avatar_url ), professional_disciplines ( discipline )",
     )
     .eq("clinic_id", clinicId);
   if (error) throw error;
@@ -85,6 +87,8 @@ export async function listClinicProfessionalDisciplines(
     professionalId: r.id,
     profileId: r.profile_id ?? null,
     fullName: r.profile?.full_name ?? null,
+    avatarPath: r.profile?.avatar_path ?? null,
+    avatarUrl: r.profile?.avatar_url ?? null,
     type: r.type,
     status: r.status ?? null,
     disciplines: (r.professional_disciplines ?? []).map((d) => d.discipline),

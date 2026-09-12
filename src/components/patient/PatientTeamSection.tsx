@@ -12,7 +12,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ProfileAvatarUrlScope } from "@/components/avatar/ProfileAvatarUrlScope";
+import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +37,7 @@ import {
   useReactivatePatientLink,
 } from "@/hooks/usePatientTeam";
 import type { PatientTeamMember } from "@/lib/api/patientTeam";
-import { formatDate, formatRelative, initials, professionalTypeLabel } from "@/lib/domain/format";
+import { formatDate, formatRelative, professionalTypeLabel } from "@/lib/domain/format";
 import {
   assignActionErrorMessage,
   canManagePatientTeam,
@@ -121,9 +122,12 @@ function MemberRow({
     <Card>
       <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar className="h-10 w-10 shrink-0">
-            <AvatarFallback>{initials(name)}</AvatarFallback>
-          </Avatar>
+          <ProfilePhoto
+            name={name}
+            avatarPath={member.avatarPath}
+            legacyUrl={member.avatarUrl}
+            className="h-9 w-9 shrink-0"
+          />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="truncate font-medium text-foreground" title={name}>
@@ -218,6 +222,10 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
     () => eligibleProfessionalsForAssign(clinicTeam.data ?? [], team.data ?? []),
     [clinicTeam.data, team.data],
   );
+  const avatarPaths = useMemo(
+    () => [...members.map((m) => m.avatarPath), ...eligible.map((p) => p.avatarPath)],
+    [members, eligible],
+  );
 
   const mutation = pending?.mode === "reactivate" ? reactivate : deactivate;
   const copy = pending ? ACTION_COPY[pending.mode] : null;
@@ -302,6 +310,7 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
   }
 
   return (
+    <ProfileAvatarUrlScope paths={avatarPaths}>
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center gap-2">
         <CardTitle>Equipe da paciente</CardTitle>
@@ -421,9 +430,12 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
                             : "border-border hover:bg-muted/50")
                         }
                       >
-                        <Avatar className="h-9 w-9 shrink-0">
-                          <AvatarFallback>{initials(name)}</AvatarFallback>
-                        </Avatar>
+                        <ProfilePhoto
+                          name={name}
+                          avatarPath={p.avatarPath}
+                          legacyUrl={p.avatarUrl}
+                          className="h-9 w-9 shrink-0"
+                        />
                         <div className="min-w-0">
                           <p className="truncate font-medium text-foreground">{name}</p>
                           <p className="text-xs text-muted-foreground">
@@ -488,5 +500,6 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
         </AlertDialogContent>
       </AlertDialog>
     </Card>
+    </ProfileAvatarUrlScope>
   );
 }

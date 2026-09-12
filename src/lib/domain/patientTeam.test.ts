@@ -27,6 +27,8 @@ function member(over: Partial<PatientTeamMember> = {}): PatientTeamMember {
     professionalId: "p1",
     type: "nutritionist",
     fullName: "Ana Prado",
+    avatarPath: null,
+    avatarUrl: null,
     isExternal: false,
     status: "active",
     statusChangedAt: null,

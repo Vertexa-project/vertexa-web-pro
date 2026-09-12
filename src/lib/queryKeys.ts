@@ -89,4 +89,7 @@ export const qk = {
   clinicOnboardingState: ["onboarding", "clinic"] as const,
   platformOnboardingSettings: ["platform", "onboardingSettings"] as const,
   platformClinicRequests: ["platform", "clinicRequests"] as const,
+  myProfileAvatar: (profileId: string) => ["profileAvatar", profileId] as const,
+  avatarSignedUrl: (path: string) => ["avatar", "signedUrl", path] as const,
+  avatarSignedUrlBatch: (fingerprint: string) => ["avatar", "signedUrlBatch", "profile-avatars", fingerprint] as const,
 };

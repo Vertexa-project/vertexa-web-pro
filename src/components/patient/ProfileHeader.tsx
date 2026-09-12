@@ -2,10 +2,10 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 
 import { StatusBadge } from "@/components/status/StatusBadge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { initials, professionalTypeLabel } from "@/lib/domain/format";
+import { professionalTypeLabel } from "@/lib/domain/format";
 import { statusLabel } from "@/lib/domain/vri";
 import { cn } from "@/lib/utils";
 import type { AdherenceSnapshot, PatientDetail } from "@/types/db";
@@ -41,9 +41,12 @@ export function ProfileHeader({ patient, snapshot }: ProfileHeaderProps) {
       <Card className="p-6">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16">
-              <AvatarFallback className="text-lg">{initials(name)}</AvatarFallback>
-            </Avatar>
+            <ProfilePhoto
+              name={name}
+              avatarPath={patient.profile?.avatar_path}
+              legacyUrl={patient.profile?.avatar_url}
+              className="h-16 w-16 text-lg"
+            />
             <div>
               <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">{name}</h1>
               {patient.goal ? <p className="text-sm text-muted-foreground">{patient.goal}</p> : null}

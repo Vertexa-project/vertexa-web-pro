@@ -1,9 +1,9 @@
 import { useNavigate } from "react-router-dom";
 import { CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun } from "lucide-react";
 
+import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { BrandMark } from "@/components/Brand";
 import { StaffNotificationsBell } from "@/components/notifications/StaffNotificationsBell";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,17 +16,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MobileNav } from "./MobileNav";
 import { useIdentity } from "@/hooks/useIdentity";
+import { useMyProfileAvatar } from "@/hooks/useProfileAvatar";
 import { useAuth } from "@/providers/auth-context";
 import { useRole } from "@/providers/role-context";
 import { useTheme } from "@/providers/theme-context";
-
-function getInitials(label: string): string {
-  const parts = label.trim().split(/\s+/);
-  if (parts.length >= 2 && parts[0] && parts[1]) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-  return label.split("@")[0].slice(0, 2).toUpperCase();
-}
 
 export function Topbar() {
   const navigate = useNavigate();
@@ -34,12 +27,12 @@ export function Topbar() {
   const { resolvedTheme, toggleTheme } = useTheme();
   const { roleLabel } = useRole();
   const identity = useIdentity();
+  const myAvatar = useMyProfileAvatar(identity.actingProfileId);
 
   const userName =
     identity.status === "active"
       ? identity.displayName ?? "Profissional"
       : session?.user?.email ?? "Profissional";
-  const initials = getInitials(userName);
 
   async function handleSignOut() {
     await signOut();
@@ -91,9 +84,11 @@ export function Topbar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="ml-1 gap-2 px-2" aria-label={`Conta · papel ${roleLabel}`}>
-              <Avatar>
-                <AvatarFallback>{initials}</AvatarFallback>
-              </Avatar>
+              <ProfilePhoto
+                name={userName}
+                avatarPath={myAvatar.data?.avatar_path ?? null}
+                legacyUrl={myAvatar.data?.avatar_url ?? null}
+              />
               <span className="hidden flex-col items-start leading-tight sm:flex">
                 <span className="max-w-[12rem] truncate text-sm font-medium">{userName}</span>
                 <span className="text-xs text-muted-foreground">{roleLabel}</span>
