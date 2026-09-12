@@ -1,6 +1,6 @@
 // WP-ASAAS-04 — A04-01..A04-10: conversão decimal->centavos segura (money.ts).
 import { describe, it, expect } from "vitest";
-import { parseAsaasAmountToCents } from "./money.ts";
+import { parseAsaasAmountToCents, centsToAsaasAmount, centsToAsaasAmountString } from "./money.ts";
 
 describe("parseAsaasAmountToCents", () => {
   it("A04-01: 10 -> 1000", () => {
@@ -51,5 +51,37 @@ describe("parseAsaasAmountToCents", () => {
 
   it("A04-10: valor absurdo fora de inteiro seguro -> null", () => {
     expect(parseAsaasAmountToCents(Number.MAX_SAFE_INTEGER)).toBeNull();
+  });
+});
+
+describe("centsToAsaasAmount", () => {
+  it("05D: 24700 → 247.00", () => {
+    expect(centsToAsaasAmountString(24700)).toBe("247.00");
+    expect(centsToAsaasAmount(24700)).toBe(247);
+  });
+
+  it("05D: 39000 → 390.00", () => {
+    expect(centsToAsaasAmountString(39000)).toBe("390.00");
+    expect(centsToAsaasAmount(39000)).toBe(390);
+  });
+
+  it("05D: 49700 → 497.00", () => {
+    expect(centsToAsaasAmountString(49700)).toBe("497.00");
+    expect(centsToAsaasAmount(49700)).toBe(497);
+  });
+
+  it("05D: 89000 → 890.00", () => {
+    expect(centsToAsaasAmountString(89000)).toBe("890.00");
+    expect(centsToAsaasAmount(89000)).toBe(890);
+  });
+
+  it("05D: 146700 → 1467.00", () => {
+    expect(centsToAsaasAmountString(146700)).toBe("1467.00");
+    expect(centsToAsaasAmount(146700)).toBe(1467);
+  });
+
+  it("05D: rejeita float/negativo", () => {
+    expect(() => centsToAsaasAmount(390.5)).toThrow("invalid_cents");
+    expect(() => centsToAsaasAmount(-1)).toThrow("invalid_cents");
   });
 });

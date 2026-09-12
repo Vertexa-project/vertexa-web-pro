@@ -25,3 +25,19 @@ export function subscriptionExternalReference(
 ): string {
   return `vtx:${environment}:${billingAccountId}:subscription:${scope}`;
 }
+
+/** Idempotency estável por contrato. Não usar chave aleatória em retry. */
+export function contractSubscriptionIdempotencyKey(
+  billingAccountId: string,
+  commercialContractId: string,
+): string {
+  return `${billingAccountId}:create_subscription:${PRIMARY_SUBSCRIPTION_SCOPE}:${commercialContractId}`;
+}
+
+export function contractSubscriptionExternalReference(
+  environment: AsaasEnvironment,
+  billingAccountId: string,
+  commercialContractId: string,
+): string {
+  return `vtx:${environment}:${billingAccountId}:subscription:${PRIMARY_SUBSCRIPTION_SCOPE}:${commercialContractId}`;
+}
