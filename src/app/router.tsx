@@ -13,6 +13,7 @@ import { ProtectedRoute } from "./ProtectedRoute";
 // Code-splitting por rota: cada página vira um chunk próprio (recharts/editores fora do bundle inicial).
 const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const AuthCallback = lazy(() => import("@/app/AuthCallback").then((m) => ({ default: m.AuthCallback })));
+const SignupPage = lazy(() => import("@/pages/SignupPage").then((m) => ({ default: m.SignupPage })));
 const ForgotPasswordPage = lazy(() =>
   import("@/pages/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })),
 );
@@ -80,6 +81,14 @@ export const router = createBrowserRouter(
           element: (
             <Suspense fallback={<LoadingState />}>
               <AuthCallback />
+            </Suspense>
+          ),
+        },
+        {
+          path: "/auth/signup",
+          element: (
+            <Suspense fallback={<LoadingState />}>
+              <SignupPage />
             </Suspense>
           ),
         },

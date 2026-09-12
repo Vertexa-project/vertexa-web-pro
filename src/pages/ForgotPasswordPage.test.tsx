@@ -30,7 +30,7 @@ function renderForgot() {
 
 beforeEach(() => {
   auth.requestPasswordReset.mockReset();
-  auth.requestPasswordReset.mockResolvedValue(undefined);
+  auth.requestPasswordReset.mockResolvedValue({ kind: "sent" });
 });
 
 describe("ForgotPasswordPage", () => {
@@ -56,6 +56,17 @@ describe("ForgotPasswordPage", () => {
     await user.click(screen.getByRole("button", { name: /enviar link de recuperação/i }));
     expect(auth.requestPasswordReset).toHaveBeenCalledTimes(1);
     expect(auth.requestPasswordReset).toHaveBeenCalledWith("pessoa@clinica.com");
+  });
+
+  it("rate limit mostra aviso amigável sem enumerar conta", async () => {
+    auth.requestPasswordReset.mockResolvedValue({ kind: "rate_limited" });
+    const user = userEvent.setup();
+    renderForgot();
+    await user.type(screen.getByLabelText(/e-mail/i), "pessoa@clinica.com");
+    await user.click(screen.getByRole("button", { name: /enviar link de recuperação/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/aguarde/i);
+    expect(screen.queryByText(/não encontramos/i)).not.toBeInTheDocument();
+    expect(auth.requestPasswordReset).toHaveBeenCalledTimes(1);
   });
 
   it("R5 — resposta visual é genérica (anti-enumeration)", async () => {

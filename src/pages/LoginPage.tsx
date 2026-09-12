@@ -6,6 +6,8 @@ import { Brand, BrandMark } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AUTH_RATE_LIMIT_MESSAGE, LOGIN_INVALID_CREDENTIALS_MESSAGE, isAuthRateLimitedError } from "@/lib/auth/authClientErrors";
+import { AUTH_SIGNUP_PATH } from "@/lib/auth/signup";
 import { useAuth } from "@/providers/auth-context";
 
 /** Logo "G" do Google (inline, sem asset externo). */
@@ -20,7 +22,6 @@ function GoogleGlyph() {
   );
 }
 
-// Estilo de botão-link acessível (foco visível) reutilizado nos links do form.
 const linkButton =
   "font-medium text-primary hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
@@ -33,7 +34,6 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   if (isPasswordRecovery) {
     return <Navigate to="/auth/update-password" replace />;
@@ -45,15 +45,14 @@ export function LoginPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (submitting) return;
     setError(null);
-    setNotice(null);
     setSubmitting(true);
     try {
       await signIn(email, password);
       navigate("/access", { replace: true });
-    } catch {
-      // Mensagem genérica — não vazar detalhes de auth.
-      setError("E-mail ou senha inválidos. Verifique seus dados e tente novamente.");
+    } catch (cause) {
+      setError(isAuthRateLimitedError(cause) ? AUTH_RATE_LIMIT_MESSAGE : LOGIN_INVALID_CREDENTIALS_MESSAGE);
     } finally {
       setSubmitting(false);
     }
@@ -61,24 +60,17 @@ export function LoginPage() {
 
   async function handleGoogle() {
     setError(null);
-    setNotice(null);
     setSubmitting(true);
     try {
-      await signInWithGoogle(); // redireciona para o Google (não retorna aqui em caso de sucesso)
+      await signInWithGoogle();
     } catch {
       setError("Não foi possível iniciar o login com Google. Tente novamente.");
       setSubmitting(false);
     }
   }
 
-  function showSoon(message: string) {
-    setError(null);
-    setNotice(message);
-  }
-
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
-      {/* Brand — gradiente laranja → preto */}
       <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-primary via-[hsl(20_90%_25%)] to-black p-12 text-white lg:flex">
         <div className="flex items-center gap-2.5">
           <BrandMark className="h-9 w-9" variant="onDark" />
@@ -94,7 +86,6 @@ export function LoginPage() {
         <p className="text-sm text-white/50">© {new Date().getFullYear()} VERTEXA</p>
       </div>
 
-      {/* Card de acesso */}
       <div className="flex items-center justify-center bg-background px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
@@ -103,27 +94,9 @@ export function LoginPage() {
           </div>
 
           <h2 className="font-display text-2xl font-bold tracking-tight">Acessar painel</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Entre com suas credenciais profissionais.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Entre com suas credenciais profissionais.</p>
 
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-8 w-full gap-2"
-            onClick={handleGoogle}
-            disabled={submitting}
-          >
-            <GoogleGlyph />
-            Entrar com Google
-          </Button>
-          <div className="my-6 flex items-center gap-3">
-            <span className="h-px flex-1 bg-border" />
-            <span className="text-xs text-muted-foreground">ou</span>
-            <span className="h-px flex-1 bg-border" />
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
               <Input
@@ -138,16 +111,7 @@ export function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Senha</Label>
-                <button
-                  type="button"
-                  className={`text-xs ${linkButton}`}
-                  onClick={() => navigate("/auth/forgot-password")}
-                >
-                  Esqueceu a senha?
-                </button>
-              </div>
+              <Label htmlFor="password">Senha</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -175,11 +139,6 @@ export function LoginPage() {
                 {error}
               </p>
             ) : null}
-            {notice ? (
-              <p className="text-sm text-info" role="status">
-                {notice}
-              </p>
-            ) : null}
 
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -187,14 +146,27 @@ export function LoginPage() {
             </Button>
           </form>
 
+          <p className="mt-3 text-center text-sm">
+            <button type="button" className={`text-sm ${linkButton}`} onClick={() => navigate("/auth/forgot-password")}>
+              Esqueci minha senha
+            </button>
+          </p>
+
+          <div className="my-6 flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">ou</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+
+          <Button type="button" variant="outline" className="w-full gap-2" onClick={handleGoogle} disabled={submitting}>
+            <GoogleGlyph />
+            Continuar com Google
+          </Button>
+
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            Não tem conta?{" "}
-            <button
-              type="button"
-              className={linkButton}
-              onClick={() => showSoon("Cadastro disponível em breve. Fale com o administrador da clínica.")}
-            >
-              Cadastre-se
+            Ainda não possui conta?{" "}
+            <button type="button" className={linkButton} onClick={() => navigate(AUTH_SIGNUP_PATH)}>
+              Criar conta
             </button>
           </p>
         </div>

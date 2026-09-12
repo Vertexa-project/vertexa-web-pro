@@ -3,8 +3,8 @@ export const PASSWORD_RESET_PATH = "/auth/update-password";
 export const PASSWORD_FORGOT_PATH = "/auth/forgot-password";
 export const AUTH_CALLBACK_PATH = "/auth/callback";
 
-/** Mínimo compatível com o default do GoTrue (`password_min_length` = 6). */
-export const PASSWORD_MIN_LENGTH = 6;
+/** Mínimo alinhado ao Auth Dashboard (password_min_length = 8). */
+export const PASSWORD_MIN_LENGTH = 8;
 
 export const PASSWORD_RESET_NOTICE =
   "Se houver uma conta vinculada a este e-mail, enviaremos as instruções para redefinir sua senha.";
