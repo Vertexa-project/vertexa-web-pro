@@ -54,6 +54,7 @@ export const qk = {
   pendingJoinRequestList: (clinicId: string) => ["joinRequests", "pendingList", clinicId] as const,
   // Sinal REAL "sou admin da clínica?" (RPC am_i_clinic_admin). null = clínica do logado (server-side).
   clinicAdmin: (clinicId: string | null) => ["clinicAdmin", clinicId ?? "self"] as const,
+  clinicBillingIdentity: (clinicId: string) => ["billingIdentity", clinicId] as const,
   // Trilha de auditoria de exportação (WP-REPORT B) — lista filtrada/paginada + profissionais p/ filtro.
   reportExports: (filters: unknown, page: number) => ["reportExports", filters, page] as const,
   clinicProfessionalProfiles: (clinicId: string) => ["clinicProfessionalProfiles", clinicId] as const,
