@@ -36,7 +36,7 @@ export function classifyAsaasEvent(eventType: string | null | undefined): Classi
       eventType: value,
       family: "pix_automatic_eligibility",
       recognized: true,
-      processingSupported: false,
+      processingSupported: true,
     };
   }
   if (AUTHORIZATION_EVENTS.has(value)) {
@@ -44,7 +44,7 @@ export function classifyAsaasEvent(eventType: string | null | undefined): Classi
       eventType: value,
       family: "pix_automatic_authorization",
       recognized: true,
-      processingSupported: false,
+      processingSupported: true,
     };
   }
   if (INSTRUCTION_EVENTS.has(value)) {
@@ -52,7 +52,7 @@ export function classifyAsaasEvent(eventType: string | null | undefined): Classi
       eventType: value,
       family: "pix_automatic_payment_instruction",
       recognized: true,
-      processingSupported: false,
+      processingSupported: true,
     };
   }
   if (value.startsWith("PAYMENT_")) {

@@ -3,46 +3,51 @@ import { describe, expect, it } from "vitest";
 import { classifyAsaasEvent } from "./events.ts";
 
 describe("classifyAsaasEvent", () => {
-  it("reconhece Pix Automático sem processar", () => {
+  it("reconhece Pix Automático e marca como processável", () => {
     expect(classifyAsaasEvent("PIX_AUTOMATIC_RECURRING_ELIGIBILITY_UPDATED")).toMatchObject({
       family: "pix_automatic_eligibility",
       recognized: true,
-      processingSupported: false,
+      processingSupported: true,
     });
     expect(classifyAsaasEvent("PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CREATED")).toMatchObject({
       family: "pix_automatic_authorization",
-      processingSupported: false,
+      processingSupported: true,
     });
     expect(classifyAsaasEvent("PIX_AUTOMATIC_RECURRING_AUTHORIZATION_ACTIVATED")).toMatchObject({
       family: "pix_automatic_authorization",
-      processingSupported: false,
+      processingSupported: true,
     });
     expect(classifyAsaasEvent("PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED")).toMatchObject({
       family: "pix_automatic_authorization",
-      processingSupported: false,
+      processingSupported: true,
     });
     expect(classifyAsaasEvent("PIX_AUTOMATIC_RECURRING_AUTHORIZATION_EXPIRED")).toMatchObject({
       family: "pix_automatic_authorization",
-      processingSupported: false,
+      processingSupported: true,
     });
     expect(classifyAsaasEvent("PIX_AUTOMATIC_RECURRING_AUTHORIZATION_REFUSED")).toMatchObject({
       family: "pix_automatic_authorization",
-      processingSupported: false,
+      processingSupported: true,
     });
     expect(classifyAsaasEvent("PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_CREATED")).toMatchObject({
       family: "pix_automatic_payment_instruction",
-      processingSupported: false,
+      processingSupported: true,
     });
     expect(classifyAsaasEvent("PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_SCHEDULED")).toMatchObject({
       family: "pix_automatic_payment_instruction",
-      processingSupported: false,
+      processingSupported: true,
     });
     expect(classifyAsaasEvent("PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED")).toMatchObject({
       family: "pix_automatic_payment_instruction",
-      processingSupported: false,
+      processingSupported: true,
     });
     expect(classifyAsaasEvent("PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_CANCELLED")).toMatchObject({
       family: "pix_automatic_payment_instruction",
+      processingSupported: true,
+    });
+    expect(classifyAsaasEvent("PIX_AUTOMATIC_SOMETHING_NEW")).toMatchObject({
+      family: "unrecognized",
+      recognized: false,
       processingSupported: false,
     });
   });

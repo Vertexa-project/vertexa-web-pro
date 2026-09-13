@@ -21,6 +21,7 @@ interface ClaimedEvent {
   external_resource_id: string | null;
   environment: string;
   attempts: number;
+  provider_facts?: Record<string, unknown> | null;
 }
 
 function makeEvent(overrides: Partial<ClaimedEvent> = {}): ClaimedEvent {
@@ -45,6 +46,10 @@ interface Cfg {
   applyError?: unknown;
   missing?: unknown;
   missingError?: unknown;
+  applyAuth?: unknown;
+  applyAuthError?: unknown;
+  applyEligibility?: unknown;
+  applyInstruction?: unknown;
 }
 
 function makeClient(cfg: Cfg) {
@@ -58,6 +63,12 @@ function makeClient(cfg: Cfg) {
         return { data: cfg.apply ?? null, error: cfg.applyError ?? null };
       case "handle_missing_payment_on_get":
         return { data: cfg.missing ?? null, error: cfg.missingError ?? null };
+      case "apply_billing_pix_automatic_authorization_event":
+        return { data: cfg.applyAuth ?? { outcome: "applied" }, error: cfg.applyAuthError ?? null };
+      case "apply_billing_pix_automatic_eligibility_event":
+        return { data: cfg.applyEligibility ?? { outcome: "applied" }, error: null };
+      case "apply_billing_pix_automatic_instruction_event":
+        return { data: cfg.applyInstruction ?? { outcome: "applied", financial_authority: "PAYMENT_EVENTS" }, error: null };
       case "ignore_billing_provider_event":
         return { data: { outcome: "ignored" }, error: null };
       case "fail_billing_provider_event":
@@ -252,6 +263,119 @@ describe("drainBillingEvents", () => {
     const fail = findCall(calls, "fail_billing_provider_event");
     expect(fail?.params.p_error_category).toBe("value_not_exact_cents");
     expect(fail?.params.p_retryable).toBe(false);
+    expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
+  });
+});
+
+describe("drainBillingEvents — Pix Automatic", () => {
+  function authEvent(overrides: Partial<ClaimedEvent> = {}): ClaimedEvent {
+    return makeEvent({
+      event_type: "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CREATED",
+      external_resource_type: "pix_automatic_authorization",
+      external_resource_id: "auth_1",
+      provider_facts: {
+        providerAuthorizationId: "auth_1",
+        providerStatus: "CREATED",
+        providerCustomerId: "cus_1",
+        providerContractId: "550e8400e29b41d4a716446655440000",
+      },
+      ...overrides,
+    });
+  }
+
+  it("CREATED GET success → apply authorization, not payment snapshot", async () => {
+    const { result, calls } = await run(
+      { events: [authEvent()], applyAuth: { outcome: "applied", commercial_mutated: false } },
+      async () =>
+        jsonResponse(200, {
+          id: "auth_1",
+          status: "CREATED",
+          customerId: "cus_1",
+          contractId: "550e8400e29b41d4a716446655440000",
+          value: 390,
+          unexpected: true,
+        }),
+    );
+    expect(result.processed).toBe(1);
+    expect(names(calls)).toContain("apply_billing_pix_automatic_authorization_event");
+    expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
+  });
+
+  it("unknown PIX_AUTOMATIC event → ignored unsupported, does not crash batch", async () => {
+    const { result, fetchSpy } = await run(
+      {
+        events: [
+          makeEvent({
+            event_type: "PIX_AUTOMATIC_SOMETHING_NEW",
+            external_resource_type: null,
+            external_resource_id: null,
+          }),
+          makeEvent(),
+        ],
+        resolve: { found: true, external_customer_id: "cus_1" },
+        apply: { outcome: "applied" },
+      },
+      async (url) => {
+        if (String(url).includes("/payments/")) {
+          return jsonResponse(200, {
+            id: "pay_1",
+            customer: "cus_1",
+            subscription: "sub_1",
+            status: "RECEIVED",
+            value: 10,
+          });
+        }
+        return jsonResponse(200, {});
+      },
+    );
+    expect(result.ignored).toBe(1);
+    expect(result.processed).toBe(1);
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("/payments/pay_1"))).toBe(true);
+  });
+
+  it("eligibility uses sanitized facts and never GETs a charge", async () => {
+    const { result, calls, fetchSpy } = await run(
+      {
+        events: [
+          makeEvent({
+            event_type: "PIX_AUTOMATIC_RECURRING_ELIGIBILITY_UPDATED",
+            external_resource_type: "pix_automatic_eligibility",
+            external_resource_id: "acc_1",
+            provider_facts: { eligibilityStatus: "ELIGIBLE", providerAccountId: "acc_1" },
+          }),
+        ],
+        applyEligibility: { outcome: "applied", entitlement_granted: false },
+      },
+      async () => jsonResponse(200, {}),
+    );
+    expect(result.processed).toBe(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(findCall(calls, "apply_billing_pix_automatic_eligibility_event")?.params.p_status).toBe("ELIGIBLE");
+  });
+
+  it("instruction GET success applies one row and keeps PAYMENT_* as financial authority", async () => {
+    const { result, calls } = await run(
+      {
+        events: [
+          makeEvent({
+            event_type: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_SCHEDULED",
+            external_resource_type: "pix_automatic_payment_instruction",
+            external_resource_id: "inst_1",
+          }),
+        ],
+        applyInstruction: { outcome: "applied", financial_authority: "PAYMENT_EVENTS" },
+      },
+      async () =>
+        jsonResponse(200, {
+          id: "inst_1",
+          status: "SCHEDULED",
+          dueDate: "2026-10-04",
+          payment: "pay_1",
+          authorization: { id: "auth_1" },
+        }),
+    );
+    expect(result.processed).toBe(1);
+    expect(findCall(calls, "apply_billing_pix_automatic_instruction_event")?.params.p_provider_payment_id).toBe("pay_1");
     expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
   });
 });
