@@ -1,4 +1,6 @@
 // WP-ASAAS-03 — outbound Vertexa -> Asaas (customer + subscription), Sandbox homologação.
+// WP-ASAAS-05E0D — execute_pix_automatic_authorization: só operationId já preparado.
+// Sem get_or_create_billing_account nesse action. Sem payload de browser.
 // Caller = Vertexa authenticated (verify_jwt=true). Nunca Asaas, nunca browser anônimo.
 //
 // Autorização desta WP (temporária, ver plano seção I / gate "AUTHORIZATION TEMPORÁRIA"):
@@ -21,6 +23,13 @@ import {
   type PaymentActionResult,
 } from "../_shared/asaas/payment.ts";
 import { PRIMARY_SUBSCRIPTION_SCOPE } from "../_shared/asaas/keys.ts";
+import {
+  EXECUTE_PIX_AUTOMATIC_ACTION,
+  PROBE_PIX_AUTOMATIC_READ_ACTION,
+  executePreparedPixAutomaticAuthorization,
+  parseExecutePixAutomaticRequest,
+  probePixAutomaticRead,
+} from "../_shared/asaas/pixAutomaticExecution.ts";
 
 // ── SANDBOX E2E FIXTURE (ASAAS-03A) — homologação técnica só. NUNCA preço/plano oficial. ──
 const CUSTOMER_FIXTURE: CustomerFixture = {
@@ -44,6 +53,7 @@ function jsonResponse(status: number, body: unknown): Response {
 interface RequestBody {
   action?: string;
   clinicId?: string;
+  operationId?: string;
 }
 
 interface BillingAccountResult {
@@ -82,6 +92,8 @@ Deno.serve(async (req: Request) => {
     "list_subscription_payments",
     "confirm_sandbox_payment",
     "check_webhook_receipt",
+    EXECUTE_PIX_AUTOMATIC_ACTION,
+    PROBE_PIX_AUTOMATIC_READ_ACTION,
   ];
   if (typeof body.action !== "string" || !validActions.includes(body.action)) {
     return jsonResponse(400, { error: "invalid_action" });
@@ -95,6 +107,28 @@ Deno.serve(async (req: Request) => {
   }
   if (!isAdmin) {
     return jsonResponse(403, { error: "forbidden" });
+  }
+
+  if (body.action === PROBE_PIX_AUTOMATIC_READ_ACTION) {
+    const probe = await probePixAutomaticRead({
+      configuredEnvironmentRaw: Deno.env.get("ASAAS_OUTBOUND_ENVIRONMENT"),
+      creds: credentials,
+    });
+    return jsonResponse(probe.status, probe.body);
+  }
+
+  if (body.action === EXECUTE_PIX_AUTOMATIC_ACTION) {
+    const parsed = parseExecutePixAutomaticRequest(body);
+    if (!parsed.ok) {
+      return jsonResponse(400, { error: parsed.error });
+    }
+    const executed = await executePreparedPixAutomaticAuthorization({
+      adminClient: supabaseAdmin(),
+      configuredEnvironmentRaw: Deno.env.get("ASAAS_OUTBOUND_ENVIRONMENT"),
+      operationId: parsed.operationId,
+      creds: credentials,
+    });
+    return jsonResponse(executed.status, executed.body);
   }
 
   const clinicId = typeof body.clinicId === "string" && body.clinicId.length > 0 ? body.clinicId : null;
