@@ -29,6 +29,9 @@ const MessagesPage = lazy(() => import("@/pages/MessagesPage").then((m) => ({ de
 const CampaignsPage = lazy(() => import("@/pages/CampaignsPage").then((m) => ({ default: m.CampaignsPage })));
 const RetentionPage = lazy(() => import("@/pages/RetentionPage").then((m) => ({ default: m.RetentionPage })));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const BillingProfilePage = lazy(() =>
+  import("@/pages/BillingProfilePage").then((m) => ({ default: m.BillingProfilePage })),
+);
 const DisciplinesAdminPage = lazy(() =>
   import("@/pages/DisciplinesAdminPage").then((m) => ({ default: m.DisciplinesAdminPage })),
 );
@@ -144,6 +147,7 @@ export const router = createBrowserRouter(
             { path: "campanhas", element: <CampaignsPage /> },
             { path: "retencao", element: <RetentionPage /> },
             { path: "configuracoes", element: <SettingsPage /> },
+            { path: "configuracoes/faturamento", element: <BillingProfilePage /> },
             { path: "configuracoes/equipe", element: <TeamAdminPage /> },
             { path: "configuracoes/disciplinas", element: <DisciplinesAdminPage /> },
             { path: "configuracoes/jornada", element: <JourneyColumnsAdminPage /> },

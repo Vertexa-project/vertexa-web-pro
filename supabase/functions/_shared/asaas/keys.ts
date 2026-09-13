@@ -41,3 +41,18 @@ export function contractSubscriptionExternalReference(
 ): string {
   return `vtx:${environment}:${billingAccountId}:subscription:${PRIMARY_SUBSCRIPTION_SCOPE}:${commercialContractId}`;
 }
+
+export function pixAutomaticAuthorizationIdempotencyKey(
+  billingAccountId: string,
+  commercialContractId: string,
+): string {
+  return `${billingAccountId}:create_pix_automatic_authorization:${PRIMARY_SUBSCRIPTION_SCOPE}:${commercialContractId}`;
+}
+
+export function pixAutomaticAuthorizationExternalReference(
+  environment: AsaasEnvironment,
+  billingAccountId: string,
+  commercialContractId: string,
+): string {
+  return `vtx:${environment}:${billingAccountId}:pix_automatic_authorization:${PRIMARY_SUBSCRIPTION_SCOPE}:${commercialContractId}`;
+}

@@ -246,11 +246,22 @@ export function SettingsPage() {
           </div>
         </SectionCard>
 
-        <SectionCard icon={CreditCard} title="Plano e assinatura" description="Cobrança é por clínica (B2B).">
+        <SectionCard
+          icon={CreditCard}
+          title="Assinatura e faturamento"
+          description="Cobrança é por clínica. Os dados fiscais ficam só com o administrador."
+        >
           <SettingRow label="Plano atual">
             <Badge tone="muted">Em breve</Badge>
           </SettingRow>
           <SettingRow label="Pacientes ativos" value="—" />
+          {isClinicAdmin ? (
+            <SettingRow label="Dados de faturamento">
+              <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/faturamento")}>
+                Gerenciar
+              </Button>
+            </SettingRow>
+          ) : null}
           <SettingRow label="Gerenciar assinatura">
             <SoonButton>Gerenciar</SoonButton>
           </SettingRow>
