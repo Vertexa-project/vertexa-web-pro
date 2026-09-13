@@ -13,8 +13,13 @@ import {
 } from "./client.ts";
 import { PIX_AUTOMATIC_AUTHORIZATIONS_PATH } from "./pixAutomatic.ts";
 import {
+  QR_UNAVAILABLE_CREATE_RESPONSE_NOT_AVAILABLE,
+  type PixAutomaticTransientQr,
+} from "./pixAutomatic.ts";
+import {
   ensurePixAutomaticAuthorization,
   type EnsurePixAutomaticAuthorizationInput,
+  type EnsurePixAutomaticAuthorizationResult,
 } from "./pixAutomaticAuthorization.ts";
 
 export const EXECUTE_PIX_AUTOMATIC_ACTION = "execute_pix_automatic_authorization";
@@ -94,18 +99,39 @@ export const SQL_LOADER_SUCCESS_KEYS = [
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+export type ExecutePixAutomaticSuccessBody = {
+  executed: true;
+  operationId: string;
+  providerAuthorizationId?: string;
+  providerStatus?: string;
+} & (
+  | { qrAvailable: true; immediateQrCode: PixAutomaticTransientQr }
+  | { qrAvailable: false; qrUnavailableReason: string }
+);
+
 export type ExecutionBridgeResult =
-  | {
-      ok: true;
-      status: number;
-      body: {
-        executed: true;
-        operationId: string;
-        providerAuthorizationId?: string;
-        providerStatus?: string;
-      };
-    }
+  | { ok: true; status: number; body: ExecutePixAutomaticSuccessBody }
   | { ok: false; status: number; body: { error: string } };
+
+export function toExecuteSuccessBody(
+  operationId: string,
+  result: EnsurePixAutomaticAuthorizationResult,
+): ExecutePixAutomaticSuccessBody {
+  const ids = {
+    executed: true as const,
+    operationId,
+    ...(result.providerAuthorizationId ? { providerAuthorizationId: result.providerAuthorizationId } : {}),
+    ...(result.providerStatus ? { providerStatus: result.providerStatus } : {}),
+  };
+  if (result.qrAvailable === true && result.immediateQrCode) {
+    return { ...ids, qrAvailable: true, immediateQrCode: result.immediateQrCode };
+  }
+  return {
+    ...ids,
+    qrAvailable: false,
+    qrUnavailableReason: result.qrUnavailableReason ?? QR_UNAVAILABLE_CREATE_RESPONSE_NOT_AVAILABLE,
+  };
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -337,12 +363,7 @@ export async function executePreparedPixAutomaticAuthorization(params: {
   return {
     ok: true,
     status: 200,
-    body: {
-      executed: true,
-      operationId: loaded.facts.operationId,
-      providerAuthorizationId: result.providerAuthorizationId,
-      providerStatus: result.providerStatus,
-    },
+    body: toExecuteSuccessBody(loaded.facts.operationId, result),
   };
 }
 

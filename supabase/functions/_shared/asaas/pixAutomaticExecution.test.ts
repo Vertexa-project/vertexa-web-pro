@@ -19,7 +19,9 @@ import {
   parsePreparedFacts,
   probePixAutomaticRead,
   toEnsureIntent,
+  toExecuteSuccessBody,
 } from "./pixAutomaticExecution.ts";
+import { parseAsaasDateTime } from "./pixAutomatic.ts";
 import { CRON_JOB_NAME } from "./cronDrain.ts";
 import { jsonResponse, makeAdminClient, readSentBody } from "./testHelpers.ts";
 
@@ -281,8 +283,15 @@ describe("executePreparedPixAutomaticAuthorization", () => {
         operationId,
         providerAuthorizationId: "auth_1",
         providerStatus: "CREATED",
+        qrAvailable: true,
+        immediateQrCode: {
+          payload: "00020126SECRET",
+          expirationDate: parseAsaasDateTime("2026-09-13 12:00:00"),
+        },
       },
     });
+    expect(JSON.stringify(out.body)).not.toContain("iVBORw0KGgo");
+    expect(JSON.stringify(out.body)).not.toContain("encodedImage");
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(String(fetchSpy.mock.calls[0][0])).toContain("/pix/automatic/authorizations");
     expect(fetchSpy.mock.calls[0][1]?.method).toBe("POST");
@@ -379,7 +388,13 @@ describe("executePreparedPixAutomaticAuthorization", () => {
       creds: { apiKey: "fake", baseUrl: "https://api-sandbox.asaas.test/v3" },
     });
     expect(first.ok).toBe(true);
+    if (first.ok) expect(first.body.qrAvailable).toBe(true);
     expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.body.qrAvailable).toBe(false);
+      expect(second.body.qrUnavailableReason).toBe("already_completed");
+      expect(JSON.stringify(second.body)).not.toContain("00020126");
+    }
     expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(1);
   });
 
@@ -494,6 +509,12 @@ describe("executePreparedPixAutomaticAuthorization", () => {
     });
     expect(first.body).toEqual({ error: "outcome_unknown_requires_reconciliation" });
     expect(retry.ok).toBe(true);
+    if (retry.ok) {
+      expect(retry.body.qrAvailable).toBe(false);
+      expect(retry.body.qrUnavailableReason).toBe("provider_create_response_not_available");
+      expect(retry.body.providerAuthorizationId).toBe("auth_1");
+      expect(JSON.stringify(retry.body)).not.toContain("00020126");
+    }
     expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(1);
   });
 
@@ -603,7 +624,11 @@ describe("executePreparedPixAutomaticAuthorization", () => {
       creds: { apiKey: "fake", baseUrl: "https://api-sandbox.asaas.test/v3" },
     });
     expect(out.ok).toBe(true);
-    if (out.ok) expect(out.body.providerAuthorizationId).toBe("auth_webhook");
+    if (out.ok) {
+      expect(out.body.providerAuthorizationId).toBe("auth_webhook");
+      expect(out.body.qrAvailable).toBe(false);
+      expect(out.body.qrUnavailableReason).toBe("already_completed");
+    }
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -706,6 +731,34 @@ describe("pixAutomaticExecution source contracts", () => {
     expect(accountIdx).toBeGreaterThan(execIdx);
     expect(src).toContain("if (!isAdmin)");
     expect(src).toContain("verify_jwt=true");
+    expect(src).toContain("executed.body");
+    expect(src).not.toMatch(/console\.(log|debug|info|error|warn)\(/);
+  });
+
+  it("QR payload is never logged or persisted in the execution adapter", () => {
+    const adapter = readFileSync(resolve(here, "./pixAutomaticAuthorization.ts"), "utf8");
+    const bridge = readFileSync(resolve(here, "./pixAutomaticExecution.ts"), "utf8");
+    const client = readFileSync(resolve(here, "./client.ts"), "utf8");
+    expect(adapter).not.toMatch(/console\.(log|debug|info|error|warn)\(/);
+    expect(bridge).not.toMatch(/console\.(log|debug|info|error|warn)\(/);
+    expect(client).not.toMatch(/console\.(log|debug|info|error|warn)\(/);
+    expect(adapter).toContain("p_conciliation_identifier: facts.conciliationIdentifier");
+    expect(adapter).toContain("p_qr_expires_at: facts.qrExpiresAt");
+    expect(adapter).not.toContain("p_payload");
+    expect(adapter).not.toContain("encodedImage");
+    expect(toExecuteSuccessBody(operationId, {
+      ok: true,
+      providerAuthorizationId: "auth_1",
+      handoffKind: "already_completed_without_qr",
+      qrAvailable: false,
+      qrUnavailableReason: "already_completed",
+    })).toEqual({
+      executed: true,
+      operationId,
+      providerAuthorizationId: "auth_1",
+      qrAvailable: false,
+      qrUnavailableReason: "already_completed",
+    });
   });
 
   it("financial cron and prepare do not invoke outbound HTTP", () => {

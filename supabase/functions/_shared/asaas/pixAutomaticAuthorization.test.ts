@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { ensurePixAutomaticAuthorization } from "./pixAutomaticAuthorization.ts";
 import type { AsaasCredentials, AsaasEnvironment } from "./client.ts";
+import { parseAsaasDateTime } from "./pixAutomatic.ts";
 import { jsonResponse, makeAdminClient, readSentBody } from "./testHelpers.ts";
 
 const creds: AsaasCredentials = {
@@ -81,6 +82,12 @@ describe("ensurePixAutomaticAuthorization", () => {
       ok: true,
       providerAuthorizationId: "auth_1",
       providerStatus: "CREATED",
+      handoffKind: "fresh_create_with_qr",
+      qrAvailable: true,
+      immediateQrCode: {
+        payload: "00020126SECRET",
+        expirationDate: parseAsaasDateTime("2026-09-13 12:00:00"),
+      },
     });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(fetchSpy.mock.calls[0][1]?.method).toBe("POST");
@@ -90,6 +97,50 @@ describe("ensurePixAutomaticAuthorization", () => {
     expect(body.frequency).toBe("MONTHLY");
     expect(calls[1].params.p_conciliation_identifier).toBe("ASAAS1");
     expect(JSON.stringify(calls[1].params)).not.toContain("00020126");
+    expect(JSON.stringify(calls[1].params)).not.toContain("iVBORw0KGgo");
+  });
+
+  it("fresh 200 with auth facts but missing payload completes safely — no fabricated QR, no second POST", async () => {
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(200, {
+        id: "auth_1",
+        status: "CREATED",
+        customerId: "cus_1",
+        contractId,
+        value: 390,
+        encodedImage: "iVBORw0KGgo",
+        immediateQrCode: { conciliationIdentifier: "ASAAS1", expirationDate: "2026-09-13 12:00:00" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient, calls } = makeAdminClient(async (name) => {
+      if (name === "reserve_billing_outbound_operation") {
+        return { data: { outcome: "reserved", operation_id: "op1" }, error: null };
+      }
+      if (name === "complete_billing_pix_automatic_authorization_operation") {
+        return {
+          data: { outcome: "completed", provider_authorization_id: "auth_1", provider_status: "CREATED" },
+          error: null,
+        };
+      }
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+    const result = await ensurePixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      environment,
+      creds,
+      intent: intent(),
+    });
+    expect(result).toEqual({
+      ok: true,
+      providerAuthorizationId: "auth_1",
+      providerStatus: "CREATED",
+      handoffKind: "fresh_create_qr_unavailable",
+      qrAvailable: false,
+      qrUnavailableReason: "provider_qr_payload_missing",
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(result)).not.toContain("iVBORw0KGgo");
     expect(JSON.stringify(calls[1].params)).not.toContain("iVBORw0KGgo");
   });
 
@@ -151,7 +202,11 @@ describe("ensurePixAutomaticAuthorization", () => {
       ok: true,
       providerAuthorizationId: "auth_1",
       providerStatus: "CREATED",
+      handoffKind: "reconciled_existing_without_qr",
+      qrAvailable: false,
+      qrUnavailableReason: "provider_create_response_not_available",
     });
+    expect(JSON.stringify(second)).not.toContain("00020126");
     const posts = fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST");
     expect(posts).toHaveLength(1);
   });
@@ -273,7 +328,13 @@ describe("ensurePixAutomaticAuthorization", () => {
       creds,
       intent: intent(),
     });
-    expect(result).toEqual({ ok: true, providerAuthorizationId: "auth_1" });
+    expect(result).toEqual({
+      ok: true,
+      providerAuthorizationId: "auth_1",
+      handoffKind: "already_completed_without_qr",
+      qrAvailable: false,
+      qrUnavailableReason: "already_completed",
+    });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

@@ -8,6 +8,7 @@ import {
   buildCreatePixAutomaticAuthorizationPayload,
   createPixAutomaticAuthorization,
   extractAuthorizationFacts,
+  extractTransientImmediateQr,
   extractInstructionFacts,
   findAuthorizationByContractId,
   getPixAutomaticAuthorization,
@@ -108,6 +109,31 @@ describe("extractAuthorizationFacts", () => {
     expect(JSON.stringify(result.facts)).not.toContain("00020126");
     expect(JSON.stringify(result.facts)).not.toContain("iVBORw0KGgo");
     expect(JSON.stringify(result.facts)).not.toContain("pixKey");
+  });
+
+  it("extracts official top-level copy/paste payload without encodedImage", () => {
+    const qr = extractTransientImmediateQr({
+      id: "auth_1",
+      payload: "00020126SYNTHETIC_VERTEXA_QA",
+      encodedImage: "iVBORw0KGgoAAA=",
+      immediateQrCode: { conciliationIdentifier: "ASAAS0001", expirationDate: "2026-09-13 12:00:00" },
+    });
+    expect(qr.ok).toBe(true);
+    if (!qr.ok) return;
+    expect(qr.qr.payload).toBe("00020126SYNTHETIC_VERTEXA_QA");
+    expect(qr.qr.expirationDate).toBeTruthy();
+    expect(JSON.stringify(qr.qr)).not.toContain("iVBORw0KGgo");
+    expect(JSON.stringify(qr.qr)).not.toContain("conciliationIdentifier");
+  });
+
+  it("fails closed when official payload is missing on a create-shaped object", () => {
+    expect(
+      extractTransientImmediateQr({
+        id: "auth_1",
+        encodedImage: "iVBORw0KGgoAAA=",
+        immediateQrCode: { expirationDate: "2026-09-13 12:00:00" },
+      }),
+    ).toEqual({ ok: false, reason: "provider_qr_payload_missing" });
   });
 
   it("rejects customer mismatch", () => {

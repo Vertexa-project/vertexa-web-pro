@@ -5,11 +5,17 @@ import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { isOutcomeUnknownCategory, type AsaasCredentials, type AsaasEnvironment } from "./client.ts";
 import { pixAutomaticAuthorizationIdempotencyKey } from "./keys.ts";
 import {
+  QR_UNAVAILABLE_ALREADY_COMPLETED,
+  QR_UNAVAILABLE_CREATE_RESPONSE_NOT_AVAILABLE,
+  QR_UNAVAILABLE_PAYLOAD_MISSING,
   createPixAutomaticAuthorization,
   extractAuthorizationFacts,
+  extractTransientImmediateQr,
   findAuthorizationByContractId,
   pixAutomaticProviderContractId,
   type PixAutomaticAuthorizationFacts,
+  type PixAutomaticQrHandoffKind,
+  type PixAutomaticTransientQr,
 } from "./pixAutomatic.ts";
 
 export interface EnsurePixAutomaticAuthorizationInput {
@@ -26,6 +32,10 @@ export interface EnsurePixAutomaticAuthorizationResult {
   providerAuthorizationId?: string;
   providerStatus?: string;
   errorCode?: string;
+  handoffKind?: PixAutomaticQrHandoffKind;
+  qrAvailable?: boolean;
+  qrUnavailableReason?: string;
+  immediateQrCode?: PixAutomaticTransientQr;
 }
 
 interface ReserveOutcome {
@@ -78,7 +88,13 @@ export async function ensurePixAutomaticAuthorization(params: {
   const reserve = reserveData as ReserveOutcome;
 
   if (reserve.outcome === "already_completed") {
-    return { ok: true, providerAuthorizationId: reserve.external_object_id ?? undefined };
+    return {
+      ok: true,
+      providerAuthorizationId: reserve.external_object_id ?? undefined,
+      handoffKind: "already_completed_without_qr",
+      qrAvailable: false,
+      qrUnavailableReason: QR_UNAVAILABLE_ALREADY_COMPLETED,
+    };
   }
 
   const operationId = reserve.operation_id;
@@ -105,7 +121,11 @@ export async function ensurePixAutomaticAuthorization(params: {
         await failOperation(adminClient, operationId, extracted.reason);
         return { ok: false, errorCode: extracted.reason };
       }
-      return await completeAuthorization(adminClient, operationId, extracted.facts);
+      return await completeAuthorization(adminClient, operationId, extracted.facts, {
+        kind: "reconciled_existing_without_qr",
+        qrAvailable: false,
+        qrUnavailableReason: QR_UNAVAILABLE_CREATE_RESPONSE_NOT_AVAILABLE,
+      });
     }
     // 0 resultados: só POST de novo se a tentativa anterior foi rejeição determinística.
     if (isOutcomeUnknownCategory(reserve.last_error_category)) {
@@ -147,13 +167,43 @@ export async function ensurePixAutomaticAuthorization(params: {
     return { ok: false, errorCode: "outcome_unknown_requires_reconciliation" };
   }
 
-  return await completeAuthorization(adminClient, operationId, extracted.facts);
+  const transientQr = extractTransientImmediateQr(createRes.data);
+  if (transientQr.ok) {
+    return await completeAuthorization(adminClient, operationId, extracted.facts, {
+      kind: "fresh_create_with_qr",
+      qrAvailable: true,
+      immediateQrCode: transientQr.qr,
+    });
+  }
+  return await completeAuthorization(adminClient, operationId, extracted.facts, {
+    kind: "fresh_create_qr_unavailable",
+    qrAvailable: false,
+    qrUnavailableReason: QR_UNAVAILABLE_PAYLOAD_MISSING,
+  });
 }
+
+type EnsureQrHandoff =
+  | {
+      kind: "fresh_create_with_qr";
+      qrAvailable: true;
+      immediateQrCode: PixAutomaticTransientQr;
+    }
+  | {
+      kind: "fresh_create_qr_unavailable";
+      qrAvailable: false;
+      qrUnavailableReason: typeof QR_UNAVAILABLE_PAYLOAD_MISSING;
+    }
+  | {
+      kind: "reconciled_existing_without_qr";
+      qrAvailable: false;
+      qrUnavailableReason: typeof QR_UNAVAILABLE_CREATE_RESPONSE_NOT_AVAILABLE;
+    };
 
 async function completeAuthorization(
   adminClient: SupabaseClient,
   operationId: string,
   facts: PixAutomaticAuthorizationFacts,
+  handoff: EnsureQrHandoff,
 ): Promise<EnsurePixAutomaticAuthorizationResult> {
   const { data, error } = await adminClient.rpc(
     "complete_billing_pix_automatic_authorization_operation",
@@ -177,6 +227,11 @@ async function completeAuthorization(
     ok: true,
     providerAuthorizationId: result.provider_authorization_id ?? facts.providerAuthorizationId,
     providerStatus: result.provider_status ?? facts.providerStatus,
+    handoffKind: handoff.kind,
+    qrAvailable: handoff.qrAvailable,
+    ...(handoff.qrAvailable
+      ? { immediateQrCode: handoff.immediateQrCode }
+      : { qrUnavailableReason: handoff.qrUnavailableReason }),
   };
 }
 
