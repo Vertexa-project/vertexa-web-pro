@@ -839,26 +839,28 @@ begin
 end $$;
 rollback;
 
--- T17: classificação de webhook — reconhecimento sem processamento
+-- T17: classificação de webhook — reconhecimento.
+-- processing_supported = false até 05E0A; true depois de 05E0B (tabela de instruções).
 begin;
 do $$
 declare
   r jsonb;
+  v_processed boolean := to_regclass('private.billing_pix_automatic_payment_instructions') is not null;
 begin
   r := private.billing_classify_asaas_event('PIX_AUTOMATIC_RECURRING_ELIGIBILITY_UPDATED');
   if r->>'family' is distinct from 'pix_automatic_eligibility'
      or (r->>'recognized')::boolean is not true
-     or (r->>'processing_supported')::boolean is not false then
+     or (r->>'processing_supported')::boolean is distinct from v_processed then
     raise exception 'ASAAS05E0A T17 FAIL: eligibility %', r;
   end if;
   r := private.billing_classify_asaas_event('PIX_AUTOMATIC_RECURRING_AUTHORIZATION_ACTIVATED');
   if r->>'family' is distinct from 'pix_automatic_authorization'
-     or (r->>'processing_supported')::boolean is not false then
+     or (r->>'processing_supported')::boolean is distinct from v_processed then
     raise exception 'ASAAS05E0A T17 FAIL: auth %', r;
   end if;
   r := private.billing_classify_asaas_event('PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_SCHEDULED');
   if r->>'family' is distinct from 'pix_automatic_payment_instruction'
-     or (r->>'processing_supported')::boolean is not false then
+     or (r->>'processing_supported')::boolean is distinct from v_processed then
     raise exception 'ASAAS05E0A T17 FAIL: instruction %', r;
   end if;
   r := private.billing_classify_asaas_event('PAYMENT_RECEIVED');

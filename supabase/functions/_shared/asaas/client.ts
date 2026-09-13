@@ -15,6 +15,11 @@ const BASE_URL: Record<AsaasEnvironment, string> = {
   production: "https://api.asaas.com/v3",
 };
 
+/** Base URL canônica do ambiente. Sem default para production. */
+export function asaasBaseUrl(environment: AsaasEnvironment): string {
+  return BASE_URL[environment];
+}
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 /** Lê e valida ASAAS_OUTBOUND_ENVIRONMENT. Fail-closed: ausente/inválido -> null. */

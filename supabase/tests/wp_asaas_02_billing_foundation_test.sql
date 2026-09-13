@@ -75,24 +75,33 @@ begin
      or has_table_privilege('anon', 'private.billing_outbound_operations', 'select') then
     raise exception 'ASAAS02 T4 FAIL: anon table priv';
   end if;
-  if has_function_privilege(
-       'authenticated',
-       'public.ingest_billing_provider_event(text,text,text,text,timestamptz,text,text,text)',
-       'execute'
+  if exists (
+       select 1
+         from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'ingest_billing_provider_event'
+          and has_function_privilege('authenticated', p.oid, 'execute')
      ) then
     raise exception 'ASAAS02 T18 FAIL: authenticated execute ingest';
   end if;
-  if has_function_privilege(
-       'anon',
-       'public.ingest_billing_provider_event(text,text,text,text,timestamptz,text,text,text)',
-       'execute'
+  if exists (
+       select 1
+         from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'ingest_billing_provider_event'
+          and has_function_privilege('anon', p.oid, 'execute')
      ) then
     raise exception 'ASAAS02 T18 FAIL: anon execute ingest';
   end if;
-  if not has_function_privilege(
-       'service_role',
-       'public.ingest_billing_provider_event(text,text,text,text,timestamptz,text,text,text)',
-       'execute'
+  if not exists (
+       select 1
+         from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'ingest_billing_provider_event'
+          and has_function_privilege('service_role', p.oid, 'execute')
      ) then
     raise exception 'ASAAS02 T18 FAIL: service_role sem execute ingest';
   end if;

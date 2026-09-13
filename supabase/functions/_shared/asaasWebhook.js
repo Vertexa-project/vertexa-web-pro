@@ -75,7 +75,99 @@ export function extractResource(event, body) {
       return { type: "payment", id: payment.id.trim() };
     }
   }
+  if (event === "PIX_AUTOMATIC_RECURRING_ELIGIBILITY_UPDATED") {
+    const account = body && typeof body === "object" ? body.account : null;
+    if (account && typeof account === "object" && typeof account.id === "string" && account.id.trim()) {
+      return { type: "pix_automatic_eligibility", id: account.id.trim() };
+    }
+  }
+  if (typeof event === "string" && event.startsWith("PIX_AUTOMATIC_RECURRING_AUTHORIZATION_")) {
+    const authorization = body && typeof body === "object" ? body.authorization : null;
+    if (
+      authorization &&
+      typeof authorization === "object" &&
+      typeof authorization.id === "string" &&
+      authorization.id.trim()
+    ) {
+      return { type: "pix_automatic_authorization", id: authorization.id.trim() };
+    }
+  }
+  if (typeof event === "string" && event.startsWith("PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_")) {
+    const instruction = body && typeof body === "object" ? body.paymentInstruction : null;
+    if (
+      instruction &&
+      typeof instruction === "object" &&
+      typeof instruction.id === "string" &&
+      instruction.id.trim()
+    ) {
+      return { type: "pix_automatic_payment_instruction", id: instruction.id.trim() };
+    }
+  }
   return { type: null, id: null };
+}
+
+function trimmed(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+/**
+ * Fatos sanitizados para o processador. Sem payload/encodedImage/pixKey/PII.
+ * Campos extras do provider são ignorados — nunca rejeitam o parse.
+ */
+export function sanitizeProviderFacts(event, body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const facts = {};
+
+  if (event === "PIX_AUTOMATIC_RECURRING_ELIGIBILITY_UPDATED") {
+    const status = trimmed(body.eligibility && body.eligibility.status);
+    const accountId = trimmed(body.account && body.account.id);
+    if (status === "ELIGIBLE" || status === "INELIGIBLE") facts.eligibilityStatus = status;
+    if (accountId) facts.providerAccountId = accountId;
+    return Object.keys(facts).length ? facts : null;
+  }
+
+  if (typeof event === "string" && event.startsWith("PIX_AUTOMATIC_RECURRING_AUTHORIZATION_")) {
+    const authorization = body.authorization;
+    if (!authorization || typeof authorization !== "object") return null;
+    const id = trimmed(authorization.id);
+    const status = trimmed(authorization.status);
+    const customerId = trimmed(authorization.customerId);
+    const contractId = trimmed(authorization.contractId);
+    if (id) facts.providerAuthorizationId = id;
+    if (status) facts.providerStatus = status;
+    if (customerId) facts.providerCustomerId = customerId;
+    if (contractId) facts.providerContractId = contractId;
+    if (typeof authorization.value === "number") facts.providerValue = authorization.value;
+    const qr = authorization.immediateQrCode;
+    if (qr && typeof qr === "object") {
+      const conciliation = trimmed(qr.conciliationIdentifier);
+      const expires = trimmed(qr.expirationDate);
+      if (conciliation) facts.conciliationIdentifier = conciliation;
+      if (expires) facts.qrExpiresAt = expires;
+    }
+    return Object.keys(facts).length ? facts : null;
+  }
+
+  if (typeof event === "string" && event.startsWith("PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_")) {
+    const instruction = body.paymentInstruction;
+    if (!instruction || typeof instruction !== "object") return null;
+    const id = trimmed(instruction.id);
+    const status = trimmed(instruction.status);
+    const dueDate = trimmed(instruction.dueDate);
+    const paymentId = trimmed(instruction.paymentId) || trimmed(instruction.payment);
+    const authorizationId =
+      instruction.authorization && typeof instruction.authorization === "object"
+        ? trimmed(instruction.authorization.id)
+        : "";
+    if (id) facts.providerInstructionId = id;
+    if (status) facts.instructionStatus = status;
+    if (dueDate) facts.dueDate = dueDate;
+    if (paymentId) facts.providerPaymentId = paymentId;
+    if (authorizationId) facts.providerAuthorizationId = authorizationId;
+    return Object.keys(facts).length ? facts : null;
+  }
+
+  return null;
 }
 
 function jsonResponse(status, body) {
@@ -132,6 +224,7 @@ export async function handleAsaasWebhook(req, ctx) {
   }
 
   const resource = extractResource(envelope.event, parsed);
+  const providerFacts = sanitizeProviderFacts(envelope.event, parsed);
   const payloadHash = await sha256Hex(raw);
   const result = await ctx.ingest({
     provider: "asaas",
@@ -142,6 +235,7 @@ export async function handleAsaasWebhook(req, ctx) {
     externalResourceType: resource.type,
     externalResourceId: resource.id,
     payloadHash,
+    providerFacts,
   });
 
   if (

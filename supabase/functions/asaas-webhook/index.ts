@@ -22,6 +22,7 @@ Deno.serve(async (req: Request) => {
         p_external_resource_type: row.externalResourceType,
         p_external_resource_id: row.externalResourceId,
         p_payload_hash: row.payloadHash,
+        p_provider_facts: row.providerFacts ?? null,
       });
       if (error || !data || typeof data !== "object") {
         return { outcome: "error" };

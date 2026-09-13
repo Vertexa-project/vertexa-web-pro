@@ -18,7 +18,16 @@
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { asaasFetch, type AsaasCredentials, type AsaasEnvironment } from "./client.ts";
+import { classifyAsaasEvent } from "./events.ts";
+import { parseAsaasAmountToCents } from "./money.ts";
 import { type AsaasPaymentFull, normalizePaymentSnapshot } from "./paymentSnapshot.ts";
+import {
+  extractAuthorizationFacts,
+  extractInstructionFacts,
+  getPixAutomaticAuthorization,
+  getPixAutomaticPaymentInstruction,
+  parseAsaasDateTime,
+} from "./pixAutomatic.ts";
 
 const PROVIDER = "asaas";
 
@@ -31,6 +40,7 @@ interface ClaimedEvent {
   external_resource_id: string | null;
   environment: string;
   attempts: number;
+  provider_facts?: Record<string, unknown> | null;
 }
 
 export interface EventOutcome {
@@ -80,6 +90,219 @@ async function failEvent(
   });
 }
 
+function asFacts(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function factString(facts: Record<string, unknown>, key: string): string {
+  const value = facts[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function applyAuthorizationFacts(
+  adminClient: SupabaseClient,
+  ev: ClaimedEvent,
+  environment: AsaasEnvironment,
+  facts: {
+    providerAuthorizationId: string;
+    providerStatus: string;
+    providerCustomerId: string;
+    providerContractId: string | null;
+    valueCents: number | null;
+    conciliationIdentifier: string | null;
+    qrExpiresAt: string | null;
+  },
+): Promise<{ outcome: string; reason?: string; amount_mismatch?: boolean }> {
+  const { data, error } = await adminClient.rpc("apply_billing_pix_automatic_authorization_event", {
+    p_event_id: ev.id,
+    p_environment: environment,
+    p_provider_authorization_id: facts.providerAuthorizationId,
+    p_provider_status: facts.providerStatus,
+    p_provider_customer_id: facts.providerCustomerId,
+    p_provider_contract_id: facts.providerContractId,
+    p_provider_value_cents: facts.valueCents,
+    p_event_created_at: ev.event_created_at,
+    p_conciliation_identifier: facts.conciliationIdentifier,
+    p_qr_expires_at: facts.qrExpiresAt,
+  });
+  if (error) return { outcome: "apply_error" };
+  return (data as { outcome?: string; reason?: string; amount_mismatch?: boolean }) ?? { outcome: "" };
+}
+
+async function processPixAutomaticAuthorization(
+  adminClient: SupabaseClient,
+  environment: AsaasEnvironment,
+  creds: AsaasCredentials,
+  ev: ClaimedEvent,
+  base: { event_id: string; external_event_id: string },
+): Promise<EventOutcome> {
+  const webhookFacts = asFacts(ev.provider_facts);
+  const authorizationId =
+    (ev.external_resource_id ?? "").trim() || factString(webhookFacts, "providerAuthorizationId");
+  if (!authorizationId) {
+    await ignoreEvent(adminClient, ev.id, "missing_resource_id");
+    return { ...base, outcome: "ignored", category: "missing_resource_id" };
+  }
+
+  const res = await getPixAutomaticAuthorization(creds, environment, authorizationId);
+  if (res.outcome === "unknown") {
+    await failEvent(adminClient, ev.id, res.category, true, backoffSeconds(ev.attempts));
+    return { ...base, outcome: "failed", category: res.category };
+  }
+  if (res.outcome === "success" && res.data) {
+    const getCustomer =
+      typeof (res.data as { customerId?: unknown }).customerId === "string"
+        ? (res.data as { customerId: string }).customerId
+        : "";
+    const extracted = extractAuthorizationFacts(res.data, { customerId: getCustomer || "missing" });
+    if (!extracted.ok) {
+      await failEvent(adminClient, ev.id, extracted.reason, false, 0);
+      return { ...base, outcome: "failed", category: extracted.reason };
+    }
+    const applied = await applyAuthorizationFacts(adminClient, ev, environment, extracted.facts);
+    return mapPixApplyOutcome(base, applied);
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    await failEvent(adminClient, ev.id, "provider_auth_error", false, 0);
+    return { ...base, outcome: "failed", category: "provider_auth_error" };
+  }
+  if (res.category === "rate_limited") {
+    await failEvent(adminClient, ev.id, "rate_limited", true, backoffSeconds(ev.attempts));
+    return { ...base, outcome: "failed", category: "rate_limited" };
+  }
+
+  const fallbackStatus = factString(webhookFacts, "providerStatus");
+  const fallbackCustomer = factString(webhookFacts, "providerCustomerId");
+  if (authorizationId && fallbackStatus && fallbackCustomer) {
+    const valueCents =
+      typeof webhookFacts.providerValue === "number"
+        ? parseAsaasAmountToCents(webhookFacts.providerValue)
+        : null;
+    const applied = await applyAuthorizationFacts(adminClient, ev, environment, {
+      providerAuthorizationId: authorizationId,
+      providerStatus: fallbackStatus,
+      providerCustomerId: fallbackCustomer,
+      providerContractId: factString(webhookFacts, "providerContractId") || null,
+      valueCents,
+      conciliationIdentifier: factString(webhookFacts, "conciliationIdentifier") || null,
+      qrExpiresAt: parseAsaasDateTime(webhookFacts.qrExpiresAt),
+    });
+    return mapPixApplyOutcome(base, applied);
+  }
+
+  await ignoreEvent(adminClient, ev.id, "ignored_unmanaged_resource");
+  return { ...base, outcome: "ignored", category: "ignored_unmanaged_resource" };
+}
+
+function mapPixApplyOutcome(
+  base: { event_id: string; external_event_id: string },
+  applied: { outcome: string; reason?: string; amount_mismatch?: boolean },
+): EventOutcome {
+  if (applied.outcome === "applied") {
+    return {
+      ...base,
+      outcome: "processed",
+      category: applied.amount_mismatch ? "PROVIDER_AMOUNT_MISMATCH" : "applied",
+    };
+  }
+  if (applied.outcome === "ignored") {
+    return { ...base, outcome: "ignored", category: applied.reason || "ignored" };
+  }
+  if (applied.outcome === "failed") {
+    return { ...base, outcome: "failed", category: applied.reason || "apply_failed" };
+  }
+  return { ...base, outcome: "skipped", category: applied.outcome || "not_claimed" };
+}
+
+async function processPixAutomaticEligibility(
+  adminClient: SupabaseClient,
+  environment: AsaasEnvironment,
+  ev: ClaimedEvent,
+  base: { event_id: string; external_event_id: string },
+): Promise<EventOutcome> {
+  const facts = asFacts(ev.provider_facts);
+  const status = factString(facts, "eligibilityStatus");
+  if (status !== "ELIGIBLE" && status !== "INELIGIBLE") {
+    await ignoreEvent(adminClient, ev.id, "invalid_provider_facts");
+    return { ...base, outcome: "ignored", category: "invalid_provider_facts" };
+  }
+  const { data, error } = await adminClient.rpc("apply_billing_pix_automatic_eligibility_event", {
+    p_event_id: ev.id,
+    p_environment: environment,
+    p_provider_account_id: factString(facts, "providerAccountId") || ev.external_resource_id,
+    p_status: status,
+    p_event_created_at: ev.event_created_at,
+  });
+  if (error) {
+    await failEvent(adminClient, ev.id, "apply_error", true, backoffSeconds(ev.attempts));
+    return { ...base, outcome: "failed", category: "apply_error" };
+  }
+  return mapPixApplyOutcome(base, (data as { outcome?: string; reason?: string }) ?? { outcome: "" });
+}
+
+async function processPixAutomaticInstruction(
+  adminClient: SupabaseClient,
+  environment: AsaasEnvironment,
+  creds: AsaasCredentials,
+  ev: ClaimedEvent,
+  base: { event_id: string; external_event_id: string },
+): Promise<EventOutcome> {
+  const webhookFacts = asFacts(ev.provider_facts);
+  const instructionId =
+    (ev.external_resource_id ?? "").trim() || factString(webhookFacts, "providerInstructionId");
+  if (!instructionId) {
+    await ignoreEvent(adminClient, ev.id, "missing_resource_id");
+    return { ...base, outcome: "ignored", category: "missing_resource_id" };
+  }
+
+  const res = await getPixAutomaticPaymentInstruction(creds, environment, instructionId);
+  let facts = null as ReturnType<typeof extractInstructionFacts> | null;
+  if (res.outcome === "unknown") {
+    await failEvent(adminClient, ev.id, res.category, true, backoffSeconds(ev.attempts));
+    return { ...base, outcome: "failed", category: res.category };
+  }
+  if (res.outcome === "success" && res.data) {
+    facts = extractInstructionFacts(res.data);
+  } else if (res.status === 401 || res.status === 403) {
+    await failEvent(adminClient, ev.id, "provider_auth_error", false, 0);
+    return { ...base, outcome: "failed", category: "provider_auth_error" };
+  } else if (res.category === "rate_limited") {
+    await failEvent(adminClient, ev.id, "rate_limited", true, backoffSeconds(ev.attempts));
+    return { ...base, outcome: "failed", category: "rate_limited" };
+  } else {
+    facts = extractInstructionFacts({
+      id: instructionId,
+      status: factString(webhookFacts, "instructionStatus"),
+      dueDate: factString(webhookFacts, "dueDate") || undefined,
+      paymentId: factString(webhookFacts, "providerPaymentId") || undefined,
+      authorization: { id: factString(webhookFacts, "providerAuthorizationId") },
+    });
+  }
+
+  if (!facts || !facts.ok) {
+    await ignoreEvent(adminClient, ev.id, facts?.ok === false ? facts.reason : "invalid_provider_facts");
+    return { ...base, outcome: "ignored", category: "invalid_provider_facts" };
+  }
+
+  const { data, error } = await adminClient.rpc("apply_billing_pix_automatic_instruction_event", {
+    p_event_id: ev.id,
+    p_environment: environment,
+    p_provider_instruction_id: facts.facts.providerInstructionId,
+    p_instruction_status: facts.facts.status,
+    p_provider_authorization_id: facts.facts.providerAuthorizationId,
+    p_provider_payment_id: facts.facts.providerPaymentId,
+    p_due_date: facts.facts.dueDate,
+    p_event_created_at: ev.event_created_at,
+  });
+  if (error) {
+    await failEvent(adminClient, ev.id, "apply_error", true, backoffSeconds(ev.attempts));
+    return { ...base, outcome: "failed", category: "apply_error" };
+  }
+  return mapPixApplyOutcome(base, (data as { outcome?: string; reason?: string }) ?? { outcome: "" });
+}
+
 /** Processa um único evento reivindicado. Nunca lança: sempre resolve num EventOutcome. */
 async function processOneEvent(
   adminClient: SupabaseClient,
@@ -89,8 +312,19 @@ async function processOneEvent(
 ): Promise<EventOutcome> {
   const base = { event_id: ev.id, external_event_id: ev.external_event_id };
   const eventType = (ev.event_type ?? "").trim();
+  const classified = classifyAsaasEvent(eventType);
 
-  // Só eventos de payment são materializáveis. Qualquer outro => ignore (unsupported_event).
+  if (classified.family === "pix_automatic_authorization") {
+    return processPixAutomaticAuthorization(adminClient, environment, creds, ev, base);
+  }
+  if (classified.family === "pix_automatic_eligibility") {
+    return processPixAutomaticEligibility(adminClient, environment, ev, base);
+  }
+  if (classified.family === "pix_automatic_payment_instruction") {
+    return processPixAutomaticInstruction(adminClient, environment, creds, ev, base);
+  }
+
+  // Só eventos de payment são materializáveis no pipeline financeiro. Qualquer outro => ignore.
   if (!eventType.startsWith("PAYMENT_") || ev.external_resource_type !== "payment") {
     await ignoreEvent(adminClient, ev.id, "unsupported_event");
     return { ...base, outcome: "ignored", category: "unsupported_event" };
