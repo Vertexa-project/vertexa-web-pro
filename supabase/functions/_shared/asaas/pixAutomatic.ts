@@ -104,6 +104,32 @@ export interface PixAutomaticAuthorizationFacts {
   qrExpiresAt: string | null;
 }
 
+/**
+ * OpenAPI oficial (docs.asaas.com, POST /v3/pix/automatic/authorizations 200 →
+ * PixReceiverAutomaticRecurringAuthorizationGetResponseDTO):
+ *   payload       = top-level "QR Code payload" (copia-e-cola)
+ *   encodedImage  = top-level base64 (não usado neste handoff)
+ *   immediateQrCode.expirationDate = data/hora da 1ª cobrança
+ *   immediateQrCode.conciliationIdentifier = só persistência
+ *
+ * Guia oficial (docs.asaas.com/docs/pix-automatico-implementacao):
+ * o `payload` deve ser apresentado ao pagador. Não persistir.
+ */
+export interface PixAutomaticTransientQr {
+  payload: string;
+  expirationDate: string | null;
+}
+
+export const QR_UNAVAILABLE_ALREADY_COMPLETED = "already_completed";
+export const QR_UNAVAILABLE_CREATE_RESPONSE_NOT_AVAILABLE = "provider_create_response_not_available";
+export const QR_UNAVAILABLE_PAYLOAD_MISSING = "provider_qr_payload_missing";
+
+export type PixAutomaticQrHandoffKind =
+  | "fresh_create_with_qr"
+  | "fresh_create_qr_unavailable"
+  | "reconciled_existing_without_qr"
+  | "already_completed_without_qr";
+
 export interface PixAutomaticInstructionFacts {
   providerInstructionId: string;
   status: "AWAITING_REQUEST" | "SCHEDULED" | "REFUSED" | "CANCELLED" | "DONE";
@@ -191,6 +217,28 @@ export function extractAuthorizationFacts(
       valueCents,
       conciliationIdentifier: qr ? asTrimmedString(qr.conciliationIdentifier) : null,
       qrExpiresAt: qr ? parseAsaasDateTime(qr.expirationDate) : null,
+    },
+  };
+}
+
+/**
+ * Handoff transitório só do POST 200 de create. GET/list NÃO é fonte de QR.
+ * Lê `payload` top-level (OpenAPI). Ignora encodedImage.
+ */
+export function extractTransientImmediateQr(
+  obj: unknown,
+): { ok: true; qr: PixAutomaticTransientQr } | { ok: false; reason: typeof QR_UNAVAILABLE_PAYLOAD_MISSING } {
+  const rec = asRecord(obj);
+  const payload = rec ? asTrimmedString(rec.payload) : null;
+  if (!payload) {
+    return { ok: false, reason: QR_UNAVAILABLE_PAYLOAD_MISSING };
+  }
+  const qr = rec ? asRecord(rec.immediateQrCode) : null;
+  return {
+    ok: true,
+    qr: {
+      payload,
+      expirationDate: qr ? parseAsaasDateTime(qr.expirationDate) : null,
     },
   };
 }

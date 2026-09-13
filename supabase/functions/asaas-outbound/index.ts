@@ -128,6 +128,7 @@ Deno.serve(async (req: Request) => {
       operationId: parsed.operationId,
       creds: credentials,
     });
+    // Body já é o contrato sanitizado (IDs + QR transitório). Sem raw provider.
     return jsonResponse(executed.status, executed.body);
   }
 
