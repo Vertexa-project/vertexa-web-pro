@@ -1,3 +1,3 @@
 # VERTEXA Web Pro — Pacote Claude Code
 
-build46
+build47
