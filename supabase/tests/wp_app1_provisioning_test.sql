@@ -1,8 +1,9 @@
 -- =====================================================================================
 -- WP-APP-1 · TESTES Nível 1 (login simulado via request.jwt.claims; ROLLBACK no fim).
 -- Prova que as RPCs SECURITY DEFINER são caminho de escrita CONTROLADO (não bypass):
---   • create_patient: só PROFISSIONAL/ADMIN da clínica-alvo cria; role SEMPRE 'patient';
---     auth_user_id NUNCA setado; vínculo AMARRADO ao chamador; clínica alheia -> proibido.
+--   • create_patient: só ADMIN/OWNER da clínica-alvo cria (ACCESS-PARTNER-01A);
+--     member/staff ⟂; role SEMPRE 'patient'; auth_user_id NUNCA setado;
+--     vínculo inicial só se o admin criador tiver professional row; clínica alheia -> proibido.
 --   • save_workout_plan / save_nutrition_plan: TRANSACIONAIS (DELETE+INSERT atômico — payload
 --     que falha no meio deixa o plano antigo INTACTO); só quem pode prescrever escreve.
 -- Ground truth lido com `reset role` (conexão de migração = BYPASSRLS) para inspecionar o
@@ -54,12 +55,21 @@ begin
   -- =====================================================================================
   execute 'set local role authenticated';
 
-  -- (+) P1 (staff de A) cria paciente em A, com anamnese
+  -- (-) P1 (member de A) NÃO cria paciente — ACCESS-PARTNER-01A
   perform set_config('request.jwt.claims',SUB_P1,true);
+  begin
+    perform public.create_patient(A,'Novo Paciente','novo@ex.com','1990-05-01','female',165,
+                                 'hipertrofia',80,75,'manual',80,22,'primeira consulta');
+    fails:=fails||'CP_P1_member_allowed ';
+  exception when insufficient_privilege then null;
+           when others then fails:=fails||'CP_P1_wrong_err '; end;
+
+  -- (+) AdminA cria paciente em A, com anamnese; sem professional row → sem vínculo automático
+  perform set_config('request.jwt.claims',SUB_ADMINA,true);
   begin
     select public.create_patient(A,'Novo Paciente','novo@ex.com','1990-05-01','female',165,
                                  'hipertrofia',80,75,'manual',80,22,'primeira consulta') into v_new;
-  exception when others then fails:=fails||'CP_P1_create_fail '; end;
+  exception when others then fails:=fails||'CP_admin_anamnese_fail '; end;
 
   execute 'reset role';  -- ground truth (bypass RLS)
   if v_new is null then fails:=fails||'CP_new_null ';
@@ -70,8 +80,8 @@ begin
     if v_auth is not null then fails:=fails||'CP_authuid_set '; end if;                        -- login liga depois
     select clinic_id into v_clinic from public.patients where id=v_new;
     if v_clinic is distinct from A then fails:=fails||'CP_wrong_clinic '; end if;
-    select professional_id into v_link_prof from public.professional_patient_links where patient_id=v_new limit 1;
-    if v_link_prof is distinct from E1 then fails:=fails||'CP_link_not_caller '; end if;       -- vínculo = chamador
+    if (select count(*) from public.professional_patient_links where patient_id=v_new)<>0
+      then fails:=fails||'CP_admin_anamnese_spurious_link '; end if;
     if (select count(*) from public.body_assessments where patient_id=v_new)<>1 then fails:=fails||'CP_anamnese_missing '; end if;
   end if;
 

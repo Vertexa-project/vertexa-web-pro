@@ -78,11 +78,12 @@ begin
   select count(*) into v_cnt from public.journey_milestone_ack where patient_id=x1 and milestone_key='day_30' and acked_by_profile_id=p1; if v_cnt<>1 then fails:=fails||'ack_row '; end if;
 
   -- ══ POSITIVO: create_patient COM p_start_date grava a data; SEM o parâmetro usa hoje ══
-  perform set_config('request.jwt.claims', json_build_object('sub',au_p1::text)::text, true); set local role authenticated;
+  -- ACCESS-PARTNER-01A: criação é admin-only (antes era staff/member).
+  perform set_config('request.jwt.claims', json_build_object('sub',au_adminA::text)::text, true); set local role authenticated;
     select public.create_patient(clA,'Paciente Antigo',null,null,null,null,null,null,null,null,null,null,null, date '2026-01-15') into v_new;
   reset role;
   select start_date into v_sd from public.patients where id=v_new; if v_sd<>date '2026-01-15' then fails:=fails||'cp_with_start('||coalesce(v_sd::text,'null')||') '; end if;
-  perform set_config('request.jwt.claims', json_build_object('sub',au_p1::text)::text, true); set local role authenticated;
+  perform set_config('request.jwt.claims', json_build_object('sub',au_adminA::text)::text, true); set local role authenticated;
     select public.create_patient(clA,'Paciente Novo') into v_new;
   reset role;
   select start_date into v_sd from public.patients where id=v_new; if v_sd<>current_date then fails:=fails||'cp_default_start '; end if;

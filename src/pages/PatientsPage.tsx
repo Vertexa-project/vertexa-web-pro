@@ -86,6 +86,7 @@ export function PatientsPage() {
   const { data: me } = useCurrentProfessional();
   const clinicId = me?.clinicId ?? null;
   const { isClinicAdmin } = useIsClinicAdmin(clinicId);
+  const canCreatePatients = isClinicAdmin;
   const withoutProfessional = usePatientsWithoutActiveProfessional(clinicId, isClinicAdmin);
   const withoutProfessionalIds = useMemo(
     () => patientsWithoutProfessionalIds(withoutProfessional.data),
@@ -204,10 +205,12 @@ export function PatientsPage() {
               <Download className="h-4 w-4" />
               Exportar em lote
             </Button>
-            <Button onClick={() => setCreateOpen(true)}>
-              <UserPlus className="h-4 w-4" />
-              Cadastrar novo paciente
-            </Button>
+            {canCreatePatients ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <UserPlus className="h-4 w-4" />
+                Cadastrar novo paciente
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -273,10 +276,12 @@ export function PatientsPage() {
           title="Nenhum paciente ainda"
           description="Cadastre seu primeiro paciente para começar o acompanhamento."
           action={
-            <Button onClick={() => setCreateOpen(true)}>
-              <UserPlus className="h-4 w-4" />
-              Cadastrar novo paciente
-            </Button>
+            canCreatePatients ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <UserPlus className="h-4 w-4" />
+                Cadastrar novo paciente
+              </Button>
+            ) : undefined
           }
         />
       ) : filtered.length === 0 ? (
@@ -297,11 +302,13 @@ export function PatientsPage() {
         </ProfileAvatarUrlScope>
       )}
 
-      <PatientCreateDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={(patientId) => navigate(`/pacientes/${patientId}`)}
-      />
+      {canCreatePatients ? (
+        <PatientCreateDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onCreated={(patientId) => navigate(`/pacientes/${patientId}`)}
+        />
+      ) : null}
     </div>
   );
 }

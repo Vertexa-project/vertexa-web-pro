@@ -160,10 +160,11 @@ export async function getPatient(id: string): Promise<PatientDetail> {
 // ===== Cadastro de paciente (Sessão 4) =====
 // O nome do paciente vive em profiles.full_name (não há name em patients). Sob a RLS real
 // (WP-05B), o client NÃO insere em `profiles` (nasce via trigger handle_new_user). O cadastro
-// roda pela RPC SECURITY DEFINER `create_patient` (WP-APP-1), que — de forma TRANSACIONAL e
-// com AUTORIZAÇÃO INTERNA (o chamador tem de ser profissional/admin da clínica-alvo) — encadeia
+// roda pela RPC SECURITY DEFINER `create_patient` (WP-APP-1 / ACCESS-PARTNER-01A), que — de
+// forma TRANSACIONAL e com AUTORIZAÇÃO INTERNA (o chamador tem de ser admin/owner da
+// clínica-alvo; member não cria) — encadeia
 // profiles(role='patient') -> patients -> professional_patient_links(vínculo amarrado ao
-// chamador) -> body_assessments(anamnese opcional). VÍNCULO COM A CONTA (WP-VINCULO-1): os dois
+// chamador, se ele tiver professional row) -> body_assessments(anamnese opcional). VÍNCULO COM A CONTA (WP-VINCULO-1): os dois
 // sentidos são cobertos, e por mecanismos diferentes. Cadastro ANTES do 1º login -> o paciente
 // entra sem auth_user_id e o handle_new_user liga por match-by-email no login. Conta JÁ existente
 // no momento do cadastro -> a própria create_patient procura em auth.users (mesma normalização
