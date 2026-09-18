@@ -6,6 +6,8 @@
 // Environment vem SÓ de ASAAS_WEBHOOK_ENVIRONMENT (exato: sandbox|production).
 // Sem fallback, sem lowercase, sem escolha via body/header.
 
+import { parseAsaasDateTime } from "./asaas/datetime.js";
+
 const PAYMENT_PREFIX = "PAYMENT_";
 
 export function parseWebhookEnvironment(raw) {
@@ -46,11 +48,7 @@ export async function sha256Hex(text) {
 }
 
 export function parseEventCreatedAt(raw) {
-  if (typeof raw !== "string" || raw.trim() === "") return null;
-  const normalized = raw.trim().includes("T") ? raw.trim() : raw.trim().replace(" ", "T");
-  const ms = Date.parse(normalized);
-  if (Number.isNaN(ms)) return null;
-  return new Date(ms).toISOString();
+  return parseAsaasDateTime(raw);
 }
 
 export function parseEnvelope(body) {

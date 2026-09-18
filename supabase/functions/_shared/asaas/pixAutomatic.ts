@@ -2,14 +2,17 @@
 // NÃO envia billingType=PIX. NÃO persiste payload/encodedImage. NÃO é entitlement.
 
 import { asaasFetch, hasStringId, type AsaasCredentials, type AsaasEnvironment } from "./client.ts";
+import { ASAAS_PROVIDER_TIMEZONE, parseAsaasDateTime } from "./datetime.js";
 import { centsToAsaasAmount, parseAsaasAmountToCents } from "./money.ts";
+
+export { parseAsaasDateTime } from "./datetime.js";
 
 export const PIX_AUTOMATIC_POLICY = {
   frequency: "MONTHLY",
   paymentCreationMode: "SUBSCRIPTION",
   retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS",
   finishDate: null,
-  timezone: "America/Sao_Paulo",
+  timezone: ASAAS_PROVIDER_TIMEZONE,
   description: "Vertexa - assinatura mensal",
   immediateQrExpirationSeconds: 3600,
 } as const;
@@ -109,7 +112,8 @@ export interface PixAutomaticAuthorizationFacts {
  * PixReceiverAutomaticRecurringAuthorizationGetResponseDTO):
  *   payload       = top-level "QR Code payload" (copia-e-cola)
  *   encodedImage  = top-level base64 (não usado neste handoff)
- *   immediateQrCode.expirationDate = data/hora da 1ª cobrança
+ *   immediateQrCode.expirationDate = naive Asaas datetime (America/Sao_Paulo)
+ *     → parseAsaasDateTime (canonical, runtime-TZ independent)
  *   immediateQrCode.conciliationIdentifier = só persistência
  *
  * Guia oficial (docs.asaas.com/docs/pix-automatico-implementacao):
@@ -147,15 +151,6 @@ function asTrimmedString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
-}
-
-export function parseAsaasDateTime(raw: unknown): string | null {
-  const text = asTrimmedString(raw);
-  if (!text) return null;
-  const normalized = text.includes("T") ? text : text.replace(" ", "T");
-  const ms = Date.parse(normalized);
-  if (Number.isNaN(ms)) return null;
-  return new Date(ms).toISOString();
 }
 
 function normalizeInstructionStatus(
