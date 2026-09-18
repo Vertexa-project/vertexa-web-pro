@@ -28,6 +28,8 @@ describe("pix automatic policy + payload", () => {
     expect(PIX_AUTOMATIC_POLICY.paymentCreationMode).toBe("SUBSCRIPTION");
     expect(PIX_AUTOMATIC_POLICY.retryPolicy).toBe("ALLOW_THREE_IN_SEVEN_DAYS");
     expect(PIX_AUTOMATIC_POLICY.finishDate).toBeNull();
+    expect(PIX_AUTOMATIC_POLICY.timezone).toBe("America/Sao_Paulo");
+    expect(PIX_AUTOMATIC_POLICY.immediateQrExpirationSeconds).toBe(3600);
     expect(JSON.stringify(PIX_AUTOMATIC_POLICY)).not.toContain("PIX");
     expect(PIX_AUTOMATIC_POLICY.description.length).toBeLessThanOrEqual(35);
     expect(ASAAS_PIX_AUTOMATIC_ELIGIBILITY_REQUIRED).toBe(
@@ -105,7 +107,7 @@ describe("extractAuthorizationFacts", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.facts.conciliationIdentifier).toBe("ASAAS0001");
-    expect(result.facts.qrExpiresAt).toBeTruthy();
+    expect(result.facts.qrExpiresAt).toBe("2026-09-13T15:00:00.000Z");
     expect(JSON.stringify(result.facts)).not.toContain("00020126");
     expect(JSON.stringify(result.facts)).not.toContain("iVBORw0KGgo");
     expect(JSON.stringify(result.facts)).not.toContain("pixKey");
@@ -121,7 +123,7 @@ describe("extractAuthorizationFacts", () => {
     expect(qr.ok).toBe(true);
     if (!qr.ok) return;
     expect(qr.qr.payload).toBe("00020126SYNTHETIC_VERTEXA_QA");
-    expect(qr.qr.expirationDate).toBeTruthy();
+    expect(qr.qr.expirationDate).toBe("2026-09-13T15:00:00.000Z");
     expect(JSON.stringify(qr.qr)).not.toContain("iVBORw0KGgo");
     expect(JSON.stringify(qr.qr)).not.toContain("conciliationIdentifier");
   });
