@@ -621,6 +621,15 @@ begin
   if v_n <> 1 then
     raise exception 'ASAAS05E0A T11 FAIL: ops=%', v_n;
   end if;
+  -- WP-ASAAS-05E1B-R1: repeated PREPARE must not steal the first-write token.
+  -- Expected to FAIL on live schema until insert-only PREPARE is applied.
+  if (
+    select o.attempt_count
+      from private.billing_outbound_operations o
+     where o.id = (r2->'authorization_operation'->>'operation_id')::uuid
+  ) is distinct from 1 then
+    raise exception 'ASAAS05E1B-R1 T11 FAIL: prepare stole attempt_count';
+  end if;
 end $$;
 rollback;
 

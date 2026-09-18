@@ -11,6 +11,7 @@
 // external_subscription_id, idempotency_key, external_reference, owner_profile_id,
 // subscription_scope. Todos server-derived.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { corsHeaders, preflight } from "../_shared/cors.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { supabaseUser } from "../_shared/supabaseUser.ts";
 import { readAsaasCredentials, resolveOutboundEnvironment } from "../_shared/asaas/client.ts";
@@ -47,7 +48,10 @@ const SUBSCRIPTION_FIXTURE: SubscriptionFixture = {
 };
 
 function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 }
 
 interface RequestBody {
@@ -62,6 +66,7 @@ interface BillingAccountResult {
 }
 
 Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return preflight();
   if (req.method !== "POST") {
     return jsonResponse(405, { error: "method_not_allowed" });
   }
