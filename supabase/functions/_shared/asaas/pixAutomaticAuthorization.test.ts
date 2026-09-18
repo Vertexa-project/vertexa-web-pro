@@ -1,5 +1,8 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { ensurePixAutomaticAuthorization } from "./pixAutomaticAuthorization.ts";
+import {
+  ensurePixAutomaticAuthorization,
+  isPixAutomaticPreparedFirstWrite,
+} from "./pixAutomaticAuthorization.ts";
 import type { AsaasCredentials, AsaasEnvironment } from "./client.ts";
 import { parseAsaasDateTime } from "./pixAutomatic.ts";
 import { jsonResponse, makeAdminClient, readSentBody } from "./testHelpers.ts";
@@ -26,6 +29,54 @@ function intent(externalCustomerId: string | null = "cus_1") {
     startDate: "2026-10-12",
   };
 }
+
+describe("isPixAutomaticPreparedFirstWrite", () => {
+  it("CASE 1 marker: in_flight_retry attempt=2 null last_error null external id", () => {
+    expect(
+      isPixAutomaticPreparedFirstWrite({
+        outcome: "in_flight_retry",
+        operation_id: "op1",
+        attempt_count: 2,
+        last_error_category: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("CASE 8/9/10/12: completed, reserved, claimed, or other types-equivalent states are not first-write", () => {
+    expect(
+      isPixAutomaticPreparedFirstWrite({
+        outcome: "already_completed",
+        operation_id: "op1",
+        attempt_count: 2,
+        external_object_id: "auth_1",
+      }),
+    ).toBe(false);
+    expect(
+      isPixAutomaticPreparedFirstWrite({
+        outcome: "reserved",
+        operation_id: "op1",
+        attempt_count: 1,
+      }),
+    ).toBe(false);
+    expect(
+      isPixAutomaticPreparedFirstWrite({
+        outcome: "claimed_for_retry",
+        operation_id: "op1",
+        attempt_count: 2,
+        last_error_category: "http_4xx",
+      }),
+    ).toBe(false);
+    expect(
+      isPixAutomaticPreparedFirstWrite({
+        outcome: "in_flight_retry",
+        operation_id: "op1",
+        attempt_count: 2,
+        last_error_category: null,
+        external_object_id: "auth_existing",
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("ensurePixAutomaticAuthorization", () => {
   it("does not POST without provider customer", async () => {
@@ -360,5 +411,197 @@ describe("ensurePixAutomaticAuthorization", () => {
       intent: intent(),
     });
     expect(String(fetchSpy.mock.calls[0][0])).toMatch(/^https:\/\/api\.asaas\.test\/v3\//);
+  });
+
+  it("CASE 1: prepared in_flight_retry attempt=2 last_error null wins first-write and POSTs once", async () => {
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(200, {
+        id: "auth_1",
+        status: "CREATED",
+        customerId: "cus_1",
+        contractId,
+        value: 390,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = makeAdminClient(async (name) => {
+      if (name === "reserve_billing_outbound_operation") {
+        return {
+          data: {
+            outcome: "in_flight_retry",
+            operation_id: "op1",
+            attempt_count: 2,
+            last_error_category: null,
+          },
+          error: null,
+        };
+      }
+      if (name === "complete_billing_pix_automatic_authorization_operation") {
+        return {
+          data: { outcome: "completed", provider_authorization_id: "auth_1", provider_status: "CREATED" },
+          error: null,
+        };
+      }
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+    const result = await ensurePixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      environment,
+      creds,
+      intent: intent(),
+    });
+    expect(result.ok).toBe(true);
+    expect(result.errorCode).toBeUndefined();
+    expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(1);
+  });
+
+  it("CASE 2/11 + PREPARE-stolen token: attempt=3 last_error null does not POST", async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(200, { data: [], hasMore: false }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = makeAdminClient(async (name) => {
+      if (name === "reserve_billing_outbound_operation") {
+        return {
+          data: {
+            outcome: "in_flight_retry",
+            operation_id: "op1",
+            attempt_count: 3,
+            last_error_category: null,
+          },
+          error: null,
+        };
+      }
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+    const result = await ensurePixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      environment,
+      creds,
+      intent: intent(),
+    });
+    expect(result).toEqual({ ok: false, errorCode: "BLOCKED_AMBIGUOUS_CREATE_RECONCILIATION" });
+    expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(0);
+  });
+
+  it("CASE 3: already reserved in-flight attempt>=2 with unknown last_error never POSTs", async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(200, { data: [], hasMore: false }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = makeAdminClient(async (name) => {
+      if (name === "reserve_billing_outbound_operation") {
+        return {
+          data: {
+            outcome: "in_flight_retry",
+            operation_id: "op1",
+            attempt_count: 2,
+            last_error_category: "network_timeout",
+          },
+          error: null,
+        };
+      }
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+    const result = await ensurePixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      environment,
+      creds,
+      intent: intent(),
+    });
+    expect(result.errorCode).toBe("BLOCKED_AMBIGUOUS_CREATE_RECONCILIATION");
+    expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(0);
+  });
+
+  it("CASE 5: lookup multiple matches blocks with zero CREATE", async () => {
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(200, {
+        data: [
+          { id: "auth_a", status: "CREATED", customerId: "cus_1", contractId },
+          { id: "auth_b", status: "CREATED", customerId: "cus_1", contractId },
+        ],
+        hasMore: false,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = makeAdminClient(async (name) => {
+      if (name === "reserve_billing_outbound_operation") {
+        return {
+          data: {
+            outcome: "claimed_for_retry",
+            operation_id: "op1",
+            attempt_count: 3,
+            last_error_category: "network_timeout",
+          },
+          error: null,
+        };
+      }
+      if (name === "fail_billing_outbound_operation") {
+        return { data: { outcome: "failed" }, error: null };
+      }
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+    const result = await ensurePixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      environment,
+      creds,
+      intent: intent(),
+    });
+    expect(result.errorCode).toBe("reconciliation_ambiguous_multiple");
+    expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(0);
+  });
+
+  it("CASE 9/10: pending row with external_object_id is not first-write", async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(200, { data: [], hasMore: false }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = makeAdminClient(async (name) => {
+      if (name === "reserve_billing_outbound_operation") {
+        return {
+          data: {
+            outcome: "in_flight_retry",
+            operation_id: "op1",
+            attempt_count: 2,
+            last_error_category: null,
+            external_object_id: "auth_existing",
+          },
+          error: null,
+        };
+      }
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+    const result = await ensurePixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      environment,
+      creds,
+      intent: intent(),
+    });
+    expect(result.ok).toBe(false);
+    expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(0);
+  });
+
+  it("CASE 7: deterministic 4xx on first-write fails the operation and does not retry POST", async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(400, { errors: [{ code: "invalid" }] }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = makeAdminClient(async (name) => {
+      if (name === "reserve_billing_outbound_operation") {
+        return {
+          data: {
+            outcome: "in_flight_retry",
+            operation_id: "op1",
+            attempt_count: 2,
+            last_error_category: null,
+          },
+          error: null,
+        };
+      }
+      if (name === "fail_billing_outbound_operation") {
+        return { data: { outcome: "failed" }, error: null };
+      }
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+    const result = await ensurePixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      environment,
+      creds,
+      intent: intent(),
+    });
+    expect(result).toEqual({ ok: false, errorCode: "provider_rejected" });
+    expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(1);
   });
 });

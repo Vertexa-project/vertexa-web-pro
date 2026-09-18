@@ -419,6 +419,38 @@ describe("executePreparedPixAutomaticAuthorization", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("prepared first-write (in_flight_retry attempt=2 last_error null) POSTs once", async () => {
+    const fetchSpy = mockCreateSuccess();
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = makeAdminClient(async (name) => {
+      if (name === LOAD_PREPARED_PIX_AUTOMATIC_RPC) return { data: prepared, error: null };
+      if (name === "reserve_billing_outbound_operation") {
+        return {
+          data: {
+            outcome: "in_flight_retry",
+            operation_id: operationId,
+            attempt_count: 2,
+            last_error_category: null,
+          },
+          error: null,
+        };
+      }
+      if (name === "complete_billing_pix_automatic_authorization_operation") {
+        return { data: { outcome: "completed", provider_authorization_id: "auth_1" }, error: null };
+      }
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+    const out = await executePreparedPixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      configuredEnvironmentRaw: "sandbox",
+      operationId,
+      creds: { apiKey: "fake", baseUrl: "https://api-sandbox.asaas.test/v3" },
+    });
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.body.executed).toBe(true);
+    expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(1);
+  });
+
   it("401/403 is provider auth failure without retry storm", async () => {
     const fetchSpy = vi.fn(async () => jsonResponse(401, { errors: [{ code: "invalid_access_token" }] }));
     vi.stubGlobal("fetch", fetchSpy);
@@ -723,10 +755,17 @@ describe("probePixAutomaticRead", () => {
 describe("pixAutomaticExecution source contracts", () => {
   it("asaas-outbound keeps platform_admin before pix execute and skips get_or_create", () => {
     const src = readFileSync(resolve(here, "../../asaas-outbound/index.ts"), "utf8");
+    const optionsIdx = src.indexOf('if (req.method === "OPTIONS")');
+    const preflightIdx = src.indexOf("return preflight()");
+    const postIdx = src.indexOf('if (req.method !== "POST")');
     const adminIdx = src.indexOf("am_i_platform_admin");
     const execIdx = src.indexOf("await executePreparedPixAutomaticAuthorization");
     const accountIdx = src.indexOf('rpc("get_or_create_billing_account"');
-    expect(adminIdx).toBeGreaterThan(0);
+    expect(src).toContain('from "../_shared/cors.ts"');
+    expect(optionsIdx).toBeGreaterThan(0);
+    expect(preflightIdx).toBeGreaterThan(optionsIdx);
+    expect(postIdx).toBeGreaterThan(preflightIdx);
+    expect(adminIdx).toBeGreaterThan(postIdx);
     expect(execIdx).toBeGreaterThan(adminIdx);
     expect(accountIdx).toBeGreaterThan(execIdx);
     expect(src).toContain("if (!isAdmin)");
@@ -781,5 +820,24 @@ describe("pixAutomaticExecution source contracts", () => {
     expect(fn).toContain("'http_blocked_reason', 'ASAAS_PIX_AUTOMATIC_ELIGIBILITY_REQUIRED'");
     expect(fn).not.toMatch(/pg_net|net\.http|http_post|http_get|asaasFetch/i);
     expect(fn).not.toContain("executePreparedPixAutomaticAuthorization");
+  });
+
+  it("R2 PREPARE migration is insert-only for pix auth and still reserves customer", () => {
+    const sql = readFileSync(
+      resolve(
+        here,
+        "../../../migrations/20260918132314_wp_asaas_05e1b_r2_prepare_insert_only.sql",
+      ),
+      "utf8",
+    );
+    const start = sql.indexOf("function private.billing_prepare_pix_automatic_authorization");
+    const end = sql.indexOf("comment on function private.billing_prepare_pix_automatic_authorization");
+    const fn = sql.slice(start, end);
+    expect(fn).toContain("v_auth_reserve := private.insert_prepared_pix_automatic_outbound_operation");
+    expect(fn).toContain("v_customer_reserve := private.reserve_billing_outbound_operation");
+    expect(fn).not.toContain("v_auth_reserve := private.reserve_billing_outbound_operation");
+    expect(fn).not.toMatch(/pg_net|net\.http|http_post|http_get|asaasFetch/i);
+    expect(sql).toContain("never increments attempt_count");
+    expect(sql).toContain("revoke all on function private.insert_prepared_pix_automatic_outbound_operation");
   });
 });

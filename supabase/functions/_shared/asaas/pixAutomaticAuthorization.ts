@@ -41,8 +41,34 @@ export interface EnsurePixAutomaticAuthorizationResult {
 interface ReserveOutcome {
   outcome: string;
   operation_id: string;
+  attempt_count?: number;
   external_object_id?: string | null;
   last_error_category?: string | null;
+}
+
+/**
+ * Pix Automatic first-write reservation (EXECUTE side).
+ *
+ * Safe ONLY if PREPARE is insert-only: pending/attempt=1/last_error NULL/no
+ * provider HTTP, and a repeated PREPARE must NOT increment attempt_count.
+ * Then the first EXECUTE unique_violation increments 1→2 under FOR UPDATE.
+ * That 1→2 transition is FIRST_WRITE_RESERVED. A concurrent loser sees
+ * attempt_count>=3 and must lookup-first / fail closed.
+ *
+ * Current live PREPARE uses insert-only SQL (WP-ASAAS-05E1B-R2). A second
+ * PREPARE returns the existing row and does not increment attempt_count.
+ * Do not deploy this helper without that migration.
+ *
+ * Not valid for create_customer/create_subscription: those INSERT reserved at
+ * attempt=1 and may already be mid-POST.
+ */
+export function isPixAutomaticPreparedFirstWrite(reserve: ReserveOutcome): boolean {
+  return (
+    reserve.outcome === "in_flight_retry" &&
+    reserve.attempt_count === 2 &&
+    (reserve.last_error_category == null || reserve.last_error_category === "") &&
+    (reserve.external_object_id == null || reserve.external_object_id === "")
+  );
 }
 
 export async function ensurePixAutomaticAuthorization(params: {
@@ -98,9 +124,10 @@ export async function ensurePixAutomaticAuthorization(params: {
   }
 
   const operationId = reserve.operation_id;
-  let canPost = reserve.outcome === "reserved";
+  const preparedFirstWrite = isPixAutomaticPreparedFirstWrite(reserve);
+  let canPost = reserve.outcome === "reserved" || preparedFirstWrite;
 
-  if (reserve.outcome === "in_flight_retry" || reserve.outcome === "claimed_for_retry") {
+  if ((reserve.outcome === "in_flight_retry" || reserve.outcome === "claimed_for_retry") && !preparedFirstWrite) {
     const lookup = await findAuthorizationByContractId(
       creds,
       environment,
