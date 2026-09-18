@@ -272,6 +272,33 @@ describe("pix automatic HTTP adapter (mocked)", () => {
     expect(String(fetchSpy.mock.calls[1][0])).not.toContain("contractId=");
   });
 
+  it("timeout lookup for authorization #2 cannot resolve historical #1 contractId", async () => {
+    const historicalContractId = "25ae57ddef5545d89456deb3c3d7dd29";
+    const attemptTwoContractId = "33333333333343338333333333333333";
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(200, {
+        data: [
+          {
+            id: "auth_historical",
+            status: "REFUSED",
+            customerId: "cus_1",
+            contractId: historicalContractId,
+          },
+        ],
+        hasMore: false,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    const found = await findAuthorizationByContractId(
+      creds,
+      "sandbox",
+      "cus_1",
+      attemptTwoContractId,
+    );
+    expect(found).toEqual({ outcome: "not_found" });
+    expect(fetchSpy.mock.calls.filter((c) => String(c[0]).includes("customerId="))).toHaveLength(1);
+  });
+
   it("scan cap with hasMore does not claim not_found", async () => {
     const fetchSpy = vi.fn(async () =>
       jsonResponse(200, {

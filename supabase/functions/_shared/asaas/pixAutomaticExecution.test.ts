@@ -29,7 +29,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const operationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const billingAccountId = "11111111-1111-1111-1111-111111111111";
 const commercialContractId = "550e8400-e29b-41d4-a716-446655440000";
+const authorizationId = "22222222-2222-4222-8222-222222222222";
 const contractId = "550e8400e29b41d4a716446655440000";
+const attemptKey = `${billingAccountId}:create_pix_automatic_authorization:${authorizationId}`;
+const attemptRef = `vtx:sandbox:${billingAccountId}:pix_automatic_authorization:${authorizationId}`;
 
 const prepared = {
   found: true,
@@ -48,9 +51,12 @@ const prepared = {
   contracted_price_cents: 39000,
   contracted_currency: "BRL",
   recurrence_start_date: "2026-10-12",
-  authorization_id: "22222222-2222-4222-8222-222222222222",
+  authorization_id: authorizationId,
   authorization_provider_status: "INTENT",
   provider_contract_id: contractId,
+  generation: 2,
+  idempotency_key: attemptKey,
+  external_reference: attemptRef,
 };
 
 afterEach(() => {
@@ -123,6 +129,10 @@ describe("pixAutomaticExecution request authority", () => {
     expect(intent).toEqual({
       billingAccountId,
       commercialContractId,
+      authorizationId: "",
+      providerContractId: "",
+      idempotencyKey: "",
+      externalReference: "",
       externalCustomerId: "cus_db",
       contractedPriceCents: 39000,
       startDate: "2026-10-12",
@@ -183,6 +193,10 @@ describe("pixAutomaticExecution SQL loader contract", () => {
     expect(toEnsureIntent(facts!)).toEqual({
       billingAccountId,
       commercialContractId,
+      authorizationId,
+      providerContractId: contractId,
+      idempotencyKey: attemptKey,
+      externalReference: attemptRef,
       externalCustomerId: "cus_1",
       contractedPriceCents: 39000,
       startDate: "2026-10-12",
@@ -839,5 +853,24 @@ describe("pixAutomaticExecution source contracts", () => {
     expect(fn).not.toMatch(/pg_net|net\.http|http_post|http_get|asaasFetch/i);
     expect(sql).toContain("never increments attempt_count");
     expect(sql).toContain("revoke all on function private.insert_prepared_pix_automatic_outbound_operation");
+  });
+
+  it("reissue migration is explicit, insert-only, and does not POST", () => {
+    const sql = readFileSync(
+      resolve(
+        here,
+        "../../../migrations/20260918213227_wp_asaas_05e1e_b_pix_automatic_reissue_state_model.sql",
+      ),
+      "utf8",
+    );
+    expect(sql).toContain("function private.billing_reissue_pix_automatic_authorization");
+    expect(sql).toContain("refused_requires_reissue");
+    expect(sql).toContain("BILLING_REISSUE_STATUS_UNSUPPORTED");
+    expect(sql).not.toContain("v_auth_reserve := private.reserve_billing_outbound_operation");
+    expect(sql).toContain("insert_prepared_pix_automatic_outbound_operation");
+    expect(sql).not.toMatch(/pg_net|net\.http|http_post|http_get|asaasFetch/i);
+    expect(sql).toContain("revoke all on function private.billing_reissue_pix_automatic_authorization");
+    expect(sql).toContain("and provider_contract_id = v_contract_id");
+    expect(sql).not.toMatch(/and provider_contract_id = v_contract_id\s+and is_primary/);
   });
 });

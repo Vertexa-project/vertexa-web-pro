@@ -14,7 +14,10 @@ const creds: AsaasCredentials = {
 const environment: AsaasEnvironment = "sandbox";
 const billingAccountId = "11111111-1111-1111-1111-111111111111";
 const commercialContractId = "550e8400-e29b-41d4-a716-446655440000";
+const authorizationId = "33333333-3333-4333-8333-333333333333";
 const contractId = "550e8400e29b41d4a716446655440000";
+const attemptKey = `${billingAccountId}:create_pix_automatic_authorization:${authorizationId}`;
+const attemptRef = `vtx:sandbox:${billingAccountId}:pix_automatic_authorization:${authorizationId}`;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -24,6 +27,10 @@ function intent(externalCustomerId: string | null = "cus_1") {
   return {
     billingAccountId,
     commercialContractId,
+    authorizationId,
+    providerContractId: contractId,
+    idempotencyKey: attemptKey,
+    externalReference: attemptRef,
     externalCustomerId,
     contractedPriceCents: 39000,
     startDate: "2026-10-12",
@@ -603,5 +610,79 @@ describe("ensurePixAutomaticAuthorization", () => {
     });
     expect(result).toEqual({ ok: false, errorCode: "provider_rejected" });
     expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(1);
+  });
+
+  it("refuses to execute without persisted authorization correlation", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient, calls } = makeAdminClient(async () => {
+      throw new Error("não deveria reservar sem correlação");
+    });
+    const result = await ensurePixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      environment,
+      creds,
+      intent: {
+        ...intent(),
+        providerContractId: "",
+        idempotencyKey: "",
+        externalReference: "",
+      },
+    });
+    expect(result).toEqual({ ok: false, errorCode: "authorization_correlation_missing" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("reserves the attempt key, not the historical primary commercial-contract key", async () => {
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(200, {
+        id: "auth_2",
+        status: "CREATED",
+        customerId: "cus_1",
+        contractId,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient, calls } = makeAdminClient(async (name) => {
+      if (name === "reserve_billing_outbound_operation") {
+        return { data: { outcome: "reserved", operation_id: "op2" }, error: null };
+      }
+      if (name === "complete_billing_pix_automatic_authorization_operation") {
+        return { data: { outcome: "completed", provider_authorization_id: "auth_2" }, error: null };
+      }
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+    await ensurePixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      environment,
+      creds,
+      intent: intent(),
+    });
+    expect(calls[0].params.p_idempotency_key).toBe(attemptKey);
+    expect(calls[0].params.p_external_reference).toBe(attemptRef);
+    expect(String(calls[0].params.p_idempotency_key)).not.toContain(":primary:");
+  });
+
+  it("completed historical key cannot be reused as authorization #2", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = makeAdminClient(async (name) => {
+      if (name === "reserve_billing_outbound_operation") {
+        return {
+          data: { outcome: "already_completed", operation_id: "op1", external_object_id: "auth_1" },
+          error: null,
+        };
+      }
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+    const result = await ensurePixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      environment,
+      creds,
+      intent: intent(),
+    });
+    expect(result.handoffKind).toBe("already_completed_without_qr");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

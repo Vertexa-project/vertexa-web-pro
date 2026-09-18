@@ -428,18 +428,20 @@ begin
 end $$;
 rollback;
 
--- T15: authorization/contract mapping mismatch fails closed
+-- T15: operation bound to another contract's authorization fails closed
 begin;
 do $$
 declare
-  s record;
+  a record;
+  b record;
   r jsonb;
 begin
-  select * into s from pg_temp.asaas05e0d1_seed('sandbox', 'cus_05e0d1');
-  update private.billing_pix_automatic_authorizations
-     set provider_contract_id = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-   where id = s.auth_id;
-  r := public.load_prepared_pix_automatic_authorization(s.operation_id);
+  select * into a from pg_temp.asaas05e0d1_seed('sandbox', 'cus_a');
+  select * into b from pg_temp.asaas05e0d1_seed('sandbox', 'cus_b');
+  update private.billing_outbound_operations
+     set pix_authorization_id = b.auth_id
+   where id = a.operation_id;
+  r := public.load_prepared_pix_automatic_authorization(a.operation_id);
   if r->>'found' is distinct from 'false'
      or r->>'error' is distinct from 'relationship_mismatch' then
     raise exception 'ASAAS05E0D1 T15 FAIL: %', r;
