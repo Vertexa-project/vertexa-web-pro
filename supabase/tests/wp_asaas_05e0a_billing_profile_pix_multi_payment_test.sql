@@ -524,8 +524,10 @@ begin
      or r->>'timezone' is distinct from 'America/Sao_Paulo'
      or (r->>'contracted_price_cents')::int is distinct from 39000
      or (r->>'asaas_amount')::numeric is distinct from 390.00
-     or r->>'provider_contract_id' is distinct from v_cid
+     or r->>'provider_contract_id' is distinct from replace((r->>'authorization_id'), '-', '')
+     or r->>'provider_contract_id' = v_cid
      or char_length(r->>'provider_contract_id') <> 32
+     or (r->>'generation')::int is distinct from 1
      or r->>'description' is distinct from 'Vertexa - assinatura mensal'
      or r->>'http_blocked_reason' is distinct from 'ASAAS_PIX_AUTOMATIC_ELIGIBILITY_REQUIRED'
      or (r->>'entitlement_granted')::boolean is not false

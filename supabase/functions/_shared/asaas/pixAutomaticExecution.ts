@@ -72,6 +72,9 @@ export type PreparedPixAutomaticFacts = {
   authorizationId?: string;
   authorizationProviderStatus?: string;
   providerContractId?: string;
+  generation?: number;
+  idempotencyKey?: string;
+  externalReference?: string;
 };
 
 /** Shape canônico do RPC 05E0D1. Chaves snake_case — autoridade SQL, não o mock TS. */
@@ -95,6 +98,9 @@ export const SQL_LOADER_SUCCESS_KEYS = [
   "authorization_id",
   "authorization_provider_status",
   "provider_contract_id",
+  "generation",
+  "idempotency_key",
+  "external_reference",
 ] as const;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -187,6 +193,10 @@ export function toEnsureIntent(facts: PreparedPixAutomaticFacts): EnsurePixAutom
   return {
     billingAccountId: facts.billingAccountId,
     commercialContractId: facts.commercialContractId,
+    authorizationId: facts.authorizationId ?? "",
+    providerContractId: facts.providerContractId ?? "",
+    idempotencyKey: facts.idempotencyKey ?? "",
+    externalReference: facts.externalReference ?? "",
     externalCustomerId: facts.externalCustomerId,
     contractedPriceCents: facts.contractedPriceCents,
     startDate: facts.recurrenceStartDate,
@@ -262,6 +272,12 @@ export function parsePreparedFacts(raw: unknown): PreparedPixAutomaticFacts | nu
       undefined,
     providerContractId:
       asTrimmedString(rec.provider_contract_id) ?? asTrimmedString(rec.providerContractId) ?? undefined,
+    generation: typeof rec.generation === "number" && Number.isInteger(rec.generation)
+      ? rec.generation
+      : undefined,
+    idempotencyKey: asTrimmedString(rec.idempotency_key) ?? asTrimmedString(rec.idempotencyKey) ?? undefined,
+    externalReference:
+      asTrimmedString(rec.external_reference) ?? asTrimmedString(rec.externalReference) ?? undefined,
   };
 }
 
@@ -291,6 +307,8 @@ export function mapEnsureError(errorCode: string | undefined): { status: number;
     case "reconciliation_lookup_failed":
     case "reconciliation_ambiguous_multiple":
       return { status: 409, error: errorCode };
+    case "authorization_correlation_missing":
+      return { status: 409, error: "authorization_correlation_missing" };
     case "reserve_failed":
     case "complete_failed":
     case "invalid_create_payload":

@@ -6,10 +6,14 @@ import {
   contractSubscriptionExternalReference,
   pixAutomaticAuthorizationIdempotencyKey,
   pixAutomaticAuthorizationExternalReference,
+  pixAutomaticAuthorizationAttemptIdempotencyKey,
+  pixAutomaticAuthorizationAttemptExternalReference,
 } from "./keys.ts";
 
 const ACCOUNT = "11111111-1111-1111-1111-111111111111";
 const CONTRACT = "22222222-2222-2222-2222-222222222222";
+const AUTHORIZATION = "33333333-3333-4333-8333-333333333333";
+const AUTHORIZATION_TWO = "44444444-4444-4444-8444-444444444444";
 
 describe("contract-scoped outbound keys", () => {
   it("customer key remains account-scoped (reuse)", () => {
@@ -51,6 +55,23 @@ describe("contract-scoped outbound keys", () => {
     );
     expect(pixAutomaticAuthorizationExternalReference("sandbox", ACCOUNT, CONTRACT)).not.toMatch(
       /@|cpf|cnpj|patient/i,
+    );
+  });
+
+  it("attempt key is distinct from the historical primary key and stable per authorization", () => {
+    const legacy = pixAutomaticAuthorizationIdempotencyKey(ACCOUNT, CONTRACT);
+    const attempt = pixAutomaticAuthorizationAttemptIdempotencyKey(ACCOUNT, AUTHORIZATION);
+    const other = pixAutomaticAuthorizationAttemptIdempotencyKey(ACCOUNT, AUTHORIZATION_TWO);
+    expect(attempt).toBe(`${ACCOUNT}:create_pix_automatic_authorization:${AUTHORIZATION}`);
+    expect(attempt).not.toBe(legacy);
+    expect(attempt).not.toContain(":primary:");
+    expect(attempt).not.toBe(other);
+    expect(pixAutomaticAuthorizationAttemptIdempotencyKey(ACCOUNT, AUTHORIZATION)).toBe(attempt);
+    expect(pixAutomaticAuthorizationAttemptExternalReference("sandbox", ACCOUNT, AUTHORIZATION)).toBe(
+      `vtx:sandbox:${ACCOUNT}:pix_automatic_authorization:${AUTHORIZATION}`,
+    );
+    expect(pixAutomaticAuthorizationAttemptExternalReference("sandbox", ACCOUNT, AUTHORIZATION)).not.toBe(
+      pixAutomaticAuthorizationExternalReference("sandbox", ACCOUNT, CONTRACT),
     );
   });
 });

@@ -3,7 +3,6 @@
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { isOutcomeUnknownCategory, type AsaasCredentials, type AsaasEnvironment } from "./client.ts";
-import { pixAutomaticAuthorizationIdempotencyKey } from "./keys.ts";
 import {
   QR_UNAVAILABLE_ALREADY_COMPLETED,
   QR_UNAVAILABLE_CREATE_RESPONSE_NOT_AVAILABLE,
@@ -12,7 +11,6 @@ import {
   extractAuthorizationFacts,
   extractTransientImmediateQr,
   findAuthorizationByContractId,
-  pixAutomaticProviderContractId,
   type PixAutomaticAuthorizationFacts,
   type PixAutomaticQrHandoffKind,
   type PixAutomaticTransientQr,
@@ -21,6 +19,10 @@ import {
 export interface EnsurePixAutomaticAuthorizationInput {
   billingAccountId: string;
   commercialContractId: string;
+  authorizationId: string;
+  providerContractId: string;
+  idempotencyKey: string;
+  externalReference: string;
   externalCustomerId: string | null;
   contractedPriceCents: number;
   startDate: string;
@@ -83,11 +85,18 @@ export async function ensurePixAutomaticAuthorization(params: {
     return { ok: false, errorCode: "customer_not_provisioned" };
   }
 
-  const contractId = pixAutomaticProviderContractId(intent.commercialContractId);
-  const idempotencyKey = pixAutomaticAuthorizationIdempotencyKey(
-    intent.billingAccountId,
-    intent.commercialContractId,
-  );
+  const authorizationId = intent.authorizationId.trim();
+  const contractId = intent.providerContractId.trim().toLowerCase();
+  const idempotencyKey = intent.idempotencyKey.trim();
+  const externalReference = intent.externalReference.trim();
+  if (
+    !authorizationId ||
+    !/^[0-9a-f]{32}$/.test(contractId) ||
+    !idempotencyKey ||
+    !externalReference
+  ) {
+    return { ok: false, errorCode: "authorization_correlation_missing" };
+  }
   const expected = { customerId: externalCustomerId, contractId };
 
   const { data: reserveData, error: reserveError } = await adminClient.rpc(
@@ -98,7 +107,7 @@ export async function ensurePixAutomaticAuthorization(params: {
       p_environment: environment,
       p_operation_type: "create_pix_automatic_authorization",
       p_idempotency_key: idempotencyKey,
-      p_external_reference: `vtx:${environment}:${intent.billingAccountId}:pix_automatic_authorization:primary:${intent.commercialContractId}`,
+      p_external_reference: externalReference,
     },
   );
   if (reserveError) {
