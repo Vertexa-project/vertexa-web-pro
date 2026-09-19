@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  listPlatformClinicPixAutomaticStatuses,
   listPlatformClinics,
   reactivatePlatformClinic,
+  reissuePixAutomaticAuthorization,
   suspendPlatformClinic,
 } from "@/lib/api/platformAdmin";
 import { qk } from "@/lib/queryKeys";
@@ -39,6 +41,31 @@ export function useReactivatePlatformClinic() {
       reactivatePlatformClinic(clinicId, reason),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.platformClinics });
+    },
+  });
+}
+
+export function usePlatformClinicPixStatuses(enabled: boolean) {
+  return useQuery({
+    queryKey: qk.platformClinicPixStatuses,
+    queryFn: listPlatformClinicPixAutomaticStatuses,
+    enabled,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function useReissuePixAutomaticAuthorization() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      clinicId: string;
+      commercialContractId: string;
+      authorizationId: string;
+      reason?: string;
+    }) => reissuePixAutomaticAuthorization(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.platformClinicPixStatuses });
     },
   });
 }

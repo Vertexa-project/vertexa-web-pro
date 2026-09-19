@@ -7,6 +7,10 @@ import {
   type ClinicCreationRequestStatus,
   type ClinicOnboardingMode,
 } from "@/lib/domain/clinicOnboarding";
+import type {
+  PlatformClinicPixAutomaticStatus,
+  ReissuePixAutomaticResult,
+} from "@/lib/domain/pixAutomaticReissue";
 
 export type ClinicLifecycleStatus = "active" | "suspended";
 
@@ -201,4 +205,72 @@ export async function reactivatePlatformClinic(
     p_reason: reason ?? null,
   });
   if (error) throw error;
+}
+
+interface PlatformClinicPixRow {
+  clinic_id: string;
+  commercial_contract_id: string;
+  authorization_id: string;
+  provider_status: string;
+  generation: number | string | null;
+}
+
+function mapPixStatus(row: PlatformClinicPixRow): PlatformClinicPixAutomaticStatus | null {
+  if (!row.clinic_id || !row.commercial_contract_id || !row.authorization_id || !row.provider_status) {
+    return null;
+  }
+  const generation = typeof row.generation === "number" ? row.generation : Number(row.generation);
+  if (!Number.isInteger(generation)) return null;
+  return {
+    clinicId: row.clinic_id,
+    commercialContractId: row.commercial_contract_id,
+    authorizationId: row.authorization_id,
+    providerStatus: row.provider_status,
+    generation,
+  };
+}
+
+/** Status sanitizado da autorização Pix Automático primary. PA-only. Sem provider ids. */
+export async function listPlatformClinicPixAutomaticStatuses(): Promise<
+  PlatformClinicPixAutomaticStatus[]
+> {
+  const { data, error } = await supabase.rpc("list_platform_clinic_pix_automatic_statuses");
+  if (error) throw error;
+  return ((data ?? []) as PlatformClinicPixRow[])
+    .map(mapPixStatus)
+    .filter((row): row is PlatformClinicPixAutomaticStatus => row !== null);
+}
+
+async function invokeOutbound<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("asaas-outbound", { body });
+  if (error) {
+    let code = "reissue_failed";
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.json === "function") {
+      try {
+        const payload = (await ctx.json()) as { error?: string };
+        if (payload?.error) code = String(payload.error);
+      } catch {
+        // corpo não-JSON: mantém o código genérico.
+      }
+    }
+    throw new Error(code);
+  }
+  return data as T;
+}
+
+/** REISSUE local via Edge autenticada. Sem environment, sem service_role, sem Asaas. */
+export async function reissuePixAutomaticAuthorization(input: {
+  clinicId: string;
+  commercialContractId: string;
+  authorizationId: string;
+  reason?: string;
+}): Promise<ReissuePixAutomaticResult> {
+  return invokeOutbound<ReissuePixAutomaticResult>({
+    action: "reissue_pix_automatic_authorization",
+    clinicId: input.clinicId,
+    commercialContractId: input.commercialContractId,
+    authorizationId: input.authorizationId,
+    ...(input.reason ? { reason: input.reason } : {}),
+  });
 }

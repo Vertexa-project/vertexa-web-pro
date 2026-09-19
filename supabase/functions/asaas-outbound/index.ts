@@ -1,5 +1,6 @@
 // WP-ASAAS-03 — outbound Vertexa -> Asaas (customer + subscription), Sandbox homologação.
 // WP-ASAAS-05E0D — execute_pix_automatic_authorization: só operationId já preparado.
+// WP-ASAAS-05G1 — reissue_pix_automatic_authorization: local REFUSED→INTENT. Zero HTTP Asaas.
 // Sem get_or_create_billing_account nesse action. Sem payload de browser.
 // Caller = Vertexa authenticated (verify_jwt=true). Nunca Asaas, nunca browser anônimo.
 //
@@ -31,6 +32,11 @@ import {
   parseExecutePixAutomaticRequest,
   probePixAutomaticRead,
 } from "../_shared/asaas/pixAutomaticExecution.ts";
+import {
+  REISSUE_PIX_AUTOMATIC_ACTION,
+  invokeReissuePixAutomaticAuthorization,
+  parseReissuePixAutomaticRequest,
+} from "../_shared/asaas/pixAutomaticReissue.ts";
 
 // ── SANDBOX E2E FIXTURE (ASAAS-03A) — homologação técnica só. NUNCA preço/plano oficial. ──
 const CUSTOMER_FIXTURE: CustomerFixture = {
@@ -57,7 +63,10 @@ function jsonResponse(status: number, body: unknown): Response {
 interface RequestBody {
   action?: string;
   clinicId?: string;
+  commercialContractId?: string;
+  authorizationId?: string;
   operationId?: string;
+  reason?: string;
 }
 
 interface BillingAccountResult {
@@ -69,18 +78,6 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "POST") {
     return jsonResponse(405, { error: "method_not_allowed" });
-  }
-
-  const environment = resolveOutboundEnvironment(Deno.env.get("ASAAS_OUTBOUND_ENVIRONMENT"));
-  if (!environment) {
-    return jsonResponse(503, { error: "asaas_outbound_not_configured" });
-  }
-
-  let credentials;
-  try {
-    credentials = readAsaasCredentials(environment);
-  } catch {
-    return jsonResponse(503, { error: "asaas_not_configured" });
   }
 
   let body: RequestBody;
@@ -99,6 +96,7 @@ Deno.serve(async (req: Request) => {
     "check_webhook_receipt",
     EXECUTE_PIX_AUTOMATIC_ACTION,
     PROBE_PIX_AUTOMATIC_READ_ACTION,
+    REISSUE_PIX_AUTOMATIC_ACTION,
   ];
   if (typeof body.action !== "string" || !validActions.includes(body.action)) {
     return jsonResponse(400, { error: "invalid_action" });
@@ -112,6 +110,27 @@ Deno.serve(async (req: Request) => {
   }
   if (!isAdmin) {
     return jsonResponse(403, { error: "forbidden" });
+  }
+
+  if (body.action === REISSUE_PIX_AUTOMATIC_ACTION) {
+    const parsed = parseReissuePixAutomaticRequest(body);
+    if (!parsed.ok) {
+      return jsonResponse(400, { error: parsed.error });
+    }
+    const reissued = await invokeReissuePixAutomaticAuthorization(userClient, parsed);
+    return jsonResponse(reissued.status, reissued.body);
+  }
+
+  const environment = resolveOutboundEnvironment(Deno.env.get("ASAAS_OUTBOUND_ENVIRONMENT"));
+  if (!environment) {
+    return jsonResponse(503, { error: "asaas_outbound_not_configured" });
+  }
+
+  let credentials;
+  try {
+    credentials = readAsaasCredentials(environment);
+  } catch {
+    return jsonResponse(503, { error: "asaas_not_configured" });
   }
 
   if (body.action === PROBE_PIX_AUTOMATIC_READ_ACTION) {

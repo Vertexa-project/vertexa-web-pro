@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
+import userEvent from "@testing-library/user-event";
+
 import type { PlatformClinic } from "@/lib/api/platformAdmin";
+import type { PlatformClinicPixAutomaticStatus } from "@/lib/domain/pixAutomaticReissue";
 
 const clinicsState = vi.hoisted(() => ({
   data: [] as PlatformClinic[] | undefined,
@@ -20,6 +23,12 @@ const lifecycleState = vi.hoisted(() => ({
   reactivate: vi.fn(),
   suspendPending: false,
   reactivatePending: false,
+}));
+
+const pixState = vi.hoisted(() => ({
+  data: [] as PlatformClinicPixAutomaticStatus[] | undefined,
+  reissue: vi.fn(),
+  reissuePending: false,
 }));
 
 vi.mock("@/hooks/useAmIPlatformAdmin", () => ({
@@ -49,6 +58,16 @@ vi.mock("@/hooks/usePlatformClinics", () => ({
     mutateAsync: lifecycleState.reactivate,
     isPending: lifecycleState.reactivatePending,
   }),
+  usePlatformClinicPixStatuses: () => ({
+    data: pixState.data,
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+  useReissuePixAutomaticAuthorization: () => ({
+    mutateAsync: pixState.reissue,
+    isPending: pixState.reissuePending,
+  }),
 }));
 
 const { PlatformClinicsPage } = await import("./PlatformClinicsPage");
@@ -77,6 +96,9 @@ beforeEach(() => {
   lifecycleState.reactivate.mockReset();
   lifecycleState.suspendPending = false;
   lifecycleState.reactivatePending = false;
+  pixState.data = [];
+  pixState.reissue.mockReset();
+  pixState.reissuePending = false;
 });
 
 describe("PlatformClinicsPage — catálogo V1", () => {
@@ -173,7 +195,11 @@ describe("PlatformClinicsPage — T14 fronteira de dados", () => {
     expect(api).toContain("set_clinic_onboarding_policy");
     expect(api).toContain("suspend_platform_clinic");
     expect(api).toContain("reactivate_platform_clinic");
+    expect(api).toContain("list_platform_clinic_pix_automatic_statuses");
+    expect(api).toContain("reissue_pix_automatic_authorization");
     expect(api).not.toContain(".from(");
+    expect(api).not.toContain("SERVICE_ROLE");
+    expect(api).not.toContain("ASAAS_API_KEY");
   });
 });
 
@@ -200,5 +226,91 @@ describe("PlatformClinicsPage — lifecycle S27/S28", () => {
     expect(screen.getByText(/inadimplencia de teste/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reativar" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Suspender" })).not.toBeInTheDocument();
+  });
+});
+
+function pix(over: Partial<PlatformClinicPixAutomaticStatus> = {}): PlatformClinicPixAutomaticStatus {
+  return {
+    clinicId: "clinic-SHOULD-NOT-APPEAR-abc",
+    commercialContractId: "contract-SHOULD-NOT-APPEAR",
+    authorizationId: "auth-SHOULD-NOT-APPEAR",
+    providerStatus: "REFUSED",
+    generation: 1,
+    ...over,
+  };
+}
+
+describe("PlatformClinicsPage — Pix Automático reissue", () => {
+  it("REFUSED mostra Recusado e o CTA", () => {
+    clinicsState.data = [clinic()];
+    pixState.data = [pix({ providerStatus: "REFUSED" })];
+    render(<PlatformClinicsPage />);
+    expect(screen.getByText("Recusado")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Gerar nova autorização" })).toBeInTheDocument();
+  });
+
+  it.each(["ACTIVE", "CREATED", "INTENT", "CANCELLED", "EXPIRED"] as const)(
+    "%s esconde o CTA",
+    (status) => {
+      clinicsState.data = [clinic()];
+      pixState.data = [pix({ providerStatus: status })];
+      render(<PlatformClinicsPage />);
+      expect(screen.queryByRole("button", { name: "Gerar nova autorização" })).not.toBeInTheDocument();
+    },
+  );
+
+  it("Cancelar no dialog não chama o backend", async () => {
+    const user = userEvent.setup();
+    clinicsState.data = [clinic()];
+    pixState.data = [pix()];
+    render(<PlatformClinicsPage />);
+    await user.click(screen.getByRole("button", { name: "Gerar nova autorização" }));
+    expect(screen.getByText("Gerar nova autorização Pix Automático?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(pixState.reissue).not.toHaveBeenCalled();
+  });
+
+  it("Confirmar chama o backend uma vez e não mostra ids de provider", async () => {
+    const user = userEvent.setup();
+    pixState.reissue.mockResolvedValue({
+      outcome: "reissued",
+      oldAuthorizationId: "old",
+      newAuthorizationId: "new",
+      oldGeneration: 1,
+      newGeneration: 2,
+      newStatus: "INTENT",
+      operationId: null,
+    });
+    clinicsState.data = [clinic()];
+    pixState.data = [pix()];
+    render(<PlatformClinicsPage />);
+    await user.click(screen.getByRole("button", { name: "Gerar nova autorização" }));
+    const confirms = screen.getAllByRole("button", { name: "Gerar nova autorização" });
+    await user.click(confirms[confirms.length - 1]);
+    expect(pixState.reissue).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("auth-SHOULD-NOT-APPEAR")).not.toBeInTheDocument();
+    expect(screen.queryByText("contract-SHOULD-NOT-APPEAR")).not.toBeInTheDocument();
+    expect(screen.queryByText(/cus_|pay_|asaas/i)).not.toBeInTheDocument();
+  });
+
+  it("desabilita o confirm enquanto pending", () => {
+    clinicsState.data = [clinic()];
+    pixState.data = [pix()];
+    pixState.reissuePending = true;
+    render(<PlatformClinicsPage />);
+    expect(screen.getByRole("button", { name: "Gerar nova autorização" })).toBeDisabled();
+  });
+
+  it("erro seguro não mostra SQL", async () => {
+    const user = userEvent.setup();
+    pixState.reissue.mockRejectedValue(new Error("authorization_not_refused"));
+    clinicsState.data = [clinic()];
+    pixState.data = [pix()];
+    render(<PlatformClinicsPage />);
+    await user.click(screen.getByRole("button", { name: "Gerar nova autorização" }));
+    const confirms = screen.getAllByRole("button", { name: "Gerar nova autorização" });
+    await user.click(confirms[confirms.length - 1]);
+    expect(await screen.findByText(/estado atual é Recusado/)).toBeInTheDocument();
+    expect(screen.queryByText(/BILLING_|SQL|postgres/i)).not.toBeInTheDocument();
   });
 });

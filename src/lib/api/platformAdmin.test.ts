@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const rpc = vi.hoisted(() => vi.fn());
+const invoke = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabase", () => ({
-  supabase: { rpc },
+  supabase: { rpc, functions: { invoke } },
 }));
 
 const {
@@ -16,10 +17,13 @@ const {
   rejectClinicCreationRequest,
   suspendPlatformClinic,
   reactivatePlatformClinic,
+  listPlatformClinicPixAutomaticStatuses,
+  reissuePixAutomaticAuthorization,
 } = await import("./platformAdmin");
 
 beforeEach(() => {
   rpc.mockReset();
+  invoke.mockReset();
 });
 
 describe("amIPlatformAdmin", () => {
@@ -192,5 +196,63 @@ describe("clinic lifecycle RPCs", () => {
     const err = { message: "NOT_PLATFORM_ADMIN", code: "42501" };
     rpc.mockResolvedValue({ data: null, error: err });
     await expect(suspendPlatformClinic("c1", "motivo")).rejects.toEqual(err);
+  });
+});
+
+describe("pix automatic PA surface", () => {
+  it("lê status sanitizado sem environment", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        {
+          clinic_id: "c1",
+          commercial_contract_id: "ct1",
+          authorization_id: "a1",
+          provider_status: "REFUSED",
+          generation: "1",
+        },
+      ],
+      error: null,
+    });
+    await expect(listPlatformClinicPixAutomaticStatuses()).resolves.toEqual([
+      {
+        clinicId: "c1",
+        commercialContractId: "ct1",
+        authorizationId: "a1",
+        providerStatus: "REFUSED",
+        generation: 1,
+      },
+    ]);
+    expect(rpc).toHaveBeenCalledWith("list_platform_clinic_pix_automatic_statuses");
+  });
+
+  it("reissue chama só a Edge autenticada, sem environment", async () => {
+    invoke.mockResolvedValue({
+      data: {
+        outcome: "reissued",
+        oldAuthorizationId: "a1",
+        newAuthorizationId: "a2",
+        oldGeneration: 1,
+        newGeneration: 2,
+        newStatus: "INTENT",
+        operationId: "op1",
+      },
+      error: null,
+    });
+    await expect(
+      reissuePixAutomaticAuthorization({
+        clinicId: "c1",
+        commercialContractId: "ct1",
+        authorizationId: "a1",
+      }),
+    ).resolves.toMatchObject({ outcome: "reissued", newStatus: "INTENT" });
+    expect(invoke).toHaveBeenCalledWith("asaas-outbound", {
+      body: {
+        action: "reissue_pix_automatic_authorization",
+        clinicId: "c1",
+        commercialContractId: "ct1",
+        authorizationId: "a1",
+      },
+    });
+    expect(JSON.stringify(invoke.mock.calls[0])).not.toMatch(/environment|service_role|apiKey/i);
   });
 });
