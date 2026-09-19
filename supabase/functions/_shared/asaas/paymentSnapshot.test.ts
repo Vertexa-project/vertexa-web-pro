@@ -1,6 +1,14 @@
 // WP-ASAAS-04 — A04-11..A04-24: mapeamento de estado + normalização do payment (paymentSnapshot.ts).
 import { describe, it, expect } from "vitest";
-import { mapFinancialState, normalizePaymentSnapshot, type AsaasPaymentFull } from "./paymentSnapshot.ts";
+import {
+  extractPixAutomaticAuthorizationId,
+  extractPixAutomaticConciliationIdentifier,
+  extractPixTransactionReference,
+  mapFinancialState,
+  normalizePaymentSnapshot,
+  normalizePixAutomaticPaymentSnapshot,
+  type AsaasPaymentFull,
+} from "./paymentSnapshot.ts";
 
 function basePayment(overrides: Partial<AsaasPaymentFull> = {}): AsaasPaymentFull {
   return {
@@ -145,5 +153,77 @@ describe("normalizePaymentSnapshot", () => {
     expect(r.snapshot.dueDate).toBe("2026-09-10");
     expect(r.snapshot.paymentDate).toBe("2026-09-11");
     expect(r.snapshot.confirmedDate).toBe("2026-09-11");
+  });
+});
+
+describe("pix automatic payment snapshot", () => {
+  it("extracts authorization id from object, string, or authorizationId", () => {
+    expect(extractPixAutomaticAuthorizationId({ authorization: { id: "auth_2" } })).toBe("auth_2");
+    expect(extractPixAutomaticAuthorizationId({ authorization: "auth_2" })).toBe("auth_2");
+    expect(extractPixAutomaticAuthorizationId({ authorizationId: "auth_2" })).toBe("auth_2");
+    expect(extractPixAutomaticAuthorizationId({})).toBeNull();
+  });
+
+  it("extracts conciliationIdentifier from documented and nested paths only", () => {
+    expect(extractPixAutomaticConciliationIdentifier({
+      conciliationIdentifier: "ASAAS-TOP",
+    })).toEqual({ path: "conciliationIdentifier", value: "ASAAS-TOP" });
+    expect(extractPixAutomaticConciliationIdentifier({
+      immediateQrCode: { conciliationIdentifier: "ASAAS-QR" },
+    })).toEqual({ path: "immediateQrCode.conciliationIdentifier", value: "ASAAS-QR" });
+    expect(extractPixAutomaticConciliationIdentifier({
+      pix: { extra: { conciliationIdentifier: "ASAAS-NESTED" } },
+    } as AsaasPaymentFull)).toEqual({ path: "pix.extra.conciliationIdentifier", value: "ASAAS-NESTED" });
+    expect(extractPixAutomaticConciliationIdentifier({ customer: "cus_1", value: 390 })).toBeNull();
+  });
+
+  it("05F1-R3: initial payment has no direct conciliationIdentifier and exposes pixTransaction", () => {
+    const payment = {
+      customer: "cus_payer",
+      value: 390,
+      pixTransaction: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      pixQrCodeId: "QRCODE-ID-LENGTH-THIRTY-FIVE-00",
+    } as AsaasPaymentFull;
+    expect(extractPixAutomaticConciliationIdentifier(payment)).toBeNull();
+    expect(extractPixTransactionReference(payment)).toEqual({
+      present: true,
+      path: "pixTransaction",
+      type: "string",
+      length: 36,
+      id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    });
+    expect(extractPixTransactionReference({ pixTransaction: { id: "tx_obj" } })).toMatchObject({
+      present: true,
+      path: "pixTransaction.id",
+      type: "object",
+      id: "tx_obj",
+    });
+    expect(extractPixTransactionReference({ customer: "cus_1" }).present).toBe(false);
+  });
+
+  it("normalizes initial QR payment without subscription", () => {
+    const r = normalizePixAutomaticPaymentSnapshot({
+      id: "pay_qr",
+      customer: "cus_1",
+      status: "RECEIVED",
+      value: 390,
+      billingType: "PIX",
+      paymentDate: "2026-09-19",
+      confirmedDate: "2026-09-19",
+      authorization: { id: "auth_2" },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.snapshot.financialState).toBe("received");
+    expect(r.snapshot.valueCents).toBe(39000);
+    expect(r.snapshot.providerAuthorizationId).toBe("auth_2");
+    expect("externalSubscriptionId" in r.snapshot).toBe(false);
+  });
+
+  it("subscription-only normalizer still rejects missing subscription", () => {
+    expect(normalizePaymentSnapshot(basePayment({ subscription: undefined }))).toEqual({
+      ok: false,
+      errorCode: "missing_subscription",
+    });
   });
 });

@@ -11,7 +11,10 @@ import {
   extractTransientImmediateQr,
   extractInstructionFacts,
   findAuthorizationByContractId,
+  findPaymentInstructionByPaymentId,
   getPixAutomaticAuthorization,
+  getPixTransaction,
+  PIX_TRANSACTIONS_PATH,
   pixAutomaticProviderContractId,
 } from "./pixAutomatic.ts";
 import { emptyResponse, jsonResponse, malformedResponse, readSentBody } from "./testHelpers.ts";
@@ -323,5 +326,68 @@ describe("pix automatic HTTP adapter (mocked)", () => {
       category: "reconciliation_lookup_scan_capped",
     });
     expect(fetchSpy).toHaveBeenCalledTimes(10);
+  });
+
+  it("lists payment instructions by paymentId and extracts authorization.id", async () => {
+    const fetchSpy = vi.fn(async (url: string) => {
+      expect(String(url)).toContain("/pix/automatic/paymentInstructions");
+      expect(String(url)).toContain("paymentId=pay_future");
+      expect(String(url)).not.toContain("customerId=");
+      return jsonResponse(200, {
+        data: [{
+          id: "instr_1",
+          status: "AWAITING_REQUEST",
+          paymentId: "pay_future",
+          authorization: { id: "auth_2" },
+          dueDate: "2026-10-18",
+        }],
+        hasMore: false,
+      });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const found = await findPaymentInstructionByPaymentId(creds, "sandbox", "pay_future");
+    expect(found).toMatchObject({
+      outcome: "found",
+      facts: {
+        providerInstructionId: "instr_1",
+        providerAuthorizationId: "auth_2",
+        providerPaymentId: "pay_future",
+      },
+    });
+  });
+
+  it("instruction list empty or ambiguous is not a customer guess", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(200, { data: [], hasMore: false })));
+    expect(await findPaymentInstructionByPaymentId(creds, "sandbox", "pay_1")).toEqual({ outcome: "not_found" });
+
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(200, {
+      data: [
+        { id: "i1", status: "AWAITING_REQUEST", paymentId: "pay_1", authorization: { id: "a1" } },
+        { id: "i2", status: "AWAITING_REQUEST", paymentId: "pay_1", authorization: { id: "a2" } },
+      ],
+      hasMore: false,
+    })));
+    expect(await findPaymentInstructionByPaymentId(creds, "sandbox", "pay_1")).toEqual({ outcome: "ambiguous" });
+  });
+
+  it("05F1-R3: exact Pix transaction GET uses /pix/transactions/{id} and no list scan", async () => {
+    const fetchSpy = vi.fn(async (url: string) => {
+      expect(String(url)).toContain(`${PIX_TRANSACTIONS_PATH}/tx_exact`);
+      expect(String(url)).not.toContain("customerId=");
+      expect(String(url)).not.toContain("?");
+      return jsonResponse(200, {
+        id: "tx_exact",
+        status: "DONE",
+        type: "CREDIT",
+        value: 390,
+        conciliationIdentifier: "ASAAS-CONCIL-2",
+        payment: "pay_1",
+      });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const res = await getPixTransaction(creds, "sandbox", "tx_exact");
+    expect(res.outcome).toBe("success");
+    expect(res.status).toBe(200);
+    expect((res.data as { conciliationIdentifier?: string } | null)?.conciliationIdentifier).toBe("ASAAS-CONCIL-2");
   });
 });

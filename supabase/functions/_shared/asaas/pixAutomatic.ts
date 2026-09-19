@@ -22,6 +22,7 @@ export const ASAAS_PIX_AUTOMATIC_ELIGIBILITY_REQUIRED =
 
 export const PIX_AUTOMATIC_AUTHORIZATIONS_PATH = "/pix/automatic/authorizations";
 export const PIX_AUTOMATIC_PAYMENT_INSTRUCTIONS_PATH = "/pix/automatic/paymentInstructions";
+export const PIX_TRANSACTIONS_PATH = "/pix/transactions";
 
 const PROVIDER_AUTH_STATUSES = new Set(["CREATED", "ACTIVE", "CANCELLED", "EXPIRED", "REFUSED"]);
 const INSTRUCTION_STATUSES = new Set(["AWAITING_REQUEST", "SCHEDULED", "REFUSED", "CANCELLED", "DONE"]);
@@ -297,6 +298,57 @@ export async function getPixAutomaticPaymentInstruction(
     "GET",
     `${PIX_AUTOMATIC_PAYMENT_INSTRUCTIONS_PATH}/${encodeURIComponent(providerInstructionId)}`,
   );
+}
+
+/** GET oficial /v3/pix/transactions/{id}. Sem body. Sem listagem. */
+export async function getPixTransaction(
+  creds: AsaasCredentials,
+  environment: AsaasEnvironment,
+  pixTransactionId: string,
+) {
+  const trimmed = pixTransactionId.trim();
+  return asaasFetch<Record<string, unknown>>(
+    creds,
+    environment,
+    "GET",
+    `${PIX_TRANSACTIONS_PATH}/${encodeURIComponent(trimmed)}`,
+  );
+}
+
+export type FindPaymentInstructionByPaymentIdResult =
+  | { outcome: "found"; facts: PixAutomaticInstructionFacts }
+  | { outcome: "not_found" }
+  | { outcome: "ambiguous" }
+  | { outcome: "lookup_failed"; category: string };
+
+/**
+ * Listagem oficial GET /pix/automatic/paymentInstructions?paymentId=.
+ * Correlação determinística do ciclo futuro quando o webhook da instrução atrasou.
+ */
+export async function findPaymentInstructionByPaymentId(
+  creds: AsaasCredentials,
+  environment: AsaasEnvironment,
+  paymentId: string,
+): Promise<FindPaymentInstructionByPaymentIdResult> {
+  const trimmed = paymentId.trim();
+  if (!trimmed) return { outcome: "lookup_failed", category: "missing_payment_id" };
+
+  const path =
+    `${PIX_AUTOMATIC_PAYMENT_INSTRUCTIONS_PATH}` +
+    `?paymentId=${encodeURIComponent(trimmed)}` +
+    `&limit=2&offset=0`;
+  const lookup = await asaasFetch<AsaasList>(creds, environment, "GET", path);
+  if (lookup.outcome !== "success") {
+    return { outcome: "lookup_failed", category: lookup.category };
+  }
+  const rows = lookup.data?.data ?? [];
+  if (rows.length === 0) return { outcome: "not_found" };
+  if (rows.length > 1) return { outcome: "ambiguous" };
+  const extracted = extractInstructionFacts(rows[0]);
+  if (!extracted.ok) {
+    return { outcome: "lookup_failed", category: extracted.reason };
+  }
+  return { outcome: "found", facts: extracted.facts };
 }
 
 interface AsaasList {
