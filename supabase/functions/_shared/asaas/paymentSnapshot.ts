@@ -44,6 +44,28 @@ export interface AsaasPaymentFull {
   confirmedDate?: unknown;
   deleted?: unknown;
   refunds?: unknown;
+  authorization?: unknown;
+  authorizationId?: unknown;
+  conciliationIdentifier?: unknown;
+  immediateQrCode?: unknown;
+  pixTransaction?: unknown;
+  pixQrCodeId?: unknown;
+}
+
+export interface NormalizedPixAutomaticPaymentSnapshot {
+  externalPaymentId: string;
+  externalCustomerId: string;
+  providerAuthorizationId: string | null;
+  providerStatus: string;
+  financialState: FinancialState;
+  billingType: string | null;
+  valueCents: number;
+  netValueCents: number | null;
+  refundedValueCents: number | null;
+  dueDate: string | null;
+  paymentDate: string | null;
+  confirmedDate: string | null;
+  deleted: boolean;
 }
 
 export interface NormalizedPaymentSnapshot {
@@ -64,6 +86,10 @@ export interface NormalizedPaymentSnapshot {
 
 export type NormalizeResult =
   | { ok: true; snapshot: NormalizedPaymentSnapshot }
+  | { ok: false; errorCode: string };
+
+export type NormalizePixAutomaticResult =
+  | { ok: true; snapshot: NormalizedPixAutomaticPaymentSnapshot }
   | { ok: false; errorCode: string };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -187,6 +213,173 @@ export function normalizePaymentSnapshot(payment: AsaasPaymentFull): NormalizeRe
       externalPaymentId: id,
       externalCustomerId: customer,
       externalSubscriptionId: subscription,
+      providerStatus: status,
+      financialState,
+      billingType: asNonEmptyString(payment.billingType),
+      valueCents,
+      netValueCents: netValueCents ?? null,
+      refundedValueCents,
+      dueDate: asIsoDateOrNull(payment.dueDate),
+      paymentDate: asIsoDateOrNull(payment.paymentDate),
+      confirmedDate: asIsoDateOrNull(payment.confirmedDate),
+      deleted,
+    },
+  };
+}
+
+/** Lê authorization id se o GET /payments/{id} o expor. Não correlaciona por value/PII. */
+export function extractPixAutomaticAuthorizationId(payment: AsaasPaymentFull): string | null {
+  const direct = asNonEmptyString(payment.authorizationId);
+  if (direct) return direct;
+  const raw = payment.authorization;
+  if (typeof raw === "string") return asNonEmptyString(raw);
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    return asNonEmptyString((raw as { id?: unknown }).id);
+  }
+  return null;
+}
+
+export interface PixAutomaticConciliationMatch {
+  path: string;
+  value: string;
+}
+
+function findExactStringKeyPath(
+  value: unknown,
+  key: string,
+  prefix = "",
+): PixAutomaticConciliationMatch | null {
+  if (!value || typeof value !== "object") return null;
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i += 1) {
+      const found = findExactStringKeyPath(value[i], key, `${prefix}[${i}]`);
+      if (found) return found;
+    }
+    return null;
+  }
+  const rec = value as Record<string, unknown>;
+  const direct = asNonEmptyString(rec[key]);
+  if (direct) return { path: prefix ? `${prefix}.${key}` : key, value: direct };
+  for (const [childKey, child] of Object.entries(rec)) {
+    if (childKey === key) continue;
+    const childPrefix = prefix ? `${prefix}.${childKey}` : childKey;
+    const found = findExactStringKeyPath(child, key, childPrefix);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Identificador oficial de conciliação do QR imediato.
+ * Prefere caminhos documentados; aceita o mesmo nome de propriedade em aninhamento
+ * observado no GET. Nunca infere por customer/value/PII.
+ */
+export function extractPixAutomaticConciliationIdentifier(
+  payment: AsaasPaymentFull,
+): PixAutomaticConciliationMatch | null {
+  const top = asNonEmptyString(payment.conciliationIdentifier);
+  if (top) return { path: "conciliationIdentifier", value: top };
+  if (payment.immediateQrCode && typeof payment.immediateQrCode === "object" && !Array.isArray(payment.immediateQrCode)) {
+    const nested = asNonEmptyString(
+      (payment.immediateQrCode as { conciliationIdentifier?: unknown }).conciliationIdentifier,
+    );
+    if (nested) return { path: "immediateQrCode.conciliationIdentifier", value: nested };
+  }
+  return findExactStringKeyPath(payment, "conciliationIdentifier");
+}
+
+export interface PixTransactionReference {
+  present: boolean;
+  path: string | null;
+  type: string;
+  length: number;
+  id: string | null;
+}
+
+/**
+ * Referência oficial do GET /payments/{id} para GET /pix/transactions/{id}.
+ * Aceita string id ou objeto com id. Nunca infere por customer.
+ */
+export function extractPixTransactionReference(
+  payment: AsaasPaymentFull,
+): PixTransactionReference {
+  const raw = payment.pixTransaction;
+  if (raw == null) {
+    return { present: false, path: null, type: raw === null ? "null" : "undefined", length: 0, id: null };
+  }
+  if (typeof raw === "string") {
+    const id = asNonEmptyString(raw);
+    return { present: id != null, path: "pixTransaction", type: "string", length: id?.length ?? 0, id };
+  }
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    const id = asNonEmptyString((raw as { id?: unknown }).id);
+    return {
+      present: id != null,
+      path: id ? "pixTransaction.id" : "pixTransaction",
+      type: "object",
+      length: id?.length ?? 0,
+      id,
+    };
+  }
+  return {
+    present: false,
+    path: "pixTransaction",
+    type: Array.isArray(raw) ? "array" : typeof raw,
+    length: 0,
+    id: null,
+  };
+}
+
+/**
+ * Normaliza payment Pix Automático. subscription NÃO é exigido.
+ * Usado só depois da correlação server-side por payment id / authorization / instruction.
+ */
+export function normalizePixAutomaticPaymentSnapshot(
+  payment: AsaasPaymentFull,
+): NormalizePixAutomaticResult {
+  const id = asNonEmptyString(payment.id);
+  const customer = asNonEmptyString(payment.customer);
+  const status = asNonEmptyString(payment.status);
+
+  if (!id || !customer || !status) {
+    return { ok: false, errorCode: "invalid_payment_shape" };
+  }
+
+  const valueCents = parseAsaasAmountToCents(payment.value);
+  if (valueCents === null) {
+    return { ok: false, errorCode: "value_not_exact_cents" };
+  }
+  if (valueCents <= 0) {
+    return { ok: false, errorCode: "non_positive_value" };
+  }
+
+  const netValueCents = payment.netValue === undefined || payment.netValue === null
+    ? null
+    : parseAsaasAmountToCents(payment.netValue);
+
+  const refundedValueCents = sumDoneRefundsCents(payment.refunds);
+  const deleted = payment.deleted === true;
+  const base = mapFinancialState(status);
+  let financialState: FinancialState;
+  if (deleted) {
+    financialState = "voided";
+  } else if (
+    refundedValueCents !== null &&
+    refundedValueCents > 0 &&
+    refundedValueCents < valueCents &&
+    (base === "received" || base === "confirmed")
+  ) {
+    financialState = "partially_refunded";
+  } else {
+    financialState = base;
+  }
+
+  return {
+    ok: true,
+    snapshot: {
+      externalPaymentId: id,
+      externalCustomerId: customer,
+      providerAuthorizationId: extractPixAutomaticAuthorizationId(payment),
       providerStatus: status,
       financialState,
       billingType: asNonEmptyString(payment.billingType),

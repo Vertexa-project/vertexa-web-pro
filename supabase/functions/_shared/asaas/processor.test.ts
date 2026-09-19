@@ -42,8 +42,12 @@ interface Cfg {
   events: ClaimedEvent[];
   resolve?: unknown;
   resolveError?: unknown;
+  resolvePix?: unknown | ((params: Record<string, unknown>) => unknown);
+  resolvePixError?: unknown;
   apply?: unknown;
   applyError?: unknown;
+  applyPix?: unknown;
+  applyPixError?: unknown;
   missing?: unknown;
   missingError?: unknown;
   applyAuth?: unknown;
@@ -53,14 +57,23 @@ interface Cfg {
 }
 
 function makeClient(cfg: Cfg) {
-  return makeAdminClient(async (name) => {
+  return makeAdminClient(async (name, params) => {
     switch (name) {
       case "claim_billing_provider_events":
         return { data: cfg.events, error: null };
       case "resolve_billing_target_by_subscription":
         return { data: cfg.resolve ?? null, error: cfg.resolveError ?? null };
+      case "resolve_billing_target_by_pix_automatic_payment":
+        return {
+          data: typeof cfg.resolvePix === "function"
+            ? cfg.resolvePix(params)
+            : (cfg.resolvePix ?? { found: false }),
+          error: cfg.resolvePixError ?? null,
+        };
       case "apply_billing_payment_snapshot":
         return { data: cfg.apply ?? null, error: cfg.applyError ?? null };
+      case "apply_billing_pix_automatic_payment_snapshot":
+        return { data: cfg.applyPix ?? null, error: cfg.applyPixError ?? null };
       case "handle_missing_payment_on_get":
         return { data: cfg.missing ?? null, error: cfg.missingError ?? null };
       case "apply_billing_pix_automatic_authorization_event":
@@ -377,5 +390,490 @@ describe("drainBillingEvents — Pix Automatic", () => {
     expect(result.processed).toBe(1);
     expect(findCall(calls, "apply_billing_pix_automatic_instruction_event")?.params.p_provider_payment_id).toBe("pay_1");
     expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
+  });
+
+  it("05F1: initial Pix Automatic PAYMENT_RECEIVED without subscription is ingested", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent()],
+        resolvePix: {
+          found: true,
+          pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+          pix_instruction_id: null,
+          external_customer_id: "cus_1",
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false, financial_state: "received" },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_1",
+        customer: "cus_1",
+        status: "RECEIVED",
+        value: 390,
+        billingType: "PIX",
+        paymentDate: "2026-09-19",
+        confirmedDate: "2026-09-19",
+        authorization: { id: "auth_2" },
+      }),
+    );
+    expect(result.processed).toBe(1);
+    const apply = findCall(calls, "apply_billing_pix_automatic_payment_snapshot");
+    expect(apply?.params.p_value_cents).toBe(39000);
+    expect(apply?.params.p_financial_state).toBe("received");
+    expect(apply?.params.p_pix_authorization_id).toBe("9377b65a-ceb5-4e47-8bd2-c8b505a10472");
+    expect(apply?.params.p_pix_instruction_id).toBeNull();
+    expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
+    expect(findCall(calls, "ignore_billing_provider_event")).toBeUndefined();
+  });
+
+  it("05F1: PAYMENT_CREATED then same payment stays one apply path", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent({ event_type: "PAYMENT_CREATED" })],
+        resolvePix: {
+          found: true,
+          pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+          external_customer_id: "cus_1",
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false },
+      },
+      async () => jsonResponse(200, { id: "pay_1", customer: "cus_1", status: "RECEIVED", value: 390 }),
+    );
+    expect(result.processed).toBe(1);
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_external_payment_id).toBe("pay_1");
+  });
+
+  it("05F1: future instruction payment correlates even with unmanaged subscription", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent({ external_resource_id: "pay_future" })],
+        resolvePix: {
+          found: true,
+          pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+          pix_instruction_id: "inst_oct",
+          external_customer_id: "cus_1",
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_future",
+        customer: "cus_1",
+        subscription: "sub_x",
+        status: "PENDING",
+        value: 390,
+        dueDate: "2026-10-18",
+      }),
+    );
+    expect(result.processed).toBe(1);
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_pix_instruction_id).toBe("inst_oct");
+    expect(names(calls)).not.toContain("resolve_billing_target_by_subscription");
+  });
+
+  it("05F1: unrelated unmanaged payment remains ignored_non_subscription_payment", async () => {
+    const { result, calls } = await run(
+      { events: [makeEvent()], resolvePix: { found: false } },
+      async () => jsonResponse(200, { id: "pay_1", customer: "cus_1", status: "RECEIVED", value: 10 }),
+    );
+    expect(result.ignored).toBe(1);
+    expect(findCall(calls, "ignore_billing_provider_event")?.params.p_reason).toBe("ignored_non_subscription_payment");
+    expect(names(calls)).not.toContain("apply_billing_pix_automatic_payment_snapshot");
+  });
+
+  it("05F1: RECEIVED pix payment does not treat apply as entitlement", async () => {
+    const { calls } = await run(
+      {
+        events: [makeEvent()],
+        resolvePix: {
+          found: true,
+          pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+          external_customer_id: "cus_1",
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false },
+      },
+      async () => jsonResponse(200, { id: "pay_1", customer: "cus_1", status: "RECEIVED", value: 390 }),
+    );
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")).toBeTruthy();
+    expect(findCall(calls, "apply_billing_pix_automatic_eligibility_event")).toBeUndefined();
+  });
+
+  it("05F1-R3: customer inequality does not reject conciliation-correlated initial QR", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent()],
+        resolvePix: {
+          found: true,
+          pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+          pix_instruction_id: null,
+          external_customer_id: "cus_1",
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false },
+      },
+      async () => jsonResponse(200, { id: "pay_1", customer: "cus_OUTRO", status: "RECEIVED", value: 390 }),
+    );
+    expect(result.processed).toBe(1);
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")).toBeTruthy();
+    expect(findCall(calls, "fail_billing_provider_event")).toBeUndefined();
+  });
+
+  it("05F1-R1: initial payment correlates by conciliationIdentifier to #2 only", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent()],
+        resolvePix: (params) => {
+          expect(params.p_conciliation_identifier).toBe("ASAAS-CONCIL-2");
+          expect(params.p_environment).toBe("sandbox");
+          if (params.p_conciliation_identifier === "ASAAS-CONCIL-2") {
+            return {
+              found: true,
+              pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+              pix_instruction_id: null,
+              external_customer_id: "cus_1",
+            };
+          }
+          return { found: false };
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false, financial_state: "received" },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_1",
+        customer: "cus_1",
+        status: "RECEIVED",
+        value: 390,
+        conciliationIdentifier: "ASAAS-CONCIL-2",
+      }),
+    );
+    expect(result.processed).toBe(1);
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_pix_authorization_id)
+      .toBe("9377b65a-ceb5-4e47-8bd2-c8b505a10472");
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_pix_instruction_id).toBeNull();
+  });
+
+  it("05F1-R1: wrong conciliation fails closed without financial apply", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent()],
+        resolvePix: { found: false, reason: "conciliation_unmatched" },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_1",
+        customer: "cus_1",
+        status: "RECEIVED",
+        value: 390,
+        conciliationIdentifier: "ASAAS-WRONG",
+      }),
+    );
+    expect(result.failed).toBe(1);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category).toBe("conciliation_unmatched");
+    expect(names(calls)).not.toContain("apply_billing_pix_automatic_payment_snapshot");
+  });
+
+  it("05F1-R1: missing deterministic id with two candidate authorizations does not guess", async () => {
+    const { result, calls, fetchSpy } = await run(
+      { events: [makeEvent()], resolvePix: { found: false } },
+      async (url) => {
+        if (String(url).includes("/pix/automatic/paymentInstructions")) {
+          return jsonResponse(200, { data: [], hasMore: false });
+        }
+        return jsonResponse(200, { id: "pay_1", customer: "cus_1", status: "RECEIVED", value: 390 });
+      },
+    );
+    expect(result.ignored).toBe(1);
+    expect(findCall(calls, "ignore_billing_provider_event")?.params.p_reason).toBe("ignored_non_subscription_payment");
+    expect(names(calls)).not.toContain("apply_billing_pix_automatic_payment_snapshot");
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("paymentId=pay_1"))).toBe(true);
+  });
+
+  it("05F1-R1: delayed instruction resolves from provider list by paymentId", async () => {
+    const { result, calls, fetchSpy } = await run(
+      {
+        events: [makeEvent({ event_type: "PAYMENT_CREATED", external_resource_id: "pay_future" })],
+        resolvePix: (params) => {
+          if (params.p_provider_authorization_id === "auth_2") {
+            return {
+              found: true,
+              pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+              pix_instruction_id: null,
+              external_customer_id: "cus_1",
+            };
+          }
+          return { found: false };
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false },
+      },
+      async (url) => {
+        if (String(url).includes("/pix/automatic/paymentInstructions")) {
+          return jsonResponse(200, {
+            data: [{
+              id: "instr_1",
+              status: "AWAITING_REQUEST",
+              paymentId: "pay_future",
+              authorization: { id: "auth_2" },
+              dueDate: "2026-10-18",
+            }],
+            hasMore: false,
+          });
+        }
+        return jsonResponse(200, {
+          id: "pay_future",
+          customer: "cus_1",
+          subscription: "sub_generated",
+          status: "PENDING",
+          value: 390,
+          dueDate: "2026-10-18",
+        });
+      },
+    );
+    expect(result.processed).toBe(1);
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_pix_authorization_id)
+      .toBe("9377b65a-ceb5-4e47-8bd2-c8b505a10472");
+    expect(names(calls)).not.toContain("resolve_billing_target_by_subscription");
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("paymentId=pay_future"))).toBe(true);
+  });
+
+  it("05F1-R1: instruction lookup failure is retryable, not permanently ignored", async () => {
+    const { result, calls } = await run(
+      { events: [makeEvent()], resolvePix: { found: false } },
+      async (url) => {
+        if (String(url).includes("/pix/automatic/paymentInstructions")) {
+          return status(500, { errors: [{ code: "error", description: "down" }] });
+        }
+        return jsonResponse(200, { id: "pay_1", customer: "cus_1", status: "RECEIVED", value: 390 });
+      },
+    );
+    expect(result.failed).toBe(1);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_retryable).toBe(true);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category)
+      .toBe("pix_automatic_instruction_lookup_failed");
+    expect(findCall(calls, "ignore_billing_provider_event")).toBeUndefined();
+  });
+
+  it("05F1-R1: duplicate RECEIVED is one apply path and never grants entitlement", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent(), makeEvent({ id: "22222222-2222-2222-2222-222222222222", external_event_id: "evt_2" })],
+        resolvePix: {
+          found: true,
+          pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+          external_customer_id: "cus_1",
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false },
+      },
+      async () => jsonResponse(200, { id: "pay_1", customer: "cus_1", status: "RECEIVED", value: 390 }),
+    );
+    expect(result.processed).toBe(2);
+    const applies = calls.filter((c) => c.name === "apply_billing_pix_automatic_payment_snapshot");
+    expect(applies).toHaveLength(2);
+    expect(applies.every((c) => c.params.p_external_payment_id === "pay_1")).toBe(true);
+    expect(names(calls)).not.toContain("apply_billing_pix_automatic_eligibility_event");
+  });
+
+  it("05F1-R3: initial QR uses pixTransaction GET conciliation and matches #2 only", async () => {
+    const { result, calls, fetchSpy } = await run(
+      {
+        events: [makeEvent({ external_resource_id: "pay_ojgo" })],
+        resolvePix: (params) => {
+          if (params.p_conciliation_identifier === "ASAAS-CONCIL-2") {
+            return {
+              found: true,
+              pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+              pix_instruction_id: null,
+              external_customer_id: "cus_account",
+            };
+          }
+          if (params.p_conciliation_identifier === "ASAAS-CONCIL-1") {
+            return { found: false, reason: "conciliation_unmatched" };
+          }
+          return { found: false };
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false },
+      },
+      async (url) => {
+        if (String(url).includes("/pix/transactions/")) {
+          return jsonResponse(200, {
+            id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+            status: "DONE",
+            type: "CREDIT",
+            value: 390,
+            conciliationIdentifier: "ASAAS-CONCIL-2",
+            payment: "pay_ojgo",
+          });
+        }
+        return jsonResponse(200, {
+          id: "pay_ojgo",
+          customer: "cus_payer",
+          status: "RECEIVED",
+          billingType: "PIX",
+          value: 390,
+          pixTransaction: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        });
+      },
+    );
+    expect(result.processed).toBe(1);
+    expect(calls.some((c) =>
+      c.name === "resolve_billing_target_by_pix_automatic_payment"
+      && c.params.p_conciliation_identifier === "ASAAS-CONCIL-2"
+    )).toBe(true);
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_pix_authorization_id)
+      .toBe("9377b65a-ceb5-4e47-8bd2-c8b505a10472");
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_pix_instruction_id).toBeNull();
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("/pix/transactions/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"))).toBe(true);
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("/pix/automatic/paymentInstructions"))).toBe(false);
+  });
+
+  it("05F1-R3: wrong transaction conciliation fails closed", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent()],
+        resolvePix: (params) => {
+          if (params.p_conciliation_identifier === "ASAAS-WRONG") {
+            return { found: false, reason: "conciliation_unmatched" };
+          }
+          return { found: false };
+        },
+      },
+      async (url) => {
+        if (String(url).includes("/pix/transactions/")) {
+          return jsonResponse(200, { id: "tx_1", conciliationIdentifier: "ASAAS-WRONG", payment: "pay_1" });
+        }
+        return jsonResponse(200, {
+          id: "pay_1",
+          customer: "cus_1",
+          status: "RECEIVED",
+          value: 390,
+          pixTransaction: "tx_1",
+        });
+      },
+    );
+    expect(result.failed).toBe(1);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category).toBe("conciliation_unmatched");
+    expect(names(calls)).not.toContain("apply_billing_pix_automatic_payment_snapshot");
+  });
+
+  it("05F1-R3: missing pixTransaction does not guess by customer", async () => {
+    const { result, calls, fetchSpy } = await run(
+      { events: [makeEvent()], resolvePix: { found: false } },
+      async (url) => {
+        if (String(url).includes("/pix/automatic/paymentInstructions")) {
+          return jsonResponse(200, { data: [], hasMore: false });
+        }
+        return jsonResponse(200, { id: "pay_1", customer: "cus_1", status: "RECEIVED", value: 390 });
+      },
+    );
+    expect(result.ignored).toBe(1);
+    expect(findCall(calls, "ignore_billing_provider_event")?.params.p_reason).toBe("ignored_non_subscription_payment");
+    expect(names(calls)).not.toContain("apply_billing_pix_automatic_payment_snapshot");
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("/pix/transactions/"))).toBe(false);
+  });
+
+  it("05F1-R3: Pix transaction GET failure is retryable", async () => {
+    const { result, calls } = await run(
+      { events: [makeEvent()], resolvePix: { found: false } },
+      async (url) => {
+        if (String(url).includes("/pix/transactions/")) {
+          return status(500, { errors: [{ code: "error", description: "down" }] });
+        }
+        return jsonResponse(200, {
+          id: "pay_1",
+          customer: "cus_1",
+          status: "RECEIVED",
+          value: 390,
+          pixTransaction: "tx_1",
+        });
+      },
+    );
+    expect(result.failed).toBe(1);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_retryable).toBe(true);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category)
+      .toBe("pix_automatic_transaction_lookup_failed");
+    expect(findCall(calls, "ignore_billing_provider_event")).toBeUndefined();
+  });
+
+  it("05F1-R3: initial path does not use future instruction payment id", async () => {
+    const { result, calls, fetchSpy } = await run(
+      {
+        events: [makeEvent({ external_resource_id: "pay_ojgo" })],
+        resolvePix: (params) => {
+          if (params.p_external_payment_id === "pay_mpg9") {
+            throw new Error("future instruction must not be queried");
+          }
+          if (params.p_conciliation_identifier === "ASAAS-CONCIL-2") {
+            return {
+              found: true,
+              pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+              pix_instruction_id: null,
+              external_customer_id: "cus_account",
+            };
+          }
+          return { found: false };
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false },
+      },
+      async (url) => {
+        if (String(url).includes("/pix/transactions/")) {
+          return jsonResponse(200, { id: "tx_1", conciliationIdentifier: "ASAAS-CONCIL-2", payment: "pay_ojgo" });
+        }
+        return jsonResponse(200, {
+          id: "pay_ojgo",
+          customer: "cus_payer",
+          status: "RECEIVED",
+          value: 390,
+          pixTransaction: "tx_1",
+        });
+      },
+    );
+    expect(result.processed).toBe(1);
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_external_payment_id)
+      .toBe("pay_ojgo");
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_pix_instruction_id).toBeNull();
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("pay_mpg9"))).toBe(false);
+  });
+
+  it("05F1-R3: PIX payment with subscription metadata still follows deterministic Pix path", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent()],
+        resolvePix: {
+          found: true,
+          pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+          pix_instruction_id: "inst_oct",
+          external_customer_id: "cus_1",
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_1",
+        customer: "cus_1",
+        subscription: "sub_generated",
+        status: "PENDING",
+        value: 390,
+        billingType: "PIX",
+      }),
+    );
+    expect(result.processed).toBe(1);
+    expect(names(calls)).not.toContain("resolve_billing_target_by_subscription");
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_pix_instruction_id)
+      .toBe("inst_oct");
+  });
+
+  it("05F1-R3: sandbox/prod isolation is passed to the resolver", async () => {
+    const { calls } = await run(
+      {
+        events: [makeEvent()],
+        resolvePix: {
+          found: true,
+          pix_authorization_id: "9377b65a-ceb5-4e47-8bd2-c8b505a10472",
+          external_customer_id: "cus_1",
+        },
+        applyPix: { outcome: "applied", entitlement_granted: false },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_1",
+        customer: "cus_1",
+        status: "RECEIVED",
+        value: 390,
+        conciliationIdentifier: "ASAAS-CONCIL-2",
+      }),
+    );
+    expect(findCall(calls, "resolve_billing_target_by_pix_automatic_payment")?.params.p_environment).toBe("sandbox");
+    expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_environment).toBe("sandbox");
   });
 });

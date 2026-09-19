@@ -7,8 +7,12 @@
 // Princípios não negociáveis:
 //  * O GET atual é a AUTORIDADE do snapshot; a ordem de chegada dos webhooks é irrelevante.
 //    RECEIVED não é terminal — um refund/chargeback posterior reescreve o snapshot pelo GET.
-//  * CORREÇÃO 2 (subscription-only): payment sem subscription => ignored_non_subscription_payment,
-//    ZERO write. Nunca correlaciona por nome/email/CPF/value/externalReference.
+//  * CORREÇÃO 2 (subscription-only): payment sem subscription E sem correlação Pix Automático
+//    => ignored_non_subscription_payment, ZERO write. Nunca correlaciona por nome/email/CPF/
+//    value/externalReference/customer+primary. Pix Automático correlaciona só por
+//    identificadores determinísticos do provider (instruction payment id, authorization id
+//    observado, payment.pixTransaction → GET /pix/transactions/{id} →
+//    transaction.conciliationIdentifier). Customer do payment NÃO é autoridade de correlação.
 //  * CORREÇÃO 3 (404 != voided): 404 é delegado ao handle_missing_payment_on_get.
 //  * CORREÇÃO 1: não classificamos pelo tipo do evento; qualquer PAYMENT_* com correlação
 //    válida atualiza o snapshot a partir do objeto atual (forward-compatible).
@@ -20,12 +24,21 @@ import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { asaasFetch, type AsaasCredentials, type AsaasEnvironment } from "./client.ts";
 import { classifyAsaasEvent } from "./events.ts";
 import { parseAsaasAmountToCents } from "./money.ts";
-import { type AsaasPaymentFull, normalizePaymentSnapshot } from "./paymentSnapshot.ts";
+import {
+  extractPixAutomaticAuthorizationId,
+  extractPixAutomaticConciliationIdentifier,
+  extractPixTransactionReference,
+  normalizePaymentSnapshot,
+  normalizePixAutomaticPaymentSnapshot,
+  type AsaasPaymentFull,
+} from "./paymentSnapshot.ts";
 import {
   extractAuthorizationFacts,
   extractInstructionFacts,
+  findPaymentInstructionByPaymentId,
   getPixAutomaticAuthorization,
   getPixAutomaticPaymentInstruction,
+  getPixTransaction,
   parseAsaasDateTime,
 } from "./pixAutomatic.ts";
 
@@ -303,6 +316,249 @@ async function processPixAutomaticInstruction(
   return mapPixApplyOutcome(base, (data as { outcome?: string; reason?: string }) ?? { outcome: "" });
 }
 
+type PixAutomaticResolve = {
+  found?: boolean;
+  reason?: string | null;
+  billing_account_id?: string;
+  pix_authorization_id?: string;
+  pix_instruction_id?: string | null;
+  external_customer_id?: string | null;
+};
+
+function isRetryablePixCorrelationReason(reason: string | null | undefined): boolean {
+  return (
+    reason === "conciliation_ambiguous" ||
+    reason === "instruction_ambiguous" ||
+    reason === "authorization_ambiguous" ||
+    reason === "conciliation_unmatched"
+  );
+}
+
+async function resolvePixAutomaticPaymentRpc(
+  adminClient: SupabaseClient,
+  environment: AsaasEnvironment,
+  paymentId: string,
+  customer: string,
+  providerAuthorizationId: string | null,
+  conciliationIdentifier: string | null,
+): Promise<{ data: PixAutomaticResolve | null; error: unknown }> {
+  const { data, error } = await adminClient.rpc("resolve_billing_target_by_pix_automatic_payment", {
+    p_provider: PROVIDER,
+    p_environment: environment,
+    p_external_payment_id: paymentId,
+    p_external_customer_id: customer,
+    p_provider_authorization_id: providerAuthorizationId,
+    p_conciliation_identifier: conciliationIdentifier,
+  });
+  return { data: (data as PixAutomaticResolve | null) ?? null, error };
+}
+
+async function processPixAutomaticPaymentIfCorrelated(
+  adminClient: SupabaseClient,
+  environment: AsaasEnvironment,
+  creds: AsaasCredentials,
+  ev: ClaimedEvent,
+  base: { event_id: string; external_event_id: string },
+  eventType: string,
+  payment: AsaasPaymentFull,
+): Promise<EventOutcome | null> {
+  const paymentId = asNonEmptyPaymentId(payment.id) || (ev.external_resource_id ?? "").trim();
+  const customer = typeof payment.customer === "string" ? payment.customer.trim() : "";
+  if (!paymentId || !customer) return null;
+
+  const paymentAuthId = extractPixAutomaticAuthorizationId(payment);
+  const conciliation = extractPixAutomaticConciliationIdentifier(payment);
+
+  const first = await resolvePixAutomaticPaymentRpc(
+    adminClient,
+    environment,
+    paymentId,
+    customer,
+    paymentAuthId,
+    conciliation?.value ?? null,
+  );
+  if (first.error) {
+    await failEvent(adminClient, ev.id, "pix_automatic_payment_correlation_error", true, backoffSeconds(ev.attempts));
+    return { ...base, outcome: "failed", category: "pix_automatic_payment_correlation_error" };
+  }
+  let resolved = first.data;
+  if (isRetryablePixCorrelationReason(resolved?.reason ?? null)) {
+    await failEvent(
+      adminClient,
+      ev.id,
+      resolved?.reason || "pix_automatic_payment_correlation_ambiguous",
+      true,
+      backoffSeconds(ev.attempts),
+    );
+    return { ...base, outcome: "failed", category: resolved?.reason || "pix_automatic_payment_correlation_ambiguous" };
+  }
+
+  if (!resolved?.found) {
+    const txRef = extractPixTransactionReference(payment);
+    if (txRef.id) {
+      const txGet = await getPixTransaction(creds, environment, txRef.id);
+      if (txGet.outcome !== "success" || !txGet.data || typeof txGet.data !== "object") {
+        await failEvent(
+          adminClient,
+          ev.id,
+          "pix_automatic_transaction_lookup_failed",
+          true,
+          backoffSeconds(ev.attempts),
+        );
+        return { ...base, outcome: "failed", category: "pix_automatic_transaction_lookup_failed" };
+      }
+      const txConciliation = extractPixAutomaticConciliationIdentifier(txGet.data as AsaasPaymentFull);
+      if (!txConciliation) {
+        await failEvent(
+          adminClient,
+          ev.id,
+          "pix_automatic_transaction_conciliation_missing",
+          true,
+          backoffSeconds(ev.attempts),
+        );
+        return { ...base, outcome: "failed", category: "pix_automatic_transaction_conciliation_missing" };
+      }
+      const byTx = await resolvePixAutomaticPaymentRpc(
+        adminClient,
+        environment,
+        paymentId,
+        customer,
+        paymentAuthId,
+        txConciliation.value,
+      );
+      if (byTx.error) {
+        await failEvent(adminClient, ev.id, "pix_automatic_payment_correlation_error", true, backoffSeconds(ev.attempts));
+        return { ...base, outcome: "failed", category: "pix_automatic_payment_correlation_error" };
+      }
+      if (byTx.data?.found) {
+        resolved = byTx.data;
+      } else if (isRetryablePixCorrelationReason(byTx.data?.reason ?? null)) {
+        await failEvent(
+          adminClient,
+          ev.id,
+          byTx.data?.reason || "conciliation_unmatched",
+          true,
+          backoffSeconds(ev.attempts),
+        );
+        return { ...base, outcome: "failed", category: byTx.data?.reason || "conciliation_unmatched" };
+      } else {
+        await failEvent(adminClient, ev.id, "conciliation_unmatched", true, backoffSeconds(ev.attempts));
+        return { ...base, outcome: "failed", category: "conciliation_unmatched" };
+      }
+    } else {
+      const lookup = await findPaymentInstructionByPaymentId(creds, environment, paymentId);
+      if (lookup.outcome === "lookup_failed") {
+        await failEvent(
+          adminClient,
+          ev.id,
+          "pix_automatic_instruction_lookup_failed",
+          true,
+          backoffSeconds(ev.attempts),
+        );
+        return { ...base, outcome: "failed", category: "pix_automatic_instruction_lookup_failed" };
+      }
+      if (lookup.outcome === "ambiguous") {
+        await failEvent(adminClient, ev.id, "instruction_ambiguous", true, backoffSeconds(ev.attempts));
+        return { ...base, outcome: "failed", category: "instruction_ambiguous" };
+      }
+      if (lookup.outcome === "found") {
+        const second = await resolvePixAutomaticPaymentRpc(
+          adminClient,
+          environment,
+          paymentId,
+          customer,
+          lookup.facts.providerAuthorizationId,
+          conciliation?.value ?? null,
+        );
+        if (second.error) {
+          await failEvent(adminClient, ev.id, "pix_automatic_payment_correlation_error", true, backoffSeconds(ev.attempts));
+          return { ...base, outcome: "failed", category: "pix_automatic_payment_correlation_error" };
+        }
+        if (second.data?.found) {
+          resolved = second.data;
+        } else {
+          await failEvent(
+            adminClient,
+            ev.id,
+            "pix_automatic_authorization_not_local",
+            true,
+            backoffSeconds(ev.attempts),
+          );
+          return { ...base, outcome: "failed", category: "pix_automatic_authorization_not_local" };
+        }
+      } else if (conciliation) {
+        await failEvent(adminClient, ev.id, "conciliation_unmatched", true, backoffSeconds(ev.attempts));
+        return { ...base, outcome: "failed", category: "conciliation_unmatched" };
+      } else if (paymentAuthId) {
+        await failEvent(
+          adminClient,
+          ev.id,
+          "pix_automatic_authorization_not_local",
+          true,
+          backoffSeconds(ev.attempts),
+        );
+        return { ...base, outcome: "failed", category: "pix_automatic_authorization_not_local" };
+      } else {
+        return null;
+      }
+    }
+  }
+
+  if (!resolved?.found) return null;
+
+  const normalized = normalizePixAutomaticPaymentSnapshot(payment);
+  if (!normalized.ok) {
+    await failEvent(adminClient, ev.id, normalized.errorCode, false, 0);
+    return { ...base, outcome: "failed", category: normalized.errorCode };
+  }
+  const snap = normalized.snapshot;
+
+  const { data: applyData, error: applyError } = await adminClient.rpc(
+    "apply_billing_pix_automatic_payment_snapshot",
+    {
+      p_event_id: ev.id,
+      p_external_event_id: ev.external_event_id,
+      p_provider: PROVIDER,
+      p_environment: environment,
+      p_external_payment_id: snap.externalPaymentId,
+      p_external_customer_id: snap.externalCustomerId,
+      p_pix_authorization_id: resolved.pix_authorization_id,
+      p_pix_instruction_id: resolved.pix_instruction_id ?? null,
+      p_provider_status: snap.providerStatus,
+      p_financial_state: snap.financialState,
+      p_billing_type: snap.billingType,
+      p_value_cents: snap.valueCents,
+      p_net_value_cents: snap.netValueCents,
+      p_refunded_value_cents: snap.refundedValueCents,
+      p_due_date: snap.dueDate,
+      p_payment_date: snap.paymentDate,
+      p_confirmed_date: snap.confirmedDate,
+      p_event_type: eventType,
+      p_event_created_at: ev.event_created_at,
+    },
+  );
+  if (applyError) {
+    await failEvent(adminClient, ev.id, "apply_error", true, backoffSeconds(ev.attempts));
+    return { ...base, outcome: "failed", category: "apply_error" };
+  }
+  const apply = (applyData as { outcome?: string; entitlement_granted?: boolean } | null) ?? {};
+  if (apply.outcome === "applied") {
+    return { ...base, outcome: "processed", category: snap.financialState };
+  }
+  if (apply.outcome === "customer_mismatch") {
+    await failEvent(adminClient, ev.id, "customer_mismatch", false, 0);
+    return { ...base, outcome: "failed", category: "customer_mismatch" };
+  }
+  if (apply.outcome === "unmanaged_pix_automatic_payment") {
+    return null;
+  }
+  return { ...base, outcome: "skipped", category: apply.outcome || "not_claimed" };
+}
+
+function asNonEmptyPaymentId(value: unknown): string {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : "";
+}
+
 /** Processa um único evento reivindicado. Nunca lança: sempre resolve num EventOutcome. */
 async function processOneEvent(
   adminClient: SupabaseClient,
@@ -395,7 +651,19 @@ async function processOneEvent(
     return { ...base, outcome: "failed", category: "invalid_payment_shape" };
   }
 
-  // CORREÇÃO 2 (subscription-only): payment sem subscription NUNCA vira billing_payment.
+  const pixOutcome = await processPixAutomaticPaymentIfCorrelated(
+    adminClient,
+    environment,
+    creds,
+    ev,
+    base,
+    eventType,
+    payment,
+  );
+  if (pixOutcome) return pixOutcome;
+
+  // CORREÇÃO 2 (subscription-only): payment sem subscription e sem correlação Pix Automático
+  // NUNCA vira billing_payment (avulsa/setup/add-on continuam ignoradas).
   const subscription = typeof payment.subscription === "string" ? payment.subscription.trim() : "";
   if (subscription === "") {
     await ignoreEvent(adminClient, ev.id, "ignored_non_subscription_payment");
