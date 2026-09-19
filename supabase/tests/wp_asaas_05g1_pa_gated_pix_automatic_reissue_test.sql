@@ -2,7 +2,10 @@
 -- WP-ASAAS-05G1 · TESTES Nível 1 (BEGIN / DO / ROLLBACK).
 -- HARNESS: exige 20260919190000. Fixtures sintéticos. Sem HTTP Asaas. Sem seed permanente.
 -- RELEASE GATE: este arquivo não roda no remoto até a migration ser aplicada.
+-- Remote Management API: one transaction so pg_temp helpers survive every case.
 -- =====================================================================================
+
+begin;
 
 create or replace function pg_temp.asaas05g1_plan()
 returns uuid
@@ -24,6 +27,35 @@ begin
     json_build_object('sub', p_auth::text, 'role', 'authenticated')::text,
     true
   );
+end;
+$$;
+
+create or replace function pg_temp.asaas05g1_cpf(p_seed int)
+returns text
+language plpgsql
+as $$
+declare
+  v_base text;
+  v_sum int := 0;
+  v_d1 int;
+  v_d2 int;
+  v_i int;
+begin
+  v_base := lpad(((abs(p_seed::bigint) % 899999999) + 100000000)::text, 9, '0');
+  if v_base = repeat(substr(v_base, 1, 1), 9) then
+    v_base := '390533447';
+  end if;
+  for v_i in 1..9 loop
+    v_sum := v_sum + substr(v_base, v_i, 1)::int * (11 - v_i);
+  end loop;
+  v_d1 := case when v_sum % 11 < 2 then 0 else 11 - (v_sum % 11) end;
+  v_sum := 0;
+  for v_i in 1..9 loop
+    v_sum := v_sum + substr(v_base, v_i, 1)::int * (12 - v_i);
+  end loop;
+  v_sum := v_sum + v_d1 * 2;
+  v_d2 := case when v_sum % 11 < 2 then 0 else 11 - (v_sum % 11) end;
+  return v_base || v_d1::text || v_d2::text;
 end;
 $$;
 
@@ -63,13 +95,14 @@ declare
   v_account uuid;
   v_contract uuid;
   v_other_contract uuid;
+  v_tag text := replace(v_clinic::text, '-', '');
 begin
   insert into public.profiles (id, auth_user_id, role, full_name, email, status) values
-    (v_owner, v_owner_auth, 'professional', 'Owner 05G1', 'own-05g1@t.test', 'active'),
-    (v_admin, v_admin_auth, 'professional', 'Admin 05G1', 'adm-05g1@t.test', 'active'),
-    (v_member, v_member_auth, 'professional', 'Member 05G1', 'mem-05g1@t.test', 'active'),
-    (v_patient, v_patient_auth, 'patient', 'Paciente 05G1', 'pat-05g1@t.test', 'active'),
-    (v_pa, v_pa_auth, 'professional', 'PA 05G1', 'pa-05g1@t.test', 'active');
+    (v_owner, v_owner_auth, 'professional', 'Owner 05G1', 'own-05g1-' || v_tag || '@t.test', 'active'),
+    (v_admin, v_admin_auth, 'professional', 'Admin 05G1', 'adm-05g1-' || v_tag || '@t.test', 'active'),
+    (v_member, v_member_auth, 'professional', 'Member 05G1', 'mem-05g1-' || v_tag || '@t.test', 'active'),
+    (v_patient, v_patient_auth, 'patient', 'Paciente 05G1', 'pat-05g1-' || v_tag || '@t.test', 'active'),
+    (v_pa, v_pa_auth, 'professional', 'PA 05G1', 'pa-05g1-' || v_tag || '@t.test', 'active');
 
   insert into public.clinics (id, name, owner_profile_id) values
     (v_clinic, 'Clinica 05G1', v_owner),
@@ -89,18 +122,28 @@ begin
   insert into private.billing_accounts (
     owner_profile_id, clinic_id, provider, environment, external_customer_id
   ) values (
-    v_owner, v_clinic, 'asaas', 'sandbox', 'cus_05g1'
+    v_owner, v_clinic, 'asaas', 'sandbox', 'cus_05g1_' || substr(v_tag, 1, 12)
   ) returning id into v_account;
   insert into private.billing_accounts (
     owner_profile_id, clinic_id, provider, environment, external_customer_id
   ) values (
-    v_owner, v_other, 'asaas', 'sandbox', 'cus_05g1b'
+    v_owner, v_other, 'asaas', 'sandbox', 'cus_05g1b_' || substr(v_tag, 1, 11)
   );
 
   insert into private.billing_customer_identities (clinic_id, legal_name, tax_id, email)
     values
-      (v_clinic, 'Clinica Sintetica 05G1 LTDA', '99991111140', 'bill-05g1@t.test'),
-      (v_other, 'Clinica Outra 05G1 LTDA', '99991111141', 'bill-05g1b@t.test');
+      (
+        v_clinic,
+        'Clinica Sintetica 05G1 LTDA',
+        pg_temp.asaas05g1_cpf(hashtext(v_clinic::text)),
+        'bill-05g1-' || v_tag || '@t.test'
+      ),
+      (
+        v_other,
+        'Clinica Outra 05G1 LTDA',
+        pg_temp.asaas05g1_cpf(hashtext(v_other::text)),
+        'bill-05g1b-' || v_tag || '@t.test'
+      );
 
   v_contract := private.billing_create_commercial_contract(
     v_clinic, pg_temp.asaas05g1_plan(), null, now(), null
@@ -135,7 +178,6 @@ $$;
 
 
 -- I0: PA + REFUSED → reissued, historical old, INTENT new, one reservation, one transition audit
-begin;
 do $$
 declare
   s record;
@@ -178,10 +220,8 @@ begin
     raise exception 'ASAAS05G1 I5 FAIL actor/audit: %', ev;
   end if;
 end $$;
-rollback;
 
 -- I1: non-PA / patient / member / clinic admin forbidden
-begin;
 do $$
 declare
   s record;
@@ -201,7 +241,8 @@ begin
       raise exception 'ASAAS05G1 I1 FAIL allowed %', caller;
     exception
       when others then
-        if sqlerrm not like '%NOT_PLATFORM_ADMIN%' then
+        if sqlerrm not like '%NOT_PLATFORM_ADMIN%'
+           and sqlerrm not like '%not a platform admin%' then
           raise;
         end if;
     end;
@@ -213,10 +254,8 @@ begin
     raise exception 'ASAAS05G1 I1 FAIL mutation';
   end if;
 end $$;
-rollback;
 
 -- I2: tampering
-begin;
 do $$
 declare
   s record;
@@ -233,7 +272,10 @@ begin
     raise exception 'ASAAS05G1 I2 FAIL wrong clinic';
   exception
     when others then
-      if sqlerrm not like '%BILLING_CLINIC_MISMATCH%' and sqlerrm not like '%BILLING_ACCOUNT_UNKNOWN%' then
+      if sqlerrm not like '%BILLING_CLINIC_MISMATCH%'
+         and sqlerrm not like '%BILLING_ACCOUNT_UNKNOWN%'
+         and sqlerrm not like '%clinic mismatch%'
+         and sqlerrm not like '%billing account unknown%' then
         raise;
       end if;
   end;
@@ -243,7 +285,10 @@ begin
     raise exception 'ASAAS05G1 I2 FAIL wrong contract';
   exception
     when others then
-      if sqlerrm not like '%BILLING_CLINIC_MISMATCH%' and sqlerrm not like '%BILLING_CONTRACT_MISMATCH%' then
+      if sqlerrm not like '%BILLING_CLINIC_MISMATCH%'
+         and sqlerrm not like '%BILLING_CONTRACT_MISMATCH%'
+         and sqlerrm not like '%clinic mismatch%'
+         and sqlerrm not like '%contract mismatch%' then
         raise;
       end if;
   end;
@@ -253,7 +298,8 @@ begin
     raise exception 'ASAAS05G1 I2 FAIL other auth';
   exception
     when others then
-      if sqlerrm not like '%BILLING_CONTRACT_MISMATCH%' then
+      if sqlerrm not like '%BILLING_CONTRACT_MISMATCH%'
+         and sqlerrm not like '%contract mismatch%' then
         raise;
       end if;
   end;
@@ -263,10 +309,8 @@ begin
     raise exception 'ASAAS05G1 I2 FAIL mutation';
   end if;
 end $$;
-rollback;
 
 -- I2b: historical REFUSED while another primary exists
-begin;
 do $$
 declare
   s record;
@@ -282,7 +326,8 @@ begin
     raise exception 'ASAAS05G1 I2b FAIL historical';
   exception
     when others then
-      if sqlerrm not like '%BILLING_REISSUE_NOT_PRIMARY%' then
+      if sqlerrm not like '%BILLING_REISSUE_NOT_PRIMARY%'
+         and sqlerrm not like '%not current primary%' then
         raise;
       end if;
   end;
@@ -291,10 +336,8 @@ begin
     raise exception 'ASAAS05G1 I2b FAIL extra generation';
   end if;
 end $$;
-rollback;
 
 -- I3: state matrix
-begin;
 do $$
 declare
   s record;
@@ -351,10 +394,8 @@ begin
     raise exception 'ASAAS05G1 I3 FAIL duplicate transition audit';
   end if;
 end $$;
-rollback;
 
 -- I4: sequential repeat does not create N+2 from the same REFUSED
-begin;
 do $$
 declare
   s record;
@@ -371,7 +412,8 @@ begin
     raise exception 'ASAAS05G1 I4 FAIL second on old primary: %', r2;
   exception
     when others then
-      if sqlerrm not like '%BILLING_REISSUE_NOT_PRIMARY%' then
+      if sqlerrm not like '%BILLING_REISSUE_NOT_PRIMARY%'
+         and sqlerrm not like '%not current primary%' then
         raise;
       end if;
   end;
@@ -388,10 +430,8 @@ begin
     raise exception 'ASAAS05G1 I4 FAIL counts';
   end if;
 end $$;
-rollback;
 
 -- Grants / private remains sealed
-begin;
 do $$
 begin
   if has_function_privilege('anon', 'public.reissue_pix_automatic_authorization(uuid,uuid,uuid,text)', 'execute')
