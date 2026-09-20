@@ -8,6 +8,7 @@ import {
   listPlatformBillingEvents,
   listPlatformBillingPayments,
 } from "@/lib/api/platformBilling";
+import { getPlatformBillingReport } from "@/lib/api/platformBillingReports";
 import type {
   PlatformBillingClinicFilters,
   PlatformBillingListFilters,
@@ -76,6 +77,19 @@ export function usePlatformBillingEvents(
     queryKey: qk.platformBillingEvents(filters),
     queryFn: () => listPlatformBillingEvents(filters),
     enabled,
+    staleTime: 15_000,
+  });
+}
+
+export function usePlatformBillingReport(
+  enabled: boolean,
+  periodStart: string,
+  periodEnd: string,
+) {
+  return useQuery({
+    queryKey: qk.platformBillingReport({ periodStart, periodEnd }),
+    queryFn: () => getPlatformBillingReport(periodStart, periodEnd),
+    enabled: enabled && Boolean(periodStart) && Boolean(periodEnd),
     staleTime: 15_000,
   });
 }

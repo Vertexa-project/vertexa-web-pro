@@ -105,6 +105,7 @@ export const qk = {
   platformBillingPayments: (filters: unknown) =>
     ["platform", "billing", "payments", filters] as const,
   platformBillingEvents: (filters: unknown) => ["platform", "billing", "events", filters] as const,
+  platformBillingReport: (period: unknown) => ["platform", "billing", "report", period] as const,
   myProfileAvatar: (profileId: string) => ["profileAvatar", profileId] as const,
   avatarSignedUrl: (path: string) => ["avatar", "signedUrl", path] as const,
   avatarSignedUrlBatch: (fingerprint: string) => ["avatar", "signedUrlBatch", "profile-avatars", fingerprint] as const,
