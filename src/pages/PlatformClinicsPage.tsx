@@ -20,8 +20,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAmIPlatformAdmin } from "@/hooks/useAmIPlatformAdmin";
 import {
+  usePlatformClinicPixStatuses,
   usePlatformClinics,
   useReactivatePlatformClinic,
+  useReissuePixAutomaticAuthorization,
   useSuspendPlatformClinic,
 } from "@/hooks/usePlatformClinics";
 import type { PlatformClinic } from "@/lib/api/platformAdmin";
@@ -33,6 +35,13 @@ import {
   isExpectedClinicLifecycleError,
   normalizeSuspendReason,
 } from "@/lib/domain/clinicLifecycle";
+import {
+  canReissuePixAutomatic,
+  pixAutomaticReissueErrorMessage,
+  pixAutomaticStatusLabel,
+  isExpectedPixAutomaticReissueError,
+  type PlatformClinicPixAutomaticStatus,
+} from "@/lib/domain/pixAutomaticReissue";
 import { PLATFORM_CLINIC_VISIBLE_COLUMNS } from "@/lib/domain/platformAdmin";
 import { formatDate } from "@/lib/domain/format";
 import { captureException } from "@/lib/observability/sentry";
@@ -56,18 +65,46 @@ function StatusBadge({ status }: { status: PlatformClinic["status"] }) {
   );
 }
 
+function PixStatusBadge({ status }: { status: string }) {
+  const refused = status === "REFUSED";
+  return (
+    <span
+      className={
+        refused
+          ? "inline-flex rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-medium text-rose-800"
+          : "inline-flex rounded-full bg-slate-500/15 px-2 py-0.5 text-xs font-medium text-slate-700"
+      }
+    >
+      {pixAutomaticStatusLabel(status)}
+    </span>
+  );
+}
+
 export function PlatformClinicsPage() {
   const access = useAmIPlatformAdmin(true);
   const { data, isLoading, isError, refetch } = usePlatformClinics(access.isPlatformAdmin === true);
+  const pix = usePlatformClinicPixStatuses(access.isPlatformAdmin === true);
   const suspend = useSuspendPlatformClinic();
   const reactivate = useReactivatePlatformClinic();
+  const reissue = useReissuePixAutomaticAuthorization();
   const [target, setTarget] = useState<PlatformClinic | null>(null);
   const [mode, setMode] = useState<"suspend" | "reactivate" | null>(null);
   const [reason, setReason] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [reissueTarget, setReissueTarget] = useState<PlatformClinicPixAutomaticStatus | null>(null);
+  const [reissueError, setReissueError] = useState<string | null>(null);
 
   const pendingAction = suspend.isPending || reactivate.isPending;
   const reasonOk = mode === "reactivate" || normalizeSuspendReason(reason) !== null;
+  const pixByClinic = useMemo(() => {
+    const map = new Map<string, PlatformClinicPixAutomaticStatus[]>();
+    for (const row of pix.data ?? []) {
+      const current = map.get(row.clinicId) ?? [];
+      current.push(row);
+      map.set(row.clinicId, current);
+    }
+    return map;
+  }, [pix.data]);
 
   const columns: Column<PlatformClinic>[] = useMemo(
     () => [
@@ -86,6 +123,38 @@ export function PlatformClinicsPage() {
         key: PLATFORM_CLINIC_VISIBLE_COLUMNS[2],
         header: "Status",
         render: (row) => <StatusBadge status={row.status} />,
+      },
+      {
+        key: "pixAutomatic",
+        header: "Pix Automático",
+        render: (row) => {
+          const rows = pixByClinic.get(row.clinicId) ?? [];
+          if (rows.length === 0) {
+            return <span className="text-sm text-muted-foreground">Sem autorização</span>;
+          }
+          return (
+            <div className="flex flex-col items-start gap-2">
+              {rows.map((item) => (
+                <div key={item.authorizationId} className="flex flex-col items-start gap-1">
+                  <PixStatusBadge status={item.providerStatus} />
+                  {canReissuePixAutomatic(item.providerStatus) ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setReissueError(null);
+                        setReissueTarget(item);
+                      }}
+                      disabled={reissue.isPending}
+                    >
+                      Gerar nova autorização
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          );
+        },
       },
       {
         key: PLATFORM_CLINIC_VISIBLE_COLUMNS[3],
@@ -141,8 +210,26 @@ export function PlatformClinicsPage() {
         ),
       },
     ],
-    [pendingAction],
+    [pendingAction, pixByClinic, reissue.isPending],
   );
+
+  async function confirmReissue() {
+    if (!reissueTarget || reissue.isPending) return;
+    try {
+      await reissue.mutateAsync({
+        clinicId: reissueTarget.clinicId,
+        commercialContractId: reissueTarget.commercialContractId,
+        authorizationId: reissueTarget.authorizationId,
+      });
+      setReissueTarget(null);
+      setReissueError(null);
+    } catch (err) {
+      setReissueError(pixAutomaticReissueErrorMessage(err));
+      if (!isExpectedPixAutomaticReissueError(err)) {
+        captureException(err, { source: "platform", scope: "pix-automatic-reissue" });
+      }
+    }
+  }
 
   async function confirmAction() {
     if (!target || !mode) return;
@@ -254,6 +341,36 @@ export function PlatformClinicsPage() {
             <Button onClick={() => void confirmAction()} disabled={pendingAction || !reasonOk}>
               {pendingAction ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {mode === "suspend" ? "Suspender" : "Reativar"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={reissueTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !reissue.isPending) {
+            setReissueTarget(null);
+            setReissueError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Gerar nova autorização Pix Automático?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Uma nova tentativa de autorização será criada. A tentativa recusada continuará
+              preservada no histórico. Esta ação não realiza uma cobrança. Esta ação não gera o QR
+              automaticamente. Após criar a nova tentativa, a etapa normal de criação da autorização
+              deverá ser executada separadamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {reissueError ? <p className="text-sm text-destructive">{reissueError}</p> : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reissue.isPending}>Cancelar</AlertDialogCancel>
+            <Button onClick={() => void confirmReissue()} disabled={reissue.isPending}>
+              {reissue.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Gerar nova autorização
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

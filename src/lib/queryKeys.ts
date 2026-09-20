@@ -87,6 +87,7 @@ export const qk = {
   // Platform Admin (WP-10B2B) — isolado do cache clínico. NÃO misturar com clinicAdmin.
   platformAccess: ["platform", "access"] as const,
   platformClinics: ["platform", "clinics"] as const,
+  platformClinicPixStatuses: ["platform", "clinicPixStatuses"] as const,
   clinicOnboardingState: ["onboarding", "clinic"] as const,
   platformOnboardingSettings: ["platform", "onboardingSettings"] as const,
   platformClinicRequests: ["platform", "clinicRequests"] as const,
