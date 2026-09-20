@@ -173,8 +173,7 @@ revoke all on function private.platform_billing_charge_universe()
   from public, anon, authenticated, service_role;
 
 
-create or replace function private.platform_billing_clinic_facts()
-returns table (
+create type private.platform_billing_clinic_facts as (
   clinic_id uuid,
   clinic_name text,
   plan_code text,
@@ -203,7 +202,17 @@ returns table (
   attention_reason text,
   entitlement_enforcement text,
   entitlement_granted boolean
-)
+);
+
+comment on type private.platform_billing_clinic_facts is
+  'WP-BILLING-PRODUCT-05: row type for platform clinic billing facts. Not exposed to PostgREST.';
+
+revoke all on type private.platform_billing_clinic_facts
+  from public, anon, authenticated, service_role;
+
+
+create or replace function private.platform_billing_clinic_facts()
+returns setof private.platform_billing_clinic_facts
 language sql
 stable
 security invoker
