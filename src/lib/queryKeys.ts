@@ -57,6 +57,10 @@ export const qk = {
   clinicBillingIdentity: (clinicId: string) => ["billingIdentity", clinicId] as const,
   sellableBillingPlans: () => ["billingCatalog", "sellable"] as const,
   clinicCommercialCheckout: (clinicId: string) => ["billingCheckout", clinicId] as const,
+  clinicBillingOverview: (clinicId: string) => ["billingHub", "overview", clinicId] as const,
+  clinicBillingCharges: (clinicId: string) => ["billingHub", "charges", clinicId] as const,
+  clinicBillingPayments: (clinicId: string) => ["billingHub", "payments", clinicId] as const,
+  clinicBillingTimeline: (clinicId: string) => ["billingHub", "timeline", clinicId] as const,
   // Trilha de auditoria de exportação (WP-REPORT B) — lista filtrada/paginada + profissionais p/ filtro.
   reportExports: (filters: unknown, page: number) => ["reportExports", filters, page] as const,
   clinicProfessionalProfiles: (clinicId: string) => ["clinicProfessionalProfiles", clinicId] as const,
