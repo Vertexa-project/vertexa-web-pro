@@ -127,7 +127,7 @@ describe("extractAuthorizationFacts", () => {
     if (!qr.ok) return;
     expect(qr.qr.payload).toBe("00020126SYNTHETIC_VERTEXA_QA");
     expect(qr.qr.expirationDate).toBe("2026-09-13T15:00:00.000Z");
-    expect(JSON.stringify(qr.qr)).not.toContain("iVBORw0KGgo");
+    expect(qr.qr.encodedImage).toBe("iVBORw0KGgoAAA=");
     expect(JSON.stringify(qr.qr)).not.toContain("conciliationIdentifier");
   });
 

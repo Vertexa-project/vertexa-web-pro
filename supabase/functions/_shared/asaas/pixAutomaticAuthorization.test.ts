@@ -145,6 +145,7 @@ describe("ensurePixAutomaticAuthorization", () => {
       immediateQrCode: {
         payload: "00020126SECRET",
         expirationDate: parseAsaasDateTime("2026-09-13 12:00:00"),
+        encodedImage: "iVBORw0KGgo",
       },
     });
     expect(fetchSpy).toHaveBeenCalledTimes(1);

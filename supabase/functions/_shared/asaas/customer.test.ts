@@ -2,7 +2,7 @@
 // customer.ts só importa SupabaseClient como `import type` (apagado no transform), e o
 // fetch/AbortController usados por asaasFetch existem no Node deste runner. Sem Docker/Deno.
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { ensureCustomer, type CustomerFixture } from "./customer.ts";
+import { customerBodyFromIdentity, ensureCustomer, type CustomerFixture } from "./customer.ts";
 import type { AsaasCredentials, AsaasEnvironment } from "./client.ts";
 import { customerExternalReference } from "./keys.ts";
 import { emptyResponse, jsonResponse, makeAdminClient, malformedResponse, readSentBody } from "./testHelpers.ts";
@@ -32,6 +32,24 @@ function baseParams(adminClient: unknown, existingExternalCustomerId: string | n
     fixture,
   };
 }
+
+describe("customerBodyFromIdentity", () => {
+  it("derives the Asaas body from Vertexa identity and never accepts a fixture name", () => {
+    const body = customerBodyFromIdentity({
+      legalName: "Clínica Sintética LTDA",
+      taxId: "999.911.111-40",
+      email: "bill@t.test",
+      mobilePhone: "11988887777",
+    });
+    expect(body).toEqual({
+      name: "Clínica Sintética LTDA",
+      cpfCnpj: "99991111140",
+      email: "bill@t.test",
+      notificationDisabled: true,
+      mobilePhone: "11988887777",
+    });
+  });
+});
 
 describe("ensureCustomer", () => {
   it("H02: customer já persistido -> retorna direto, zero RPC, zero fetch", async () => {

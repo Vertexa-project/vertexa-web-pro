@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Loader2, ShieldAlert } from "lucide-react";
 
 import { BillingIdentityForm } from "@/components/billing/BillingIdentityForm";
+import { BillingPixCheckoutPanel } from "@/components/billing/BillingPixCheckoutPanel";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -118,7 +119,7 @@ export function BillingProfilePage() {
       <div className="space-y-6">
         <PageHeader
           title="Assinatura e faturamento"
-          description="Resumo comercial da clínica. Pix Automático entra no próximo passo de implementação."
+          description="Resumo comercial da clínica e configuração do Pix Automático."
         />
         <Card>
           <CardHeader>
@@ -144,16 +145,7 @@ export function BillingProfilePage() {
               <StateRow label="Pagamento" value="ainda não acompanhado nesta etapa" />
               <StateRow label="Liberação do produto" value="desligada" />
             </div>
-            <div className="rounded-lg border bg-muted/30 p-4">
-              <p className="text-sm font-medium">Próxima etapa: Configurar Pix Automático</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                A contratação comercial está registrada. A configuração do Pix Automático será liberada no próximo
-                pacote.
-              </p>
-              <Button className="mt-3" disabled title="Disponível no próximo pacote">
-                Continuar para configuração do Pix Automático
-              </Button>
-            </div>
+            {clinicId ? <BillingPixCheckoutPanel clinicId={clinicId} checkout={checkout.data} /> : null}
           </CardContent>
         </Card>
         <Card>

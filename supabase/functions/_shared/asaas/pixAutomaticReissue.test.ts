@@ -135,9 +135,10 @@ describe("asaas-outbound reissue source contracts", () => {
     expect(adminIdx).toBeGreaterThan(0);
     expect(invokeIdx).toBeGreaterThan(adminIdx);
     expect(credIdx).toBeGreaterThan(invokeIdx);
-    expect(src).toContain("if (!isAdmin)");
+    expect(src).toContain('if (gate === "PA_ONLY" && !isPlatformAdmin)');
     expect(src).toContain('return jsonResponse(401, { error: "unauthorized" })');
     expect(src).toContain('return jsonResponse(403, { error: "forbidden" })');
+    expect(src).toContain('gate === "PA_ONLY"');
     expect(src).toContain("userClient");
     expect(src).not.toContain("invokeReissuePixAutomaticAuthorization(supabaseAdmin");
     expect(src).not.toContain("invokeReissuePixAutomaticAuthorization(adminClient");

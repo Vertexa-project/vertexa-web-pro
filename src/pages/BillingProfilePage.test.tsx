@@ -108,6 +108,12 @@ vi.mock("@/hooks/useBillingCheckout", () => ({
     isPending: fixtures.createPending,
   }),
 }));
+vi.mock("@/hooks/useBillingPixCheckout", () => ({
+  useEnsureClinicCustomerFromIdentity: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  usePrepareClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useExecuteClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useReissueClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 vi.mock("@/lib/observability/sentry", () => ({ captureException: vi.fn() }));
 
 const { BillingProfilePage } = await import("./BillingProfilePage");
@@ -204,8 +210,7 @@ describe("BillingProfilePage commercial checkout", () => {
     };
     render(<BillingProfilePage />);
     expect(screen.getByText("Plano contratado")).toBeInTheDocument();
-    expect(screen.getByText(/próxima etapa: configurar pix automático/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /continuar para configuração do pix automático/i })).toBeDisabled();
-    expect(screen.queryByText(/asaas|cus_|qr code/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /configurar pix automático/i })).toBeEnabled();
+    expect(screen.queryByText(/asaas|cus_/i)).not.toBeInTheDocument();
   });
 });

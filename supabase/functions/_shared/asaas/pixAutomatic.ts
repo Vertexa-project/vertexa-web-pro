@@ -123,6 +123,7 @@ export interface PixAutomaticAuthorizationFacts {
 export interface PixAutomaticTransientQr {
   payload: string;
   expirationDate: string | null;
+  encodedImage?: string;
 }
 
 export const QR_UNAVAILABLE_ALREADY_COMPLETED = "already_completed";
@@ -230,11 +231,13 @@ export function extractTransientImmediateQr(
     return { ok: false, reason: QR_UNAVAILABLE_PAYLOAD_MISSING };
   }
   const qr = rec ? asRecord(rec.immediateQrCode) : null;
+  const encodedImage = rec ? asTrimmedString(rec.encodedImage) : null;
   return {
     ok: true,
     qr: {
       payload,
       expirationDate: qr ? parseAsaasDateTime(qr.expirationDate) : null,
+      ...(encodedImage ? { encodedImage } : {}),
     },
   };
 }

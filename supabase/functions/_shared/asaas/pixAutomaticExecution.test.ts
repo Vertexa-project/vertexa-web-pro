@@ -301,11 +301,11 @@ describe("executePreparedPixAutomaticAuthorization", () => {
         immediateQrCode: {
           payload: "00020126SECRET",
           expirationDate: parseAsaasDateTime("2026-09-13 12:00:00"),
+          encodedImage: "iVBORw0KGgo",
         },
       },
     });
-    expect(JSON.stringify(out.body)).not.toContain("iVBORw0KGgo");
-    expect(JSON.stringify(out.body)).not.toContain("encodedImage");
+    expect(JSON.stringify(calls.find((c) => c.name.startsWith("complete"))?.params)).not.toContain("iVBORw0KGgo");
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(String(fetchSpy.mock.calls[0][0])).toContain("/pix/automatic/authorizations");
     expect(fetchSpy.mock.calls[0][1]?.method).toBe("POST");
@@ -782,8 +782,9 @@ describe("pixAutomaticExecution source contracts", () => {
     expect(adminIdx).toBeGreaterThan(postIdx);
     expect(execIdx).toBeGreaterThan(adminIdx);
     expect(accountIdx).toBeGreaterThan(execIdx);
-    expect(src).toContain("if (!isAdmin)");
+    expect(src).toContain('if (gate === "PA_ONLY" && !isPlatformAdmin)');
     expect(src).toContain("verify_jwt=true");
+    expect(src).toContain("am_i_clinic_admin_for_billing_account");
     expect(src).toContain("executed.body");
     expect(src).not.toMatch(/console\.(log|debug|info|error|warn)\(/);
   });

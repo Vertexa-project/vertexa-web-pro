@@ -1,0 +1,76 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import {
+  ACTION_AUTHORITY,
+  ENSURE_CUSTOMER_FROM_IDENTITY_ACTION,
+  hasForbiddenProductKeys,
+  parseEnsureCustomerFromIdentityRequest,
+  sanitizeClinicCustomerResponse,
+  sanitizeClinicExecuteResponse,
+} from "./outboundAuthority.ts";
+
+const here = dirname(fileURLToPath(import.meta.url));
+
+describe("outbound action authority", () => {
+  it("keeps ops actions PA_ONLY and product customer/execute clinic-scoped", () => {
+    expect(ACTION_AUTHORITY.ensure_customer).toBe("PA_ONLY");
+    expect(ACTION_AUTHORITY.ensure_customer_from_identity).toBe("CLINIC_ADMIN_OWN_CLINIC");
+    expect(ACTION_AUTHORITY.execute_pix_automatic_authorization).toBe("PA_OR_CLINIC_OWN_OPERATION");
+    expect(ACTION_AUTHORITY.reissue_pix_automatic_authorization).toBe("PA_ONLY");
+    expect(ACTION_AUTHORITY.confirm_sandbox_payment).toBe("PA_ONLY");
+    expect(ACTION_AUTHORITY.probe_pix_automatic_read).toBe("PA_ONLY");
+  });
+
+  it("rejects browser-supplied provider facts on the product customer action", () => {
+    expect(
+      parseEnsureCustomerFromIdentityRequest({
+        action: ENSURE_CUSTOMER_FROM_IDENTITY_ACTION,
+        clinicId: "11111111-1111-4111-8111-111111111111",
+        cpfCnpj: "99991111140",
+      }).ok,
+    ).toBe(false);
+    expect(
+      parseEnsureCustomerFromIdentityRequest({
+        action: ENSURE_CUSTOMER_FROM_IDENTITY_ACTION,
+        clinicId: "11111111-1111-4111-8111-111111111111",
+        environment: "production",
+      }).ok,
+    ).toBe(false);
+    expect(
+      parseEnsureCustomerFromIdentityRequest({
+        action: ENSURE_CUSTOMER_FROM_IDENTITY_ACTION,
+        clinicId: "11111111-1111-4111-8111-111111111111",
+      }),
+    ).toEqual({ ok: true, clinicId: "11111111-1111-4111-8111-111111111111" });
+  });
+
+  it("sanitizes clinic responses without raw provider ids", () => {
+    expect(sanitizeClinicCustomerResponse()).toEqual({ customerBound: true });
+    const sanitized = sanitizeClinicExecuteResponse({
+      executed: true,
+      operationId: "op",
+      providerAuthorizationId: "auth_xxx",
+      providerStatus: "CREATED",
+      qrAvailable: true,
+      immediateQrCode: { payload: "000201", expirationDate: "2026-09-20T15:00:00.000Z" },
+    });
+    expect(sanitized.authorizationStatus).toBe("CREATED");
+    expect(sanitized).not.toHaveProperty("providerAuthorizationId");
+    expect(sanitized).not.toHaveProperty("operationId");
+  });
+
+  it("product path source never uses CUSTOMER_FIXTURE", () => {
+    const src = readFileSync(resolve(here, "../../asaas-outbound/index.ts"), "utf8");
+    const product = src.slice(
+      src.indexOf("if (body.action === ENSURE_CUSTOMER_FROM_IDENTITY_ACTION)"),
+      src.indexOf("if (body.action === EXECUTE_PIX_AUTOMATIC_ACTION)"),
+    );
+    expect(product).toContain("customerBodyFromIdentity");
+    expect(product).not.toContain("CUSTOMER_FIXTURE");
+    expect(src).toContain("am_i_clinic_admin");
+    expect(hasForbiddenProductKeys({ fixture: true })).toBe(true);
+  });
+});
