@@ -48,6 +48,11 @@ interface RawCheckout {
   local_billing_account_exists?: boolean;
   commercial_contract?: RawContract | null;
   pix_authorization_status?: string | null;
+  pix_generation?: number | null;
+  pix_next_action?: string;
+  local_billing_account_sandbox?: boolean;
+  provider_customer_bound?: boolean;
+  qr_available_now?: boolean;
   entitlement_enforcement?: string;
   entitlement_granted?: boolean;
 }
@@ -94,6 +99,11 @@ function mapCheckout(row: RawCheckout, fallbackClinicId: string): ClinicCommerci
     localBillingAccountExists: row.local_billing_account_exists === true,
     commercialContract: mapContract(row.commercial_contract),
     pixAuthorizationStatus: (row.pix_authorization_status as PixAuthorizationStatus | null) ?? null,
+    pixGeneration: typeof row.pix_generation === "number" ? row.pix_generation : null,
+    pixNextAction: (row.pix_next_action as ClinicCommercialCheckout["pixNextAction"]) ?? undefined,
+    localBillingAccountSandbox: row.local_billing_account_sandbox === true,
+    providerCustomerBound: row.provider_customer_bound === true,
+    qrAvailableNow: false,
     entitlementEnforcement: "OFF",
     entitlementGranted: false,
   };

@@ -57,14 +57,30 @@ export interface BillingFourStates {
   entitlementGranted: false;
 }
 
+export const PIX_NEXT_ACTIONS = [
+  "none",
+  "complete_identity",
+  "ensure_customer",
+  "prepare_execute",
+  "await_bank",
+  "reissue",
+  "done",
+] as const;
+export type PixNextAction = (typeof PIX_NEXT_ACTIONS)[number];
+
 export interface ClinicCommercialCheckout {
   clinicId: string;
   founderCheckout: typeof FOUNDER_CHECKOUT;
   identityExists: boolean;
   identityComplete: boolean;
   localBillingAccountExists: boolean;
+  localBillingAccountSandbox?: boolean;
+  providerCustomerBound?: boolean;
   commercialContract: CommercialContractSummary | null;
   pixAuthorizationStatus: PixAuthorizationStatus | null;
+  pixGeneration?: number | null;
+  pixNextAction?: PixNextAction;
+  qrAvailableNow?: false;
   entitlementEnforcement: typeof ENTITLEMENT_ENFORCEMENT;
   entitlementGranted: false;
 }

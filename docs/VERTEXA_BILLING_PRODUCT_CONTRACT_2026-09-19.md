@@ -334,7 +334,7 @@ TTL requested today: 3600 seconds. Actual expiry is the provider `expirationDate
 ## 12. QR recovery gate
 
 ```
-CHECKOUT_QR_RECOVERY = REQUIRED_DESIGN_BEFORE_BP03_RELEASE
+CHECKOUT_QR_RECOVERY = NO_SUPPORTED_QR_RECOVERY
 ```
 
 **Risk:** Clinic Admin may close or reload the page while authorization is `CREATED` and before the bank flow completes. The transient QR is then gone from memory.
@@ -360,17 +360,17 @@ This document **does not choose** an unsupported implementation. Candidates may 
 - a later-proven provider read that returns a new immediate QR without creating a second authorization
 - expiry + `REFUSED` then reissue (new generation), never a second CREATE on the same attempt
 
-If none is provider-safe, checkout cannot ship.
+BP03 product decision: **no supported QR recovery**. CREATE is the only QR source. GET authorization is state/config only. After reload while `CREATED`, the UI shows awaiting-bank copy and does not POST again.
 
 ---
 
 ## 13. Retry policy gate
 
 ```
-PIX_AUTOMATIC_RETRY_POLICY = DECISION_REQUIRED_BEFORE_MASTER_E2E
+PIX_AUTOMATIC_RETRY_POLICY = ALLOW_THREE_IN_SEVEN_DAYS
 ```
 
-The engine currently hardcodes `ALLOW_THREE_IN_SEVEN_DAYS`. That is an implementation default, **not** a closed product decision for new real product authorizations.
+Closed for **new** Clinic Admin product authorizations. Historical QA authorizations remain unchanged. Actual retry scheduling stays later Billing/delinquency work.
 
 Provider supports:
 
@@ -686,8 +686,8 @@ After BP06 PASS, a dedicated cutover WP may perform production configuration on 
 
 | Gate | Status |
 |---|---|
-| `CHECKOUT_QR_RECOVERY` | `REQUIRED_DESIGN_BEFORE_BP03_RELEASE` |
-| `PIX_AUTOMATIC_RETRY_POLICY` | `DECISION_REQUIRED_BEFORE_MASTER_E2E` |
+| `CHECKOUT_QR_RECOVERY` | `NO_SUPPORTED_QR_RECOVERY` |
+| `PIX_AUTOMATIC_RETRY_POLICY` | `ALLOW_THREE_IN_SEVEN_DAYS` (new product auths only) |
 | Product entitlement enforcement | `INTENTIONALLY_DEFERRED_PRODUCT_SCOPE` |
 | Production Asaas | Locked until BP06 PASS |
 | Live QA 2026-10-18 settlement | `DEFERRED_UNTIL_REAL_EVENT` (observe; do not simulate) |

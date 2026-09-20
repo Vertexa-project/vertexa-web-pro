@@ -14,6 +14,32 @@ export interface CustomerFixture {
   cpfCnpj: string;
   email: string;
   notificationDisabled: boolean;
+  mobilePhone?: string;
+}
+
+export interface CustomerIdentitySource {
+  legalName: string;
+  taxId: string;
+  email: string;
+  mobilePhone?: string | null;
+}
+
+/** Server-derived Asaas body. Browser never supplies these fields. */
+export function customerBodyFromIdentity(identity: CustomerIdentitySource): CustomerFixture {
+  const name = identity.legalName.trim();
+  const cpfCnpj = identity.taxId.replace(/\D/g, "");
+  const email = identity.email.trim();
+  const phone = identity.mobilePhone?.replace(/\D/g, "") ?? "";
+  if (!name || !cpfCnpj || !email) {
+    throw new Error("identity_incomplete");
+  }
+  return {
+    name,
+    cpfCnpj,
+    email,
+    notificationDisabled: true,
+    ...(phone.length >= 10 ? { mobilePhone: phone } : {}),
+  };
 }
 
 export interface EnsureCustomerResult {
@@ -138,6 +164,7 @@ export async function ensureCustomer(params: {
     cpfCnpj: fixture.cpfCnpj,
     email: fixture.email,
     notificationDisabled: fixture.notificationDisabled,
+    ...(fixture.mobilePhone ? { mobilePhone: fixture.mobilePhone } : {}),
     externalReference,
   });
 

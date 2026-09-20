@@ -1,22 +1,18 @@
-// WP-ASAAS-03 — outbound Vertexa -> Asaas (customer + subscription), Sandbox homologação.
-// WP-ASAAS-05E0D — execute_pix_automatic_authorization: só operationId já preparado.
-// WP-ASAAS-05G1 — reissue_pix_automatic_authorization: local REFUSED→INTENT. Zero HTTP Asaas.
-// Sem get_or_create_billing_account nesse action. Sem payload de browser.
+// WP-ASAAS-03 / 05E0D / 05G1 / BILLING-PRODUCT-03
 // Caller = Vertexa authenticated (verify_jwt=true). Nunca Asaas, nunca browser anônimo.
-//
-// Autorização desta WP (temporária, ver plano seção I / gate "AUTHORIZATION TEMPORÁRIA"):
-// só platform_admin pode acionar. get_or_create_billing_account já é correta para o
-// self-service futuro (auth.uid()-scoped) — só este gate extra é removido depois.
-//
-// Nunca aceita do body: environment, price, billingType, cycle, external_customer_id,
-// external_subscription_id, idempotency_key, external_reference, owner_profile_id,
-// subscription_scope. Todos server-derived.
+// Action-level authority. Never a generic authenticated gate.
+// Clinic product path: ensure_customer_from_identity + execute own prepared operation.
+// PA ops path unchanged. CUSTOMER_FIXTURE stays PA/ops only.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { supabaseUser } from "../_shared/supabaseUser.ts";
 import { readAsaasCredentials, resolveOutboundEnvironment } from "../_shared/asaas/client.ts";
-import { ensureCustomer, type CustomerFixture } from "../_shared/asaas/customer.ts";
+import {
+  customerBodyFromIdentity,
+  ensureCustomer,
+  type CustomerFixture,
+} from "../_shared/asaas/customer.ts";
 import { ensureSubscription, type SubscriptionFixture } from "../_shared/asaas/subscription.ts";
 import {
   listSubscriptionPayments,
@@ -29,6 +25,7 @@ import {
   EXECUTE_PIX_AUTOMATIC_ACTION,
   PROBE_PIX_AUTOMATIC_READ_ACTION,
   executePreparedPixAutomaticAuthorization,
+  loadPreparedPixAutomaticAuthorization,
   parseExecutePixAutomaticRequest,
   probePixAutomaticRead,
 } from "../_shared/asaas/pixAutomaticExecution.ts";
@@ -37,11 +34,18 @@ import {
   invokeReissuePixAutomaticAuthorization,
   parseReissuePixAutomaticRequest,
 } from "../_shared/asaas/pixAutomaticReissue.ts";
+import {
+  ACTION_AUTHORITY,
+  ENSURE_CUSTOMER_FROM_IDENTITY_ACTION,
+  authorityForAction,
+  parseEnsureCustomerFromIdentityRequest,
+  sanitizeClinicCustomerResponse,
+  sanitizeClinicExecuteResponse,
+} from "../_shared/asaas/outboundAuthority.ts";
 
-// ── SANDBOX E2E FIXTURE (ASAAS-03A) — homologação técnica só. NUNCA preço/plano oficial. ──
 const CUSTOMER_FIXTURE: CustomerFixture = {
   name: "Vertexa Sandbox QA",
-  cpfCnpj: "99991111140", // CPF sintético publicado pela própria Asaas (docs sandbox de teste)
+  cpfCnpj: "99991111140",
   email: "sandbox-qa@vertexa.test",
   notificationDisabled: true,
 };
@@ -49,7 +53,7 @@ const CUSTOMER_FIXTURE: CustomerFixture = {
 const SUBSCRIPTION_FIXTURE: SubscriptionFixture = {
   billingType: "PIX",
   cycle: "MONTHLY",
-  valueCents: 1000, // R$10,00 — fixture, nunca regra comercial (schema usa CHECK > 0)
+  valueCents: 1000,
   description: "Vertexa Sandbox E2E",
 };
 
@@ -74,6 +78,17 @@ interface BillingAccountResult {
   external_customer_id: string | null;
 }
 
+interface ProviderCustomerContext {
+  identity_complete?: boolean;
+  legal_name?: string | null;
+  tax_id?: string | null;
+  email?: string | null;
+  mobile_phone?: string | null;
+  billing_account_id?: string | null;
+  environment?: string | null;
+  external_customer_id?: string | null;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "POST") {
@@ -88,27 +103,22 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(400, { error: "invalid_json" });
   }
 
-  const validActions = [
-    "ensure_customer",
-    "ensure_subscription",
-    "list_subscription_payments",
-    "confirm_sandbox_payment",
-    "check_webhook_receipt",
-    EXECUTE_PIX_AUTOMATIC_ACTION,
-    PROBE_PIX_AUTOMATIC_READ_ACTION,
-    REISSUE_PIX_AUTOMATIC_ACTION,
-  ];
+  const validActions = Object.keys(ACTION_AUTHORITY);
   if (typeof body.action !== "string" || !validActions.includes(body.action)) {
     return jsonResponse(400, { error: "invalid_action" });
   }
 
-  const userClient = supabaseUser(req);
+  const gate = authorityForAction(body.action);
+  if (!gate) return jsonResponse(400, { error: "invalid_action" });
 
+  const userClient = supabaseUser(req);
   const { data: isAdmin, error: adminError } = await userClient.rpc("am_i_platform_admin");
   if (adminError) {
     return jsonResponse(401, { error: "unauthorized" });
   }
-  if (!isAdmin) {
+  const isPlatformAdmin = isAdmin === true;
+
+  if (gate === "PA_ONLY" && !isPlatformAdmin) {
     return jsonResponse(403, { error: "forbidden" });
   }
 
@@ -141,18 +151,97 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(probe.status, probe.body);
   }
 
+  if (body.action === ENSURE_CUSTOMER_FROM_IDENTITY_ACTION) {
+    const parsed = parseEnsureCustomerFromIdentityRequest(body);
+    if (!parsed.ok) {
+      return jsonResponse(400, { error: parsed.error });
+    }
+    const { data: clinicAdmin, error: clinicAdminError } = await userClient.rpc("am_i_clinic_admin", {
+      p_clinic: parsed.clinicId,
+    });
+    if (clinicAdminError) return jsonResponse(401, { error: "unauthorized" });
+    if (clinicAdmin !== true) return jsonResponse(403, { error: "forbidden" });
+
+    const adminClient = supabaseAdmin();
+    const { data: ctxRaw, error: ctxError } = await adminClient.rpc(
+      "billing_load_provider_customer_context_outbound",
+      { p_clinic_id: parsed.clinicId },
+    );
+    if (ctxError || !ctxRaw) {
+      return jsonResponse(409, { error: "identity_context_unavailable" });
+    }
+    const ctx = ctxRaw as ProviderCustomerContext;
+    if (ctx.identity_complete !== true) {
+      return jsonResponse(409, { error: "identity_incomplete" });
+    }
+    if (ctx.environment !== "sandbox") {
+      return jsonResponse(409, { error: "production_locked" });
+    }
+    if (!ctx.billing_account_id) {
+      return jsonResponse(409, { error: "billing_account_unknown" });
+    }
+    if (environment !== "sandbox") {
+      return jsonResponse(409, { error: "production_locked" });
+    }
+
+    let identityBody: CustomerFixture;
+    try {
+      identityBody = customerBodyFromIdentity({
+        legalName: ctx.legal_name ?? "",
+        taxId: ctx.tax_id ?? "",
+        email: ctx.email ?? "",
+        mobilePhone: ctx.mobile_phone,
+      });
+    } catch {
+      return jsonResponse(409, { error: "identity_incomplete" });
+    }
+
+    const result = await ensureCustomer({
+      adminClient,
+      environment: "sandbox",
+      creds: credentials,
+      billingAccountId: ctx.billing_account_id,
+      existingExternalCustomerId: ctx.external_customer_id ?? null,
+      fixture: identityBody,
+    });
+    if (!result.ok) {
+      return jsonResponse(502, { error: "provider_error", category: result.errorCode });
+    }
+    return jsonResponse(200, sanitizeClinicCustomerResponse());
+  }
+
   if (body.action === EXECUTE_PIX_AUTOMATIC_ACTION) {
     const parsed = parseExecutePixAutomaticRequest(body);
     if (!parsed.ok) {
       return jsonResponse(400, { error: parsed.error });
     }
+
+    const adminClient = supabaseAdmin();
+    if (!isPlatformAdmin) {
+      const loaded = await loadPreparedPixAutomaticAuthorization(adminClient, parsed.operationId);
+      if (!loaded.ok) {
+        return jsonResponse(loaded.error === "operation_not_found" ? 404 : 409, { error: loaded.error });
+      }
+      if (loaded.facts.environment !== "sandbox") {
+        return jsonResponse(409, { error: "production_locked" });
+      }
+      const { data: ownsAccount, error: ownsError } = await userClient.rpc(
+        "am_i_clinic_admin_for_billing_account",
+        { p_billing_account_id: loaded.facts.billingAccountId },
+      );
+      if (ownsError) return jsonResponse(401, { error: "unauthorized" });
+      if (ownsAccount !== true) return jsonResponse(403, { error: "forbidden" });
+    }
+
     const executed = await executePreparedPixAutomaticAuthorization({
-      adminClient: supabaseAdmin(),
+      adminClient,
       configuredEnvironmentRaw: Deno.env.get("ASAAS_OUTBOUND_ENVIRONMENT"),
       operationId: parsed.operationId,
       creds: credentials,
     });
-    // Body já é o contrato sanitizado (IDs + QR transitório). Sem raw provider.
+    if (!isPlatformAdmin && executed.ok) {
+      return jsonResponse(executed.status, sanitizeClinicExecuteResponse(executed.body as Record<string, unknown>));
+    }
     return jsonResponse(executed.status, executed.body);
   }
 
@@ -211,10 +300,6 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // list_subscription_payments / confirm_sandbox_payment / check_webhook_receipt —
-  // homologação técnica ASAAS-03B. subscriptionId/customerId/paymentId nunca vêm do body:
-  // sempre resolvidos server-side a partir da subscription_scope=primary já persistida
-  // (resolve_primary_asaas_subscription).
   const paymentParams = {
     adminClient,
     environment,
