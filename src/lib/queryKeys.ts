@@ -97,6 +97,14 @@ export const qk = {
   clinicOnboardingState: ["onboarding", "clinic"] as const,
   platformOnboardingSettings: ["platform", "onboardingSettings"] as const,
   platformClinicRequests: ["platform", "clinicRequests"] as const,
+  platformBillingOverview: ["platform", "billing", "overview"] as const,
+  platformBillingClinics: (filters: unknown) => ["platform", "billing", "clinics", filters] as const,
+  platformClinicBillingDetail: (clinicId: string) =>
+    ["platform", "billing", "clinic", clinicId] as const,
+  platformBillingCharges: (filters: unknown) => ["platform", "billing", "charges", filters] as const,
+  platformBillingPayments: (filters: unknown) =>
+    ["platform", "billing", "payments", filters] as const,
+  platformBillingEvents: (filters: unknown) => ["platform", "billing", "events", filters] as const,
   myProfileAvatar: (profileId: string) => ["profileAvatar", profileId] as const,
   avatarSignedUrl: (path: string) => ["avatar", "signedUrl", path] as const,
   avatarSignedUrlBatch: (fingerprint: string) => ["avatar", "signedUrlBatch", "profile-avatars", fingerprint] as const,

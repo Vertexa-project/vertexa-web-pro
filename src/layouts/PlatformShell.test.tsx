@@ -62,6 +62,7 @@ describe("PlatformShell", () => {
     expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Solicitações" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Clínicas" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Faturamento" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Configurações" })).toBeInTheDocument();
     expect(screen.queryByLabelText(/whatsapp/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/pacientes/i)).not.toBeInTheDocument();

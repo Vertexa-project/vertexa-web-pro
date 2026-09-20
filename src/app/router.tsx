@@ -63,6 +63,56 @@ const PlatformRequestsPage = lazy(() =>
 const PlatformSettingsPage = lazy(() =>
   import("@/pages/PlatformSettingsPage").then((m) => ({ default: m.PlatformSettingsPage })),
 );
+const PlatformBillingLayout = lazy(() =>
+  import("@/pages/platform-billing/PlatformBillingLayout").then((m) => ({
+    default: m.PlatformBillingLayout,
+  })),
+);
+const PlatformBillingOverviewPage = lazy(() =>
+  import("@/pages/platform-billing/PlatformBillingOverviewPage").then((m) => ({
+    default: m.PlatformBillingOverviewPage,
+  })),
+);
+const PlatformBillingClinicsPage = lazy(() =>
+  import("@/pages/platform-billing/PlatformBillingClinicsPage").then((m) => ({
+    default: m.PlatformBillingClinicsPage,
+  })),
+);
+const PlatformBillingChargesPage = lazy(() =>
+  import("@/pages/platform-billing/PlatformBillingChargesPage").then((m) => ({
+    default: m.PlatformBillingChargesPage,
+  })),
+);
+const PlatformBillingPaymentsPage = lazy(() =>
+  import("@/pages/platform-billing/PlatformBillingPaymentsPage").then((m) => ({
+    default: m.PlatformBillingPaymentsPage,
+  })),
+);
+const PlatformBillingDelinquencyPage = lazy(() =>
+  import("@/pages/platform-billing/PlatformBillingDelinquencyPage").then((m) => ({
+    default: m.PlatformBillingDelinquencyPage,
+  })),
+);
+const PlatformBillingPixPage = lazy(() =>
+  import("@/pages/platform-billing/PlatformBillingPixPage").then((m) => ({
+    default: m.PlatformBillingPixPage,
+  })),
+);
+const PlatformBillingEventsPage = lazy(() =>
+  import("@/pages/platform-billing/PlatformBillingEventsPage").then((m) => ({
+    default: m.PlatformBillingEventsPage,
+  })),
+);
+const PlatformBillingReportsPage = lazy(() =>
+  import("@/pages/platform-billing/PlatformBillingReportsPage").then((m) => ({
+    default: m.PlatformBillingReportsPage,
+  })),
+);
+const PlatformClinicBillingDetailPage = lazy(() =>
+  import("@/pages/platform-billing/PlatformClinicBillingDetailPage").then((m) => ({
+    default: m.PlatformClinicBillingDetailPage,
+  })),
+);
 
 export const router = createBrowserRouter(
   [
@@ -126,6 +176,21 @@ export const router = createBrowserRouter(
             { index: true, element: <PlatformDashboardPage /> },
             { path: "solicitacoes", element: <PlatformRequestsPage /> },
             { path: "clinicas", element: <PlatformClinicsPage /> },
+            {
+              path: "billing",
+              element: <PlatformBillingLayout />,
+              children: [
+                { index: true, element: <PlatformBillingOverviewPage /> },
+                { path: "contratos", element: <PlatformBillingClinicsPage /> },
+                { path: "cobrancas", element: <PlatformBillingChargesPage /> },
+                { path: "pagamentos", element: <PlatformBillingPaymentsPage /> },
+                { path: "inadimplencia", element: <PlatformBillingDelinquencyPage /> },
+                { path: "pix", element: <PlatformBillingPixPage /> },
+                { path: "eventos", element: <PlatformBillingEventsPage /> },
+                { path: "relatorios", element: <PlatformBillingReportsPage /> },
+                { path: "clinicas/:clinicId", element: <PlatformClinicBillingDetailPage /> },
+              ],
+            },
             { path: "configuracoes", element: <PlatformSettingsPage /> },
           ],
         },

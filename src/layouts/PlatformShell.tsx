@@ -14,6 +14,7 @@ const NAV = [
   { to: "/platform", label: "Dashboard", end: true },
   { to: "/platform/solicitacoes", label: "Solicitações", end: false },
   { to: "/platform/clinicas", label: "Clínicas", end: false },
+  { to: "/platform/billing", label: "Faturamento", end: false },
   { to: "/platform/configuracoes", label: "Configurações", end: false },
 ] as const;
 
