@@ -25,12 +25,49 @@ const fixtures = vi.hoisted(() => ({
     mobilePhone: null as string | null,
     updatedAt: "2026-09-12T00:00:00Z",
   },
+  pulse: {
+    planId: "plan-pulse",
+    planVersionId: "ver-pulse",
+    code: "pulse",
+    displayName: "Pulse",
+    priceCents: 39000,
+    currency: "BRL" as const,
+    billingCycle: "monthly" as const,
+    tagline: "O pulso constante",
+    marketingMessage: null,
+    features: ["Painel de pacientes"],
+    sellable: true,
+  },
+  checkout: {
+    clinicId: "c1",
+    founderCheckout: "OUT_OF_SCOPE_BLOCKED_BY_ELIGIBILITY" as const,
+    identityExists: false,
+    identityComplete: false,
+    localBillingAccountExists: false,
+    commercialContract: null as null | {
+      id: string;
+      status: "active";
+      planId: string;
+      planVersionId: string;
+      planCode: string;
+      planDisplayName: string;
+      priceCents: number;
+      currency: string;
+      billingCycle: "monthly";
+    },
+    pixAuthorizationStatus: null,
+    entitlementEnforcement: "OFF" as const,
+    entitlementGranted: false as const,
+  },
   isClinicAdmin: true,
   adminLoading: false,
-  profileLoading: false,
-  profileError: false,
-  exists: false,
-  mutate: vi.fn(),
+  pageLoading: false,
+  pageError: false,
+  identityExists: false,
+  createPending: false,
+  mutateIdentity: vi.fn(),
+  mutateContract: vi.fn(),
+  refetchCheckout: vi.fn(),
 }));
 
 vi.mock("@/hooks/useCurrentProfessional", () => ({
@@ -45,75 +82,130 @@ vi.mock("@/hooks/useIsClinicAdmin", () => ({
 }));
 vi.mock("@/hooks/useBillingProfile", () => ({
   useClinicBillingIdentity: () => ({
-    data: fixtures.exists ? fixtures.savedIdentity : fixtures.emptyIdentity,
-    isLoading: fixtures.profileLoading,
-    isError: fixtures.profileError,
+    data: fixtures.identityExists ? fixtures.savedIdentity : fixtures.emptyIdentity,
+    isLoading: false,
+    isError: false,
   }),
   useUpsertClinicBillingIdentity: () => ({
-    mutate: fixtures.mutate,
+    mutate: fixtures.mutateIdentity,
     isPending: false,
+  }),
+}));
+vi.mock("@/hooks/useBillingCheckout", () => ({
+  useSellableBillingPlans: () => ({
+    data: [fixtures.pulse],
+    isLoading: fixtures.pageLoading,
+    isError: fixtures.pageError,
+  }),
+  useClinicCommercialCheckout: () => ({
+    data: fixtures.checkout,
+    isLoading: fixtures.pageLoading,
+    isError: fixtures.pageError,
+    refetch: fixtures.refetchCheckout,
+  }),
+  useCreateClinicCommercialContract: () => ({
+    mutate: fixtures.mutateContract,
+    isPending: fixtures.createPending,
   }),
 }));
 vi.mock("@/lib/observability/sentry", () => ({ captureException: vi.fn() }));
 
 const { BillingProfilePage } = await import("./BillingProfilePage");
 
-describe("BillingProfilePage", () => {
+describe("BillingProfilePage commercial checkout", () => {
   beforeEach(() => {
     fixtures.isClinicAdmin = true;
     fixtures.adminLoading = false;
-    fixtures.profileLoading = false;
-    fixtures.profileError = false;
-    fixtures.exists = false;
-    fixtures.mutate.mockReset();
+    fixtures.pageLoading = false;
+    fixtures.pageError = false;
+    fixtures.identityExists = false;
+    fixtures.createPending = false;
+    fixtures.checkout.identityExists = false;
+    fixtures.checkout.identityComplete = false;
+    fixtures.checkout.commercialContract = null;
+    fixtures.checkout.localBillingAccountExists = false;
+    fixtures.mutateIdentity.mockReset();
+    fixtures.mutateContract.mockReset();
+    fixtures.refetchCheckout.mockReset();
   });
 
-  it("nega acesso ao não-admin sem expor documento", async () => {
+  it("nega acesso ao não-admin sem checkout", () => {
     fixtures.isClinicAdmin = false;
     render(<BillingProfilePage />);
     expect(screen.getByText(/apenas o administrador da clínica/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/cpf ou cnpj/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/asaas|billing_customer|rpc/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Pulse")).not.toBeInTheDocument();
+    expect(screen.queryByText(/asaas|cus_|billing_customer/i)).not.toBeInTheDocument();
   });
 
-  it("mostra formulário vazio para admin e valida CPF", async () => {
-    const user = userEvent.setup();
+  it("mostra cards com preço vindo do RPC e avança para cobrança", async () => {
+    const user = userEvent.setup({ delay: null });
     render(<BillingProfilePage />);
-    expect(
-      screen.getByText(/esses dados serão usados para faturamento e cobrança/i),
-    ).toBeInTheDocument();
-    await user.type(screen.getByLabelText(/nome ou razão social/i), "Clínica Alfa");
-    await user.type(screen.getByLabelText(/cpf ou cnpj/i), "11111111111");
+    expect(screen.getByRole("button", { name: /pulse/i })).toBeInTheDocument();
+    expect(screen.getByText(/390/)).toBeInTheDocument();
+    expect(screen.queryByText("390")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /pulse/i }));
+    await user.click(screen.getByRole("button", { name: /^continuar$/i }));
+    expect(screen.getByLabelText(/razão social \/ nome legal/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/cpf\/cnpj/i)).toBeInTheDocument();
+  });
+
+  it("valida CPF no passo de cobrança e não chama contrato", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<BillingProfilePage />);
+    await user.click(screen.getByRole("button", { name: /pulse/i }));
+    await user.click(screen.getByRole("button", { name: /^continuar$/i }));
+    await user.type(screen.getByLabelText(/razão social \/ nome legal/i), "Clínica Alfa");
+    await user.type(screen.getByLabelText(/cpf\/cnpj/i), "11111111111");
     await user.type(screen.getByLabelText(/e-mail de cobrança/i), "bill@t.test");
-    await user.click(screen.getByRole("button", { name: /salvar dados de faturamento/i }));
+    await user.click(screen.getByRole("button", { name: /salvar dados de cobrança/i }));
     expect(screen.getByRole("alert")).toHaveTextContent(/cpf ou cnpj inválido/i);
-    expect(fixtures.mutate).not.toHaveBeenCalled();
+    expect(fixtures.mutateIdentity).not.toHaveBeenCalled();
+    expect(fixtures.mutateContract).not.toHaveBeenCalled();
   });
 
-  it("salva valores normalizados e não mostra seletor de pagamento", async () => {
-    const user = userEvent.setup();
+  it("revisa e confirma só o contrato comercial", async () => {
+    const user = userEvent.setup({ delay: null });
+    fixtures.identityExists = true;
+    fixtures.checkout.identityExists = true;
+    fixtures.checkout.identityComplete = true;
     render(<BillingProfilePage />);
-    await user.type(screen.getByLabelText(/nome ou razão social/i), "Clínica Alfa");
-    await user.type(screen.getByLabelText(/cpf ou cnpj/i), "999.911.111-40");
-    await user.type(screen.getByLabelText(/e-mail de cobrança/i), "  BILL@T.TEST ");
-    await user.click(screen.getByRole("button", { name: /salvar dados de faturamento/i }));
-    expect(fixtures.mutate).toHaveBeenCalledWith(
-      {
-        legalName: "Clínica Alfa",
-        taxId: "99991111140",
-        email: "bill@t.test",
-        mobilePhone: null,
-      },
-      expect.any(Object),
-    );
-    expect(screen.queryByText(/assinatura agora|qr code|cartão/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /pulse/i }));
+    await user.click(screen.getByRole("button", { name: /^continuar$/i }));
+    expect(screen.getByRole("button", { name: /confirmar contratação/i })).toBeInTheDocument();
+    expect(screen.getByText(/sem pix e sem qr/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /confirmar contratação/i }));
+    expect(fixtures.mutateContract).toHaveBeenCalledWith("ver-pulse", expect.any(Object));
   });
 
-  it("mascara o CPF depois de salvo", async () => {
-    fixtures.exists = true;
+  it("desabilita confirmação em double-submit", async () => {
+    const user = userEvent.setup({ delay: null });
+    fixtures.identityExists = true;
+    fixtures.checkout.identityComplete = true;
+    fixtures.createPending = true;
     render(<BillingProfilePage />);
-    expect(screen.getByText("***.***.***-40")).toBeInTheDocument();
-    expect(screen.queryByDisplayValue("99991111140")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /editar/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /pulse/i }));
+    await user.click(screen.getByRole("button", { name: /^continuar$/i }));
+    expect(screen.getByRole("button", { name: /confirmando/i })).toBeDisabled();
+  });
+
+  it("mostra plano contratado sem fingir checkout completo", () => {
+    fixtures.identityExists = true;
+    fixtures.checkout.identityComplete = true;
+    fixtures.checkout.commercialContract = {
+      id: "cc1",
+      status: "active",
+      planId: "plan-pulse",
+      planVersionId: "ver-pulse",
+      planCode: "pulse",
+      planDisplayName: "Pulse",
+      priceCents: 39000,
+      currency: "BRL",
+      billingCycle: "monthly",
+    };
+    render(<BillingProfilePage />);
+    expect(screen.getByText("Plano contratado")).toBeInTheDocument();
+    expect(screen.getByText(/próxima etapa: configurar pix automático/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /continuar para configuração do pix automático/i })).toBeDisabled();
+    expect(screen.queryByText(/asaas|cus_|qr code/i)).not.toBeInTheDocument();
   });
 });

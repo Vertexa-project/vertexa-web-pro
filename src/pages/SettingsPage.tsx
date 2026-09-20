@@ -252,19 +252,16 @@ export function SettingsPage() {
           description="Cobrança é por clínica. Os dados fiscais ficam só com o administrador."
         >
           <SettingRow label="Plano atual">
-            <Badge tone="muted">Em breve</Badge>
+            <Badge tone="muted">Ver em faturamento</Badge>
           </SettingRow>
           <SettingRow label="Pacientes ativos" value="—" />
           {isClinicAdmin ? (
-            <SettingRow label="Dados de faturamento">
+            <SettingRow label="Assinatura e cobrança">
               <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/faturamento")}>
                 Gerenciar
               </Button>
             </SettingRow>
           ) : null}
-          <SettingRow label="Gerenciar assinatura">
-            <SoonButton>Gerenciar</SoonButton>
-          </SettingRow>
         </SectionCard>
 
         <SectionCard icon={Bell} title="Notificações" description="Como você é avisado de menções e pendências.">

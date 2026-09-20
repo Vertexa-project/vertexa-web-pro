@@ -29,6 +29,7 @@ export function useUpsertClinicBillingIdentity(clinicId: string | null) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.clinicBillingIdentity(clinicId ?? "none") });
+      qc.invalidateQueries({ queryKey: qk.clinicCommercialCheckout(clinicId ?? "none") });
     },
   });
 }
