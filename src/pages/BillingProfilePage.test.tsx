@@ -114,6 +114,41 @@ vi.mock("@/hooks/useBillingPixCheckout", () => ({
   useExecuteClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReissueClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
+vi.mock("@/hooks/useBillingHub", () => ({
+  useClinicBillingOverview: () => ({
+    data: {
+      clinicId: "c1",
+      plan: fixtures.checkout.commercialContract
+        ? {
+            displayName: fixtures.checkout.commercialContract.planDisplayName,
+            priceCents: fixtures.checkout.commercialContract.priceCents,
+            currency: "BRL",
+            billingCycle: "monthly",
+            contractStatus: "active",
+          }
+        : null,
+      pixAuthorizationStatus: fixtures.checkout.pixAuthorizationStatus,
+      pixGeneration: null,
+      identityComplete: fixtures.checkout.identityComplete,
+      nextCharge: null,
+      financialSituation: {
+        summaryCode: fixtures.checkout.commercialContract ? "no_charges" : "no_plan",
+        attention: false,
+        overdueCount: 0,
+        overdueCents: null,
+      },
+      latestPaymentDisplayState: null,
+      chargeCount: 0,
+      entitlementEnforcement: "OFF",
+      entitlementGranted: false,
+    },
+    isLoading: false,
+    isError: false,
+  }),
+  useClinicBillingCharges: () => ({ data: [], isLoading: false, isError: false }),
+  useClinicBillingPayments: () => ({ data: [], isLoading: false, isError: false }),
+  useClinicBillingTimeline: () => ({ data: [], isLoading: false, isError: false }),
+}));
 vi.mock("@/lib/observability/sentry", () => ({ captureException: vi.fn() }));
 
 const { BillingProfilePage } = await import("./BillingProfilePage");
@@ -194,7 +229,7 @@ describe("BillingProfilePage commercial checkout", () => {
     expect(screen.getByRole("button", { name: /confirmando/i })).toBeDisabled();
   });
 
-  it("mostra plano contratado sem fingir checkout completo", () => {
+  it("mostra o hub da clínica sem fingir checkout completo", () => {
     fixtures.identityExists = true;
     fixtures.checkout.identityComplete = true;
     fixtures.checkout.commercialContract = {
@@ -209,8 +244,13 @@ describe("BillingProfilePage commercial checkout", () => {
       billingCycle: "monthly",
     };
     render(<BillingProfilePage />);
-    expect(screen.getByText("Plano contratado")).toBeInTheDocument();
+    expect(screen.getByText("Situação da assinatura")).toBeInTheDocument();
+    expect(screen.getByText("Cobranças")).toBeInTheDocument();
+    expect(screen.getByText("Pagamentos")).toBeInTheDocument();
+    expect(screen.getByText("Linha do tempo")).toBeInTheDocument();
+    expect(screen.getByText("Plano atual")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /configurar pix automático/i })).toBeEnabled();
     expect(screen.queryByText(/asaas|cus_/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /criar cobrança/i })).not.toBeInTheDocument();
   });
 });

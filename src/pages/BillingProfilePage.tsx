@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { Loader2, ShieldAlert } from "lucide-react";
 
+import { BillingHubCharges } from "@/components/billing/BillingHubCharges";
+import { BillingHubOverview } from "@/components/billing/BillingHubOverview";
+import { BillingHubPayments } from "@/components/billing/BillingHubPayments";
+import { BillingHubTimeline } from "@/components/billing/BillingHubTimeline";
 import { BillingIdentityForm } from "@/components/billing/BillingIdentityForm";
 import { BillingPixCheckoutPanel } from "@/components/billing/BillingPixCheckoutPanel";
 import { PageHeader } from "@/components/PageHeader";
@@ -21,7 +25,6 @@ import {
   formatBillingPriceCents,
   isActiveCommercialContract,
   isExpectedBillingCheckoutError,
-  resolveFourStates,
   type SellableBillingPlan,
 } from "@/lib/domain/billingCheckout";
 import { captureException } from "@/lib/observability/sentry";
@@ -54,7 +57,6 @@ export function BillingProfilePage() {
     identityComplete: checkout.data?.identityComplete === true,
     selectedPlanVersionId,
   });
-  const fourStates = checkout.data ? resolveFourStates(checkout.data) : null;
 
   if (adminLoading) {
     return (
@@ -119,32 +121,21 @@ export function BillingProfilePage() {
       <div className="space-y-6">
         <PageHeader
           title="Assinatura e faturamento"
-          description="Resumo comercial da clínica e configuração do Pix Automático."
+          description="Acompanhe o plano, o Pix Automático e as cobranças da clínica."
         />
+        {clinicId ? <BillingHubOverview clinicId={clinicId} checkout={checkout.data} /> : null}
+        {clinicId ? <BillingHubCharges clinicId={clinicId} /> : null}
+        {clinicId ? <BillingHubPayments clinicId={clinicId} /> : null}
+        {clinicId ? <BillingHubTimeline clinicId={clinicId} /> : null}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Plano contratado</CardTitle>
+            <CardTitle className="text-base">Pix Automático</CardTitle>
             <CardDescription>
-              Contrato comercial {contract.status}. Isso ainda não significa pagamento recebido nem acesso liberado.
+              Autorização bancária do plano {contract.planDisplayName}. Contrato comercial {contract.status}{" "}
+              não significa pagamento recebido nem acesso liberado.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="font-display text-2xl font-semibold">{contract.planDisplayName}</p>
-                <p className="text-sm text-muted-foreground">{billingCycleLabel(contract.billingCycle)}</p>
-              </div>
-              <p className="font-display text-xl font-semibold">
-                {formatBillingPriceCents(contract.priceCents, contract.currency)}
-                <span className="ml-1 text-sm font-normal text-muted-foreground">/mês</span>
-              </p>
-            </div>
-            <div className="grid gap-2 text-sm sm:grid-cols-2">
-              <StateRow label="Contrato comercial" value={fourStates?.commercialContractStatus ?? "—"} />
-              <StateRow label="Pix Automático" value={fourStates?.pixAuthorizationStatus ?? "ainda não configurado"} />
-              <StateRow label="Pagamento" value="ainda não acompanhado nesta etapa" />
-              <StateRow label="Liberação do produto" value="desligada" />
-            </div>
+          <CardContent>
             {clinicId ? <BillingPixCheckoutPanel clinicId={clinicId} checkout={checkout.data} /> : null}
           </CardContent>
         </Card>
@@ -345,15 +336,6 @@ function SelectedPlanHint({ plan }: { plan: SellableBillingPlan }) {
       <p className="text-sm text-muted-foreground">
         {formatBillingPriceCents(plan.priceCents, plan.currency)} · {billingCycleLabel(plan.billingCycle)}
       </p>
-    </div>
-  );
-}
-
-function StateRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border px-3 py-2">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium capitalize">{value}</p>
     </div>
   );
 }

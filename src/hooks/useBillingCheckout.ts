@@ -35,6 +35,10 @@ export function useCreateClinicCommercialContract(clinicId: string | null) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.clinicCommercialCheckout(clinicId ?? "none") });
       qc.invalidateQueries({ queryKey: qk.clinicBillingIdentity(clinicId ?? "none") });
+      qc.invalidateQueries({ queryKey: qk.clinicBillingOverview(clinicId ?? "none") });
+      qc.invalidateQueries({ queryKey: qk.clinicBillingCharges(clinicId ?? "none") });
+      qc.invalidateQueries({ queryKey: qk.clinicBillingPayments(clinicId ?? "none") });
+      qc.invalidateQueries({ queryKey: qk.clinicBillingTimeline(clinicId ?? "none") });
       qc.invalidateQueries({ queryKey: qk.sellableBillingPlans() });
     },
   });
