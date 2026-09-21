@@ -850,20 +850,45 @@ create trigger billing_professionals_commercial_guard
   for each row
   execute function private.billing_professionals_commercial_guard();
 
+-- Explicit clinical policies. Do NOT loop tables that do not share clinic_id.
+-- patients / appointments: DIRECT_CLINIC_ID
+-- patient_documents / professional_patient_links: VIA_PATIENT_ID via private.patient_clinic
 do $policies$
-declare
-  t text;
 begin
-  foreach t in array array['patients', 'appointments', 'patient_documents']
-  loop
-    if to_regclass('public.' || t) is not null then
-      execute format('drop policy if exists billing_preprod_clinical_access on public.%I', t);
-      execute format(
-        'create policy billing_preprod_clinical_access on public.%I as restrictive for all to authenticated using (private.billing_clinical_product_permitted(clinic_id)) with check (private.billing_clinical_product_permitted(clinic_id))',
-        t
+  if to_regclass('public.patients') is not null then
+    drop policy if exists billing_preprod_clinical_access on public.patients;
+    create policy billing_preprod_clinical_access on public.patients
+      as restrictive
+      for all
+      to authenticated
+      using (private.billing_clinical_product_permitted(clinic_id))
+      with check (private.billing_clinical_product_permitted(clinic_id));
+  end if;
+
+  if to_regclass('public.appointments') is not null then
+    drop policy if exists billing_preprod_clinical_access on public.appointments;
+    create policy billing_preprod_clinical_access on public.appointments
+      as restrictive
+      for all
+      to authenticated
+      using (private.billing_clinical_product_permitted(clinic_id))
+      with check (private.billing_clinical_product_permitted(clinic_id));
+  end if;
+
+  if to_regclass('public.patient_documents') is not null then
+    drop policy if exists billing_preprod_clinical_access on public.patient_documents;
+    create policy billing_preprod_clinical_access on public.patient_documents
+      as restrictive
+      for all
+      to authenticated
+      using (
+        private.billing_clinical_product_permitted(private.patient_clinic(patient_id))
+      )
+      with check (
+        private.billing_clinical_product_permitted(private.patient_clinic(patient_id))
       );
-    end if;
-  end loop;
+  end if;
+
   if to_regclass('public.professional_patient_links') is not null then
     drop policy if exists billing_preprod_clinical_access on public.professional_patient_links;
     create policy billing_preprod_clinical_access on public.professional_patient_links
@@ -871,14 +896,10 @@ begin
       for all
       to authenticated
       using (
-        private.billing_clinical_product_permitted(
-          (select pat.clinic_id from public.patients pat where pat.id = patient_id)
-        )
+        private.billing_clinical_product_permitted(private.patient_clinic(patient_id))
       )
       with check (
-        private.billing_clinical_product_permitted(
-          (select pat.clinic_id from public.patients pat where pat.id = patient_id)
-        )
+        private.billing_clinical_product_permitted(private.patient_clinic(patient_id))
       );
   end if;
 end

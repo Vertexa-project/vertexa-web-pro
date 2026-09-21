@@ -91,4 +91,26 @@ describe("WP-BILLING-PREPROD-02 — security source contracts", () => {
     expect(sql).not.toMatch(/'aging',\s*private\.platform_billing_aging\(/);
     expect(sql).not.toMatch(/null::text as pix_status[\s\S]{0,200}'pix_status', p_row\.pix_status/);
   });
+
+  it("does not assume patient_documents.clinic_id; resolves via private.patient_clinic", () => {
+    const sql = readFileSync(resolve(root, MIGRATION), "utf8");
+    expect(sql).not.toMatch(
+      /foreach t in array array\[[^\]]*patient_documents[^\]]*\][\s\S]{0,400}billing_clinical_product_permitted\(clinic_id\)/i,
+    );
+    expect(sql).not.toMatch(
+      /create policy billing_preprod_clinical_access on public\.patient_documents[\s\S]{0,400}billing_clinical_product_permitted\(clinic_id\)/i,
+    );
+    expect(sql).toMatch(
+      /create policy billing_preprod_clinical_access on public\.patient_documents[\s\S]{0,500}using \(\s*private\.billing_clinical_product_permitted\(private\.patient_clinic\(patient_id\)\)\s*\)/i,
+    );
+    expect(sql).toMatch(
+      /create policy billing_preprod_clinical_access on public\.patient_documents[\s\S]{0,700}with check \(\s*private\.billing_clinical_product_permitted\(private\.patient_clinic\(patient_id\)\)\s*\)/i,
+    );
+    expect(sql).toMatch(
+      /create policy billing_preprod_clinical_access on public\.patients[\s\S]{0,300}billing_clinical_product_permitted\(clinic_id\)/i,
+    );
+    expect(sql).toMatch(
+      /create policy billing_preprod_clinical_access on public\.appointments[\s\S]{0,300}billing_clinical_product_permitted\(clinic_id\)/i,
+    );
+  });
 });
