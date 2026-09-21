@@ -40,10 +40,27 @@ const { PlatformBillingReportsPage } = await import("./PlatformBillingReportsPag
 beforeEach(() => {
   reportState.data = {
     ...emptyPlatformBillingReport({ start: "2026-09-01", end: "2026-09-30" }),
-    receivedInPeriodCents: 40000,
-    receivedInPeriodCount: 1,
+    financial: {
+      sandbox: {
+        receivedCents: 40000,
+        receivedCount: 1,
+        pendingCents: 0,
+        pendingCount: 0,
+        overdueCents: 0,
+        overdueCount: 0,
+      },
+      production: {
+        receivedCents: 0,
+        receivedCount: 0,
+        pendingCents: 0,
+        pendingCount: 0,
+        overdueCents: 0,
+        overdueCount: 0,
+      },
+    },
     receivedByPlan: [
       {
+        environment: "sandbox",
         planCode: "pulse",
         planDisplayName: "Pulse",
         planAttribution: "contract",
@@ -51,7 +68,7 @@ beforeEach(() => {
         paymentCount: 1,
       },
     ],
-    paymentsByStatus: [{ status: "received", paymentCount: 1, amountCents: 40000 }],
+    paymentsByStatus: [{ environment: "sandbox", status: "received", paymentCount: 1, amountCents: 40000 }],
     activePixAutomaticAuthorizations: 1,
     delinquentClinics: 0,
     delinquentItems: [],

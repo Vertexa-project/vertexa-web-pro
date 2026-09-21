@@ -68,6 +68,18 @@ export async function getMyClinicCommercialAccess(clinicId: string): Promise<Cli
     p_clinic_id: clinicId,
   });
   if (error) throw error;
+  const rec = asRecord(data);
+  if (
+    !rec ||
+    typeof rec.product_allowed !== "boolean" ||
+    typeof rec.access_class !== "string" ||
+    typeof rec.rollout_mode !== "string"
+  ) {
+    const malformed = new Error("COMMERCIAL_ACCESS_MALFORMED");
+    (malformed as { hint?: string; code?: string }).hint = "COMMERCIAL_ACCESS_MALFORMED";
+    (malformed as { hint?: string; code?: string }).code = "COMMERCIAL_ACCESS_MALFORMED";
+    throw malformed;
+  }
   return mapClinicCommercialAccess(data, clinicId);
 }
 

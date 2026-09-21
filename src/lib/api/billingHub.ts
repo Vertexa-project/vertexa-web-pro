@@ -3,6 +3,7 @@ import type { PixAuthorizationStatus } from "@/lib/domain/billingCheckout";
 import {
   emptyBillingOverview,
   isBillingMethod,
+  isBillingProviderEnvironment,
   isChargeDisplayState,
   isPaymentDisplayState,
   isTimelineEventType,
@@ -77,6 +78,7 @@ interface RawEvent {
   id?: string;
   occurred_at?: string;
   type?: string;
+  environment?: string | null;
 }
 
 interface RawList<T> {
@@ -186,7 +188,9 @@ function mapPayment(row: RawPayment): ClinicBillingPayment | null {
 
 function mapEvent(row: RawEvent): ClinicBillingTimelineEvent | null {
   if (!row.id || !row.occurred_at || !row.type || !isTimelineEventType(row.type)) return null;
-  return { id: row.id, occurredAt: row.occurred_at, type: row.type };
+  const environment =
+    row.environment && isBillingProviderEnvironment(row.environment) ? row.environment : null;
+  return { id: row.id, occurredAt: row.occurred_at, type: row.type, environment };
 }
 
 export async function getMyClinicBillingOverview(clinicId: string): Promise<ClinicBillingOverview> {

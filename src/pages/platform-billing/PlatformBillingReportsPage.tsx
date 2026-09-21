@@ -14,6 +14,7 @@ import {
   agingBucketLabel,
   pixAutomaticStatusLabel,
 } from "@/lib/domain/platformBilling";
+import { providerEnvironmentLabel } from "@/lib/domain/billingHub";
 import {
   buildBillingReportCsv,
   currentSaoPauloMonth,
@@ -23,6 +24,7 @@ import {
   reportDate,
   reportMoney,
   validateReportPeriod,
+  type PlatformBillingReportEnvironmentView,
   type PlatformBillingReportKind,
 } from "@/lib/domain/platformBillingReports";
 
@@ -50,6 +52,7 @@ export function PlatformBillingReportsPage() {
   const [start, setStart] = useState(defaults.start);
   const [end, setEnd] = useState(defaults.end);
   const [kind, setKind] = useState<PlatformBillingReportKind>("payments");
+  const [envView, setEnvView] = useState<PlatformBillingReportEnvironmentView>("comparison");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportEmpty, setExportEmpty] = useState(false);
@@ -68,6 +71,7 @@ export function PlatformBillingReportsPage() {
         periodStart: start,
         periodEnd: end,
         kind,
+        environment: envView === "comparison" ? null : envView,
         limit: 500,
         offset: 0,
       });
@@ -140,6 +144,23 @@ export function PlatformBillingReportsPage() {
             />
           </div>
           <div className="min-w-[12rem]">
+            <Label htmlFor="bp06-env" className="text-xs text-muted-foreground">
+              Ambiente
+            </Label>
+            <select
+              id="bp06-env"
+              value={envView}
+              onChange={(event) =>
+                setEnvView(event.target.value as PlatformBillingReportEnvironmentView)
+              }
+              className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="comparison">Comparação</option>
+              <option value="sandbox">Sandbox</option>
+              <option value="production">Produção</option>
+            </select>
+          </div>
+          <div className="min-w-[12rem]">
             <Label htmlFor="bp06-kind" className="text-xs text-muted-foreground">
               Exportação CSV
             </Label>
@@ -184,25 +205,53 @@ export function PlatformBillingReportsPage() {
           Recebido, em aberto e vencido
         </h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          {data ? `${reportDate(data.periodStart)} — ${reportDate(data.periodEnd)}` : "Período civil"}
+          {data ? `${reportDate(data.periodStart)} — ${reportDate(data.periodEnd)}` : "Período civil"}.
+          Sandbox não é receita de Produção.
         </p>
-        <dl className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <Metric
-            label="Recebido no recorte"
-            value={reportMoney(data?.receivedInPeriodCents ?? 0)}
-            hint={`${data?.receivedInPeriodCount ?? 0} pagamentos`}
-          />
-          <Metric
-            label="Em aberto no recorte"
-            value={reportMoney(data?.pendingInPeriodCents ?? 0)}
-            hint={`${data?.pendingInPeriodCount ?? 0} cobranças`}
-          />
-          <Metric
-            label="Vencido no recorte"
-            value={reportMoney(data?.overdueInPeriodCents ?? 0)}
-            hint={`${data?.overdueInPeriodCount ?? 0} cobranças`}
-          />
-        </dl>
+        {(envView === "comparison" || envView === "sandbox") && (
+          <div className="mt-4 space-y-2">
+            <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sandbox</h4>
+            <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <Metric
+                label="Recebido Sandbox"
+                value={reportMoney(data?.financial.sandbox.receivedCents ?? 0)}
+                hint={`${data?.financial.sandbox.receivedCount ?? 0} pagamentos`}
+              />
+              <Metric
+                label="Em aberto Sandbox"
+                value={reportMoney(data?.financial.sandbox.pendingCents ?? 0)}
+                hint={`${data?.financial.sandbox.pendingCount ?? 0} cobranças`}
+              />
+              <Metric
+                label="Vencido Sandbox"
+                value={reportMoney(data?.financial.sandbox.overdueCents ?? 0)}
+                hint={`${data?.financial.sandbox.overdueCount ?? 0} cobranças`}
+              />
+            </dl>
+          </div>
+        )}
+        {(envView === "comparison" || envView === "production") && (
+          <div className="mt-6 space-y-2">
+            <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Produção</h4>
+            <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <Metric
+                label="Recebido Produção"
+                value={reportMoney(data?.financial.production.receivedCents ?? 0)}
+                hint={`${data?.financial.production.receivedCount ?? 0} pagamentos`}
+              />
+              <Metric
+                label="Em aberto Produção"
+                value={reportMoney(data?.financial.production.pendingCents ?? 0)}
+                hint={`${data?.financial.production.pendingCount ?? 0} cobranças`}
+              />
+              <Metric
+                label="Vencido Produção"
+                value={reportMoney(data?.financial.production.overdueCents ?? 0)}
+                hint={`${data?.financial.production.overdueCount ?? 0} cobranças`}
+              />
+            </dl>
+          </div>
+        )}
       </section>
 
       <section aria-labelledby="bp07-commercial">
@@ -252,6 +301,9 @@ export function PlatformBillingReportsPage() {
               <thead>
                 <tr className="border-b text-muted-foreground">
                   <th scope="col" className="py-2 font-medium">
+                    Ambiente
+                  </th>
+                  <th scope="col" className="py-2 font-medium">
                     Plano
                   </th>
                   <th scope="col" className="py-2 font-medium">
@@ -267,7 +319,11 @@ export function PlatformBillingReportsPage() {
               </thead>
               <tbody>
                 {data?.receivedByPlan.map((row) => (
-                  <tr key={`${row.planCode ?? "none"}-${row.planAttribution}`} className="border-b border-border/60">
+                  <tr
+                    key={`${row.environment ?? "none"}-${row.planCode ?? "none"}-${row.planAttribution}`}
+                    className="border-b border-border/60"
+                  >
+                    <td className="py-2">{providerEnvironmentLabel(row.environment) ?? "—"}</td>
                     <td className="py-2">{row.planDisplayName ?? row.planCode ?? "Não atribuído"}</td>
                     <td className="py-2 text-muted-foreground">{planAttributionLabel(row.planAttribution)}</td>
                     <td className="py-2">{reportMoney(row.receivedCents)}</td>
@@ -291,9 +347,14 @@ export function PlatformBillingReportsPage() {
           />
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {data?.paymentsByStatus.map((row) => (
-              <li key={row.status} className="border-l border-border pl-4">
-                <p className="text-xs text-muted-foreground">{paymentStatusLabel(row.status)}</p>
+            {data?.paymentsByStatus
+              .filter((row) => envView === "comparison" || row.environment === envView)
+              .map((row) => (
+              <li key={`${row.environment ?? "none"}-${row.status}`} className="border-l border-border pl-4">
+                <p className="text-xs text-muted-foreground">
+                  {paymentStatusLabel(row.status)}
+                  {row.environment ? ` · ${providerEnvironmentLabel(row.environment)}` : ""}
+                </p>
                 <p className="mt-1 font-medium">{reportMoney(row.amountCents)}</p>
                 <p className="text-xs text-muted-foreground">{row.paymentCount} registros</p>
               </li>
@@ -331,6 +392,9 @@ export function PlatformBillingReportsPage() {
                     Clínica
                   </th>
                   <th scope="col" className="py-2 font-medium">
+                    Ambiente
+                  </th>
+                  <th scope="col" className="py-2 font-medium">
                     Vencido
                   </th>
                   <th scope="col" className="py-2 font-medium">
@@ -342,9 +406,12 @@ export function PlatformBillingReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data?.delinquentItems.map((row) => (
-                  <tr key={row.clinicId} className="border-b border-border/60">
+                {data?.delinquentItems
+                  .filter((row) => envView === "comparison" || row.environment === envView)
+                  .map((row) => (
+                  <tr key={`${row.clinicId}-${row.environment ?? "none"}`} className="border-b border-border/60">
                     <td className="py-2">{row.clinicName}</td>
+                    <td className="py-2">{providerEnvironmentLabel(row.environment) ?? "—"}</td>
                     <td className="py-2">
                       {row.overdueCount} · {reportMoney(row.overdueCents)}
                     </td>

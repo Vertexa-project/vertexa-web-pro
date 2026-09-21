@@ -45,6 +45,8 @@ const state = vi.hoisted(() => ({
     } | undefined,
     isLoading: false,
     isError: false,
+    error: null as unknown,
+    refetch: () => undefined,
   },
 }));
 
@@ -155,6 +157,8 @@ beforeEach(() => {
     },
     isLoading: false,
     isError: false,
+    error: null,
+    refetch: () => undefined,
   };
 });
 
@@ -337,6 +341,8 @@ describe("ProtectedRoute — PRE_CONTRACT commercial gate", () => {
       },
       isLoading: false,
       isError: false,
+      error: null,
+      refetch: () => undefined,
     };
     renderRoute();
     expect(screen.getByTestId("tela-pre-contrato")).toBeInTheDocument();
@@ -354,6 +360,8 @@ describe("ProtectedRoute — PRE_CONTRACT commercial gate", () => {
       },
       isLoading: false,
       isError: false,
+      error: null,
+      refetch: () => undefined,
     };
     renderRoute("/configuracoes/faturamento");
     expect(screen.getByTestId("faturamento")).toBeInTheDocument();
@@ -371,15 +379,83 @@ describe("ProtectedRoute — PRE_CONTRACT commercial gate", () => {
       },
       isLoading: false,
       isError: false,
+      error: null,
+      refetch: () => undefined,
     };
     renderRoute();
     expect(screen.getByTestId("painel")).toBeInTheDocument();
     expect(screen.queryByTestId("tela-pre-contrato")).not.toBeInTheDocument();
   });
 
-  it("RPC error fail-opens so existing clinics are not locked out", () => {
-    state.commercial = { data: undefined, isLoading: false, isError: true };
+  it("recognized missing RPC remains compatible and mounts the product", () => {
+    state.commercial = {
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { code: "PGRST202", message: "Could not find the function get_my_clinic_commercial_access" },
+      refetch: () => undefined,
+    };
     renderRoute();
     expect(screen.getByTestId("painel")).toBeInTheDocument();
+    expect(screen.queryByTestId("commercial-access-error")).not.toBeInTheDocument();
+  });
+
+  it("ENFORCE resolver network failure does not mount the clinical product", () => {
+    state.commercial = {
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { message: "Failed to fetch" },
+      refetch: () => undefined,
+    };
+    renderRoute();
+    expect(screen.getByTestId("commercial-access-error")).toBeInTheDocument();
+    expect(screen.queryByTestId("painel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tela-pre-contrato")).not.toBeInTheDocument();
+  });
+
+  it("ENFORCE HTTP 500 does not grant FULL access", () => {
+    state.commercial = {
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { code: "500", message: "internal" },
+      refetch: () => undefined,
+    };
+    renderRoute();
+    expect(screen.getByTestId("commercial-access-error")).toBeInTheDocument();
+    expect(screen.queryByTestId("painel")).not.toBeInTheDocument();
+  });
+
+  it("ENFORCE malformed payload does not mount the clinical product", () => {
+    state.commercial = {
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: {
+        code: "COMMERCIAL_ACCESS_MALFORMED",
+        hint: "COMMERCIAL_ACCESS_MALFORMED",
+        message: "COMMERCIAL_ACCESS_MALFORMED",
+      },
+      refetch: () => undefined,
+    };
+    renderRoute();
+    expect(screen.getByTestId("commercial-access-error")).toBeInTheDocument();
+    expect(screen.queryByTestId("painel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tela-pre-contrato")).not.toBeInTheDocument();
+  });
+
+  it("expired session is auth, not PRE_CONTRACT", () => {
+    state.commercial = {
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { hint: "BILLING_NOT_AUTHENTICATED", code: "42501" },
+      refetch: () => undefined,
+    };
+    renderRoute();
+    expect(screen.getByTestId("login")).toBeInTheDocument();
+    expect(screen.queryByTestId("painel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tela-pre-contrato")).not.toBeInTheDocument();
   });
 });

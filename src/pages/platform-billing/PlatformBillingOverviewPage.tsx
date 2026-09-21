@@ -66,11 +66,29 @@ export function PlatformBillingOverviewPage() {
           . Valores recebidos e vencidos; isto não é MRR.
         </p>
         <dl className="mt-4 grid grid-cols-2 gap-6 lg:grid-cols-4">
-          <Metric label="Recebido no mês" value={formatPlatformMoney(data?.receivedInPeriodCents)} />
-          <Metric label="Em aberto" value={formatPlatformMoney(data?.pendingAmountCents)} />
           <Metric
-            label="Vencido"
-            value={formatPlatformMoney(data?.overdueAmountCents)}
+            label="Recebido Sandbox"
+            value={formatPlatformMoney(data?.financial.sandbox.receivedCents)}
+          />
+          <Metric
+            label="Recebido Produção"
+            value={formatPlatformMoney(data?.financial.production.receivedCents)}
+          />
+          <Metric
+            label="Em aberto Sandbox"
+            value={formatPlatformMoney(data?.financial.sandbox.pendingCents)}
+          />
+          <Metric
+            label="Em aberto Produção"
+            value={formatPlatformMoney(data?.financial.production.pendingCents)}
+          />
+          <Metric
+            label="Vencido Sandbox"
+            value={formatPlatformMoney(data?.financial.sandbox.overdueCents)}
+          />
+          <Metric
+            label="Vencido Produção"
+            value={formatPlatformMoney(data?.financial.production.overdueCents)}
             hint={`${data?.delinquentClinics ?? 0} ${(data?.delinquentClinics ?? 0) === 1 ? "clínica inadimplente" : "clínicas inadimplentes"}`}
           />
           <Metric

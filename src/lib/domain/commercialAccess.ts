@@ -38,6 +38,60 @@ export function isCommercialOnboardingPath(pathname: string): boolean {
   );
 }
 
+export function isMissingCommercialAccessFunction(error: unknown): boolean {
+  const code =
+    error && typeof error === "object"
+      ? `${String((error as { code?: unknown }).code ?? "")} ${String((error as { message?: unknown }).message ?? "")} ${String((error as { hint?: unknown }).hint ?? "")}`
+      : String(error ?? "");
+  return /PGRST202|42883|function.*get_my_clinic_commercial_access/i.test(code);
+}
+
+export type CommercialShellDecision =
+  | "allow"
+  | "pre_contract"
+  | "resolver_unavailable"
+  | "resolution_failed"
+  | "auth_required";
+
+export function isCommercialAuthFailure(error: unknown): boolean {
+  const code =
+    error && typeof error === "object"
+      ? `${String((error as { code?: unknown }).code ?? "")} ${String((error as { message?: unknown }).message ?? "")} ${String((error as { hint?: unknown }).hint ?? "")}`
+      : String(error ?? "");
+  return /BILLING_NOT_AUTHENTICATED|PGRST301|JWT expired|not authenticated|invalid jwt/i.test(code);
+}
+
+export function isMalformedCommercialAccessPayload(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return true;
+  const rec = raw as Record<string, unknown>;
+  return (
+    typeof rec.product_allowed !== "boolean" ||
+    typeof rec.access_class !== "string" ||
+    typeof rec.rollout_mode !== "string"
+  );
+}
+
+export function resolveCommercialShellGate(input: {
+  isLoading: boolean;
+  isError: boolean;
+  error?: unknown;
+  productAllowed?: boolean;
+  pathname: string;
+}): CommercialShellDecision {
+  if (input.isLoading) {
+    return "allow";
+  }
+  if (input.isError) {
+    if (isCommercialAuthFailure(input.error)) return "auth_required";
+    if (isMissingCommercialAccessFunction(input.error)) return "resolver_unavailable";
+    return "resolution_failed";
+  }
+  if (input.productAllowed === false && !isCommercialOnboardingPath(input.pathname)) {
+    return "pre_contract";
+  }
+  return "allow";
+}
+
 export type ProviderWriteMode = "LOCKED" | "CANARY" | "OPEN";
 
 export function isProductionProviderWriteAllowed(input: {

@@ -6,7 +6,7 @@ import { useAmIPlatformAdmin } from "@/hooks/useAmIPlatformAdmin";
 import { useMyClinicCommercialAccess } from "@/hooks/useCommercialAccess";
 import { useIdentity } from "@/hooks/useIdentity";
 import { useMyClinicMemberships } from "@/hooks/useProfessionalStatus";
-import { isCommercialOnboardingPath } from "@/lib/domain/commercialAccess";
+import { resolveCommercialShellGate } from "@/lib/domain/commercialAccess";
 import { pickActingMembership, resolveClinicAccess } from "@/lib/domain/professionalStatus";
 import {
   resolvePendingOnboardingGate,
@@ -20,6 +20,7 @@ import {
 import { ClinicSuspendedPage } from "@/pages/ClinicSuspendedPage";
 import { PendingAccessPage } from "@/pages/PendingAccessPage";
 
+import { CommercialAccessError } from "./CommercialAccessError";
 import { AuthGate } from "./AuthGate";
 import { PlatformAuthorityError } from "./PlatformAuthorityError";
 
@@ -101,10 +102,20 @@ function ClinicAccessGate({ children }: { children: React.ReactNode }) {
           </div>
         );
       }
-      if (
-        commercial.data?.productAllowed === false &&
-        !isCommercialOnboardingPath(location.pathname)
-      ) {
+      const shell = resolveCommercialShellGate({
+        isLoading: commercial.isLoading,
+        isError: commercial.isError,
+        error: commercial.error,
+        productAllowed: commercial.data?.productAllowed,
+        pathname: location.pathname,
+      });
+      if (shell === "auth_required") {
+        return <Navigate to="/login" replace />;
+      }
+      if (shell === "resolution_failed") {
+        return <CommercialAccessError onRetry={() => void commercial.refetch()} />;
+      }
+      if (shell === "pre_contract") {
         return <CommercialActivationPage />;
       }
     }

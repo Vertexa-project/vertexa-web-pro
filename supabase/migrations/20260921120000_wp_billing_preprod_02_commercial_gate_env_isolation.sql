@@ -1317,11 +1317,1143 @@ end;
 $$;
 
 
+-- ── PREPROD-02R1: dual-env read scoping + report/timeline environment ────────
+
+drop function if exists private.platform_billing_payment_plan_facts();
+create function private.platform_billing_payment_plan_facts()
+returns table (
+  payment_id uuid,
+  clinic_id uuid,
+  clinic_name text,
+  amount_cents integer,
+  currency text,
+  financial_state text,
+  due_date date,
+  payment_date date,
+  billing_type text,
+  method text,
+  plan_code text,
+  plan_display_name text,
+  plan_attribution text,
+  environment text
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select
+    p.id as payment_id,
+    a.clinic_id,
+    c.name as clinic_name,
+    p.value_cents::integer as amount_cents,
+    'BRL'::text as currency,
+    p.financial_state,
+    p.due_date,
+    p.payment_date,
+    p.billing_type,
+    private.billing_hub_payment_method(p.billing_type) as method,
+    pl.code as plan_code,
+    pl.display_name as plan_display_name,
+    case
+      when cc.id is not null then 'contract'
+      else 'unattributed'
+    end as plan_attribution,
+    a.environment
+  from private.billing_payments p
+  join private.billing_accounts a on a.id = p.billing_account_id
+  join public.clinics c on c.id = a.clinic_id
+  left join private.billing_pix_automatic_authorizations auth
+    on auth.id = p.pix_authorization_id
+  left join private.billing_subscriptions sub
+    on sub.id = p.billing_subscription_id
+  left join private.billing_commercial_contracts cc
+    on cc.id = coalesce(auth.commercial_contract_id, sub.commercial_contract_id)
+  left join private.billing_plan_versions pv on pv.id = cc.plan_version_id
+  left join private.billing_plans pl on pl.id = pv.plan_id
+  where a.clinic_id is not null
+    and p.environment = a.environment
+    and p.financial_state not in ('voided', 'unknown');
+$$;
+
+comment on function private.platform_billing_payment_plan_facts() is
+  'WP-BILLING-PREPROD-02R1: payment facts carry provider environment. Sandbox money is never Production money.';
+
+revoke all on function private.platform_billing_payment_plan_facts()
+  from public, anon, authenticated, service_role;
+
+
+drop function if exists private.platform_billing_charge_universe();
+create function private.platform_billing_charge_universe()
+returns table (
+  clinic_id uuid,
+  charge_id uuid,
+  source text,
+  amount_cents integer,
+  currency text,
+  due_date date,
+  paid_date date,
+  display_state text,
+  method text,
+  occurred_at timestamptz,
+  environment text
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  with today as (
+    select private.billing_hub_business_date() as d
+  ),
+  pay as (
+    select
+      a.clinic_id,
+      p.id as charge_id,
+      'payment'::text as source,
+      p.value_cents::integer as amount_cents,
+      'BRL'::text as currency,
+      p.due_date,
+      p.payment_date as paid_date,
+      private.billing_hub_charge_state_from_payment(p.financial_state, p.due_date, t.d) as display_state,
+      private.billing_hub_payment_method(p.billing_type) as method,
+      p.created_at as occurred_at,
+      a.environment
+    from private.billing_payments p
+    join private.billing_accounts a on a.id = p.billing_account_id
+    cross join today t
+    where a.clinic_id is not null
+      and p.environment = a.environment
+      and p.financial_state not in ('voided', 'unknown')
+  ),
+  instr as (
+    select
+      cc.clinic_id,
+      i.id as charge_id,
+      'instruction'::text as source,
+      cc.contracted_price_cents as amount_cents,
+      cc.contracted_currency as currency,
+      i.due_date,
+      null::date as paid_date,
+      'PROGRAMMED'::text as display_state,
+      'PIX'::text as method,
+      i.created_at as occurred_at,
+      auth.environment
+    from private.billing_pix_automatic_payment_instructions i
+    join private.billing_pix_automatic_authorizations auth
+      on auth.id = i.pix_authorization_id
+    join private.billing_commercial_contracts cc
+      on cc.id = auth.commercial_contract_id
+    where cc.clinic_id is not null
+      and i.environment = auth.environment
+      and i.status in ('AWAITING_REQUEST', 'SCHEDULED')
+      and not exists (
+        select 1
+          from private.billing_payments p
+         where p.pix_instruction_id = i.id
+           and p.financial_state not in ('voided', 'unknown')
+      )
+  )
+  select pay.clinic_id, pay.charge_id, pay.source, pay.amount_cents, pay.currency,
+         pay.due_date, pay.paid_date, pay.display_state, pay.method, pay.occurred_at,
+         pay.environment
+    from pay
+  union all
+  select instr.clinic_id, instr.charge_id, instr.source, instr.amount_cents, instr.currency,
+         instr.due_date, instr.paid_date, instr.display_state, instr.method, instr.occurred_at,
+         instr.environment
+    from instr;
+$$;
+
+revoke all on function private.platform_billing_charge_universe()
+  from public, anon, authenticated, service_role;
+
+
+create or replace function private.platform_billing_clinic_facts()
+returns setof private.platform_billing_clinic_facts
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  with today as (
+    select private.billing_hub_business_date() as d
+  ),
+  contract as (
+    select distinct on (cc.clinic_id)
+      cc.clinic_id,
+      cc.status as contract_status,
+      (timezone('America/Sao_Paulo', cc.effective_from))::date as contract_effective_from,
+      p.code as plan_code,
+      p.display_name as plan_display_name,
+      cc.contracted_price_cents as plan_price_cents,
+      cc.contracted_currency as plan_currency,
+      cc.billing_cycle,
+      cc.id as contract_id
+    from private.billing_commercial_contracts cc
+    join private.billing_plan_versions pv on pv.id = cc.plan_version_id
+    join private.billing_plans p on p.id = pv.plan_id
+    order by
+      cc.clinic_id,
+      case cc.status when 'active' then 0 when 'pending' then 1 else 2 end,
+      cc.effective_from desc
+  ),
+  account as (
+    select
+      a.clinic_id,
+      bool_or(a.external_customer_id is not null) as customer_bound
+    from private.billing_accounts a
+    where a.clinic_id is not null
+    group by a.clinic_id
+  ),
+  pix as (
+    select distinct on (cc.clinic_id)
+      cc.clinic_id,
+      auth.provider_status as pix_status,
+      auth.generation as pix_generation
+    from private.billing_pix_automatic_authorizations auth
+    join private.billing_commercial_contracts cc
+      on cc.id = auth.commercial_contract_id
+    where auth.is_primary
+    order by cc.clinic_id, auth.generation desc
+  ),
+  identity as (
+    select i.clinic_id
+      from private.billing_customer_identities i
+     where btrim(i.legal_name) <> ''
+       and private.billing_tax_id_is_valid(i.tax_id)
+       and private.billing_email_is_valid(i.email)
+  ),
+  charges as materialized (
+    select * from private.platform_billing_charge_universe()
+  ),
+  charge_agg as (
+    select
+      u.clinic_id,
+      count(*)::integer as charge_count,
+      count(*) filter (where u.display_state = 'OVERDUE')::integer as overdue_count,
+      coalesce(sum(u.amount_cents) filter (where u.display_state = 'OVERDUE'), 0)::bigint as overdue_cents,
+      coalesce(sum(u.amount_cents) filter (where u.display_state in ('PROGRAMMED', 'PENDING')), 0)::bigint as pending_cents,
+      count(*) filter (where u.display_state in ('PROGRAMMED', 'PENDING'))::integer as open_count,
+      count(*) filter (where u.display_state = 'PAID')::integer as paid_count,
+      min(u.due_date) filter (where u.display_state = 'OVERDUE') as oldest_overdue_due
+    from charges u
+    group by u.clinic_id
+  ),
+  next_charge as (
+    select distinct on (u.clinic_id)
+      u.clinic_id,
+      u.due_date as next_charge_due,
+      u.amount_cents as next_charge_cents,
+      u.display_state as next_charge_state
+    from charges u
+    cross join today t
+    where u.display_state in ('PROGRAMMED', 'PENDING')
+      and u.due_date is not null
+      and u.due_date >= t.d
+    order by u.clinic_id, u.due_date asc, u.occurred_at asc, u.charge_id asc
+  ),
+  latest_pay as (
+    select distinct on (a.clinic_id)
+      a.clinic_id,
+      private.billing_hub_payment_display_state(p.financial_state, p.due_date, t.d) as latest_payment_state,
+      coalesce(p.payment_date, p.due_date) as latest_payment_date
+    from private.billing_payments p
+    join private.billing_accounts a on a.id = p.billing_account_id
+    cross join today t
+    where a.clinic_id is not null
+      and p.environment = a.environment
+      and p.financial_state not in ('voided', 'unknown')
+    order by a.clinic_id, coalesce(p.payment_date, p.due_date, t.d) desc, p.created_at desc
+  )
+  select
+    c.id as clinic_id,
+    c.name as clinic_name,
+    ct.plan_code,
+    ct.plan_display_name,
+    ct.plan_price_cents,
+    ct.plan_currency,
+    ct.billing_cycle,
+    ct.contract_status,
+    ct.contract_effective_from,
+    (idn.clinic_id is not null) as identity_complete,
+    coalesce(ac.customer_bound, false) as customer_bound,
+    px.pix_status,
+    px.pix_generation,
+    case
+      when ct.contract_id is null then 'no_plan'
+      when coalesce(ca.overdue_count, 0) > 0 then 'overdue'
+      when coalesce(ca.open_count, 0) > 0 then 'pending'
+      when coalesce(ca.paid_count, 0) > 0 then 'current'
+      else 'no_charges'
+    end as financial_summary,
+    coalesce(ca.overdue_count, 0) as overdue_count,
+    coalesce(ca.overdue_cents, 0) as overdue_cents,
+    coalesce(ca.pending_cents, 0) as pending_cents,
+    coalesce(ca.charge_count, 0) as charge_count,
+    nc.next_charge_due,
+    nc.next_charge_cents,
+    nc.next_charge_state,
+    lp.latest_payment_state,
+    lp.latest_payment_date,
+    private.platform_billing_overdue_aging(ca.oldest_overdue_due, t.d) as aging_bucket,
+    (
+      coalesce(ca.overdue_count, 0) > 0
+      or (ct.contract_id is not null and idn.clinic_id is null)
+      or (ct.contract_id is not null and not coalesce(ac.customer_bound, false))
+      or px.pix_status = 'REFUSED'
+      or (ct.contract_status = 'active' and px.pix_status is null)
+    ) as attention,
+    case
+      when coalesce(ca.overdue_count, 0) > 0 then 'overdue'
+      when ct.contract_id is not null and idn.clinic_id is null then 'identity_incomplete'
+      when ct.contract_id is not null and not coalesce(ac.customer_bound, false)
+        then 'customer_unbound'
+      when px.pix_status = 'REFUSED' then 'pix_refused'
+      when ct.contract_status = 'active' and px.pix_status is null then 'pix_absent'
+      else 'none'
+    end as attention_reason,
+    'OFF'::text as entitlement_enforcement,
+    false as entitlement_granted
+  from public.clinics c
+  cross join today t
+  left join contract ct on ct.clinic_id = c.id
+  left join account ac on ac.clinic_id = c.id
+  left join pix px on px.clinic_id = c.id
+  left join identity idn on idn.clinic_id = c.id
+  left join charge_agg ca on ca.clinic_id = c.id
+  left join next_charge nc on nc.clinic_id = c.id
+  left join latest_pay lp on lp.clinic_id = c.id;
+$$;
+
+comment on function private.platform_billing_clinic_facts() is
+  'WP-BILLING-PREPROD-02R1: customer_bound is BOOL_OR(external_customer_id is not null) per clinic. Not DISTINCT ON newest account.';
+
+
+drop function if exists private.billing_hub_timeline_rows(uuid);
+create function private.billing_hub_timeline_rows(p_clinic_id uuid)
+returns table (
+  event_id text,
+  occurred_at timestamptz,
+  event_type text,
+  environment text
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  with plan_events as (
+    select
+      'plan_contracted:' || cc.id::text as event_id,
+      cc.created_at as occurred_at,
+      'plan_contracted'::text as event_type,
+      null::text as environment
+    from private.billing_commercial_contracts cc
+    where cc.clinic_id = p_clinic_id
+  ),
+  pix_events as (
+    select
+      case a.provider_status
+        when 'INTENT' then 'pix_prepared:'
+        when 'CREATED' then 'pix_created:'
+        when 'ACTIVE' then 'pix_active:'
+        when 'REFUSED' then 'pix_refused:'
+        else null
+      end || a.id::text as event_id,
+      case
+        when a.provider_status = 'INTENT' then a.created_at
+        else coalesce(a.updated_at, a.created_at)
+      end as occurred_at,
+      case a.provider_status
+        when 'INTENT' then 'pix_prepared'
+        when 'CREATED' then 'pix_created'
+        when 'ACTIVE' then 'pix_active'
+        when 'REFUSED' then 'pix_refused'
+        else null
+      end as event_type,
+      a.environment
+    from private.billing_pix_automatic_authorizations a
+    join private.billing_commercial_contracts cc on cc.id = a.commercial_contract_id
+    where cc.clinic_id = p_clinic_id
+      and a.provider_status in ('INTENT', 'CREATED', 'ACTIVE', 'REFUSED')
+  ),
+  programmed as (
+    select
+      'charge_programmed:' || i.id::text as event_id,
+      i.created_at as occurred_at,
+      'charge_programmed'::text as event_type,
+      coalesce(i.environment, a.environment) as environment
+    from private.billing_pix_automatic_payment_instructions i
+    join private.billing_pix_automatic_authorizations a on a.id = i.pix_authorization_id
+    join private.billing_commercial_contracts cc on cc.id = a.commercial_contract_id
+    where cc.clinic_id = p_clinic_id
+      and i.status in ('AWAITING_REQUEST', 'SCHEDULED')
+  ),
+  pay_events as (
+    select
+      'charge_created:' || p.id::text as event_id,
+      p.created_at as occurred_at,
+      'charge_created'::text as event_type,
+      acc.environment
+    from private.billing_payments p
+    join private.billing_accounts acc on acc.id = p.billing_account_id
+    where acc.clinic_id = p_clinic_id
+      and p.environment = acc.environment
+      and p.financial_state not in ('voided', 'unknown')
+    union all
+    select
+      'payment_received:' || p.id::text as event_id,
+      coalesce(
+        (p.payment_date::timestamp at time zone 'America/Sao_Paulo'),
+        p.updated_at,
+        p.created_at
+      ) as occurred_at,
+      'payment_received'::text as event_type,
+      acc.environment
+    from private.billing_payments p
+    join private.billing_accounts acc on acc.id = p.billing_account_id
+    where acc.clinic_id = p_clinic_id
+      and p.environment = acc.environment
+      and p.financial_state = 'received'
+    union all
+    select
+      'payment_overdue:' || p.id::text as event_id,
+      coalesce(
+        (p.due_date::timestamp at time zone 'America/Sao_Paulo'),
+        p.updated_at,
+        p.created_at
+      ) as occurred_at,
+      'payment_overdue'::text as event_type,
+      acc.environment
+    from private.billing_payments p
+    join private.billing_accounts acc on acc.id = p.billing_account_id
+    where acc.clinic_id = p_clinic_id
+      and p.environment = acc.environment
+      and private.billing_hub_charge_state_from_payment(
+            p.financial_state,
+            p.due_date,
+            private.billing_hub_business_date()
+          ) = 'OVERDUE'
+  )
+  select event_id, occurred_at, event_type, environment
+    from plan_events
+  union all
+  select event_id, occurred_at, event_type, environment
+    from pix_events
+   where event_type is not null
+  union all
+  select event_id, occurred_at, event_type, environment
+    from programmed
+  union all
+  select event_id, occurred_at, event_type, environment
+    from pay_events;
+$$;
+
+comment on function private.billing_hub_timeline_rows(uuid) is
+  'WP-BILLING-PREPROD-02R1: unified clinic timeline. Provider-backed facts carry environment. Commercial plan events remain unlabeled.';
+
+revoke all on function private.billing_hub_timeline_rows(uuid)
+  from public, anon, authenticated, service_role;
+
+
+create or replace function public.list_my_clinic_billing_timeline(p_clinic_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform private.assert_my_clinic_billing_reader(p_clinic_id);
+  return jsonb_build_object(
+    'clinic_id', p_clinic_id,
+    'items', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', t.event_id,
+        'occurred_at', t.occurred_at,
+        'type', t.event_type,
+        'environment', t.environment
+      ) order by t.occurred_at desc, t.event_type desc, t.event_id desc)
+      from (
+        select *
+          from private.billing_hub_timeline_rows(p_clinic_id)
+         where event_type in (
+           'plan_contracted',
+           'pix_prepared',
+           'pix_created',
+           'pix_active',
+           'pix_refused',
+           'charge_programmed',
+           'charge_created',
+           'payment_received',
+           'payment_overdue'
+         )
+           and occurred_at is not null
+         order by occurred_at desc, event_type desc, event_id desc
+         limit 40
+      ) t
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+
+create or replace function private.platform_billing_normalize_environment(p_environment text)
+returns text
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  v_env text := lower(nullif(btrim(coalesce(p_environment, '')), ''));
+begin
+  if v_env is null then
+    return null;
+  end if;
+  if v_env not in ('sandbox', 'production') then
+    raise exception 'BILLING_REPORT_ENVIRONMENT_INVALID'
+      using errcode = '22023', hint = 'BILLING_REPORT_ENVIRONMENT_INVALID';
+  end if;
+  return v_env;
+end;
+$$;
+
+revoke all on function private.platform_billing_normalize_environment(text)
+  from public, anon, authenticated, service_role;
+
+
+create or replace function private.platform_billing_env_bucket(
+  p_environment text,
+  p_start date,
+  p_end date
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'environment', p_environment,
+    'received_in_period_cents', coalesce((
+      select sum(f.amount_cents)
+        from private.platform_billing_payment_plan_facts() f
+       where f.environment = p_environment
+         and f.financial_state = 'received'
+         and f.payment_date between p_start and p_end
+    ), 0),
+    'received_in_period_count', coalesce((
+      select count(*)
+        from private.platform_billing_payment_plan_facts() f
+       where f.environment = p_environment
+         and f.financial_state = 'received'
+         and f.payment_date between p_start and p_end
+    ), 0),
+    'pending_in_period_cents', coalesce((
+      select sum(u.amount_cents)
+        from private.platform_billing_charge_universe() u
+       where u.environment = p_environment
+         and u.display_state in ('PROGRAMMED', 'PENDING')
+         and u.due_date between p_start and p_end
+    ), 0),
+    'pending_in_period_count', coalesce((
+      select count(*)
+        from private.platform_billing_charge_universe() u
+       where u.environment = p_environment
+         and u.display_state in ('PROGRAMMED', 'PENDING')
+         and u.due_date between p_start and p_end
+    ), 0),
+    'overdue_in_period_cents', coalesce((
+      select sum(u.amount_cents)
+        from private.platform_billing_charge_universe() u
+       where u.environment = p_environment
+         and u.display_state = 'OVERDUE'
+         and u.due_date between p_start and p_end
+    ), 0),
+    'overdue_in_period_count', coalesce((
+      select count(*)
+        from private.platform_billing_charge_universe() u
+       where u.environment = p_environment
+         and u.display_state = 'OVERDUE'
+         and u.due_date between p_start and p_end
+    ), 0)
+  );
+$$;
+
+revoke all on function private.platform_billing_env_bucket(text, date, date)
+  from public, anon, authenticated, service_role;
+
+
+create or replace function public.get_platform_billing_report(
+  p_period_start date default null,
+  p_period_end date default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_today date := private.billing_hub_business_date();
+  v_start date;
+  v_end date;
+  v_sandbox jsonb;
+  v_production jsonb;
+  v_delinquent integer := 0;
+  v_active_pix integer := 0;
+  v_by_plan jsonb := '[]'::jsonb;
+  v_by_status jsonb := '[]'::jsonb;
+  v_delinquent_items jsonb := '[]'::jsonb;
+begin
+  perform private.assert_platform_billing_reader();
+
+  select r.period_start, r.period_end
+    into v_start, v_end
+    from private.platform_billing_resolve_report_period(p_period_start, p_period_end) r;
+
+  v_sandbox := private.platform_billing_env_bucket('sandbox', v_start, v_end);
+  v_production := private.platform_billing_env_bucket('production', v_start, v_end);
+
+  select count(*) filter (where f.financial_summary = 'overdue')
+    into v_delinquent
+    from private.platform_billing_clinic_facts() f;
+
+  select count(*)::integer
+    into v_active_pix
+    from private.billing_pix_automatic_authorizations auth
+   where auth.is_primary
+     and auth.provider_status = 'ACTIVE';
+
+  select coalesce(jsonb_agg(row_obj order by environment, received_cents desc, plan_label), '[]'::jsonb)
+    into v_by_plan
+    from (
+      select
+        jsonb_build_object(
+          'environment', f.environment,
+          'plan_code', f.plan_code,
+          'plan_display_name', f.plan_display_name,
+          'plan_attribution', f.plan_attribution,
+          'received_cents', sum(f.amount_cents),
+          'payment_count', count(*)
+        ) as row_obj,
+        sum(f.amount_cents) as received_cents,
+        coalesce(f.plan_code, 'unattributed') as plan_label,
+        f.environment
+      from private.platform_billing_payment_plan_facts() f
+      where f.financial_state = 'received'
+        and f.payment_date between v_start and v_end
+      group by f.environment, f.plan_code, f.plan_display_name, f.plan_attribution
+    ) plan_rows;
+
+  select coalesce(jsonb_agg(row_obj order by environment, status), '[]'::jsonb)
+    into v_by_status
+    from (
+      select
+        jsonb_build_object(
+          'environment', f.environment,
+          'status', f.financial_state,
+          'payment_count', count(*),
+          'amount_cents', sum(f.amount_cents)
+        ) as row_obj,
+        f.financial_state as status,
+        f.environment
+      from private.platform_billing_payment_plan_facts() f
+      where (
+          f.payment_date between v_start and v_end
+          or (f.payment_date is null and f.due_date between v_start and v_end)
+        )
+      group by f.environment, f.financial_state
+    ) status_rows;
+
+  select coalesce(
+      jsonb_agg(row_obj order by overdue_cents desc, clinic_name, environment)
+        filter (where overdue_count > 0),
+      '[]'::jsonb
+    )
+    into v_delinquent_items
+    from (
+      select
+        jsonb_build_object(
+          'clinic_id', u.clinic_id,
+          'clinic_name', c.name,
+          'environment', u.environment,
+          'overdue_count', count(*)::integer,
+          'overdue_cents', coalesce(sum(u.amount_cents), 0)::bigint,
+          'aging_bucket', private.platform_billing_overdue_aging(min(u.due_date), v_today),
+          'pix_status', null
+        ) as row_obj,
+        count(*)::integer as overdue_count,
+        coalesce(sum(u.amount_cents), 0)::bigint as overdue_cents,
+        c.name as clinic_name,
+        u.environment
+      from private.platform_billing_charge_universe() u
+      join public.clinics c on c.id = u.clinic_id
+      where u.display_state = 'OVERDUE'
+      group by u.clinic_id, c.name, u.environment
+      order by coalesce(sum(u.amount_cents), 0) desc, c.name, u.environment
+      limit 50
+    ) delinq;
+
+  return jsonb_build_object(
+    'timezone', 'America/Sao_Paulo',
+    'period_start', v_start,
+    'period_end', v_end,
+    'as_of', v_today,
+    'not_mrr', true,
+    'entitlement_enforcement', 'OFF',
+    'financial', jsonb_build_object(
+      'sandbox', coalesce(v_sandbox, '{}'::jsonb),
+      'production', coalesce(v_production, '{}'::jsonb)
+    ),
+    'received_by_plan', coalesce(v_by_plan, '[]'::jsonb),
+    'payments_by_status', coalesce(v_by_status, '[]'::jsonb),
+    'active_pix_automatic_authorizations', coalesce(v_active_pix, 0),
+    'delinquent_clinics', coalesce(v_delinquent, 0),
+    'delinquent_items', coalesce(v_delinquent_items, '[]'::jsonb),
+    'export_max_rows', 500,
+    'commercial', private.billing_commercial_report_metrics()
+  );
+end;
+$$;
+
+comment on function public.get_platform_billing_report(date, date) is
+  'WP-BILLING-PREPROD-02R1: environment-bucketed financials. No unlabeled Sandbox+Production total. Commercial projection remains clinic-level.';
+
+
+drop function if exists public.list_platform_billing_report_export(date, date, text, integer, integer);
+drop function if exists public.list_platform_billing_report_export(date, date, text, integer, integer, text);
+create function public.list_platform_billing_report_export(
+  p_period_start date default null,
+  p_period_end date default null,
+  p_kind text default 'payments',
+  p_limit integer default 200,
+  p_offset integer default 0,
+  p_environment text default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_start date;
+  v_end date;
+  v_limit integer := private.platform_billing_clamp_export_limit(p_limit);
+  v_offset integer := private.platform_billing_clamp_offset(p_offset);
+  v_kind text := lower(coalesce(p_kind, 'payments'));
+  v_env text := private.platform_billing_normalize_environment(p_environment);
+  v_items jsonb := '[]'::jsonb;
+begin
+  perform private.assert_platform_billing_reader();
+
+  select r.period_start, r.period_end
+    into v_start, v_end
+    from private.platform_billing_resolve_report_period(p_period_start, p_period_end) r;
+
+  if v_kind not in ('payments', 'delinquent', 'received_by_plan') then
+    raise exception 'BILLING_REPORT_KIND_INVALID'
+      using errcode = '22023', hint = 'BILLING_REPORT_KIND_INVALID';
+  end if;
+
+  if v_kind = 'payments' then
+    select coalesce(jsonb_agg(row_obj order by sort_date desc, clinic_name, payment_id), '[]'::jsonb)
+      into v_items
+      from (
+        select
+          jsonb_build_object(
+            'row_kind', 'payment',
+            'environment', f.environment,
+            'clinic_name', f.clinic_name,
+            'plan_code', f.plan_code,
+            'plan_attribution', f.plan_attribution,
+            'amount_cents', f.amount_cents,
+            'currency', f.currency,
+            'financial_state', f.financial_state,
+            'due_date', f.due_date,
+            'payment_date', f.payment_date,
+            'method', f.method
+          ) as row_obj,
+          coalesce(f.payment_date, f.due_date) as sort_date,
+          f.clinic_name,
+          f.payment_id
+        from private.platform_billing_payment_plan_facts() f
+        where (
+            f.payment_date between v_start and v_end
+            or (f.payment_date is null and f.due_date between v_start and v_end)
+          )
+          and (v_env is null or f.environment = v_env)
+        order by coalesce(f.payment_date, f.due_date) desc, f.clinic_name, f.payment_id
+        limit v_limit
+        offset v_offset
+      ) rows;
+  elsif v_kind = 'delinquent' then
+    select coalesce(jsonb_agg(row_obj order by overdue_cents desc, clinic_name, environment), '[]'::jsonb)
+      into v_items
+      from (
+        select
+          jsonb_build_object(
+            'row_kind', 'delinquent',
+            'environment', u.environment,
+            'clinic_name', c.name,
+            'plan_code', null,
+            'overdue_count', count(*)::integer,
+            'overdue_cents', coalesce(sum(u.amount_cents), 0)::bigint,
+            'aging_bucket', private.platform_billing_overdue_aging(min(u.due_date), private.billing_hub_business_date()),
+            'pix_status', null
+          ) as row_obj,
+          coalesce(sum(u.amount_cents), 0)::bigint as overdue_cents,
+          c.name as clinic_name,
+          u.environment
+        from private.platform_billing_charge_universe() u
+        join public.clinics c on c.id = u.clinic_id
+        where u.display_state = 'OVERDUE'
+          and (v_env is null or u.environment = v_env)
+        group by u.clinic_id, c.name, u.environment
+        order by coalesce(sum(u.amount_cents), 0) desc, c.name, u.environment
+        limit v_limit
+        offset v_offset
+      ) rows;
+  else
+    select coalesce(jsonb_agg(row_obj order by environment, received_cents desc, plan_label), '[]'::jsonb)
+      into v_items
+      from (
+        select
+          jsonb_build_object(
+            'row_kind', 'received_by_plan',
+            'environment', f.environment,
+            'plan_code', f.plan_code,
+            'plan_display_name', f.plan_display_name,
+            'plan_attribution', f.plan_attribution,
+            'received_cents', sum(f.amount_cents),
+            'payment_count', count(*)
+          ) as row_obj,
+          sum(f.amount_cents) as received_cents,
+          coalesce(f.plan_code, 'unattributed') as plan_label,
+          f.environment
+        from private.platform_billing_payment_plan_facts() f
+        where f.financial_state = 'received'
+          and f.payment_date between v_start and v_end
+          and (v_env is null or f.environment = v_env)
+        group by f.environment, f.plan_code, f.plan_display_name, f.plan_attribution
+        order by f.environment, sum(f.amount_cents) desc, coalesce(f.plan_code, 'unattributed')
+        limit v_limit
+        offset v_offset
+      ) rows;
+  end if;
+
+  return jsonb_build_object(
+    'timezone', 'America/Sao_Paulo',
+    'period_start', v_start,
+    'period_end', v_end,
+    'kind', v_kind,
+    'environment', v_env,
+    'limit', v_limit,
+    'offset', v_offset,
+    'max_limit', 500,
+    'items', coalesce(v_items, '[]'::jsonb)
+  );
+end;
+$$;
+
+comment on function public.list_platform_billing_report_export(date, date, text, integer, integer, text) is
+  'WP-BILLING-PREPROD-02R1: CSV source with environment column and server-side environment filter.';
+
+revoke all on function public.list_platform_billing_report_export(date, date, text, integer, integer, text)
+  from public, anon, service_role;
+grant execute on function public.list_platform_billing_report_export(date, date, text, integer, integer, text)
+  to authenticated;
+
+create or replace function public.list_platform_billing_report_export(
+  p_period_start date,
+  p_period_end date,
+  p_kind text,
+  p_limit integer,
+  p_offset integer
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.list_platform_billing_report_export(
+    p_period_start, p_period_end, p_kind, p_limit, p_offset, null::text
+  );
+$$;
+
+revoke all on function public.list_platform_billing_report_export(date, date, text, integer, integer)
+  from public, anon, service_role;
+grant execute on function public.list_platform_billing_report_export(date, date, text, integer, integer)
+  to authenticated;
+
+
+create or replace function public.get_platform_billing_overview()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_today date := private.billing_hub_business_date();
+  v_start date;
+  v_end date;
+  v_delinquent integer := 0;
+  v_attention integer := 0;
+  v_c17 integer := 0;
+  v_c815 integer := 0;
+  v_c1630 integer := 0;
+  v_c31 integer := 0;
+  v_a17 bigint := 0;
+  v_a815 bigint := 0;
+  v_a1630 bigint := 0;
+  v_a31 bigint := 0;
+  v_aging jsonb;
+  v_sandbox jsonb;
+  v_production jsonb;
+begin
+  perform private.assert_platform_billing_reader();
+  v_start := date_trunc('month', v_today::timestamp)::date;
+  v_end := (date_trunc('month', v_today::timestamp) + interval '1 month - 1 day')::date;
+
+  select
+    count(*) filter (where f.financial_summary = 'overdue'),
+    count(*) filter (where f.attention),
+    count(*) filter (where f.aging_bucket = 'd1_7'),
+    count(*) filter (where f.aging_bucket = 'd8_15'),
+    count(*) filter (where f.aging_bucket = 'd16_30'),
+    count(*) filter (where f.aging_bucket = 'd31_plus')
+    into v_delinquent, v_attention, v_c17, v_c815, v_c1630, v_c31
+    from private.platform_billing_clinic_facts() f;
+
+  select
+    coalesce(sum(u.amount_cents) filter (
+      where private.platform_billing_overdue_aging(u.due_date, v_today) = 'd1_7'
+    ), 0),
+    coalesce(sum(u.amount_cents) filter (
+      where private.platform_billing_overdue_aging(u.due_date, v_today) = 'd8_15'
+    ), 0),
+    coalesce(sum(u.amount_cents) filter (
+      where private.platform_billing_overdue_aging(u.due_date, v_today) = 'd16_30'
+    ), 0),
+    coalesce(sum(u.amount_cents) filter (
+      where private.platform_billing_overdue_aging(u.due_date, v_today) = 'd31_plus'
+    ), 0)
+    into v_a17, v_a815, v_a1630, v_a31
+    from private.platform_billing_charge_universe() u
+   where u.display_state = 'OVERDUE';
+
+  v_aging := jsonb_build_object(
+    'd1_7', jsonb_build_object('clinic_count', v_c17, 'amount_cents', v_a17),
+    'd8_15', jsonb_build_object('clinic_count', v_c815, 'amount_cents', v_a815),
+    'd16_30', jsonb_build_object('clinic_count', v_c1630, 'amount_cents', v_a1630),
+    'd31_plus', jsonb_build_object('clinic_count', v_c31, 'amount_cents', v_a31)
+  );
+
+  v_sandbox := private.platform_billing_env_bucket('sandbox', v_start, v_end);
+  v_production := private.platform_billing_env_bucket('production', v_start, v_end);
+
+  return jsonb_build_object(
+    'timezone', 'America/Sao_Paulo',
+    'period_start', v_start,
+    'period_end', v_end,
+    'financial', jsonb_build_object(
+      'sandbox', coalesce(v_sandbox, '{}'::jsonb),
+      'production', coalesce(v_production, '{}'::jsonb)
+    ),
+    'clinics_with_received', coalesce((
+      select count(distinct a.clinic_id)::integer
+        from private.billing_payments p
+        join private.billing_accounts a on a.id = p.billing_account_id
+       where a.clinic_id is not null
+         and p.environment = a.environment
+         and p.financial_state = 'received'
+         and p.payment_date is not null
+         and p.payment_date between v_start and v_end
+    ), 0),
+    'delinquent_clinics', coalesce(v_delinquent, 0),
+    'active_commercial_contracts', coalesce((
+      select count(*)::integer
+        from private.billing_commercial_contracts cc
+       where cc.status = 'active'
+    ), 0),
+    'active_pix_automatic_authorizations', coalesce((
+      select count(*)::integer
+        from private.billing_pix_automatic_authorizations auth
+       where auth.is_primary
+         and auth.provider_status = 'ACTIVE'
+    ), 0),
+    'payment_success_count', coalesce((
+      select count(*)::integer
+        from private.billing_payments p
+        join private.billing_accounts a on a.id = p.billing_account_id
+       where a.clinic_id is not null
+         and p.environment = a.environment
+         and p.financial_state = 'received'
+         and p.payment_date is not null
+         and p.payment_date between v_start and v_end
+    ), 0),
+    'attention_clinic_count', coalesce(v_attention, 0),
+    'aging', coalesce(v_aging, '{}'::jsonb),
+    'entitlement_enforcement', 'OFF'
+  );
+end;
+$$;
+
+
+create or replace function public.get_platform_clinic_billing_detail(p_clinic_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_row private.platform_billing_clinic_facts;
+  v_today date := private.billing_hub_business_date();
+begin
+  perform private.assert_platform_billing_reader();
+  if p_clinic_id is null then
+    raise exception 'BILLING_CLINIC_REQUIRED'
+      using errcode = '22023', hint = 'BILLING_CLINIC_REQUIRED';
+  end if;
+
+  select f.* into v_row
+    from private.platform_billing_clinic_facts() f
+   where f.clinic_id = p_clinic_id
+   limit 1;
+
+  if v_row.clinic_id is null then
+    return jsonb_build_object('found', false, 'clinic_id', p_clinic_id);
+  end if;
+
+  return jsonb_build_object(
+    'found', true,
+    'clinic', private.platform_billing_clinic_json(v_row),
+    'charges', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', c.charge_id,
+        'clinic_id', c.clinic_id,
+        'environment', c.environment,
+        'amount_cents', c.amount_cents,
+        'currency', c.currency,
+        'due_date', c.due_date,
+        'paid_date', c.paid_date,
+        'display_state', c.display_state,
+        'method', c.method
+      ) order by
+        case c.display_state
+          when 'OVERDUE' then 0
+          when 'PENDING' then 1
+          when 'PROGRAMMED' then 2
+          else 3
+        end,
+        c.due_date desc nulls last,
+        c.occurred_at desc,
+        c.charge_id desc
+      )
+      from (
+        select *
+          from private.platform_billing_charge_universe() u
+         where u.clinic_id = p_clinic_id
+         order by u.occurred_at desc, u.charge_id desc
+         limit 50
+      ) c
+    ), '[]'::jsonb),
+    'payments', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', p.id,
+        'clinic_id', a.clinic_id,
+        'environment', a.environment,
+        'amount_cents', p.value_cents,
+        'currency', 'BRL',
+        'due_date', p.due_date,
+        'received_date', p.payment_date,
+        'display_state', private.billing_hub_payment_display_state(
+          p.financial_state, p.due_date, v_today
+        ),
+        'method', private.billing_hub_payment_method(p.billing_type)
+      ) order by coalesce(p.payment_date, p.due_date) desc nulls last, p.created_at desc)
+      from (
+        select bp.*, ba.clinic_id, ba.environment
+          from private.billing_payments bp
+          join private.billing_accounts ba on ba.id = bp.billing_account_id
+         where ba.clinic_id = p_clinic_id
+           and bp.environment = ba.environment
+           and bp.financial_state not in ('voided', 'unknown')
+         order by bp.created_at desc, bp.id desc
+         limit 50
+      ) p
+      join private.billing_accounts a on a.id = p.billing_account_id
+    ), '[]'::jsonb),
+    'business_timeline', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', t.event_id,
+        'occurred_at', t.occurred_at,
+        'type', t.event_type,
+        'environment', t.environment
+      ) order by t.occurred_at desc, t.event_type desc, t.event_id desc)
+      from (
+        select *
+          from private.billing_hub_timeline_rows(p_clinic_id)
+         order by occurred_at desc, event_type desc, event_id desc
+         limit 50
+      ) t
+    ), '[]'::jsonb),
+    'events', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', e.id,
+        'event_type', e.event_type,
+        'processing_status', e.processing_status,
+        'received_at', e.received_at,
+        'processed_at', e.processed_at,
+        'failure_category', e.last_error_category,
+        'clinic_id', e.clinic_id,
+        'related_payment_id', e.related_payment_id,
+        'related_entity_type', e.related_entity_type
+      ) order by e.received_at desc, e.id desc)
+      from (
+        select
+          ev.id,
+          ev.event_type,
+          ev.processing_status,
+          ev.received_at,
+          ev.processed_at,
+          ev.last_error_category,
+          coalesce(a.clinic_id, cc.clinic_id) as clinic_id,
+          p.id as related_payment_id,
+          case
+            when p.id is not null then 'payment'
+            when auth.id is not null then 'authorization'
+            else 'unknown'
+          end as related_entity_type
+        from private.billing_provider_events ev
+        left join private.billing_payments p
+          on p.external_payment_id = ev.external_resource_id
+        left join private.billing_accounts a
+          on a.id = p.billing_account_id
+        left join private.billing_pix_automatic_authorizations auth
+          on auth.provider_contract_id = ev.external_resource_id
+        left join private.billing_commercial_contracts cc
+          on cc.id = auth.commercial_contract_id
+        where coalesce(a.clinic_id, cc.clinic_id) = p_clinic_id
+        order by ev.received_at desc, ev.id desc
+        limit 50
+      ) e
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+
 insert into public.schema_migration_log (version, filename, description, session)
 values (
   '20260921120000',
   '20260921120000_wp_billing_preprod_02_commercial_gate_env_isolation.sql',
-  'WP-BILLING-PREPROD-02: commercial access OBSERVE default, PA exemption, unique(clinic, environment), Production write LOCKED. Local only.',
+  'WP-BILLING-PREPROD-02/R1: commercial gate OBSERVE default, dual-env accounts, BOOL_OR customer_bound, environment-bucketed reports, labeled timeline. Local only.',
   'WP-BILLING-PREPROD-02'
 )
 on conflict (version) do nothing;

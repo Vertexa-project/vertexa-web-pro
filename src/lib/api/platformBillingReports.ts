@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { isAgingBucket } from "@/lib/domain/platformBilling";
+import { emptyEnvironmentFinancialBucket } from "@/lib/domain/billingEnvScoping";
 import {
   emptyPlatformBillingReport,
   type PlatformBillingDelinquentRow,
@@ -7,12 +8,14 @@ import {
   type PlatformBillingExportRow,
   type PlatformBillingPlanRow,
   type PlatformBillingReport,
+  type PlatformBillingReportEnvironment,
   type PlatformBillingReportKind,
   type PlatformBillingStatusRow,
 } from "@/lib/domain/platformBillingReports";
 import { mapPlatformCommercialGovernance } from "./billingCommercial";
 
 interface RawPlan {
+  environment?: string | null;
   plan_code?: string | null;
   plan_display_name?: string | null;
   plan_attribution?: string;
@@ -21,6 +24,7 @@ interface RawPlan {
 }
 
 interface RawStatus {
+  environment?: string | null;
   status?: string;
   payment_count?: number;
   amount_cents?: number;
@@ -29,10 +33,20 @@ interface RawStatus {
 interface RawDelinquent {
   clinic_id?: string;
   clinic_name?: string;
+  environment?: string | null;
   overdue_count?: number;
   overdue_cents?: number;
   aging_bucket?: string | null;
   pix_status?: string | null;
+}
+
+interface RawBucket {
+  received_in_period_cents?: number;
+  received_in_period_count?: number;
+  pending_in_period_cents?: number;
+  pending_in_period_count?: number;
+  overdue_in_period_cents?: number;
+  overdue_in_period_count?: number;
 }
 
 interface RawReport {
@@ -42,12 +56,10 @@ interface RawReport {
   as_of?: string;
   not_mrr?: boolean;
   entitlement_enforcement?: string;
-  received_in_period_cents?: number;
-  received_in_period_count?: number;
-  pending_in_period_cents?: number;
-  pending_in_period_count?: number;
-  overdue_in_period_cents?: number;
-  overdue_in_period_count?: number;
+  financial?: {
+    sandbox?: RawBucket;
+    production?: RawBucket;
+  };
   received_by_plan?: RawPlan[];
   payments_by_status?: RawStatus[];
   active_pix_automatic_authorizations?: number;
@@ -59,6 +71,7 @@ interface RawReport {
 
 interface RawExportItem {
   row_kind?: string;
+  environment?: string | null;
   clinic_name?: string | null;
   plan_code?: string | null;
   plan_display_name?: string | null;
@@ -97,8 +110,25 @@ function asInt(value: unknown, fallback = 0): number {
   return fallback;
 }
 
+function mapEnvironment(value: string | null | undefined): PlatformBillingReportEnvironment | null {
+  return value === "sandbox" || value === "production" ? value : null;
+}
+
+function mapBucket(raw: RawBucket | undefined) {
+  if (!raw) return emptyEnvironmentFinancialBucket();
+  return {
+    receivedCents: asInt(raw.received_in_period_cents),
+    receivedCount: asInt(raw.received_in_period_count),
+    pendingCents: asInt(raw.pending_in_period_cents),
+    pendingCount: asInt(raw.pending_in_period_count),
+    overdueCents: asInt(raw.overdue_in_period_cents),
+    overdueCount: asInt(raw.overdue_in_period_count),
+  };
+}
+
 function mapPlan(row: RawPlan): PlatformBillingPlanRow {
   return {
+    environment: mapEnvironment(row.environment),
     planCode: row.plan_code ?? null,
     planDisplayName: row.plan_display_name ?? null,
     planAttribution: row.plan_attribution === "contract" ? "contract" : "unattributed",
@@ -110,6 +140,7 @@ function mapPlan(row: RawPlan): PlatformBillingPlanRow {
 function mapStatus(row: RawStatus): PlatformBillingStatusRow | null {
   if (!row.status) return null;
   return {
+    environment: mapEnvironment(row.environment),
     status: row.status,
     paymentCount: asInt(row.payment_count),
     amountCents: asInt(row.amount_cents),
@@ -121,6 +152,7 @@ function mapDelinquent(row: RawDelinquent): PlatformBillingDelinquentRow | null 
   return {
     clinicId: row.clinic_id,
     clinicName: row.clinic_name,
+    environment: mapEnvironment(row.environment),
     overdueCount: asInt(row.overdue_count),
     overdueCents: asInt(row.overdue_cents),
     agingBucket: row.aging_bucket && isAgingBucket(row.aging_bucket) ? row.aging_bucket : null,
@@ -138,12 +170,10 @@ export function mapPlatformBillingReport(raw: RawReport): PlatformBillingReport 
     periodStart: raw.period_start ?? empty.periodStart,
     periodEnd: raw.period_end ?? empty.periodEnd,
     asOf: raw.as_of ?? raw.period_end ?? empty.asOf,
-    receivedInPeriodCents: asInt(raw.received_in_period_cents),
-    receivedInPeriodCount: asInt(raw.received_in_period_count),
-    pendingInPeriodCents: asInt(raw.pending_in_period_cents),
-    pendingInPeriodCount: asInt(raw.pending_in_period_count),
-    overdueInPeriodCents: asInt(raw.overdue_in_period_cents),
-    overdueInPeriodCount: asInt(raw.overdue_in_period_count),
+    financial: {
+      sandbox: mapBucket(raw.financial?.sandbox),
+      production: mapBucket(raw.financial?.production),
+    },
     receivedByPlan: (raw.received_by_plan ?? []).map(mapPlan),
     paymentsByStatus: (raw.payments_by_status ?? [])
       .map(mapStatus)
@@ -161,6 +191,7 @@ export function mapPlatformBillingReport(raw: RawReport): PlatformBillingReport 
 function mapExportRow(row: RawExportItem): PlatformBillingExportRow {
   return {
     rowKind: row.row_kind ?? "payment",
+    environment: mapEnvironment(row.environment) ?? row.environment ?? null,
     clinicName: row.clinic_name ?? null,
     planCode: row.plan_code ?? null,
     planDisplayName: row.plan_display_name ?? null,
@@ -196,6 +227,7 @@ export async function listPlatformBillingReportExport(input: {
   periodStart?: string;
   periodEnd?: string;
   kind?: PlatformBillingReportKind;
+  environment?: PlatformBillingReportEnvironment | null;
   limit?: number;
   offset?: number;
 }): Promise<PlatformBillingExportPage> {
@@ -205,6 +237,7 @@ export async function listPlatformBillingReportExport(input: {
     p_kind: input.kind ?? "payments",
     p_limit: input.limit ?? 200,
     p_offset: input.offset ?? 0,
+    p_environment: input.environment ?? null,
   });
   if (error) throw error;
   const raw = (data ?? {}) as RawExport;

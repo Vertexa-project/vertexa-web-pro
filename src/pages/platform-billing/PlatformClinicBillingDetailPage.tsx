@@ -26,6 +26,7 @@ import {
   pixAutomaticStatusLabel,
   platformBillingErrorMessage,
   processingStatusLabel,
+  providerEnvironmentLabel,
   timelineEventLabel,
 } from "@/lib/domain/platformBilling";
 
@@ -127,6 +128,9 @@ export function PlatformClinicBillingDetailPage() {
                 <span>
                   {formatPlatformMoney(row.amountCents)} · venc. {formatPlatformDate(row.dueDate)} ·{" "}
                   {billingMethodLabel(row.method)}
+                  {providerEnvironmentLabel(row.environment)
+                    ? ` · ${providerEnvironmentLabel(row.environment)}`
+                    : ""}
                 </span>
                 <StatusChip
                   label={chargeStateLabel(row.displayState)}
@@ -151,6 +155,9 @@ export function PlatformClinicBillingDetailPage() {
                 <span>
                   {formatPlatformMoney(row.amountCents)} · {billingMethodLabel(row.method)}
                   {row.receivedDate ? ` · recebido ${formatPlatformDate(row.receivedDate)}` : ""}
+                  {providerEnvironmentLabel(row.environment)
+                    ? ` · ${providerEnvironmentLabel(row.environment)}`
+                    : ""}
                 </span>
                 <StatusChip
                   label={paymentStateLabel(row.displayState)}
@@ -173,6 +180,9 @@ export function PlatformClinicBillingDetailPage() {
             {detail.data.businessTimeline.map((event) => (
               <li key={event.id}>
                 {formatPlatformDate(event.occurredAt)} — {timelineEventLabel(event.type)}
+                {providerEnvironmentLabel(event.environment)
+                  ? ` · ${providerEnvironmentLabel(event.environment)}`
+                  : ""}
               </li>
             ))}
           </ul>

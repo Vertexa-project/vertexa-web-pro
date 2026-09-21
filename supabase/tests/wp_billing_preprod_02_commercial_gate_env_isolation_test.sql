@@ -27,6 +27,10 @@ declare
   v_access jsonb;
   v_exemption uuid;
   v_mode text;
+  v_rep jsonb;
+  v_export jsonb;
+  v_timeline jsonb;
+  v_bound boolean;
 begin
   insert into public.profiles (id, auth_user_id, role, full_name, email, status)
   values
@@ -147,6 +151,101 @@ begin
   select rollout_mode into v_mode from private.billing_commercial_access_config where id;
   if v_mode is distinct from 'observe' then
     raise exception 'PP02 FAIL: could not restore OBSERVE';
+  end if;
+
+  insert into private.billing_payments (
+    billing_account_id, provider, environment, external_payment_id,
+    external_customer_id, provider_status, financial_state, billing_type,
+    value_cents, due_date, payment_date
+  ) values
+    (v_sandbox, 'asaas', 'sandbox', 'pay-sbx-pp02r1', 'cus_sandbox_pp02', 'RECEIVED', 'received', 'PIX',
+     39000, date '2026-09-10', date '2026-09-11'),
+    (v_prod, 'asaas', 'production', 'pay-prd-pp02r1', 'cus_prod_pp02', 'RECEIVED', 'received', 'PIX',
+     89000, date '2026-09-10', date '2026-09-12'),
+    (v_sandbox, 'asaas', 'sandbox', 'pay-sbx-pend-pp02r1', 'cus_sandbox_pp02', 'PENDING', 'pending', 'PIX',
+     1000, date '2026-09-20', null),
+    (v_prod, 'asaas', 'production', 'pay-prd-pend-pp02r1', 'cus_prod_pp02', 'PENDING', 'pending', 'PIX',
+     2500, date '2026-09-21', null);
+
+  select f.customer_bound into v_bound
+    from private.platform_billing_clinic_facts() f
+   where f.clinic_id = v_clinic;
+  if v_bound is not true then
+    raise exception 'PP02R1 FAIL: both bound accounts must yield customer_bound';
+  end if;
+
+  update private.billing_accounts
+     set external_customer_id = null
+   where id = v_prod;
+  select f.customer_bound into v_bound
+    from private.platform_billing_clinic_facts() f
+   where f.clinic_id = v_clinic;
+  if v_bound is not true then
+    raise exception 'PP02R1 FAIL: sandbox bound + production unbound must stay customer_bound';
+  end if;
+
+  update private.billing_accounts
+     set external_customer_id = null
+   where id = v_sandbox;
+  select f.customer_bound into v_bound
+    from private.platform_billing_clinic_facts() f
+   where f.clinic_id = v_clinic;
+  if v_bound is not false then
+    raise exception 'PP02R1 FAIL: both unbound must be customer_bound false';
+  end if;
+
+  update private.billing_accounts
+     set external_customer_id = 'cus_sandbox_pp02'
+   where id = v_sandbox;
+  update private.billing_accounts
+     set external_customer_id = 'cus_prod_pp02'
+   where id = v_prod;
+
+  perform pg_temp.pp02_as(v_auth_pa);
+  v_rep := public.get_platform_billing_report(date '2026-09-01', date '2026-09-30');
+  if v_rep ? 'received_in_period_cents' then
+    raise exception 'PP02R1 FAIL: unlabeled combined received total is still exposed';
+  end if;
+  if (v_rep#>>'{financial,sandbox,received_in_period_cents}')::int is distinct from 39000 then
+    raise exception 'PP02R1 FAIL: sandbox received: %', v_rep->'financial';
+  end if;
+  if (v_rep#>>'{financial,production,received_in_period_cents}')::int is distinct from 89000 then
+    raise exception 'PP02R1 FAIL: production received: %', v_rep->'financial';
+  end if;
+  if (v_rep#>>'{financial,sandbox,pending_in_period_cents}')::int
+       is not distinct from (v_rep#>>'{financial,production,pending_in_period_cents}')::int then
+    raise exception 'PP02R1 FAIL: pending buckets collapsed: %', v_rep->'financial';
+  end if;
+
+  v_export := public.list_platform_billing_report_export(
+    date '2026-09-01', date '2026-09-30', 'payments', 200, 0, 'sandbox'
+  );
+  if exists (
+    select 1
+      from jsonb_array_elements(v_export->'items') item
+     where item->>'environment' is distinct from 'sandbox'
+  ) then
+    raise exception 'PP02R1 FAIL: sandbox CSV leaked another environment: %', v_export;
+  end if;
+  v_export := public.list_platform_billing_report_export(
+    date '2026-09-01', date '2026-09-30', 'payments', 200, 0, 'production'
+  );
+  if exists (
+    select 1
+      from jsonb_array_elements(v_export->'items') item
+     where item->>'environment' is distinct from 'production'
+  ) then
+    raise exception 'PP02R1 FAIL: production CSV leaked another environment: %', v_export;
+  end if;
+
+  perform pg_temp.pp02_as(v_auth_owner);
+  v_timeline := public.list_my_clinic_billing_timeline(v_clinic);
+  if (
+    select count(distinct item->>'environment')
+      from jsonb_array_elements(v_timeline->'items') item
+     where item->>'type' = 'payment_received'
+  ) is distinct from 2 then
+    raise exception 'PP02R1 FAIL: timeline payment_received missing dual environments: %', v_timeline;
   end if;
 
   raise notice 'PP02 PASS';

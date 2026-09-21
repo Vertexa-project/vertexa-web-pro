@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   CANARY_PRODUCTION_OPERATIONS,
+  isCommercialAuthFailure,
   isCommercialOnboardingPath,
+  isMissingCommercialAccessFunction,
   isProductionProviderWriteAllowed,
   resolveCommercialAccess,
+  resolveCommercialShellGate,
 } from "./commercialAccess";
 
 describe("resolveCommercialAccess", () => {
@@ -117,5 +120,82 @@ describe("isProductionProviderWriteAllowed", () => {
         allowedOperations: [],
       }),
     ).toBe(false);
+  });
+});
+
+describe("resolveCommercialShellGate", () => {
+  it("allows OBSERVE resolved no-contract", () => {
+    expect(
+      resolveCommercialShellGate({
+        isLoading: false,
+        isError: false,
+        productAllowed: true,
+        pathname: "/pacientes",
+      }),
+    ).toBe("allow");
+  });
+
+  it("blocks ENFORCE PRE_CONTRACT on clinical routes", () => {
+    expect(
+      resolveCommercialShellGate({
+        isLoading: false,
+        isError: false,
+        productAllowed: false,
+        pathname: "/pacientes",
+      }),
+    ).toBe("pre_contract");
+  });
+
+  it("fail-closes unexpected ENFORCE resolver errors", () => {
+    expect(
+      resolveCommercialShellGate({
+        isLoading: false,
+        isError: true,
+        error: { message: "network" },
+        pathname: "/pacientes",
+      }),
+    ).toBe("resolution_failed");
+    expect(
+      resolveCommercialShellGate({
+        isLoading: false,
+        isError: true,
+        error: { code: "500", message: "internal" },
+        pathname: "/jornada",
+      }),
+    ).toBe("resolution_failed");
+    expect(
+      resolveCommercialShellGate({
+        isLoading: false,
+        isError: true,
+        error: { code: "COMMERCIAL_ACCESS_MALFORMED", hint: "COMMERCIAL_ACCESS_MALFORMED" },
+        pathname: "/pacientes",
+      }),
+    ).toBe("resolution_failed");
+  });
+
+  it("treats expired session as auth, not PRE_CONTRACT", () => {
+    const error = { hint: "BILLING_NOT_AUTHENTICATED", code: "42501" };
+    expect(isCommercialAuthFailure(error)).toBe(true);
+    expect(
+      resolveCommercialShellGate({
+        isLoading: false,
+        isError: true,
+        error,
+        pathname: "/pacientes",
+      }),
+    ).toBe("auth_required");
+  });
+
+  it("keeps a narrow missing-RPC compatibility path", () => {
+    const error = { code: "PGRST202", message: "Could not find the function get_my_clinic_commercial_access" };
+    expect(isMissingCommercialAccessFunction(error)).toBe(true);
+    expect(
+      resolveCommercialShellGate({
+        isLoading: false,
+        isError: true,
+        error,
+        pathname: "/pacientes",
+      }),
+    ).toBe("resolver_unavailable");
   });
 });

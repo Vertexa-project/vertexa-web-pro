@@ -99,10 +99,23 @@ export interface ClinicBillingPayment {
   method: BillingMethod;
 }
 
+export type BillingProviderEnvironment = "sandbox" | "production";
+
 export interface ClinicBillingTimelineEvent {
   id: string;
   occurredAt: string;
   type: TimelineEventType;
+  environment?: BillingProviderEnvironment | null;
+}
+
+export function isBillingProviderEnvironment(value: string | null | undefined): value is BillingProviderEnvironment {
+  return value === "sandbox" || value === "production";
+}
+
+export function providerEnvironmentLabel(environment: string | null | undefined): string | null {
+  if (environment === "sandbox") return "Sandbox";
+  if (environment === "production") return "Produção";
+  return null;
 }
 
 export function isChargeDisplayState(value: string): value is ChargeDisplayState {

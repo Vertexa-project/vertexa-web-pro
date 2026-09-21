@@ -21,7 +21,7 @@ import {
   type PlatformEventEntityType,
   type PlatformFinancialSummary,
 } from "@/lib/domain/platformBilling";
-import type { ClinicBillingTimelineEvent } from "@/lib/domain/billingHub";
+import { isBillingProviderEnvironment, type ClinicBillingTimelineEvent } from "@/lib/domain/billingHub";
 
 interface RawNextCharge {
   amount_cents?: number;
@@ -63,13 +63,23 @@ interface RawAging {
   amount_cents?: number;
 }
 
+interface RawBucket {
+  received_in_period_cents?: number;
+  received_in_period_count?: number;
+  pending_in_period_cents?: number;
+  pending_in_period_count?: number;
+  overdue_in_period_cents?: number;
+  overdue_in_period_count?: number;
+}
+
 interface RawOverview {
   timezone?: string;
   period_start?: string;
   period_end?: string;
-  received_in_period_cents?: number;
-  pending_amount_cents?: number;
-  overdue_amount_cents?: number;
+  financial?: {
+    sandbox?: RawBucket;
+    production?: RawBucket;
+  };
   clinics_with_received?: number;
   delinquent_clinics?: number;
   active_commercial_contracts?: number;
@@ -84,6 +94,7 @@ interface RawCharge {
   id?: string;
   clinic_id?: string;
   clinic_name?: string;
+  environment?: string | null;
   amount_cents?: number;
   currency?: string;
   due_date?: string | null;
@@ -96,6 +107,7 @@ interface RawPayment {
   id?: string;
   clinic_id?: string;
   clinic_name?: string;
+  environment?: string | null;
   amount_cents?: number;
   currency?: string;
   due_date?: string | null;
@@ -121,6 +133,7 @@ interface RawTimeline {
   id?: string;
   occurred_at?: string;
   type?: string;
+  environment?: string | null;
 }
 
 interface RawPage<T> {
@@ -216,9 +229,24 @@ export function mapPlatformOverview(row: RawOverview): PlatformBillingOverview {
     timezone: "America/Sao_Paulo",
     periodStart: row.period_start ?? "",
     periodEnd: row.period_end ?? "",
-    receivedInPeriodCents: asInt(row.received_in_period_cents),
-    pendingAmountCents: asInt(row.pending_amount_cents),
-    overdueAmountCents: asInt(row.overdue_amount_cents),
+    financial: {
+      sandbox: {
+        receivedCents: asInt(row.financial?.sandbox?.received_in_period_cents),
+        receivedCount: asInt(row.financial?.sandbox?.received_in_period_count),
+        pendingCents: asInt(row.financial?.sandbox?.pending_in_period_cents),
+        pendingCount: asInt(row.financial?.sandbox?.pending_in_period_count),
+        overdueCents: asInt(row.financial?.sandbox?.overdue_in_period_cents),
+        overdueCount: asInt(row.financial?.sandbox?.overdue_in_period_count),
+      },
+      production: {
+        receivedCents: asInt(row.financial?.production?.received_in_period_cents),
+        receivedCount: asInt(row.financial?.production?.received_in_period_count),
+        pendingCents: asInt(row.financial?.production?.pending_in_period_cents),
+        pendingCount: asInt(row.financial?.production?.pending_in_period_count),
+        overdueCents: asInt(row.financial?.production?.overdue_in_period_cents),
+        overdueCount: asInt(row.financial?.production?.overdue_in_period_count),
+      },
+    },
     clinicsWithReceived: asInt(row.clinics_with_received),
     delinquentClinics: asInt(row.delinquent_clinics),
     activeCommercialContracts: asInt(row.active_commercial_contracts),
@@ -250,6 +278,7 @@ function mapCharge(row: RawCharge): PlatformBillingCharge | null {
     paidDate: row.paid_date ?? null,
     displayState: row.display_state,
     method: row.method && isBillingMethod(row.method) ? row.method : "UNDEFINED",
+    environment: row.environment && isBillingProviderEnvironment(row.environment) ? row.environment : null,
   };
 }
 
@@ -268,6 +297,7 @@ function mapPayment(row: RawPayment): PlatformBillingPayment | null {
     receivedDate: row.received_date ?? null,
     displayState: row.display_state,
     method: row.method && isBillingMethod(row.method) ? row.method : "UNDEFINED",
+    environment: row.environment && isBillingProviderEnvironment(row.environment) ? row.environment : null,
   };
 }
 
@@ -294,7 +324,12 @@ function mapEvent(row: RawEvent): PlatformBillingEvent | null {
 
 function mapTimeline(row: RawTimeline): ClinicBillingTimelineEvent | null {
   if (!row.id || !row.occurred_at || !row.type || !isTimelineEventType(row.type)) return null;
-  return { id: row.id, occurredAt: row.occurred_at, type: row.type };
+  return {
+    id: row.id,
+    occurredAt: row.occurred_at,
+    type: row.type,
+    environment: row.environment && isBillingProviderEnvironment(row.environment) ? row.environment : null,
+  };
 }
 
 function mapPage<TRaw, T>(

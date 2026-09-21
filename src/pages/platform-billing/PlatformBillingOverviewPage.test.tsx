@@ -78,8 +78,24 @@ beforeEach(() => {
     ...emptyOverview(),
     periodStart: "2026-09-01",
     periodEnd: "2026-09-30",
-    receivedInPeriodCents: 39000,
-    overdueAmountCents: 39000,
+    financial: {
+      sandbox: {
+        receivedCents: 39000,
+        receivedCount: 1,
+        pendingCents: 0,
+        pendingCount: 0,
+        overdueCents: 39000,
+        overdueCount: 1,
+      },
+      production: {
+        receivedCents: 0,
+        receivedCount: 0,
+        pendingCents: 0,
+        pendingCount: 0,
+        overdueCents: 0,
+        overdueCount: 0,
+      },
+    },
     delinquentClinics: 1,
     attentionClinicCount: 1,
     activeCommercialContracts: 2,
@@ -113,8 +129,8 @@ describe("PlatformBillingOverviewPage", () => {
         <PlatformBillingOverviewPage />
       </MemoryRouter>,
     );
-    expect(screen.getByText("Recebido no mês")).toBeInTheDocument();
-    expect(screen.getAllByText("Vencido").length).toBeGreaterThan(0);
+    expect(screen.getByText("Recebido Sandbox")).toBeInTheDocument();
+    expect(screen.getByText("Recebido Produção")).toBeInTheDocument();
     expect(screen.getByText(/clínica inadimplente/)).toBeInTheDocument();
     expect(screen.getByText(/isto não é MRR/i)).toBeInTheDocument();
     expect(screen.getAllByText("Clínica Norte").length).toBeGreaterThan(0);

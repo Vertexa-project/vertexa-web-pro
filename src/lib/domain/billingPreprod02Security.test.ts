@@ -58,4 +58,17 @@ describe("WP-BILLING-PREPROD-02 — security source contracts", () => {
     expect(src).toContain("exemptionActive");
     expect(src).not.toMatch(/localStorage|sessionStorage/);
   });
+
+  it("makes customer_bound a BOOL_OR clinic fact and buckets financials by environment", () => {
+    const sql = readFileSync(resolve(root, MIGRATION), "utf8");
+    expect(sql).toContain("bool_or(a.external_customer_id is not null)");
+    expect(sql).not.toMatch(
+      /select distinct on \(a\.clinic_id\)[\s\S]{0,120}as customer_bound/i,
+    );
+    expect(sql).toContain("'sandbox', coalesce(v_sandbox");
+    expect(sql).toContain("'production', coalesce(v_production");
+    expect(sql).toContain("'environment', f.environment");
+    expect(sql).toContain("acc.environment");
+    expect(sql).toContain("BILLING_REPORT_ENVIRONMENT_INVALID");
+  });
 });

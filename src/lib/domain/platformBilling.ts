@@ -12,13 +12,19 @@ import {
   isTimelineEventType,
   paymentStateLabel,
   paymentStateTone,
+  providerEnvironmentLabel,
   timelineEventLabel,
   type BillingMethod,
+  type BillingProviderEnvironment,
   type ChargeDisplayState,
   type ClinicBillingTimelineEvent,
   type PaymentDisplayState,
 } from "./billingHub";
 import { formatBillingPriceCents } from "./billingCheckout";
+import {
+  emptyEnvironmentFinancialBucket,
+  type EnvironmentFinancialBucket,
+} from "./billingEnvScoping";
 import { pixAutomaticStatusLabel } from "./pixAutomaticReissue";
 
 export const PLATFORM_BILLING_PAGE_SIZE = 50;
@@ -92,9 +98,10 @@ export interface PlatformBillingOverview {
   timezone: "America/Sao_Paulo";
   periodStart: string;
   periodEnd: string;
-  receivedInPeriodCents: number;
-  pendingAmountCents: number;
-  overdueAmountCents: number;
+  financial: {
+    sandbox: EnvironmentFinancialBucket;
+    production: EnvironmentFinancialBucket;
+  };
   clinicsWithReceived: number;
   delinquentClinics: number;
   activeCommercialContracts: number;
@@ -109,6 +116,7 @@ export interface PlatformBillingCharge {
   id: string;
   clinicId: string;
   clinicName?: string;
+  environment?: BillingProviderEnvironment | null;
   amountCents: number;
   currency: string;
   dueDate: string | null;
@@ -121,6 +129,7 @@ export interface PlatformBillingPayment {
   id: string;
   clinicId: string;
   clinicName?: string;
+  environment?: BillingProviderEnvironment | null;
   amountCents: number;
   currency: string;
   dueDate: string | null;
@@ -341,9 +350,10 @@ export function emptyOverview(): PlatformBillingOverview {
     timezone: "America/Sao_Paulo",
     periodStart: "",
     periodEnd: "",
-    receivedInPeriodCents: 0,
-    pendingAmountCents: 0,
-    overdueAmountCents: 0,
+    financial: {
+      sandbox: emptyEnvironmentFinancialBucket(),
+      production: emptyEnvironmentFinancialBucket(),
+    },
     clinicsWithReceived: 0,
     delinquentClinics: 0,
     activeCommercialContracts: 0,
@@ -371,5 +381,6 @@ export {
   paymentStateLabel,
   paymentStateTone,
   pixAutomaticStatusLabel,
+  providerEnvironmentLabel,
   timelineEventLabel,
 };

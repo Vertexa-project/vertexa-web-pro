@@ -24,9 +24,24 @@ describe("platformBilling API", () => {
         timezone: "America/Sao_Paulo",
         period_start: "2026-09-01",
         period_end: "2026-09-30",
-        received_in_period_cents: 39000,
-        pending_amount_cents: 1000,
-        overdue_amount_cents: 39000,
+        financial: {
+          sandbox: {
+            received_in_period_cents: 39000,
+            received_in_period_count: 1,
+            pending_in_period_cents: 1000,
+            pending_in_period_count: 1,
+            overdue_in_period_cents: 39000,
+            overdue_in_period_count: 1,
+          },
+          production: {
+            received_in_period_cents: 0,
+            received_in_period_count: 0,
+            pending_in_period_cents: 0,
+            pending_in_period_count: 0,
+            overdue_in_period_cents: 0,
+            overdue_in_period_count: 0,
+          },
+        },
         clinics_with_received: 1,
         delinquent_clinics: 1,
         active_commercial_contracts: 2,
@@ -46,6 +61,8 @@ describe("platformBilling API", () => {
     const overview = await getPlatformBillingOverview();
     expect(rpc).toHaveBeenCalledWith("get_platform_billing_overview");
     expect(overview.delinquentClinics).toBe(1);
+    expect(overview.financial.sandbox.receivedCents).toBe(39000);
+    expect(overview.financial.production.receivedCents).toBe(0);
     expect(overview.entitlementEnforcement).toBe("OFF");
     expect(JSON.stringify(overview)).not.toMatch(/mrr|qr_payload|encoded_image|cus_|pay_/i);
   });

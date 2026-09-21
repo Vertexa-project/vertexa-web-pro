@@ -91,4 +91,11 @@ describe("commercialAccess API", () => {
       /RECEIVED|entitlement/i,
     );
   });
+
+  it("rejects a malformed commercial access payload instead of mapping FULL", async () => {
+    rpc.mockResolvedValue({ data: { unexpected: true }, error: null });
+    await expect(getMyClinicCommercialAccess("c1")).rejects.toMatchObject({
+      hint: "COMMERCIAL_ACCESS_MALFORMED",
+    });
+  });
 });
