@@ -72,6 +72,9 @@ vi.mock("@/hooks/useProfessionalStatus", () => ({
   useReactivateProfessional: () => ({ mutate: reactivateMutate, isPending: false }),
 }));
 vi.mock("@/lib/observability/sentry", () => ({ captureException: vi.fn() }));
+vi.mock("@/hooks/useBillingCommercial", () => ({
+  useClinicCommercialUsage: () => ({ data: null, isLoading: false, isError: false }),
+}));
 vi.mock("@/hooks/useProfileAvatar", () => ({
   useSignedAvatarUrl: (path?: string | null) => ({
     data: path ? `https://signed.test/${path}` : undefined,

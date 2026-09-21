@@ -152,6 +152,15 @@ export function PatientCreateDialog({ open, onOpenChange, onCreated }: Props) {
         onOpenChange(false);
         onCreated(patientId);
       },
+      onError: (err) => {
+        const hint =
+          err && typeof err === "object" && "hint" in err
+            ? String((err as { hint?: unknown }).hint ?? "")
+            : "";
+        if (hint === "BILLING_PATIENT_CAPACITY") {
+          setError("A clínica atingiu o limite de pacientes ativos.");
+        }
+      },
     });
   }
 

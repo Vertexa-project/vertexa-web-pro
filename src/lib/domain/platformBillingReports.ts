@@ -1,3 +1,5 @@
+import type { PlatformCommercialMetrics } from "./billingCommercial";
+import { emptyCommercialMetrics } from "./billingCommercial";
 import {
   formatPlatformDate,
   formatPlatformMoney,
@@ -58,6 +60,7 @@ export interface PlatformBillingReport {
   delinquentClinics: number;
   delinquentItems: PlatformBillingDelinquentRow[];
   exportMaxRows: number;
+  commercial: PlatformCommercialMetrics;
 }
 
 export interface PlatformBillingExportRow {
@@ -144,6 +147,7 @@ export function emptyPlatformBillingReport(
     delinquentClinics: 0,
     delinquentItems: [],
     exportMaxRows: BILLING_CSV_MAX_EXPORT_ROWS,
+    commercial: emptyCommercialMetrics(),
   };
 }
 

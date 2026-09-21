@@ -114,6 +114,56 @@ vi.mock("@/hooks/useBillingPixCheckout", () => ({
   useExecuteClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReissueClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
+vi.mock("@/hooks/useBillingCommercial", () => ({
+  useClinicCommercialUsage: () => ({
+    data: {
+      capacity: {
+        clinicId: "c1",
+        hasActiveContract: true,
+        planCode: "pulse",
+        ownerExempt: 1,
+        billableProfessionals: 0,
+        includedProfessionals: 2,
+        additionalProfessionalUnits: 0,
+        allowedProfessionals: 2,
+        remainingProfessionals: 2,
+        professionalsExceeded: false,
+        activePatients: 0,
+        includedPatients: 50,
+        additionalPatientUnits: 0,
+        allowedPatients: 50,
+        remainingPatients: 50,
+        patientsExceeded: false,
+        enforced: true,
+      },
+      price: {
+        clinicId: "c1",
+        hasActiveContract: true,
+        planCode: "pulse",
+        contractedPlanVersion: 2,
+        currentTableVersion: 2,
+        tablePriceCents: 39000,
+        lockedPriceCents: null,
+        founderAdjustmentCents: 0,
+        additionalCapacityCents: 0,
+        finalProjectedCents: 39000,
+        pricingReason: "standard_snapshot",
+        founderEligible: false,
+        lockUntil: null,
+        lifetimeDiscountBps: null,
+        additionalProfessionalUnits: 0,
+        additionalPatientUnits: 0,
+        adjustmentsApplied: 0,
+        projectionNotCharge: true,
+      },
+      founder: null,
+      entitlementEnforcement: "OFF",
+      projectionNotCharge: true,
+    },
+    isLoading: false,
+    isError: false,
+  }),
+}));
 vi.mock("@/hooks/useBillingHub", () => ({
   useClinicBillingOverview: () => ({
     data: {
@@ -248,9 +298,11 @@ describe("BillingProfilePage commercial checkout", () => {
     expect(screen.getByText("Cobranças")).toBeInTheDocument();
     expect(screen.getByText("Pagamentos")).toBeInTheDocument();
     expect(screen.getByText("Linha do tempo")).toBeInTheDocument();
-    expect(screen.getByText("Plano atual")).toBeInTheDocument();
+    expect(screen.getAllByText("Plano atual").length).toBeGreaterThan(0);
+    expect(screen.getByText("Uso e valor comercial")).toBeInTheDocument();
+    expect(screen.getByText(/não é cobrança Asaas/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /configurar pix automático/i })).toBeEnabled();
-    expect(screen.queryByText(/asaas|cus_/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/cus_/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /criar cobrança/i })).not.toBeInTheDocument();
   });
 });

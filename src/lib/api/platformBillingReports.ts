@@ -10,6 +10,7 @@ import {
   type PlatformBillingReportKind,
   type PlatformBillingStatusRow,
 } from "@/lib/domain/platformBillingReports";
+import { mapPlatformCommercialGovernance } from "./billingCommercial";
 
 interface RawPlan {
   plan_code?: string | null;
@@ -53,6 +54,7 @@ interface RawReport {
   delinquent_clinics?: number;
   delinquent_items?: RawDelinquent[];
   export_max_rows?: number;
+  commercial?: Record<string, unknown>;
 }
 
 interface RawExportItem {
@@ -152,6 +154,7 @@ export function mapPlatformBillingReport(raw: RawReport): PlatformBillingReport 
       .map(mapDelinquent)
       .filter((row): row is PlatformBillingDelinquentRow => row !== null),
     exportMaxRows: asInt(raw.export_max_rows, 500),
+    commercial: mapPlatformCommercialGovernance((raw.commercial ?? {}) as Record<string, unknown>),
   };
 }
 

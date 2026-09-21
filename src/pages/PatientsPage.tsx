@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Download, Eye, Search, UserPlus, Users } from "lucide-react";
 
+import { ClinicCapacityNotice } from "@/components/billing/ClinicCapacityNotice";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -214,6 +215,7 @@ export function PatientsPage() {
           </>
         }
       />
+      <ClinicCapacityNotice clinicId={clinicId} kind="patient" />
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>

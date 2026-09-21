@@ -23,6 +23,9 @@ vi.mock("@/hooks/usePatientTeam", () => ({
 vi.mock("@/components/patient/PatientCreateDialog", () => ({
   PatientCreateDialog: () => null,
 }));
+vi.mock("@/hooks/useBillingCommercial", () => ({
+  useClinicCommercialUsage: () => ({ data: null, isLoading: false, isError: false }),
+}));
 vi.mock("@/hooks/useProfileAvatar", () => ({
   useSignedAvatarUrl: (path?: string | null) => ({
     data: path ? `https://signed.test/${path}` : undefined,

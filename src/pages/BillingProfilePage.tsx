@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Loader2, ShieldAlert } from "lucide-react";
 
+import { BillingCommercialUsagePanel } from "@/components/billing/BillingCommercialUsagePanel";
 import { BillingHubCharges } from "@/components/billing/BillingHubCharges";
 import { BillingHubOverview } from "@/components/billing/BillingHubOverview";
 import { BillingHubPayments } from "@/components/billing/BillingHubPayments";
@@ -124,6 +125,7 @@ export function BillingProfilePage() {
           description="Acompanhe o plano, o Pix Automático e as cobranças da clínica."
         />
         {clinicId ? <BillingHubOverview clinicId={clinicId} checkout={checkout.data} /> : null}
+        {clinicId ? <BillingCommercialUsagePanel clinicId={clinicId} /> : null}
         {clinicId ? <BillingHubCharges clinicId={clinicId} /> : null}
         {clinicId ? <BillingHubPayments clinicId={clinicId} /> : null}
         {clinicId ? <BillingHubTimeline clinicId={clinicId} /> : null}

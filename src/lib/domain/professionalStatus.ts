@@ -163,6 +163,8 @@ const EXPECTED = new Set(["42501", "22023", "P0002"]);
 /** Erros ESPERADOS (autorização/estado) — viram mensagem, não vão ao Sentry. */
 export function isExpectedMemberStatusError(error: unknown): boolean {
   const code = memberStatusErrorCode(error);
+  const hint = memberStatusErrorHint(error);
+  if (hint === "BILLING_PROFESSIONAL_CAPACITY") return true;
   return code !== null && EXPECTED.has(code);
 }
 
@@ -184,6 +186,9 @@ export function memberStatusErrorMessage(error: unknown): string {
   }
   if (hint === "SELF_DEACTIVATION_NOT_ALLOWED") {
     return "Você não pode desativar o próprio cadastro. Peça a outro administrador.";
+  }
+  if (hint === "BILLING_PROFESSIONAL_CAPACITY") {
+    return "A clínica atingiu o limite de profissionais ativos. O dono responsável não consome assento.";
   }
   switch (memberStatusErrorCode(error)) {
     case "42501":

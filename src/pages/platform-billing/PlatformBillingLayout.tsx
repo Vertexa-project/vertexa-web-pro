@@ -11,6 +11,7 @@ const SUBNAV = [
   { to: "/platform/billing/pix", label: "Pix Automático", end: false },
   { to: "/platform/billing/eventos", label: "Eventos", end: false },
   { to: "/platform/billing/relatorios", label: "Relatórios", end: false },
+  { to: "/platform/billing/comercial", label: "Comercial", end: false },
 ] as const;
 
 export function PlatformBillingLayout() {
