@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 
+import { ClinicCapacityNotice } from "@/components/billing/ClinicCapacityNotice";
 import { ProfileAvatarUrlScope } from "@/components/avatar/ProfileAvatarUrlScope";
 import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { AsyncSection } from "@/components/patient/AsyncSection";
@@ -281,6 +282,7 @@ export function TeamAdminPage() {
         title="Equipe"
         description="Aprove quem pediu para entrar na clínica e acompanhe quem já faz parte."
       />
+      <ClinicCapacityNotice clinicId={clinicId} kind="professional" />
 
       {error ? (
         <p className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">

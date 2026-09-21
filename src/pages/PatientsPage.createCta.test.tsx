@@ -28,6 +28,9 @@ vi.mock("@/hooks/usePatientTeam", () => ({
 vi.mock("@/components/patient/PatientCreateDialog", () => ({
   PatientCreateDialog: () => <div data-testid="patient-create-dialog" />,
 }));
+vi.mock("@/hooks/useBillingCommercial", () => ({
+  useClinicCommercialUsage: () => ({ data: null, isLoading: false, isError: false }),
+}));
 vi.mock("@/hooks/useProfileAvatar", () => ({
   useSignedAvatarUrl: () => ({ data: undefined }),
   useProfileAvatarUrls: () => ({ data: new Map(), isLoading: false }),

@@ -205,6 +205,37 @@ export function PlatformBillingReportsPage() {
         </dl>
       </section>
 
+      <section aria-labelledby="bp07-commercial">
+        <h3 id="bp07-commercial" className="text-sm font-medium">
+          Projeção comercial
+        </h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Founder e capacidade. Isto não é recebido, pendente nem vencido.
+        </p>
+        <dl className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <Metric
+            label="Admissões Founder"
+            value={`${data?.commercial.founderAdmissionsUsed ?? 0} / 50`}
+            hint={`${data?.commercial.founderAdmissionsRemaining ?? 50} restantes · ${data?.commercial.founderActive ?? 0} ativos`}
+          />
+          <Metric
+            label="Desconto comercial projetado"
+            value={reportMoney(data?.commercial.projectedCommercialDiscountCents ?? 0)}
+            hint="Não é receita recebida"
+          />
+          <Metric
+            label="Unidades adicionais"
+            value={`${data?.commercial.additionalProfessionalUnits ?? 0} prof. · ${data?.commercial.additionalPatientUnits ?? 0} pac.`}
+            hint={reportMoney(data?.commercial.projectedAdditionalRevenueCents ?? 0)}
+          />
+          <Metric
+            label="Consumo de capacidade"
+            value={`${data?.commercial.professionalCapacityUsed ?? 0}/${data?.commercial.professionalCapacityAllowed ?? 0} · ${data?.commercial.patientCapacityUsed ?? 0}/${data?.commercial.patientCapacityAllowed ?? 0}`}
+            hint="Profissionais · pacientes"
+          />
+        </dl>
+      </section>
+
       <section aria-labelledby="bp06-plan" className="space-y-3">
         <h3 id="bp06-plan" className="text-sm font-medium">
           Recebido por plano

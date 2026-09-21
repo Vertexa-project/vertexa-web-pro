@@ -22,6 +22,14 @@ const EXPECTED = new Set(["42501", "22023", "P0002"]);
 
 export function isExpectedDecisionError(error: unknown): boolean {
   const code = decisionErrorCode(error);
+  if (
+    error &&
+    typeof error === "object" &&
+    "hint" in error &&
+    (error as { hint?: unknown }).hint === "BILLING_PROFESSIONAL_CAPACITY"
+  ) {
+    return true;
+  }
   return code !== null && EXPECTED.has(code);
 }
 
@@ -32,6 +40,14 @@ export function isExpectedDecisionError(error: unknown): boolean {
  *   P0002 — o pedido não existe mais
  */
 export function decisionErrorMessage(error: unknown): string {
+  if (
+    error &&
+    typeof error === "object" &&
+    "hint" in error &&
+    (error as { hint?: unknown }).hint === "BILLING_PROFESSIONAL_CAPACITY"
+  ) {
+    return "A clínica atingiu o limite de profissionais ativos. O dono responsável não consome assento.";
+  }
   switch (decisionErrorCode(error)) {
     case "42501":
       return "Você não tem permissão de administrador nesta clínica.";

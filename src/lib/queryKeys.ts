@@ -57,6 +57,7 @@ export const qk = {
   clinicBillingIdentity: (clinicId: string) => ["billingIdentity", clinicId] as const,
   sellableBillingPlans: () => ["billingCatalog", "sellable"] as const,
   clinicCommercialCheckout: (clinicId: string) => ["billingCheckout", clinicId] as const,
+  clinicCommercialUsage: (clinicId: string) => ["billingCommercialUsage", clinicId] as const,
   clinicBillingOverview: (clinicId: string) => ["billingHub", "overview", clinicId] as const,
   clinicBillingCharges: (clinicId: string) => ["billingHub", "charges", clinicId] as const,
   clinicBillingPayments: (clinicId: string) => ["billingHub", "payments", clinicId] as const,
@@ -106,6 +107,10 @@ export const qk = {
     ["platform", "billing", "payments", filters] as const,
   platformBillingEvents: (filters: unknown) => ["platform", "billing", "events", filters] as const,
   platformBillingReport: (period: unknown) => ["platform", "billing", "report", period] as const,
+  platformBillingCommercial: ["platform", "billing", "commercial"] as const,
+  platformClinicCommercialDetail: (clinicId: string) =>
+    ["platform", "billing", "commercial", "clinic", clinicId] as const,
+  platformCommercialPlanOptions: ["platform", "billing", "commercial", "plans"] as const,
   myProfileAvatar: (profileId: string) => ["profileAvatar", profileId] as const,
   avatarSignedUrl: (path: string) => ["avatar", "signedUrl", path] as const,
   avatarSignedUrlBatch: (fingerprint: string) => ["avatar", "signedUrlBatch", "profile-avatars", fingerprint] as const,
