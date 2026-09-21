@@ -88,3 +88,78 @@ export function timelineEventsCollapseEnvironment(
     labeled: events.map((row) => `${row.environment}:${row.type}`),
   };
 }
+
+export interface DualEnvPixFact {
+  environment: BillingProviderEnvironment;
+  status: string;
+}
+
+export function pixStatusByEnvironment(rows: readonly DualEnvPixFact[]): {
+  sandbox: string | null;
+  production: string | null;
+} {
+  return {
+    sandbox: rows.find((row) => row.environment === "sandbox")?.status ?? null,
+    production: rows.find((row) => row.environment === "production")?.status ?? null,
+  };
+}
+
+export interface DualEnvDatedFact {
+  environment: BillingProviderEnvironment;
+  at: string;
+  id: string;
+}
+
+export function latestFactByEnvironment(rows: readonly DualEnvDatedFact[]): {
+  sandboxId: string | null;
+  productionId: string | null;
+} {
+  const pick = (environment: BillingProviderEnvironment) =>
+    [...rows]
+      .filter((row) => row.environment === environment)
+      .sort((a, b) => (a.at < b.at ? 1 : -1))[0]?.id ?? null;
+  return { sandboxId: pick("sandbox"), productionId: pick("production") };
+}
+
+export interface DualEnvNextChargeFact {
+  environment: BillingProviderEnvironment;
+  dueDate: string;
+}
+
+export function nextChargeByEnvironment(rows: readonly DualEnvNextChargeFact[]): {
+  sandboxDue: string | null;
+  productionDue: string | null;
+} {
+  const pick = (environment: BillingProviderEnvironment) =>
+    [...rows]
+      .filter((row) => row.environment === environment)
+      .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))[0]?.dueDate ?? null;
+  return { sandboxDue: pick("sandbox"), productionDue: pick("production") };
+}
+
+export type AgingBucketCode = "d1_7" | "d8_15" | "d16_30" | "d31_plus";
+
+export interface DualEnvOverdueFact {
+  environment: BillingProviderEnvironment;
+  aging: AgingBucketCode;
+  amountCents: number;
+}
+
+export function agingByEnvironment(rows: readonly DualEnvOverdueFact[]): Record<
+  BillingProviderEnvironment,
+  Record<AgingBucketCode, number>
+> {
+  const empty = (): Record<AgingBucketCode, number> => ({
+    d1_7: 0,
+    d8_15: 0,
+    d16_30: 0,
+    d31_plus: 0,
+  });
+  const sandbox = empty();
+  const production = empty();
+  for (const row of rows) {
+    const bucket = row.environment === "production" ? production : sandbox;
+    bucket[row.aging] += row.amountCents;
+  }
+  return { sandbox, production };
+}

@@ -69,8 +69,8 @@ beforeEach(() => {
       },
     ],
     paymentsByStatus: [{ environment: "sandbox", status: "received", paymentCount: 1, amountCents: 40000 }],
-    activePixAutomaticAuthorizations: 1,
-    delinquentClinics: 0,
+    activePixAutomaticAuthorizations: { sandbox: 1, production: 0 },
+    delinquent: { sandbox: 0, production: 0 },
     delinquentItems: [],
   };
   reportState.isLoading = false;
@@ -90,8 +90,18 @@ describe("PlatformBillingReportsPage", () => {
     expect(screen.getByRole("heading", { name: "Recebido por plano" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Pagamentos por situação" })).toBeInTheDocument();
     expect(screen.getByText(/Pix Automático ativo/)).toBeInTheDocument();
+    expect(screen.getByText(/Sandbox: 1 autorizações primárias/)).toBeInTheDocument();
+    expect(screen.getByText(/Produção: 0/)).toBeInTheDocument();
     expect(screen.getByText("Nenhuma clínica inadimplente")).toBeInTheDocument();
     expect(screen.getByText(/não é MRR/i)).toBeInTheDocument();
+  });
+
+  it("production filter hides Sandbox financial headlines", async () => {
+    const user = userEvent.setup();
+    render(<PlatformBillingReportsPage />);
+    await user.selectOptions(screen.getByLabelText("Ambiente"), "Produção");
+    expect(screen.getByText("Recebido Produção")).toBeInTheDocument();
+    expect(screen.queryByText("Recebido Sandbox")).not.toBeInTheDocument();
   });
 
   it("shows loading, empty and error states", () => {

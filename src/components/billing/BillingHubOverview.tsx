@@ -14,6 +14,7 @@ import {
   nextChargeCopy,
   paymentStateLabel,
   pixHubLabel,
+  providerEnvironmentLabel,
   resolveHubFourStates,
 } from "@/lib/domain/billingHub";
 import { pixProductLabel } from "@/lib/domain/billingPixCheckout";
@@ -78,11 +79,19 @@ export function BillingHubOverview({
           />
           <Fact
             label="Pix Automático"
-            value={pixHubLabel(data?.pixAuthorizationStatus ?? checkout.pixAuthorizationStatus)}
+            value={`${pixHubLabel(data?.pixAuthorizationStatus ?? checkout.pixAuthorizationStatus)}${
+              data?.environment ? ` · ${providerEnvironmentLabel(data.environment) ?? data.environment}` : ""
+            }`}
           />
           <Fact
             label="Próxima cobrança"
-            value={nextChargeCopy(data?.nextCharge ?? null)}
+            value={`${nextChargeCopy(data?.nextCharge ?? null)}${
+              data?.nextCharge?.environment
+                ? ` · ${providerEnvironmentLabel(data.nextCharge.environment) ?? data.nextCharge.environment}`
+                : data?.environment
+                  ? ` · ${providerEnvironmentLabel(data.environment) ?? data.environment}`
+                  : ""
+            }`}
             empty={!data?.nextCharge}
           />
           <Fact

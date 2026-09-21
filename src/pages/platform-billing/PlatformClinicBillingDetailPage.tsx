@@ -86,7 +86,14 @@ export function PlatformClinicBillingDetailPage() {
         </h3>
         <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Fact label="Contrato" value={`${clinicPlanCopy(clinic)} · ${contractStatusLabel(clinic.contractStatus)}`} />
-          <Fact label="Pix Automático" value={pixAutomaticStatusLabel(clinic.pixStatus)} />
+          <Fact
+            label="Pix Automático Sandbox"
+            value={pixAutomaticStatusLabel(clinic.provider.sandbox.pixStatus)}
+          />
+          <Fact
+            label="Pix Automático Produção"
+            value={pixAutomaticStatusLabel(clinic.provider.production.pixStatus)}
+          />
           <Fact label="Identidade" value={identityLabel(clinic.identityComplete)} />
           <Fact label="Cliente do provedor" value={customerBoundLabel(clinic.customerBound)} />
           <div className="border-l border-border pl-3">
@@ -99,14 +106,45 @@ export function PlatformClinicBillingDetailPage() {
             </dd>
           </div>
           <Fact
-            label="Vencido"
+            label="Vencido Sandbox"
             value={
-              clinic.overdueCount > 0
-                ? `${clinic.overdueCount} · ${formatPlatformMoney(clinic.overdueCents)}`
+              clinic.provider.sandbox.overdueCount > 0
+                ? `${clinic.provider.sandbox.overdueCount} · ${formatPlatformMoney(clinic.provider.sandbox.overdueCents)}`
                 : "Nenhuma cobrança vencida"
             }
           />
-          <Fact label="Próxima cobrança" value={nextChargeCopy(clinic.nextCharge)} />
+          <Fact
+            label="Vencido Produção"
+            value={
+              clinic.provider.production.overdueCount > 0
+                ? `${clinic.provider.production.overdueCount} · ${formatPlatformMoney(clinic.provider.production.overdueCents)}`
+                : "Nenhuma cobrança vencida"
+            }
+          />
+          <Fact
+            label="Próxima cobrança Sandbox"
+            value={nextChargeCopy(clinic.provider.sandbox.nextCharge)}
+          />
+          <Fact
+            label="Próxima cobrança Produção"
+            value={nextChargeCopy(clinic.provider.production.nextCharge)}
+          />
+          <Fact
+            label="Último pagamento Sandbox"
+            value={
+              clinic.provider.sandbox.latestPaymentDate
+                ? `${formatPlatformDate(clinic.provider.sandbox.latestPaymentDate)} · ${clinic.provider.sandbox.latestPaymentState ?? "—"}`
+                : "—"
+            }
+          />
+          <Fact
+            label="Último pagamento Produção"
+            value={
+              clinic.provider.production.latestPaymentDate
+                ? `${formatPlatformDate(clinic.provider.production.latestPaymentDate)} · ${clinic.provider.production.latestPaymentState ?? "—"}`
+                : "—"
+            }
+          />
           <Fact
             label="Atenção"
             value={clinic.attention ? attentionReasonLabel(clinic.attentionReason) : "Sem atenção"}

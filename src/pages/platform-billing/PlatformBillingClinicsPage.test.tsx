@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
 import type { PlatformBillingClinicRow } from "@/lib/domain/platformBilling";
+import { emptyProviderEnvFacts } from "@/lib/domain/platformBilling";
 
 const clinicsState = vi.hoisted(() => ({
   data: { limit: 50, offset: 0, items: [] as PlatformBillingClinicRow[] },
@@ -40,21 +41,22 @@ function clinic(over: Partial<PlatformBillingClinicRow> = {}): PlatformBillingCl
     contractEffectiveFrom: "2026-08-01",
     identityComplete: false,
     customerBound: false,
-    pixStatus: "REFUSED",
-    pixGeneration: 2,
-    financialSummary: "pending",
-    overdueCount: 0,
-    overdueCents: null,
-    pendingCents: 39000,
-    chargeCount: 1,
-    nextCharge: {
-      amountCents: 39000,
-      dueDate: "2026-10-18",
-      displayState: "PENDING",
+    provider: {
+      sandbox: {
+        ...emptyProviderEnvFacts(),
+        pixStatus: "REFUSED",
+        pixGeneration: 2,
+        pendingCents: 39000,
+        nextCharge: {
+          amountCents: 39000,
+          dueDate: "2026-10-18",
+          displayState: "PENDING",
+        },
+        latestPaymentState: "pending",
+      },
+      production: emptyProviderEnvFacts(),
     },
-    latestPaymentState: "pending",
-    latestPaymentDate: null,
-    agingBucket: null,
+    financialSummary: "pending",
     attention: true,
     attentionReason: "pix_refused",
     entitlementEnforcement: "OFF",
@@ -79,6 +81,8 @@ describe("PlatformBillingClinicsPage", () => {
     expect(screen.getByRole("heading", { name: "Contratos" })).toBeInTheDocument();
     expect(screen.getAllByText("Clínica Leste").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Recusado").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Sandbox:/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Produção:/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Em aberto").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pix Automático recusado").length).toBeGreaterThan(0);
     expect(screen.queryByText(/inadimplente/i)).not.toBeInTheDocument();

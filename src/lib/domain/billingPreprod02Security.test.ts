@@ -71,4 +71,24 @@ describe("WP-BILLING-PREPROD-02 — security source contracts", () => {
     expect(sql).toContain("acc.environment");
     expect(sql).toContain("BILLING_REPORT_ENVIRONMENT_INVALID");
   });
+
+  it("keeps provider Pix/latest/next/aging environment-keyed; clinic-only DISTINCT ON is contract ranking", () => {
+    const sql = readFileSync(resolve(root, MIGRATION), "utf8");
+    const distinctOns = [...sql.matchAll(/select distinct on \(([^)]+)\)/gi)].map((match) =>
+      match[1].replace(/\s+/g, " ").trim(),
+    );
+    const clinicOnly = distinctOns.filter(
+      (keys) => /clinic_id/i.test(keys) && !/environment/i.test(keys),
+    );
+    expect(clinicOnly).toEqual(["cc.clinic_id"]);
+    expect(sql).toContain("select distinct on (cc.clinic_id, auth.environment)");
+    expect(sql).toContain("select distinct on (u.clinic_id, u.environment)");
+    expect(sql).toContain("select distinct on (a.clinic_id, a.environment)");
+    expect(sql).toContain("platform_billing_aging_for_environment");
+    expect(sql).toContain("private.platform_billing_pack_provider_env");
+    expect(sql).toContain("'sandbox', private.platform_billing_pack_provider_env");
+    expect(sql).toContain("'production', private.platform_billing_pack_provider_env");
+    expect(sql).not.toMatch(/'aging',\s*private\.platform_billing_aging\(/);
+    expect(sql).not.toMatch(/null::text as pix_status[\s\S]{0,200}'pix_status', p_row\.pix_status/);
+  });
 });

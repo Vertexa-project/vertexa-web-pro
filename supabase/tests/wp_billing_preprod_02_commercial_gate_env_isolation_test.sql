@@ -31,6 +31,12 @@ declare
   v_export jsonb;
   v_timeline jsonb;
   v_bound boolean;
+  v_plan_version uuid;
+  v_contract uuid := gen_random_uuid();
+  v_facts jsonb;
+  v_overview jsonb;
+  v_hub jsonb;
+  v_today date;
 begin
   insert into public.profiles (id, auth_user_id, role, full_name, email, status)
   values
@@ -246,6 +252,142 @@ begin
      where item->>'type' = 'payment_received'
   ) is distinct from 2 then
     raise exception 'PP02R1 FAIL: timeline payment_received missing dual environments: %', v_timeline;
+  end if;
+
+  -- R2: conflicting dual-env provider facts for the same clinic.
+  v_today := private.billing_hub_business_date();
+  select pv.id into v_plan_version
+    from private.billing_plan_versions pv
+    join private.billing_plans p on p.id = pv.plan_id
+   where p.code = 'pulse'
+   order by pv.version desc
+   limit 1;
+  if v_plan_version is null then
+    raise exception 'PP02R2 FAIL: pulse plan version missing';
+  end if;
+
+  insert into private.billing_commercial_contracts (
+    id, clinic_id, plan_version_id, contracted_price_cents, contracted_currency,
+    billing_cycle, status, effective_from
+  ) values (v_contract, v_clinic, v_plan_version, 39000, 'BRL', 'monthly', 'active', now());
+
+  insert into private.billing_pix_automatic_authorizations (
+    commercial_contract_id, billing_account_id, environment,
+    provider_status, is_primary, provider_contract_id, generation
+  ) values
+    (v_contract, v_sandbox, 'sandbox', 'ACTIVE', true, replace(v_contract::text, '-', ''), 1),
+    (
+      v_contract, v_prod, 'production', 'CREATED', true,
+      replace(gen_random_uuid()::text, '-', ''), 1
+    );
+
+  update private.billing_payments
+     set payment_date = date '2026-09-20'
+   where external_payment_id = 'pay-sbx-pp02r1';
+  update private.billing_payments
+     set payment_date = date '2026-09-01'
+   where external_payment_id = 'pay-prd-pp02r1';
+  update private.billing_payments
+     set due_date = date '2026-09-25'
+   where external_payment_id = 'pay-sbx-pend-pp02r1';
+  update private.billing_payments
+     set due_date = date '2026-09-28'
+   where external_payment_id = 'pay-prd-pend-pp02r1';
+
+  insert into private.billing_payments (
+    billing_account_id, provider, environment, external_payment_id,
+    external_customer_id, provider_status, financial_state, billing_type,
+    value_cents, due_date, payment_date
+  ) values
+    (v_sandbox, 'asaas', 'sandbox', 'pay-sbx-over-pp02r2', 'cus_sandbox_pp02', 'OVERDUE', 'overdue', 'PIX',
+     39000, v_today - 10, null),
+    (v_prod, 'asaas', 'production', 'pay-prd-over-pp02r2', 'cus_prod_pp02', 'OVERDUE', 'overdue', 'PIX',
+     15000, v_today - 40, null);
+
+  select f.provider_facts into v_facts
+    from private.platform_billing_clinic_facts() f
+   where f.clinic_id = v_clinic;
+  if v_facts#>>'{sandbox,pix_status}' is distinct from 'ACTIVE' then
+    raise exception 'PP02R2 FAIL: sandbox pix hidden: %', v_facts;
+  end if;
+  if v_facts#>>'{production,pix_status}' is distinct from 'CREATED' then
+    raise exception 'PP02R2 FAIL: production pix collapsed by sandbox ACTIVE: %', v_facts;
+  end if;
+  if (v_facts#>>'{sandbox,latest_payment_date}')::date
+       is not distinct from (v_facts#>>'{production,latest_payment_date}')::date
+     or (v_facts#>>'{sandbox,latest_payment_date}')::date
+          <= (v_facts#>>'{production,latest_payment_date}')::date then
+    raise exception 'PP02R2 FAIL: latest payment collapsed: %', v_facts;
+  end if;
+  if v_facts#>>'{sandbox,next_charge,due_date}' is not distinct from
+     v_facts#>>'{production,next_charge,due_date}' then
+    raise exception 'PP02R2 FAIL: next charge collapsed: %', v_facts;
+  end if;
+  if v_facts#>>'{sandbox,aging_bucket}' is distinct from 'd8_15' then
+    raise exception 'PP02R2 FAIL: sandbox aging: %', v_facts;
+  end if;
+  if v_facts#>>'{production,aging_bucket}' is distinct from 'd31_plus' then
+    raise exception 'PP02R2 FAIL: production aging: %', v_facts;
+  end if;
+  if (v_facts#>>'{sandbox,overdue_cents}')::int is distinct from 39000
+     or (v_facts#>>'{production,overdue_cents}')::int is distinct from 15000 then
+    raise exception 'PP02R2 FAIL: overdue cents mixed: %', v_facts;
+  end if;
+
+  perform pg_temp.pp02_as(v_auth_pa);
+  v_overview := public.get_platform_billing_overview();
+  if v_overview ? 'delinquent_clinics' or v_overview#>'{aging,d1_7}' is not null then
+    raise exception 'PP02R2 FAIL: unlabeled overview aging/delinquency still exposed: %', v_overview;
+  end if;
+  if (v_overview#>>'{aging,sandbox,d8_15,amount_cents}')::int < 39000 then
+    raise exception 'PP02R2 FAIL: sandbox aging missing: %', v_overview->'aging';
+  end if;
+  if (v_overview#>>'{aging,production,d8_15,amount_cents}')::int
+       >= (v_overview#>>'{aging,sandbox,d8_15,amount_cents}')::int
+     and (v_overview#>>'{aging,sandbox,d8_15,amount_cents}')::int > 0 then
+    raise exception 'PP02R2 FAIL: sandbox aging leaked into production: %', v_overview->'aging';
+  end if;
+  if (v_overview#>>'{aging,production,d31_plus,amount_cents}')::int < 15000 then
+    raise exception 'PP02R2 FAIL: production aging missing: %', v_overview->'aging';
+  end if;
+  if (v_overview#>>'{aging,sandbox,d31_plus,amount_cents}')::int
+       >= (v_overview#>>'{aging,production,d31_plus,amount_cents}')::int
+     and (v_overview#>>'{aging,production,d31_plus,amount_cents}')::int > 0 then
+    raise exception 'PP02R2 FAIL: production aging leaked into sandbox: %', v_overview->'aging';
+  end if;
+  if (v_overview#>>'{active_pix_automatic_authorizations,sandbox}')::int < 1
+     or (v_overview#>>'{active_pix_automatic_authorizations,production}')::int is distinct from 0 then
+    raise exception 'PP02R2 FAIL: pix counts collapsed: %', v_overview->'active_pix_automatic_authorizations';
+  end if;
+
+  v_rep := public.get_platform_billing_report(date '2026-09-01', date '2026-09-30');
+  if exists (
+    select 1
+      from jsonb_array_elements(v_rep->'delinquent_items') item
+     where item->>'clinic_id' = v_clinic::text
+       and item->>'environment' = 'production'
+       and item->>'aging_bucket' = 'd8_15'
+  ) then
+    raise exception 'PP02R2 FAIL: sandbox d8_15 presented as production delinquency: %', v_rep->'delinquent_items';
+  end if;
+  if exists (
+    select 1
+      from jsonb_array_elements(v_rep->'delinquent_items') item
+     where item->>'clinic_id' = v_clinic::text
+       and item->>'environment' = 'sandbox'
+       and item->>'aging_bucket' = 'd31_plus'
+  ) then
+    raise exception 'PP02R2 FAIL: production d31_plus presented as sandbox delinquency: %', v_rep->'delinquent_items';
+  end if;
+
+  perform pg_temp.pp02_as(v_auth_owner);
+  v_hub := public.get_my_clinic_billing_overview(v_clinic);
+  if v_hub->>'pix_authorization_status' is distinct from 'ACTIVE'
+     or v_hub->>'environment' is distinct from 'sandbox' then
+    raise exception 'PP02R2 FAIL: clinic hub used unlabeled/production pix: %', v_hub;
+  end if;
+  if v_hub#>>'{next_charge,environment}' is distinct from 'sandbox' then
+    raise exception 'PP02R2 FAIL: clinic hub next charge unlabeled: %', v_hub->'next_charge';
   end if;
 
   raise notice 'PP02 PASS';

@@ -62,8 +62,8 @@ interface RawReport {
   };
   received_by_plan?: RawPlan[];
   payments_by_status?: RawStatus[];
-  active_pix_automatic_authorizations?: number;
-  delinquent_clinics?: number;
+  active_pix_automatic_authorizations?: { sandbox?: number; production?: number };
+  delinquent?: { sandbox?: number; production?: number };
   delinquent_items?: RawDelinquent[];
   export_max_rows?: number;
   commercial?: Record<string, unknown>;
@@ -178,8 +178,14 @@ export function mapPlatformBillingReport(raw: RawReport): PlatformBillingReport 
     paymentsByStatus: (raw.payments_by_status ?? [])
       .map(mapStatus)
       .filter((row): row is PlatformBillingStatusRow => row !== null),
-    activePixAutomaticAuthorizations: asInt(raw.active_pix_automatic_authorizations),
-    delinquentClinics: asInt(raw.delinquent_clinics),
+    activePixAutomaticAuthorizations: {
+      sandbox: asInt(raw.active_pix_automatic_authorizations?.sandbox),
+      production: asInt(raw.active_pix_automatic_authorizations?.production),
+    },
+    delinquent: {
+      sandbox: asInt(raw.delinquent?.sandbox),
+      production: asInt(raw.delinquent?.production),
+    },
     delinquentItems: (raw.delinquent_items ?? [])
       .map(mapDelinquent)
       .filter((row): row is PlatformBillingDelinquentRow => row !== null),

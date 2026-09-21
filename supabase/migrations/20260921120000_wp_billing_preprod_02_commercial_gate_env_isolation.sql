@@ -1469,6 +1469,108 @@ revoke all on function private.platform_billing_charge_universe()
   from public, anon, authenticated, service_role;
 
 
+-- PREPROD-02R2: provider facts are per-environment. Clinic-level columns no longer
+-- select one Pix / latest pay / next charge / aging bucket by row order.
+alter type private.platform_billing_clinic_facts add attribute provider_facts jsonb;
+
+create or replace function private.platform_billing_pack_provider_env(
+  p_pix_status text,
+  p_pix_generation integer,
+  p_latest_state text,
+  p_latest_date date,
+  p_next_due date,
+  p_next_cents integer,
+  p_next_state text,
+  p_aging text,
+  p_overdue_count integer,
+  p_overdue_cents bigint,
+  p_pending_cents bigint,
+  p_charge_count integer
+)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'pix_status', p_pix_status,
+    'pix_generation', p_pix_generation,
+    'latest_payment_state', p_latest_state,
+    'latest_payment_date', p_latest_date,
+    'next_charge', case
+      when p_next_due is null then null
+      else jsonb_build_object(
+        'due_date', p_next_due,
+        'amount_cents', p_next_cents,
+        'display_state', p_next_state
+      )
+    end,
+    'aging_bucket', p_aging,
+    'overdue_count', coalesce(p_overdue_count, 0),
+    'overdue_cents', coalesce(p_overdue_cents, 0),
+    'pending_cents', coalesce(p_pending_cents, 0),
+    'charge_count', coalesce(p_charge_count, 0)
+  );
+$$;
+
+revoke all on function private.platform_billing_pack_provider_env(
+  text, integer, text, date, date, integer, text, text, integer, bigint, bigint, integer
+) from public, anon, authenticated, service_role;
+
+
+create or replace function private.platform_billing_aging_for_environment(
+  p_environment text,
+  p_today date
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'd1_7', jsonb_build_object(
+      'clinic_count', coalesce(count(distinct u.clinic_id) filter (
+        where private.platform_billing_overdue_aging(u.due_date, p_today) = 'd1_7'
+      ), 0),
+      'amount_cents', coalesce(sum(u.amount_cents) filter (
+        where private.platform_billing_overdue_aging(u.due_date, p_today) = 'd1_7'
+      ), 0)
+    ),
+    'd8_15', jsonb_build_object(
+      'clinic_count', coalesce(count(distinct u.clinic_id) filter (
+        where private.platform_billing_overdue_aging(u.due_date, p_today) = 'd8_15'
+      ), 0),
+      'amount_cents', coalesce(sum(u.amount_cents) filter (
+        where private.platform_billing_overdue_aging(u.due_date, p_today) = 'd8_15'
+      ), 0)
+    ),
+    'd16_30', jsonb_build_object(
+      'clinic_count', coalesce(count(distinct u.clinic_id) filter (
+        where private.platform_billing_overdue_aging(u.due_date, p_today) = 'd16_30'
+      ), 0),
+      'amount_cents', coalesce(sum(u.amount_cents) filter (
+        where private.platform_billing_overdue_aging(u.due_date, p_today) = 'd16_30'
+      ), 0)
+    ),
+    'd31_plus', jsonb_build_object(
+      'clinic_count', coalesce(count(distinct u.clinic_id) filter (
+        where private.platform_billing_overdue_aging(u.due_date, p_today) = 'd31_plus'
+      ), 0),
+      'amount_cents', coalesce(sum(u.amount_cents) filter (
+        where private.platform_billing_overdue_aging(u.due_date, p_today) = 'd31_plus'
+      ), 0)
+    )
+  )
+  from private.platform_billing_charge_universe() u
+  where u.display_state = 'OVERDUE'
+    and u.environment = p_environment;
+$$;
+
+revoke all on function private.platform_billing_aging_for_environment(text, date)
+  from public, anon, authenticated, service_role;
+
+
 create or replace function private.platform_billing_clinic_facts()
 returns setof private.platform_billing_clinic_facts
 language sql
@@ -1507,15 +1609,16 @@ as $$
     group by a.clinic_id
   ),
   pix as (
-    select distinct on (cc.clinic_id)
+    select distinct on (cc.clinic_id, auth.environment)
       cc.clinic_id,
+      auth.environment,
       auth.provider_status as pix_status,
       auth.generation as pix_generation
     from private.billing_pix_automatic_authorizations auth
     join private.billing_commercial_contracts cc
       on cc.id = auth.commercial_contract_id
     where auth.is_primary
-    order by cc.clinic_id, auth.generation desc
+    order by cc.clinic_id, auth.environment, auth.generation desc nulls last, auth.created_at desc
   ),
   identity as (
     select i.clinic_id
@@ -1530,6 +1633,7 @@ as $$
   charge_agg as (
     select
       u.clinic_id,
+      u.environment,
       count(*)::integer as charge_count,
       count(*) filter (where u.display_state = 'OVERDUE')::integer as overdue_count,
       coalesce(sum(u.amount_cents) filter (where u.display_state = 'OVERDUE'), 0)::bigint as overdue_cents,
@@ -1538,11 +1642,12 @@ as $$
       count(*) filter (where u.display_state = 'PAID')::integer as paid_count,
       min(u.due_date) filter (where u.display_state = 'OVERDUE') as oldest_overdue_due
     from charges u
-    group by u.clinic_id
+    group by u.clinic_id, u.environment
   ),
   next_charge as (
-    select distinct on (u.clinic_id)
+    select distinct on (u.clinic_id, u.environment)
       u.clinic_id,
+      u.environment,
       u.due_date as next_charge_due,
       u.amount_cents as next_charge_cents,
       u.display_state as next_charge_state
@@ -1551,11 +1656,12 @@ as $$
     where u.display_state in ('PROGRAMMED', 'PENDING')
       and u.due_date is not null
       and u.due_date >= t.d
-    order by u.clinic_id, u.due_date asc, u.occurred_at asc, u.charge_id asc
+    order by u.clinic_id, u.environment, u.due_date asc, u.occurred_at asc, u.charge_id asc
   ),
   latest_pay as (
-    select distinct on (a.clinic_id)
+    select distinct on (a.clinic_id, a.environment)
       a.clinic_id,
+      a.environment,
       private.billing_hub_payment_display_state(p.financial_state, p.due_date, t.d) as latest_payment_state,
       coalesce(p.payment_date, p.due_date) as latest_payment_date
     from private.billing_payments p
@@ -1564,7 +1670,7 @@ as $$
     where a.clinic_id is not null
       and p.environment = a.environment
       and p.financial_state not in ('voided', 'unknown')
-    order by a.clinic_id, coalesce(p.payment_date, p.due_date, t.d) desc, p.created_at desc
+    order by a.clinic_id, a.environment, coalesce(p.payment_date, p.due_date, t.d) desc, p.created_at desc
   )
   select
     c.id as clinic_id,
@@ -1578,56 +1684,78 @@ as $$
     ct.contract_effective_from,
     (idn.clinic_id is not null) as identity_complete,
     coalesce(ac.customer_bound, false) as customer_bound,
-    px.pix_status,
-    px.pix_generation,
+    null::text as pix_status,
+    null::integer as pix_generation,
     case
       when ct.contract_id is null then 'no_plan'
-      when coalesce(ca.overdue_count, 0) > 0 then 'overdue'
-      when coalesce(ca.open_count, 0) > 0 then 'pending'
-      when coalesce(ca.paid_count, 0) > 0 then 'current'
+      when coalesce(ca_s.overdue_count, 0) + coalesce(ca_p.overdue_count, 0) > 0 then 'overdue'
+      when coalesce(ca_s.open_count, 0) + coalesce(ca_p.open_count, 0) > 0 then 'pending'
+      when coalesce(ca_s.paid_count, 0) + coalesce(ca_p.paid_count, 0) > 0 then 'current'
       else 'no_charges'
     end as financial_summary,
-    coalesce(ca.overdue_count, 0) as overdue_count,
-    coalesce(ca.overdue_cents, 0) as overdue_cents,
-    coalesce(ca.pending_cents, 0) as pending_cents,
-    coalesce(ca.charge_count, 0) as charge_count,
-    nc.next_charge_due,
-    nc.next_charge_cents,
-    nc.next_charge_state,
-    lp.latest_payment_state,
-    lp.latest_payment_date,
-    private.platform_billing_overdue_aging(ca.oldest_overdue_due, t.d) as aging_bucket,
+    coalesce(ca_s.overdue_count, 0) + coalesce(ca_p.overdue_count, 0) as overdue_count,
+    coalesce(ca_s.overdue_cents, 0) + coalesce(ca_p.overdue_cents, 0) as overdue_cents,
+    coalesce(ca_s.pending_cents, 0) + coalesce(ca_p.pending_cents, 0) as pending_cents,
+    coalesce(ca_s.charge_count, 0) + coalesce(ca_p.charge_count, 0) as charge_count,
+    null::date as next_charge_due,
+    null::integer as next_charge_cents,
+    null::text as next_charge_state,
+    null::text as latest_payment_state,
+    null::date as latest_payment_date,
+    null::text as aging_bucket,
     (
-      coalesce(ca.overdue_count, 0) > 0
+      coalesce(ca_s.overdue_count, 0) + coalesce(ca_p.overdue_count, 0) > 0
       or (ct.contract_id is not null and idn.clinic_id is null)
       or (ct.contract_id is not null and not coalesce(ac.customer_bound, false))
-      or px.pix_status = 'REFUSED'
-      or (ct.contract_status = 'active' and px.pix_status is null)
+      or px_s.pix_status = 'REFUSED'
+      or px_p.pix_status = 'REFUSED'
+      or (ct.contract_status = 'active' and px_s.pix_status is null and px_p.pix_status is null)
     ) as attention,
     case
-      when coalesce(ca.overdue_count, 0) > 0 then 'overdue'
+      when coalesce(ca_s.overdue_count, 0) + coalesce(ca_p.overdue_count, 0) > 0 then 'overdue'
       when ct.contract_id is not null and idn.clinic_id is null then 'identity_incomplete'
       when ct.contract_id is not null and not coalesce(ac.customer_bound, false)
         then 'customer_unbound'
-      when px.pix_status = 'REFUSED' then 'pix_refused'
-      when ct.contract_status = 'active' and px.pix_status is null then 'pix_absent'
+      when px_s.pix_status = 'REFUSED' or px_p.pix_status = 'REFUSED' then 'pix_refused'
+      when ct.contract_status = 'active' and px_s.pix_status is null and px_p.pix_status is null
+        then 'pix_absent'
       else 'none'
     end as attention_reason,
     'OFF'::text as entitlement_enforcement,
-    false as entitlement_granted
+    false as entitlement_granted,
+    jsonb_build_object(
+      'sandbox', private.platform_billing_pack_provider_env(
+        px_s.pix_status, px_s.pix_generation,
+        lp_s.latest_payment_state, lp_s.latest_payment_date,
+        nc_s.next_charge_due, nc_s.next_charge_cents, nc_s.next_charge_state,
+        private.platform_billing_overdue_aging(ca_s.oldest_overdue_due, t.d),
+        ca_s.overdue_count, ca_s.overdue_cents, ca_s.pending_cents, ca_s.charge_count
+      ),
+      'production', private.platform_billing_pack_provider_env(
+        px_p.pix_status, px_p.pix_generation,
+        lp_p.latest_payment_state, lp_p.latest_payment_date,
+        nc_p.next_charge_due, nc_p.next_charge_cents, nc_p.next_charge_state,
+        private.platform_billing_overdue_aging(ca_p.oldest_overdue_due, t.d),
+        ca_p.overdue_count, ca_p.overdue_cents, ca_p.pending_cents, ca_p.charge_count
+      )
+    ) as provider_facts
   from public.clinics c
   cross join today t
   left join contract ct on ct.clinic_id = c.id
   left join account ac on ac.clinic_id = c.id
-  left join pix px on px.clinic_id = c.id
+  left join pix px_s on px_s.clinic_id = c.id and px_s.environment = 'sandbox'
+  left join pix px_p on px_p.clinic_id = c.id and px_p.environment = 'production'
   left join identity idn on idn.clinic_id = c.id
-  left join charge_agg ca on ca.clinic_id = c.id
-  left join next_charge nc on nc.clinic_id = c.id
-  left join latest_pay lp on lp.clinic_id = c.id;
+  left join charge_agg ca_s on ca_s.clinic_id = c.id and ca_s.environment = 'sandbox'
+  left join charge_agg ca_p on ca_p.clinic_id = c.id and ca_p.environment = 'production'
+  left join next_charge nc_s on nc_s.clinic_id = c.id and nc_s.environment = 'sandbox'
+  left join next_charge nc_p on nc_p.clinic_id = c.id and nc_p.environment = 'production'
+  left join latest_pay lp_s on lp_s.clinic_id = c.id and lp_s.environment = 'sandbox'
+  left join latest_pay lp_p on lp_p.clinic_id = c.id and lp_p.environment = 'production';
 $$;
 
 comment on function private.platform_billing_clinic_facts() is
-  'WP-BILLING-PREPROD-02R1: customer_bound is BOOL_OR(external_customer_id is not null) per clinic. Not DISTINCT ON newest account.';
+  'WP-BILLING-PREPROD-02R2: provider Pix/latest/next/aging are per environment. customer_bound remains BOOL_OR. Contract ranking stays clinic-level.';
 
 
 drop function if exists private.billing_hub_timeline_rows(uuid);
@@ -1901,8 +2029,6 @@ declare
   v_end date;
   v_sandbox jsonb;
   v_production jsonb;
-  v_delinquent integer := 0;
-  v_active_pix integer := 0;
   v_by_plan jsonb := '[]'::jsonb;
   v_by_status jsonb := '[]'::jsonb;
   v_delinquent_items jsonb := '[]'::jsonb;
@@ -1915,16 +2041,6 @@ begin
 
   v_sandbox := private.platform_billing_env_bucket('sandbox', v_start, v_end);
   v_production := private.platform_billing_env_bucket('production', v_start, v_end);
-
-  select count(*) filter (where f.financial_summary = 'overdue')
-    into v_delinquent
-    from private.platform_billing_clinic_facts() f;
-
-  select count(*)::integer
-    into v_active_pix
-    from private.billing_pix_automatic_authorizations auth
-   where auth.is_primary
-     and auth.provider_status = 'ACTIVE';
 
   select coalesce(jsonb_agg(row_obj order by environment, received_cents desc, plan_label), '[]'::jsonb)
     into v_by_plan
@@ -1982,7 +2098,17 @@ begin
           'overdue_count', count(*)::integer,
           'overdue_cents', coalesce(sum(u.amount_cents), 0)::bigint,
           'aging_bucket', private.platform_billing_overdue_aging(min(u.due_date), v_today),
-          'pix_status', null
+          'pix_status', (
+            select auth.provider_status
+              from private.billing_pix_automatic_authorizations auth
+              join private.billing_commercial_contracts cc
+                on cc.id = auth.commercial_contract_id
+             where cc.clinic_id = u.clinic_id
+               and auth.environment = u.environment
+               and auth.is_primary
+             order by auth.generation desc nulls last, auth.created_at desc
+             limit 1
+          )
         ) as row_obj,
         count(*)::integer as overdue_count,
         coalesce(sum(u.amount_cents), 0)::bigint as overdue_cents,
@@ -2009,8 +2135,36 @@ begin
     ),
     'received_by_plan', coalesce(v_by_plan, '[]'::jsonb),
     'payments_by_status', coalesce(v_by_status, '[]'::jsonb),
-    'active_pix_automatic_authorizations', coalesce(v_active_pix, 0),
-    'delinquent_clinics', coalesce(v_delinquent, 0),
+    'active_pix_automatic_authorizations', jsonb_build_object(
+      'sandbox', coalesce((
+        select count(*)::integer
+          from private.billing_pix_automatic_authorizations auth
+         where auth.is_primary
+           and auth.provider_status = 'ACTIVE'
+           and auth.environment = 'sandbox'
+      ), 0),
+      'production', coalesce((
+        select count(*)::integer
+          from private.billing_pix_automatic_authorizations auth
+         where auth.is_primary
+           and auth.provider_status = 'ACTIVE'
+           and auth.environment = 'production'
+      ), 0)
+    ),
+    'delinquent', jsonb_build_object(
+      'sandbox', coalesce((
+        select count(distinct u.clinic_id)::integer
+          from private.platform_billing_charge_universe() u
+         where u.display_state = 'OVERDUE'
+           and u.environment = 'sandbox'
+      ), 0),
+      'production', coalesce((
+        select count(distinct u.clinic_id)::integer
+          from private.platform_billing_charge_universe() u
+         where u.display_state = 'OVERDUE'
+           and u.environment = 'production'
+      ), 0)
+    ),
     'delinquent_items', coalesce(v_delinquent_items, '[]'::jsonb),
     'export_max_rows', 500,
     'commercial', private.billing_commercial_report_metrics()
@@ -2019,7 +2173,7 @@ end;
 $$;
 
 comment on function public.get_platform_billing_report(date, date) is
-  'WP-BILLING-PREPROD-02R1: environment-bucketed financials. No unlabeled Sandbox+Production total. Commercial projection remains clinic-level.';
+  'WP-BILLING-PREPROD-02R2: environment-bucketed financials, Pix, aging and delinquency. No unlabeled Sandbox+Production total.';
 
 
 drop function if exists public.list_platform_billing_report_export(date, date, text, integer, integer);
@@ -2102,7 +2256,17 @@ begin
             'overdue_count', count(*)::integer,
             'overdue_cents', coalesce(sum(u.amount_cents), 0)::bigint,
             'aging_bucket', private.platform_billing_overdue_aging(min(u.due_date), private.billing_hub_business_date()),
-            'pix_status', null
+            'pix_status', (
+              select auth.provider_status
+                from private.billing_pix_automatic_authorizations auth
+                join private.billing_commercial_contracts cc
+                  on cc.id = auth.commercial_contract_id
+               where cc.clinic_id = u.clinic_id
+                 and auth.environment = u.environment
+                 and auth.is_primary
+               order by auth.generation desc nulls last, auth.created_at desc
+               limit 1
+            )
           ) as row_obj,
           coalesce(sum(u.amount_cents), 0)::bigint as overdue_cents,
           c.name as clinic_name,
@@ -2201,17 +2365,7 @@ declare
   v_today date := private.billing_hub_business_date();
   v_start date;
   v_end date;
-  v_delinquent integer := 0;
   v_attention integer := 0;
-  v_c17 integer := 0;
-  v_c815 integer := 0;
-  v_c1630 integer := 0;
-  v_c31 integer := 0;
-  v_a17 bigint := 0;
-  v_a815 bigint := 0;
-  v_a1630 bigint := 0;
-  v_a31 bigint := 0;
-  v_aging jsonb;
   v_sandbox jsonb;
   v_production jsonb;
 begin
@@ -2219,39 +2373,9 @@ begin
   v_start := date_trunc('month', v_today::timestamp)::date;
   v_end := (date_trunc('month', v_today::timestamp) + interval '1 month - 1 day')::date;
 
-  select
-    count(*) filter (where f.financial_summary = 'overdue'),
-    count(*) filter (where f.attention),
-    count(*) filter (where f.aging_bucket = 'd1_7'),
-    count(*) filter (where f.aging_bucket = 'd8_15'),
-    count(*) filter (where f.aging_bucket = 'd16_30'),
-    count(*) filter (where f.aging_bucket = 'd31_plus')
-    into v_delinquent, v_attention, v_c17, v_c815, v_c1630, v_c31
+  select count(*) filter (where f.attention)
+    into v_attention
     from private.platform_billing_clinic_facts() f;
-
-  select
-    coalesce(sum(u.amount_cents) filter (
-      where private.platform_billing_overdue_aging(u.due_date, v_today) = 'd1_7'
-    ), 0),
-    coalesce(sum(u.amount_cents) filter (
-      where private.platform_billing_overdue_aging(u.due_date, v_today) = 'd8_15'
-    ), 0),
-    coalesce(sum(u.amount_cents) filter (
-      where private.platform_billing_overdue_aging(u.due_date, v_today) = 'd16_30'
-    ), 0),
-    coalesce(sum(u.amount_cents) filter (
-      where private.platform_billing_overdue_aging(u.due_date, v_today) = 'd31_plus'
-    ), 0)
-    into v_a17, v_a815, v_a1630, v_a31
-    from private.platform_billing_charge_universe() u
-   where u.display_state = 'OVERDUE';
-
-  v_aging := jsonb_build_object(
-    'd1_7', jsonb_build_object('clinic_count', v_c17, 'amount_cents', v_a17),
-    'd8_15', jsonb_build_object('clinic_count', v_c815, 'amount_cents', v_a815),
-    'd16_30', jsonb_build_object('clinic_count', v_c1630, 'amount_cents', v_a1630),
-    'd31_plus', jsonb_build_object('clinic_count', v_c31, 'amount_cents', v_a31)
-  );
 
   v_sandbox := private.platform_billing_env_bucket('sandbox', v_start, v_end);
   v_production := private.platform_billing_env_bucket('production', v_start, v_end);
@@ -2274,18 +2398,41 @@ begin
          and p.payment_date is not null
          and p.payment_date between v_start and v_end
     ), 0),
-    'delinquent_clinics', coalesce(v_delinquent, 0),
+    'delinquent', jsonb_build_object(
+      'sandbox', coalesce((
+        select count(distinct u.clinic_id)::integer
+          from private.platform_billing_charge_universe() u
+         where u.display_state = 'OVERDUE'
+           and u.environment = 'sandbox'
+      ), 0),
+      'production', coalesce((
+        select count(distinct u.clinic_id)::integer
+          from private.platform_billing_charge_universe() u
+         where u.display_state = 'OVERDUE'
+           and u.environment = 'production'
+      ), 0)
+    ),
     'active_commercial_contracts', coalesce((
       select count(*)::integer
         from private.billing_commercial_contracts cc
        where cc.status = 'active'
     ), 0),
-    'active_pix_automatic_authorizations', coalesce((
-      select count(*)::integer
-        from private.billing_pix_automatic_authorizations auth
-       where auth.is_primary
-         and auth.provider_status = 'ACTIVE'
-    ), 0),
+    'active_pix_automatic_authorizations', jsonb_build_object(
+      'sandbox', coalesce((
+        select count(*)::integer
+          from private.billing_pix_automatic_authorizations auth
+         where auth.is_primary
+           and auth.provider_status = 'ACTIVE'
+           and auth.environment = 'sandbox'
+      ), 0),
+      'production', coalesce((
+        select count(*)::integer
+          from private.billing_pix_automatic_authorizations auth
+         where auth.is_primary
+           and auth.provider_status = 'ACTIVE'
+           and auth.environment = 'production'
+      ), 0)
+    ),
     'payment_success_count', coalesce((
       select count(*)::integer
         from private.billing_payments p
@@ -2297,7 +2444,10 @@ begin
          and p.payment_date between v_start and v_end
     ), 0),
     'attention_clinic_count', coalesce(v_attention, 0),
-    'aging', coalesce(v_aging, '{}'::jsonb),
+    'aging', jsonb_build_object(
+      'sandbox', coalesce(private.platform_billing_aging_for_environment('sandbox', v_today), '{}'::jsonb),
+      'production', coalesce(private.platform_billing_aging_for_environment('production', v_today), '{}'::jsonb)
+    ),
     'entitlement_enforcement', 'OFF'
   );
 end;
@@ -2449,11 +2599,259 @@ end;
 $$;
 
 
+create or replace function private.platform_billing_clinic_json(p_row private.platform_billing_clinic_facts)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'clinic_id', p_row.clinic_id,
+    'clinic_name', p_row.clinic_name,
+    'plan_code', p_row.plan_code,
+    'plan_display_name', p_row.plan_display_name,
+    'plan_price_cents', p_row.plan_price_cents,
+    'plan_currency', coalesce(p_row.plan_currency, 'BRL'),
+    'billing_cycle', p_row.billing_cycle,
+    'contract_status', p_row.contract_status,
+    'contract_effective_from', p_row.contract_effective_from,
+    'identity_complete', p_row.identity_complete,
+    'customer_bound', p_row.customer_bound,
+    'provider', coalesce(p_row.provider_facts, jsonb_build_object(
+      'sandbox', private.platform_billing_pack_provider_env(
+        null, null, null, null, null, null, null, null, 0, 0, 0, 0
+      ),
+      'production', private.platform_billing_pack_provider_env(
+        null, null, null, null, null, null, null, null, 0, 0, 0, 0
+      )
+    )),
+    'financial_summary', p_row.financial_summary,
+    'attention', p_row.attention,
+    'attention_reason', p_row.attention_reason,
+    'entitlement_enforcement', 'OFF',
+    'entitlement_granted', false
+  );
+$$;
+
+comment on function private.platform_billing_clinic_json(private.platform_billing_clinic_facts) is
+  'WP-BILLING-PREPROD-02R2: clinic JSON carries per-environment provider facts. Unlabeled Pix/latest/next/aging are omitted.';
+
+revoke all on function private.platform_billing_clinic_json(private.platform_billing_clinic_facts)
+  from public, anon, authenticated, service_role;
+
+
+create or replace function public.list_platform_billing_clinics(
+  p_clinic_query text default null,
+  p_plan_code text default null,
+  p_contract_status text default null,
+  p_pix_status text default null,
+  p_financial_status text default null,
+  p_needs_attention boolean default null,
+  p_limit integer default 50,
+  p_offset integer default 0
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_limit integer := private.platform_billing_clamp_limit(p_limit);
+  v_offset integer := private.platform_billing_clamp_offset(p_offset);
+  v_query text := nullif(btrim(coalesce(p_clinic_query, '')), '');
+  v_plan text := nullif(btrim(coalesce(p_plan_code, '')), '');
+  v_contract text := nullif(btrim(coalesce(p_contract_status, '')), '');
+  v_pix text := nullif(btrim(coalesce(p_pix_status, '')), '');
+  v_fin text := nullif(btrim(coalesce(p_financial_status, '')), '');
+begin
+  perform private.assert_platform_billing_reader();
+
+  return jsonb_build_object(
+    'limit', v_limit,
+    'offset', v_offset,
+    'items', coalesce((
+      select jsonb_agg(private.platform_billing_clinic_json(x) order by
+        x.attention desc,
+        x.overdue_cents desc,
+        x.clinic_name asc,
+        x.clinic_id asc
+      )
+      from (
+        select f.*
+          from private.platform_billing_clinic_facts() f
+         where (v_query is null
+                or f.clinic_name ilike '%' || v_query || '%'
+                or f.clinic_id::text = v_query)
+           and (v_plan is null or f.plan_code = v_plan)
+           and (v_contract is null or f.contract_status = v_contract)
+           and (
+             v_pix is null
+             or (
+               v_pix = 'absent'
+               and f.provider_facts#>>'{sandbox,pix_status}' is null
+               and f.provider_facts#>>'{production,pix_status}' is null
+             )
+             or f.provider_facts#>>'{sandbox,pix_status}' = v_pix
+             or f.provider_facts#>>'{production,pix_status}' = v_pix
+           )
+           and (v_fin is null or f.financial_summary = v_fin)
+           and (p_needs_attention is null or f.attention = p_needs_attention)
+         order by f.attention desc, f.overdue_cents desc, f.clinic_name asc, f.clinic_id asc
+         limit v_limit
+         offset v_offset
+      ) x
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+comment on function public.list_platform_billing_clinics(text, text, text, text, text, boolean, integer, integer) is
+  'WP-BILLING-PREPROD-02R2: Pix filter matches either environment without collapsing statuses.';
+
+
+create or replace function private.billing_hub_next_charge(p_clinic_id uuid)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select case
+    when x.charge_id is null then null
+    else jsonb_build_object(
+      'amount_cents', x.amount_cents,
+      'currency', x.currency,
+      'due_date', x.due_date,
+      'display_state', x.display_state,
+      'environment', private.billing_clinic_provider_environment(p_clinic_id)
+    )
+  end
+  from (
+    select c.charge_id, c.amount_cents, c.currency, c.due_date, c.display_state
+      from private.billing_hub_charge_rows(p_clinic_id) c
+     where c.display_state in ('PROGRAMMED', 'PENDING')
+       and c.due_date is not null
+       and c.due_date >= private.billing_hub_business_date()
+     order by c.due_date asc, c.occurred_at asc, c.charge_id asc
+     limit 1
+  ) x;
+$$;
+
+comment on function private.billing_hub_next_charge(uuid) is
+  'WP-BILLING-PREPROD-02R2: next charge is scoped to the clinic write environment and labeled.';
+
+
+create or replace function public.get_my_clinic_billing_overview(p_clinic_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_checkout jsonb;
+  v_next jsonb;
+  v_overdue_count integer := 0;
+  v_overdue_cents bigint := 0;
+  v_open_count integer := 0;
+  v_paid_count integer := 0;
+  v_charge_count integer := 0;
+  v_summary text;
+  v_latest_payment text;
+  v_pix_status text;
+  v_pix_generation integer;
+  v_today date := private.billing_hub_business_date();
+  v_env text := private.billing_clinic_provider_environment(p_clinic_id);
+begin
+  perform private.assert_my_clinic_billing_reader(p_clinic_id);
+  v_checkout := private.billing_clinic_checkout_snapshot(p_clinic_id);
+  v_next := private.billing_hub_next_charge(p_clinic_id);
+
+  select
+    count(*)::integer,
+    count(*) filter (where c.display_state = 'OVERDUE')::integer,
+    coalesce(sum(c.amount_cents) filter (where c.display_state = 'OVERDUE'), 0),
+    count(*) filter (where c.display_state in ('PROGRAMMED', 'PENDING'))::integer,
+    count(*) filter (where c.display_state = 'PAID')::integer
+    into v_charge_count, v_overdue_count, v_overdue_cents, v_open_count, v_paid_count
+    from private.billing_hub_charge_rows(p_clinic_id) c;
+
+  select private.billing_hub_payment_display_state(p.financial_state, p.due_date, v_today)
+    into v_latest_payment
+    from private.billing_payments p
+    join private.billing_accounts a on a.id = p.billing_account_id
+   where a.clinic_id = p_clinic_id
+     and a.environment = v_env
+     and p.environment = a.environment
+     and p.financial_state not in ('voided', 'unknown')
+   order by coalesce(p.payment_date, p.due_date, v_today) desc, p.created_at desc
+   limit 1;
+
+  select a.provider_status, a.generation
+    into v_pix_status, v_pix_generation
+    from private.billing_pix_automatic_authorizations a
+    join private.billing_commercial_contracts cc on cc.id = a.commercial_contract_id
+   where cc.clinic_id = p_clinic_id
+     and a.environment = v_env
+     and a.is_primary
+   order by a.generation desc nulls last, a.created_at desc
+   limit 1;
+
+  if v_checkout->'commercial_contract' is null
+     or v_checkout->>'commercial_contract' = 'null' then
+    v_summary := 'no_plan';
+  elsif v_overdue_count > 0 then
+    v_summary := 'overdue';
+  elsif v_open_count > 0 then
+    v_summary := 'pending';
+  elsif v_paid_count > 0 then
+    v_summary := 'current';
+  else
+    v_summary := 'no_charges';
+  end if;
+
+  return jsonb_build_object(
+    'clinic_id', p_clinic_id,
+    'environment', v_env,
+    'plan', case
+      when v_checkout->'commercial_contract' is null
+           or v_checkout->>'commercial_contract' = 'null' then null
+      else jsonb_build_object(
+        'status', v_checkout#>>'{commercial_contract,status}',
+        'plan_display_name', v_checkout#>>'{commercial_contract,plan_display_name}',
+        'price_cents', (v_checkout#>>'{commercial_contract,price_cents}')::integer,
+        'currency', v_checkout#>>'{commercial_contract,currency}',
+        'billing_cycle', v_checkout#>>'{commercial_contract,billing_cycle}'
+      )
+    end,
+    'pix_authorization_status', to_jsonb(v_pix_status),
+    'pix_generation', to_jsonb(v_pix_generation),
+    'identity_complete', coalesce((v_checkout->>'identity_complete')::boolean, false),
+    'next_charge', v_next,
+    'financial_situation', jsonb_build_object(
+      'summary_code', v_summary,
+      'attention', v_summary = 'overdue',
+      'overdue_count', v_overdue_count,
+      'overdue_cents', case when v_overdue_count > 0 then v_overdue_cents else null end
+    ),
+    'latest_payment_display_state', v_latest_payment,
+    'charge_count', v_charge_count,
+    'entitlement_enforcement', 'OFF',
+    'entitlement_granted', false
+  );
+end;
+$$;
+
+comment on function public.get_my_clinic_billing_overview(uuid) is
+  'WP-BILLING-PREPROD-02R2: clinic hub reads the write environment only and labels it. Latest pay cannot hide the other environment.';
+
+
 insert into public.schema_migration_log (version, filename, description, session)
 values (
   '20260921120000',
   '20260921120000_wp_billing_preprod_02_commercial_gate_env_isolation.sql',
-  'WP-BILLING-PREPROD-02/R1: commercial gate OBSERVE default, dual-env accounts, BOOL_OR customer_bound, environment-bucketed reports, labeled timeline. Local only.',
+  'WP-BILLING-PREPROD-02/R2: commercial gate, BOOL_OR customer_bound, environment-safe Pix/latest/next/aging. Local only.',
   'WP-BILLING-PREPROD-02'
 )
 on conflict (version) do nothing;

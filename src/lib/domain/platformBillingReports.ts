@@ -6,10 +6,12 @@ import {
   type EnvironmentFinancialBucket,
 } from "./billingEnvScoping";
 import {
+  emptyEnvCount,
   formatPlatformDate,
   formatPlatformMoney,
   platformBillingErrorMessage,
   type PlatformAgingBucket,
+  type PlatformEnvCount,
 } from "./platformBilling";
 import { BILLING_CSV_MAX_EXPORT_ROWS, buildCsv, type CsvCell } from "./billingCsv";
 
@@ -66,8 +68,8 @@ export interface PlatformBillingReport {
   };
   receivedByPlan: PlatformBillingPlanRow[];
   paymentsByStatus: PlatformBillingStatusRow[];
-  activePixAutomaticAuthorizations: number;
-  delinquentClinics: number;
+  activePixAutomaticAuthorizations: PlatformEnvCount;
+  delinquent: PlatformEnvCount;
   delinquentItems: PlatformBillingDelinquentRow[];
   exportMaxRows: number;
   commercial: PlatformCommercialMetrics;
@@ -152,8 +154,8 @@ export function emptyPlatformBillingReport(
     },
     receivedByPlan: [],
     paymentsByStatus: [],
-    activePixAutomaticAuthorizations: 0,
-    delinquentClinics: 0,
+    activePixAutomaticAuthorizations: emptyEnvCount(),
+    delinquent: emptyEnvCount(),
     delinquentItems: [],
     exportMaxRows: BILLING_CSV_MAX_EXPORT_ROWS,
     commercial: emptyCommercialMetrics(),

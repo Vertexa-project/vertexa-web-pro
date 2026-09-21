@@ -53,8 +53,8 @@ describe("platformBillingReports API", () => {
           },
         ],
         payments_by_status: [{ status: "received", payment_count: 1, amount_cents: 40000 }],
-        active_pix_automatic_authorizations: 1,
-        delinquent_clinics: 0,
+        active_pix_automatic_authorizations: { sandbox: 1, production: 0 },
+        delinquent: { sandbox: 0, production: 0 },
         delinquent_items: [],
         export_max_rows: 500,
       },
@@ -69,6 +69,8 @@ describe("platformBillingReports API", () => {
     expect(report.financial.sandbox.receivedCents).toBe(40000);
     expect(report.financial.production.receivedCents).toBe(0);
     expect(report.receivedByPlan[0]?.planAttribution).toBe("contract");
+    expect(report.activePixAutomaticAuthorizations.sandbox).toBe(1);
+    expect(report.activePixAutomaticAuthorizations.production).toBe(0);
     expect(JSON.stringify(report)).not.toMatch(/qr_payload|encoded_image|service_role|tax_id/i);
     expect(report.notMrr).toBe(true);
   });

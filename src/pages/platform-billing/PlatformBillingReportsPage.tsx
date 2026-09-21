@@ -368,8 +368,9 @@ export function PlatformBillingReportsPage() {
           Pix Automático ativo
         </h3>
         <p className="mt-2 text-sm">
-          {data?.activePixAutomaticAuthorizations ?? 0} autorizações primárias ativas agora.
-          Recusa de Pix não entra nesta conta e não é inadimplência.
+          Sandbox: {data?.activePixAutomaticAuthorizations.sandbox ?? 0} autorizações primárias
+          ativas. Produção: {data?.activePixAutomaticAuthorizations.production ?? 0}. Recusa de Pix
+          não entra nesta conta e não é inadimplência.
         </p>
       </section>
 
