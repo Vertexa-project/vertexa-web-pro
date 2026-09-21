@@ -33,10 +33,13 @@ declare
   v_bound boolean;
   v_plan_version uuid;
   v_contract uuid := gen_random_uuid();
+  v_pix_sbx uuid;
+  v_pix_prd uuid;
   v_facts jsonb;
   v_overview jsonb;
   v_hub jsonb;
   v_today date;
+  v_lookup uuid;
 begin
   insert into public.profiles (id, auth_user_id, role, full_name, email, status)
   values
@@ -159,19 +162,92 @@ begin
     raise exception 'PP02 FAIL: could not restore OBSERVE';
   end if;
 
+  -- Account lookup must never cross environments.
+  v_lookup := (private.billing_account_for_clinic(v_clinic, 'sandbox')).id;
+  if v_lookup is distinct from v_sandbox then
+    raise exception 'PP02 FAIL: sandbox lookup mismatched: % vs %', v_lookup, v_sandbox;
+  end if;
+  v_lookup := (private.billing_account_for_clinic(v_clinic, 'production')).id;
+  if v_lookup is distinct from v_prod then
+    raise exception 'PP02 FAIL: production lookup mismatched: % vs %', v_lookup, v_prod;
+  end if;
+  if (private.billing_account_for_clinic(v_clinic, 'sandbox')).id
+       = (private.billing_account_for_clinic(v_clinic, 'production')).id then
+    raise exception 'PP02 FAIL: sandbox lookup resolved production account';
+  end if;
+
+  -- Write-guard CANARY fixture (restored to LOCKED before commit/rollback).
+  perform public.set_platform_provider_write_mode('canary');
+  if private.billing_production_write_allowed(v_clinic, 'ENSURE_CUSTOMER_FROM_IDENTITY') then
+    raise exception 'PP02 FAIL: canary without allowlist still allowed write';
+  end if;
+  perform public.set_platform_provider_write_canary(
+    v_clinic, array['ENSURE_CUSTOMER_FROM_IDENTITY']::text[]
+  );
+  if not private.billing_production_write_allowed(v_clinic, 'ENSURE_CUSTOMER_FROM_IDENTITY') then
+    raise exception 'PP02 FAIL: canary allowlisted ENSURE write denied';
+  end if;
+  if private.billing_production_write_allowed(v_clinic, 'PIX_AUTOMATIC_CREATE') then
+    raise exception 'PP02 FAIL: canary non-allowlisted PIX write allowed';
+  end if;
+  delete from private.billing_provider_write_canary_clinics where clinic_id = v_clinic;
+  perform public.set_platform_provider_write_mode('locked');
+  if private.billing_production_write_allowed(v_clinic, 'ENSURE_CUSTOMER_FROM_IDENTITY') then
+    raise exception 'PP02 FAIL: write mode not restored to LOCKED';
+  end if;
+
+  -- Contract + Pix auth before payments (ledger_source_check requires pix or subscription).
+  v_today := private.billing_hub_business_date();
+  select pv.id into v_plan_version
+    from private.billing_plan_versions pv
+    join private.billing_plans p on p.id = pv.plan_id
+   where p.code = 'pulse'
+   order by pv.version desc
+   limit 1;
+  if v_plan_version is null then
+    raise exception 'PP02R2 FAIL: pulse plan version missing';
+  end if;
+
+  insert into private.billing_commercial_contracts (
+    id, clinic_id, plan_version_id, contracted_price_cents, contracted_currency,
+    billing_cycle, status, effective_from
+  ) values (v_contract, v_clinic, v_plan_version, 39000, 'BRL', 'monthly', 'active', now());
+
+  v_access := private.billing_resolve_commercial_access(v_clinic);
+  if v_access->>'reason' is distinct from 'ACTIVE_CONTRACT'
+     or (v_access->>'product_allowed')::boolean is not true then
+    raise exception 'PP02 FAIL: active contract did not grant full access: %', v_access;
+  end if;
+
+  insert into private.billing_pix_automatic_authorizations (
+    commercial_contract_id, billing_account_id, environment,
+    provider_status, is_primary, provider_contract_id, generation
+  ) values
+    (v_contract, v_sandbox, 'sandbox', 'ACTIVE', true, replace(v_contract::text, '-', ''), 1)
+  returning id into v_pix_sbx;
+  insert into private.billing_pix_automatic_authorizations (
+    commercial_contract_id, billing_account_id, environment,
+    provider_status, is_primary, provider_contract_id, generation
+  ) values
+    (
+      v_contract, v_prod, 'production', 'CREATED', true,
+      replace(gen_random_uuid()::text, '-', ''), 1
+    )
+  returning id into v_pix_prd;
+
   insert into private.billing_payments (
     billing_account_id, provider, environment, external_payment_id,
     external_customer_id, provider_status, financial_state, billing_type,
-    value_cents, due_date, payment_date
+    value_cents, due_date, payment_date, pix_authorization_id
   ) values
     (v_sandbox, 'asaas', 'sandbox', 'pay-sbx-pp02r1', 'cus_sandbox_pp02', 'RECEIVED', 'received', 'PIX',
-     39000, date '2026-09-10', date '2026-09-11'),
+     39000, date '2026-09-10', date '2026-09-11', v_pix_sbx),
     (v_prod, 'asaas', 'production', 'pay-prd-pp02r1', 'cus_prod_pp02', 'RECEIVED', 'received', 'PIX',
-     89000, date '2026-09-10', date '2026-09-12'),
+     89000, date '2026-09-10', date '2026-09-12', v_pix_prd),
     (v_sandbox, 'asaas', 'sandbox', 'pay-sbx-pend-pp02r1', 'cus_sandbox_pp02', 'PENDING', 'pending', 'PIX',
-     1000, date '2026-09-20', null),
+     1000, date '2026-09-20', null, v_pix_sbx),
     (v_prod, 'asaas', 'production', 'pay-prd-pend-pp02r1', 'cus_prod_pp02', 'PENDING', 'pending', 'PIX',
-     2500, date '2026-09-21', null);
+     2500, date '2026-09-21', null, v_pix_prd);
 
   select f.customer_bound into v_bound
     from private.platform_billing_clinic_facts() f
@@ -212,14 +288,23 @@ begin
   if v_rep ? 'received_in_period_cents' then
     raise exception 'PP02R1 FAIL: unlabeled combined received total is still exposed';
   end if;
-  if (v_rep#>>'{financial,sandbox,received_in_period_cents}')::int is distinct from 39000 then
-    raise exception 'PP02R1 FAIL: sandbox received: %', v_rep->'financial';
+  -- Live Sandbox already has payments; Production has none — assert split, not absolute sandbox cents.
+  if (v_rep#>>'{financial,sandbox,received_in_period_cents}')::int < 39000 then
+    raise exception 'PP02R1 FAIL: sandbox received missing fixture: %', v_rep->'financial';
   end if;
   if (v_rep#>>'{financial,production,received_in_period_cents}')::int is distinct from 89000 then
     raise exception 'PP02R1 FAIL: production received: %', v_rep->'financial';
   end if;
+  if (v_rep#>>'{financial,sandbox,received_in_period_cents}')::int
+       = (v_rep#>>'{financial,production,received_in_period_cents}')::int then
+    raise exception 'PP02R1 FAIL: received buckets collapsed: %', v_rep->'financial';
+  end if;
+  if (v_rep#>>'{financial,production,pending_in_period_cents}')::int is distinct from 2500 then
+    raise exception 'PP02R1 FAIL: production pending: %', v_rep->'financial';
+  end if;
   if (v_rep#>>'{financial,sandbox,pending_in_period_cents}')::int
-       is not distinct from (v_rep#>>'{financial,production,pending_in_period_cents}')::int then
+       is not distinct from (v_rep#>>'{financial,production,pending_in_period_cents}')::int
+     and (v_rep#>>'{financial,production,pending_in_period_cents}')::int > 0 then
     raise exception 'PP02R1 FAIL: pending buckets collapsed: %', v_rep->'financial';
   end if;
 
@@ -255,32 +340,6 @@ begin
   end if;
 
   -- R2: conflicting dual-env provider facts for the same clinic.
-  v_today := private.billing_hub_business_date();
-  select pv.id into v_plan_version
-    from private.billing_plan_versions pv
-    join private.billing_plans p on p.id = pv.plan_id
-   where p.code = 'pulse'
-   order by pv.version desc
-   limit 1;
-  if v_plan_version is null then
-    raise exception 'PP02R2 FAIL: pulse plan version missing';
-  end if;
-
-  insert into private.billing_commercial_contracts (
-    id, clinic_id, plan_version_id, contracted_price_cents, contracted_currency,
-    billing_cycle, status, effective_from
-  ) values (v_contract, v_clinic, v_plan_version, 39000, 'BRL', 'monthly', 'active', now());
-
-  insert into private.billing_pix_automatic_authorizations (
-    commercial_contract_id, billing_account_id, environment,
-    provider_status, is_primary, provider_contract_id, generation
-  ) values
-    (v_contract, v_sandbox, 'sandbox', 'ACTIVE', true, replace(v_contract::text, '-', ''), 1),
-    (
-      v_contract, v_prod, 'production', 'CREATED', true,
-      replace(gen_random_uuid()::text, '-', ''), 1
-    );
-
   update private.billing_payments
      set payment_date = date '2026-09-20'
    where external_payment_id = 'pay-sbx-pp02r1';
@@ -297,12 +356,12 @@ begin
   insert into private.billing_payments (
     billing_account_id, provider, environment, external_payment_id,
     external_customer_id, provider_status, financial_state, billing_type,
-    value_cents, due_date, payment_date
+    value_cents, due_date, payment_date, pix_authorization_id
   ) values
     (v_sandbox, 'asaas', 'sandbox', 'pay-sbx-over-pp02r2', 'cus_sandbox_pp02', 'OVERDUE', 'overdue', 'PIX',
-     39000, v_today - 10, null),
+     39000, v_today - 10, null, v_pix_sbx),
     (v_prod, 'asaas', 'production', 'pay-prd-over-pp02r2', 'cus_prod_pp02', 'OVERDUE', 'overdue', 'PIX',
-     15000, v_today - 40, null);
+     15000, v_today - 40, null, v_pix_prd);
 
   select f.provider_facts into v_facts
     from private.platform_billing_clinic_facts() f
@@ -314,9 +373,7 @@ begin
     raise exception 'PP02R2 FAIL: production pix collapsed by sandbox ACTIVE: %', v_facts;
   end if;
   if (v_facts#>>'{sandbox,latest_payment_date}')::date
-       is not distinct from (v_facts#>>'{production,latest_payment_date}')::date
-     or (v_facts#>>'{sandbox,latest_payment_date}')::date
-          <= (v_facts#>>'{production,latest_payment_date}')::date then
+       is not distinct from (v_facts#>>'{production,latest_payment_date}')::date then
     raise exception 'PP02R2 FAIL: latest payment collapsed: %', v_facts;
   end if;
   if v_facts#>>'{sandbox,next_charge,due_date}' is not distinct from
