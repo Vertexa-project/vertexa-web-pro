@@ -88,6 +88,10 @@ declare
   v_prof uuid;
 begin
   select * into s from pg_temp.bp07_seed();
+  if coalesce((private.billing_commercial_capacity(s.clinic_a)->>'enforced')::boolean, true)
+     or (private.billing_commercial_capacity(s.clinic_a)->>'has_active_contract') is distinct from 'false' then
+    raise exception 'no-contract compatibility broken %', private.billing_commercial_capacity(s.clinic_a);
+  end if;
   v_sync := pg_temp.bp07_plan('sync');
   v_pulse := pg_temp.bp07_plan('pulse');
   v_apex := pg_temp.bp07_plan('apex');

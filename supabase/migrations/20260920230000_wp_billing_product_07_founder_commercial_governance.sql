@@ -526,7 +526,6 @@ declare
   v_allowed_prof integer := 0;
   v_allowed_pat integer := 0;
   v_code text;
-  v_has_contract boolean := false;
 begin
   select c.owner_profile_id into v_owner from public.clinics c where c.id = p_clinic_id;
   if v_owner is null and not exists (select 1 from public.clinics c where c.id = p_clinic_id) then
@@ -551,8 +550,10 @@ begin
      and pr.clinic_id = pat.clinic_id
    where pat.clinic_id = p_clinic_id;
 
-  select p.code, pv.max_professionals, pv.max_active_patients, true
-    into v_code, v_included_prof, v_included_pat, v_has_contract
+  -- SELECT INTO with zero rows nullifies targets. Use FOUND, not a boolean
+  -- written only on a matching contract row.
+  select p.code, pv.max_professionals, pv.max_active_patients
+    into v_code, v_included_prof, v_included_pat
     from private.billing_commercial_contracts cc
     join private.billing_plan_versions pv on pv.id = cc.plan_version_id
     join private.billing_plans p on p.id = pv.plan_id
@@ -560,7 +561,7 @@ begin
      and cc.status = 'active'
    limit 1;
 
-  if not v_has_contract then
+  if not found then
     return jsonb_build_object(
       'clinic_id', p_clinic_id,
       'has_active_contract', false,
@@ -949,6 +950,11 @@ begin
   update private.billing_commercial_campaigns
      set status = 'closed', updated_at = clock_timestamp()
    where id = v_campaign.id;
+  update private.billing_founder_admissions
+     set benefit_status = 'historical_only',
+         ineligible_after_close_at = coalesce(ineligible_after_close_at, clock_timestamp())
+   where campaign_id = v_campaign.id
+     and benefit_status = 'returnable';
   insert into private.billing_commercial_governance_events (
     actor_id, actor_authority, action, payload
   ) values (v_me, 'platform_admin', 'founder_campaign_close', '{}'::jsonb);
