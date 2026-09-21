@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const MIGRATION =
   "supabase/migrations/20260920230000_wp_billing_product_07_founder_commercial_governance.sql";
+const PROVENANCE_FIXES =
+  "supabase/migrations/20260920230100_wp_billing_product_07_founder_provenance_fixes.sql";
 const API = "src/lib/api/billingCommercial.ts";
 const DOMAIN = "src/lib/domain/billingCommercial.ts";
 const PAGE = "src/pages/platform-billing/PlatformBillingCommercialPage.tsx";
@@ -46,6 +48,25 @@ describe("WP-BILLING-PRODUCT-07 — security source contracts", () => {
     expect(sql).toContain("enable row level security");
     expect(sql).toContain("revoke all on table private.billing_founder_admissions");
     expect(sql).not.toContain("apply_migration");
+  });
+
+  it("keeps original apply SQL in 20260920230000 and post-apply fixes in 20260920230100", () => {
+    const original = readFileSync(resolve(root, MIGRATION), "utf8");
+    const fixes = readFileSync(resolve(root, PROVENANCE_FIXES), "utf8");
+    const originalClose = original.slice(
+      original.indexOf("create or replace function public.close_platform_founder_campaign()"),
+      original.indexOf("create or replace function public.mark_platform_founder_clinic_cancelled"),
+    );
+    expect(original).toContain("v_has_contract boolean := false");
+    expect(original).toContain("if not v_has_contract then");
+    expect(original).not.toContain("if not found then");
+    expect(originalClose).not.toContain("and benefit_status = 'returnable'");
+    expect(fixes).toContain("if not found then");
+    expect(fixes).toContain("and benefit_status = 'returnable'");
+    expect(fixes).toContain("create or replace function private.billing_commercial_capacity");
+    expect(fixes).toContain("create or replace function public.close_platform_founder_campaign");
+    expect(fixes).not.toMatch(/create table/i);
+    expect((fixes.match(/create or replace function/g) || []).length).toBe(2);
   });
 
   it("keeps frontend payloads free of client price, slot and discount", () => {
