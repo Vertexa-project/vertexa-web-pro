@@ -1,0 +1,116 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const MIGRATION =
+  "supabase/migrations/20260921120000_wp_billing_preprod_02_commercial_gate_env_isolation.sql";
+const OUTBOUND = "supabase/functions/asaas-outbound/index.ts";
+const WEBHOOK = "supabase/functions/_shared/asaasWebhook.js";
+const PROCESSOR = "supabase/functions/_shared/asaas/processor.ts";
+const GUARD = "supabase/functions/_shared/asaas/productionWriteGuard.ts";
+const DOMAIN = "src/lib/domain/commercialAccess.ts";
+
+describe("WP-BILLING-PREPROD-02 — security source contracts", () => {
+  it("defaults OBSERVE and Production LOCKED without fake contracts", () => {
+    const sql = readFileSync(resolve(root, MIGRATION), "utf8");
+    expect(sql).toContain("rollout_mode text not null default 'observe'");
+    expect(sql).toContain("write_mode text not null default 'locked'");
+    expect(sql).toContain("billing_accounts_clinic_environment_uidx");
+    expect(sql).toContain("BILLING_ACCOUNT_ENVIRONMENT_IMMUTABLE");
+    expect(sql).toContain("billing_assert_clinic_commercial_access");
+    expect(sql).toContain("grant_platform_commercial_access_exemption");
+    expect(sql).toContain("BILLING_NOT_PLATFORM_ADMIN");
+    expect(sql).not.toMatch(/is_paid\s*=/);
+    expect(sql).not.toMatch(
+      /insert into private\.billing_commercial_access_exemptions[\s\S]{0,120}select/i,
+    );
+  });
+
+  it("keeps PA fixtures Production-impossible and routes by persisted environment", () => {
+    const outbound = readFileSync(resolve(root, OUTBOUND), "utf8");
+    const guard = readFileSync(resolve(root, GUARD), "utf8");
+    expect(guard).toContain("production_fixture_forbidden");
+    expect(outbound).toContain("assertSandboxFixtureEnvironment");
+    expect(outbound).toContain("assertProductionProviderWriteForClinic");
+    expect(outbound).toContain("accountEnv");
+    expect(outbound).not.toMatch(/console\.(log|debug|info|error|warn)\(/);
+  });
+
+  it("attributes webhook environment from the matching token, never the body", () => {
+    const src = readFileSync(resolve(root, WEBHOOK), "utf8");
+    expect(src).toContain("resolveWebhookChannelFromToken");
+    expect(src).toContain("sandboxMatch");
+    expect(src).toContain("productionMatch");
+    expect(src).not.toMatch(/body\.environment/);
+  });
+
+  it("fails closed when claimed event environment disagrees with drain", () => {
+    const src = readFileSync(resolve(root, PROCESSOR), "utf8");
+    expect(src).toContain("environment_mismatch");
+    expect(src).toContain("ev.environment !== environment");
+  });
+
+  it("does not let the browser declare commercial access", () => {
+    const src = readFileSync(resolve(root, DOMAIN), "utf8");
+    expect(src).toContain("hasActiveContract");
+    expect(src).toContain("exemptionActive");
+    expect(src).not.toMatch(/localStorage|sessionStorage/);
+  });
+
+  it("makes customer_bound a BOOL_OR clinic fact and buckets financials by environment", () => {
+    const sql = readFileSync(resolve(root, MIGRATION), "utf8");
+    expect(sql).toContain("bool_or(a.external_customer_id is not null)");
+    expect(sql).not.toMatch(
+      /select distinct on \(a\.clinic_id\)[\s\S]{0,120}as customer_bound/i,
+    );
+    expect(sql).toContain("'sandbox', coalesce(v_sandbox");
+    expect(sql).toContain("'production', coalesce(v_production");
+    expect(sql).toContain("'environment', f.environment");
+    expect(sql).toContain("acc.environment");
+    expect(sql).toContain("BILLING_REPORT_ENVIRONMENT_INVALID");
+  });
+
+  it("keeps provider Pix/latest/next/aging environment-keyed; clinic-only DISTINCT ON is contract ranking", () => {
+    const sql = readFileSync(resolve(root, MIGRATION), "utf8");
+    const distinctOns = [...sql.matchAll(/select distinct on \(([^)]+)\)/gi)].map((match) =>
+      match[1].replace(/\s+/g, " ").trim(),
+    );
+    const clinicOnly = distinctOns.filter(
+      (keys) => /clinic_id/i.test(keys) && !/environment/i.test(keys),
+    );
+    expect(clinicOnly).toEqual(["cc.clinic_id"]);
+    expect(sql).toContain("select distinct on (cc.clinic_id, auth.environment)");
+    expect(sql).toContain("select distinct on (u.clinic_id, u.environment)");
+    expect(sql).toContain("select distinct on (a.clinic_id, a.environment)");
+    expect(sql).toContain("platform_billing_aging_for_environment");
+    expect(sql).toContain("private.platform_billing_pack_provider_env");
+    expect(sql).toContain("'sandbox', private.platform_billing_pack_provider_env");
+    expect(sql).toContain("'production', private.platform_billing_pack_provider_env");
+    expect(sql).not.toMatch(/'aging',\s*private\.platform_billing_aging\(/);
+    expect(sql).not.toMatch(/null::text as pix_status[\s\S]{0,200}'pix_status', p_row\.pix_status/);
+  });
+
+  it("does not assume patient_documents.clinic_id; resolves via private.patient_clinic", () => {
+    const sql = readFileSync(resolve(root, MIGRATION), "utf8");
+    expect(sql).not.toMatch(
+      /foreach t in array array\[[^\]]*patient_documents[^\]]*\][\s\S]{0,400}billing_clinical_product_permitted\(clinic_id\)/i,
+    );
+    expect(sql).not.toMatch(
+      /create policy billing_preprod_clinical_access on public\.patient_documents[\s\S]{0,400}billing_clinical_product_permitted\(clinic_id\)/i,
+    );
+    expect(sql).toMatch(
+      /create policy billing_preprod_clinical_access on public\.patient_documents[\s\S]{0,500}using \(\s*private\.billing_clinical_product_permitted\(private\.patient_clinic\(patient_id\)\)\s*\)/i,
+    );
+    expect(sql).toMatch(
+      /create policy billing_preprod_clinical_access on public\.patient_documents[\s\S]{0,700}with check \(\s*private\.billing_clinical_product_permitted\(private\.patient_clinic\(patient_id\)\)\s*\)/i,
+    );
+    expect(sql).toMatch(
+      /create policy billing_preprod_clinical_access on public\.patients[\s\S]{0,300}billing_clinical_product_permitted\(clinic_id\)/i,
+    );
+    expect(sql).toMatch(
+      /create policy billing_preprod_clinical_access on public\.appointments[\s\S]{0,300}billing_clinical_product_permitted\(clinic_id\)/i,
+    );
+  });
+});

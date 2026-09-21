@@ -17,6 +17,7 @@ import {
   resolveHubFourStates,
   sortTimelineNewestFirst,
   timelineEventLabel,
+  providerEnvironmentLabel,
   type ClinicBillingOverview,
   type ClinicBillingTimelineEvent,
 } from "./billingHub";
@@ -113,6 +114,8 @@ describe("billingHub domain", () => {
     expect(sortTimelineNewestFirst(events).map((item) => item.id)).toEqual(["c", "b", "a"]);
     expect(timelineEventLabel("pix_refused")).toBe("Pix Automático recusado");
     expect(timelineEventLabel("charge_programmed")).toBe("Cobrança programada");
+    expect(providerEnvironmentLabel("sandbox")).toBe("Sandbox");
+    expect(providerEnvironmentLabel("production")).toBe("Produção");
   });
 
   it("never advertises QR recovery", () => {

@@ -49,15 +49,23 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(403, { error: "forbidden" });
   }
 
-  const environment = resolveOutboundEnvironment(Deno.env.get("ASAAS_OUTBOUND_ENVIRONMENT"));
-  if (!environment) {
-    return jsonResponse(503, { error: "asaas_outbound_not_configured" });
-  }
-
-  let credentials;
-  try {
-    credentials = readAsaasCredentials(environment);
-  } catch {
+  const sandbox = resolveOutboundEnvironment("sandbox");
+  const production = resolveOutboundEnvironment("production");
+  const sandboxCreds = (() => {
+    try {
+      return readAsaasCredentials("sandbox");
+    } catch {
+      return null;
+    }
+  })();
+  const productionCreds = (() => {
+    try {
+      return readAsaasCredentials("production");
+    } catch {
+      return null;
+    }
+  })();
+  if (!sandboxCreds && !productionCreds) {
     return jsonResponse(503, { error: "asaas_not_configured" });
   }
 
@@ -76,22 +84,44 @@ Deno.serve(async (req: Request) => {
   const limit = clampLimit(body.limit);
   const adminClient = supabaseAdmin();
 
-  let result;
+  const environments: Array<{ environment: "sandbox" | "production"; creds: NonNullable<typeof sandboxCreds> }> = [];
+  if (sandbox && sandboxCreds) environments.push({ environment: "sandbox", creds: sandboxCreds });
+  if (production && productionCreds) environments.push({ environment: "production", creds: productionCreds });
+
   try {
-    result = await drainBillingEvents({ adminClient, environment, creds: credentials, limit });
+    let claimed = 0;
+    let processed = 0;
+    let ignored = 0;
+    let failed = 0;
+    let voided = 0;
+    let skipped = 0;
+    const outcomes: unknown[] = [];
+    for (const item of environments) {
+      const result = await drainBillingEvents({
+        adminClient,
+        environment: item.environment,
+        creds: item.creds,
+        limit,
+      });
+      claimed += result.claimed;
+      processed += result.processed;
+      ignored += result.ignored;
+      failed += result.failed;
+      voided += result.voided;
+      skipped += result.skipped;
+      outcomes.push(...result.outcomes);
+    }
+    return jsonResponse(200, {
+      limit,
+      claimed,
+      processed,
+      ignored,
+      failed,
+      voided,
+      skipped,
+      outcomes,
+    });
   } catch {
     return jsonResponse(502, { error: "drain_failed" });
   }
-
-  return jsonResponse(200, {
-    environment,
-    limit,
-    claimed: result.claimed,
-    processed: result.processed,
-    ignored: result.ignored,
-    failed: result.failed,
-    voided: result.voided,
-    skipped: result.skipped,
-    outcomes: result.outcomes,
-  });
 });

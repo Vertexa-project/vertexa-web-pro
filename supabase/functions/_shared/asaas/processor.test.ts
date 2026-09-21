@@ -876,4 +876,15 @@ describe("drainBillingEvents — Pix Automatic", () => {
     expect(findCall(calls, "resolve_billing_target_by_pix_automatic_payment")?.params.p_environment).toBe("sandbox");
     expect(findCall(calls, "apply_billing_pix_automatic_payment_snapshot")?.params.p_environment).toBe("sandbox");
   });
+
+  it("fails closed when claimed event environment disagrees with drain", async () => {
+    const { result, calls, fetchSpy } = await run(
+      { events: [makeEvent({ environment: "production" })] },
+      async () => jsonResponse(200, { id: "pay_1" }),
+    );
+    expect(result.failed).toBe(1);
+    expect(result.outcomes[0]?.category).toBe("environment_mismatch");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category).toBe("environment_mismatch");
+  });
 });

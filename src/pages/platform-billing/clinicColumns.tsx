@@ -7,9 +7,10 @@ import {
   financialSummaryLabel,
   financialSummaryTone,
   formatPlatformDate,
-  formatPlatformMoney,
   nextChargeCopy,
   pixAutomaticStatusLabel,
+  providerLatestPaymentCopy,
+  providerOverdueCopy,
   type PlatformBillingClinicRow,
 } from "@/lib/domain/platformBilling";
 
@@ -44,7 +45,14 @@ export function clinicColumns(): Column<PlatformBillingClinicRow>[] {
     {
       key: "pix",
       header: "Pix Automático",
-      render: (row) => pixAutomaticStatusLabel(row.pixStatus),
+      render: (row) => (
+        <div className="text-sm">
+          <div>Sandbox: {pixAutomaticStatusLabel(row.provider.sandbox.pixStatus)}</div>
+          <div className="text-xs text-muted-foreground">
+            Produção: {pixAutomaticStatusLabel(row.provider.production.pixStatus)}
+          </div>
+        </div>
+      ),
     },
     {
       key: "financial",
@@ -59,15 +67,38 @@ export function clinicColumns(): Column<PlatformBillingClinicRow>[] {
     {
       key: "overdue",
       header: "Vencido",
-      render: (row) =>
-        row.overdueCount > 0
-          ? `${row.overdueCount} · ${formatPlatformMoney(row.overdueCents)}`
-          : "—",
+      render: (row) => (
+        <div className="text-sm">
+          <div>Sandbox: {providerOverdueCopy(row.provider.sandbox)}</div>
+          <div className="text-xs text-muted-foreground">
+            Produção: {providerOverdueCopy(row.provider.production)}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "latest",
+      header: "Último pagamento",
+      render: (row) => (
+        <div className="text-sm">
+          <div>Sandbox: {providerLatestPaymentCopy(row.provider.sandbox)}</div>
+          <div className="text-xs text-muted-foreground">
+            Produção: {providerLatestPaymentCopy(row.provider.production)}
+          </div>
+        </div>
+      ),
     },
     {
       key: "next",
       header: "Próxima cobrança",
-      render: (row) => nextChargeCopy(row.nextCharge),
+      render: (row) => (
+        <div className="text-sm">
+          <div>Sandbox: {nextChargeCopy(row.provider.sandbox.nextCharge)}</div>
+          <div className="text-xs text-muted-foreground">
+            Produção: {nextChargeCopy(row.provider.production.nextCharge)}
+          </div>
+        </div>
+      ),
     },
     {
       key: "since",
@@ -91,12 +122,14 @@ export function clinicMobile(row: PlatformBillingClinicRow) {
         />
       </div>
       <p className="text-sm">
-        Pix: {pixAutomaticStatusLabel(row.pixStatus)} ·{" "}
+        Pix Sandbox: {pixAutomaticStatusLabel(row.provider.sandbox.pixStatus)} · Pix Produção:{" "}
+        {pixAutomaticStatusLabel(row.provider.production.pixStatus)} ·{" "}
         {row.attention ? attentionReasonLabel(row.attentionReason) : "Sem atenção"}
       </p>
-      {row.overdueCount > 0 ? (
+      {row.provider.sandbox.overdueCount > 0 || row.provider.production.overdueCount > 0 ? (
         <p className="text-sm text-destructive">
-          Vencido: {row.overdueCount} · {formatPlatformMoney(row.overdueCents)}
+          Vencido Sandbox: {providerOverdueCopy(row.provider.sandbox)} · Produção:{" "}
+          {providerOverdueCopy(row.provider.production)}
         </p>
       ) : null}
     </div>

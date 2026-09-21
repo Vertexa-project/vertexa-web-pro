@@ -160,12 +160,22 @@ describe("pixAutomaticExecution environment isolation", () => {
     expect(expectedProviderBaseUrl("production")).toBe("https://api.asaas.com/v3");
   });
 
-  it("rejects missing/invalid configured env and cross-env execution", () => {
-    expect(assertExecutionEnvironment(undefined, "sandbox").ok).toBe(false);
-    expect(assertExecutionEnvironment("prod", "sandbox").ok).toBe(false);
+  it("routes by persisted operation environment, not the global outbound secret", () => {
+    expect(assertExecutionEnvironment(undefined, "sandbox")).toEqual({
+      ok: true,
+      environment: "sandbox",
+    });
+    expect(assertExecutionEnvironment("prod", "sandbox")).toEqual({
+      ok: true,
+      environment: "sandbox",
+    });
     expect(assertExecutionEnvironment("sandbox", "production")).toEqual({
+      ok: true,
+      environment: "production",
+    });
+    expect(assertExecutionEnvironment("sandbox", "staging")).toEqual({
       ok: false,
-      error: "environment_mismatch",
+      error: "invalid_operation_environment",
     });
   });
 });
@@ -697,12 +707,15 @@ describe("executePreparedPixAutomaticAuthorization", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("sandbox config cannot execute a production prepared op", async () => {
+  it("production prepared op is blocked by the write guard even if sandbox is configured", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     const { adminClient } = makeAdminClient(async (name) => {
       if (name === LOAD_PREPARED_PIX_AUTOMATIC_RPC) {
         return { data: { ...prepared, environment: "production" }, error: null };
+      }
+      if (name === "assert_billing_production_provider_write_for_account") {
+        return { data: null, error: { message: "BILLING_PRODUCTION_LOCKED" } };
       }
       throw new Error(`RPC inesperada: ${name}`);
     });
@@ -712,7 +725,7 @@ describe("executePreparedPixAutomaticAuthorization", () => {
       operationId,
       creds: { apiKey: "fake", baseUrl: "https://api-sandbox.asaas.test/v3" },
     });
-    expect(out).toEqual({ ok: false, status: 409, body: { error: "environment_mismatch" } });
+    expect(out).toEqual({ ok: false, status: 409, body: { error: "production_locked" } });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -722,6 +735,9 @@ describe("executePreparedPixAutomaticAuthorization", () => {
     const { adminClient } = makeAdminClient(async (name) => {
       if (name === LOAD_PREPARED_PIX_AUTOMATIC_RPC) {
         return { data: { ...prepared, environment: "production" }, error: null };
+      }
+      if (name === "assert_billing_production_provider_write_for_account") {
+        return { data: { allowed: true }, error: null };
       }
       if (name === "reserve_billing_outbound_operation") {
         return { data: { outcome: "reserved", operation_id: operationId }, error: null };

@@ -780,6 +780,18 @@ export async function drainBillingEvents(params: {
   };
 
   for (const ev of events) {
+    if (ev.environment !== environment) {
+      await failEvent(adminClient, ev.id, "environment_mismatch", false, 0);
+      const outcome: EventOutcome = {
+        event_id: ev.id,
+        external_event_id: ev.external_event_id,
+        outcome: "failed",
+        category: "environment_mismatch",
+      };
+      result.outcomes.push(outcome);
+      result.failed++;
+      continue;
+    }
     let outcome: EventOutcome;
     try {
       outcome = await processOneEvent(adminClient, environment, creds, ev);

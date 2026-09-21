@@ -20,13 +20,27 @@ import {
   type PlatformClinicBillingDetail,
   type PlatformEventEntityType,
   type PlatformFinancialSummary,
+  emptyProviderEnvFacts,
+  type PlatformProviderEnvFacts,
 } from "@/lib/domain/platformBilling";
-import type { ClinicBillingTimelineEvent } from "@/lib/domain/billingHub";
+import { isBillingProviderEnvironment, type ClinicBillingTimelineEvent } from "@/lib/domain/billingHub";
 
 interface RawNextCharge {
   amount_cents?: number;
   due_date?: string;
   display_state?: string;
+}
+
+interface RawProviderEnv {
+  pix_status?: string | null;
+  pix_generation?: number | null;
+  latest_payment_state?: string | null;
+  latest_payment_date?: string | null;
+  next_charge?: RawNextCharge | null;
+  aging_bucket?: string | null;
+  overdue_count?: number;
+  overdue_cents?: number | null;
+  pending_cents?: number | null;
 }
 
 interface RawClinic {
@@ -41,17 +55,11 @@ interface RawClinic {
   contract_effective_from?: string | null;
   identity_complete?: boolean;
   customer_bound?: boolean;
-  pix_status?: string | null;
-  pix_generation?: number | null;
+  provider?: {
+    sandbox?: RawProviderEnv;
+    production?: RawProviderEnv;
+  };
   financial_summary?: string;
-  overdue_count?: number;
-  overdue_cents?: number | null;
-  pending_cents?: number | null;
-  charge_count?: number;
-  next_charge?: RawNextCharge | null;
-  latest_payment_state?: string | null;
-  latest_payment_date?: string | null;
-  aging_bucket?: string | null;
   attention?: boolean;
   attention_reason?: string;
   entitlement_enforcement?: string;
@@ -63,20 +71,33 @@ interface RawAging {
   amount_cents?: number;
 }
 
+interface RawBucket {
+  received_in_period_cents?: number;
+  received_in_period_count?: number;
+  pending_in_period_cents?: number;
+  pending_in_period_count?: number;
+  overdue_in_period_cents?: number;
+  overdue_in_period_count?: number;
+}
+
 interface RawOverview {
   timezone?: string;
   period_start?: string;
   period_end?: string;
-  received_in_period_cents?: number;
-  pending_amount_cents?: number;
-  overdue_amount_cents?: number;
+  financial?: {
+    sandbox?: RawBucket;
+    production?: RawBucket;
+  };
   clinics_with_received?: number;
-  delinquent_clinics?: number;
+  delinquent?: { sandbox?: number; production?: number };
   active_commercial_contracts?: number;
-  active_pix_automatic_authorizations?: number;
+  active_pix_automatic_authorizations?: { sandbox?: number; production?: number };
   payment_success_count?: number;
   attention_clinic_count?: number;
-  aging?: Partial<Record<string, RawAging>>;
+  aging?: {
+    sandbox?: Partial<Record<string, RawAging>>;
+    production?: Partial<Record<string, RawAging>>;
+  };
   entitlement_enforcement?: string;
 }
 
@@ -84,6 +105,7 @@ interface RawCharge {
   id?: string;
   clinic_id?: string;
   clinic_name?: string;
+  environment?: string | null;
   amount_cents?: number;
   currency?: string;
   due_date?: string | null;
@@ -96,6 +118,7 @@ interface RawPayment {
   id?: string;
   clinic_id?: string;
   clinic_name?: string;
+  environment?: string | null;
   amount_cents?: number;
   currency?: string;
   due_date?: string | null;
@@ -121,6 +144,7 @@ interface RawTimeline {
   id?: string;
   occurred_at?: string;
   type?: string;
+  environment?: string | null;
 }
 
 interface RawPage<T> {
@@ -165,6 +189,25 @@ function mapNextCharge(raw: RawNextCharge | null | undefined): PlatformBillingNe
   };
 }
 
+function mapProviderEnv(raw: RawProviderEnv | undefined): PlatformProviderEnvFacts {
+  const empty = emptyProviderEnvFacts();
+  if (!raw) return empty;
+  return {
+    pixStatus: raw.pix_status ?? null,
+    pixGeneration: typeof raw.pix_generation === "number" ? raw.pix_generation : null,
+    latestPaymentState:
+      raw.latest_payment_state && isPaymentDisplayState(raw.latest_payment_state)
+        ? raw.latest_payment_state
+        : null,
+    latestPaymentDate: raw.latest_payment_date ?? null,
+    nextCharge: mapNextCharge(raw.next_charge),
+    agingBucket: raw.aging_bucket && isAgingBucket(raw.aging_bucket) ? raw.aging_bucket : null,
+    overdueCount: asInt(raw.overdue_count),
+    overdueCents: typeof raw.overdue_cents === "number" && raw.overdue_cents > 0 ? raw.overdue_cents : null,
+    pendingCents: typeof raw.pending_cents === "number" && raw.pending_cents > 0 ? raw.pending_cents : null,
+  };
+}
+
 export function mapPlatformClinicRow(row: RawClinic): PlatformBillingClinicRow | null {
   if (!row.clinic_id || !row.clinic_name) return null;
   const summary = row.financial_summary;
@@ -181,22 +224,13 @@ export function mapPlatformClinicRow(row: RawClinic): PlatformBillingClinicRow |
     contractEffectiveFrom: row.contract_effective_from ?? null,
     identityComplete: row.identity_complete === true,
     customerBound: row.customer_bound === true,
-    pixStatus: row.pix_status ?? null,
-    pixGeneration: typeof row.pix_generation === "number" ? row.pix_generation : null,
+    provider: {
+      sandbox: mapProviderEnv(row.provider?.sandbox),
+      production: mapProviderEnv(row.provider?.production),
+    },
     financialSummary: isFinancialSummary(summary ?? "")
       ? (summary as PlatformFinancialSummary)
       : "no_charges",
-    overdueCount: asInt(row.overdue_count),
-    overdueCents: typeof row.overdue_cents === "number" && row.overdue_cents > 0 ? row.overdue_cents : null,
-    pendingCents: typeof row.pending_cents === "number" && row.pending_cents > 0 ? row.pending_cents : null,
-    chargeCount: asInt(row.charge_count),
-    nextCharge: mapNextCharge(row.next_charge),
-    latestPaymentState:
-      row.latest_payment_state && isPaymentDisplayState(row.latest_payment_state)
-        ? row.latest_payment_state
-        : null,
-    latestPaymentDate: row.latest_payment_date ?? null,
-    agingBucket: row.aging_bucket && isAgingBucket(row.aging_bucket) ? row.aging_bucket : null,
     attention: row.attention === true,
     attentionReason: isAttentionReason(attentionReason) ? attentionReason : "none",
     entitlementEnforcement: "OFF",
@@ -216,20 +250,49 @@ export function mapPlatformOverview(row: RawOverview): PlatformBillingOverview {
     timezone: "America/Sao_Paulo",
     periodStart: row.period_start ?? "",
     periodEnd: row.period_end ?? "",
-    receivedInPeriodCents: asInt(row.received_in_period_cents),
-    pendingAmountCents: asInt(row.pending_amount_cents),
-    overdueAmountCents: asInt(row.overdue_amount_cents),
+    financial: {
+      sandbox: {
+        receivedCents: asInt(row.financial?.sandbox?.received_in_period_cents),
+        receivedCount: asInt(row.financial?.sandbox?.received_in_period_count),
+        pendingCents: asInt(row.financial?.sandbox?.pending_in_period_cents),
+        pendingCount: asInt(row.financial?.sandbox?.pending_in_period_count),
+        overdueCents: asInt(row.financial?.sandbox?.overdue_in_period_cents),
+        overdueCount: asInt(row.financial?.sandbox?.overdue_in_period_count),
+      },
+      production: {
+        receivedCents: asInt(row.financial?.production?.received_in_period_cents),
+        receivedCount: asInt(row.financial?.production?.received_in_period_count),
+        pendingCents: asInt(row.financial?.production?.pending_in_period_cents),
+        pendingCount: asInt(row.financial?.production?.pending_in_period_count),
+        overdueCents: asInt(row.financial?.production?.overdue_in_period_cents),
+        overdueCount: asInt(row.financial?.production?.overdue_in_period_count),
+      },
+    },
     clinicsWithReceived: asInt(row.clinics_with_received),
-    delinquentClinics: asInt(row.delinquent_clinics),
+    delinquent: {
+      sandbox: asInt(row.delinquent?.sandbox),
+      production: asInt(row.delinquent?.production),
+    },
     activeCommercialContracts: asInt(row.active_commercial_contracts),
-    activePixAutomaticAuthorizations: asInt(row.active_pix_automatic_authorizations),
+    activePixAutomaticAuthorizations: {
+      sandbox: asInt(row.active_pix_automatic_authorizations?.sandbox),
+      production: asInt(row.active_pix_automatic_authorizations?.production),
+    },
     paymentSuccessCount: asInt(row.payment_success_count),
     attentionClinicCount: asInt(row.attention_clinic_count),
     aging: {
-      d1_7: mapAging(row.aging?.d1_7),
-      d8_15: mapAging(row.aging?.d8_15),
-      d16_30: mapAging(row.aging?.d16_30),
-      d31_plus: mapAging(row.aging?.d31_plus),
+      sandbox: {
+        d1_7: mapAging(row.aging?.sandbox?.d1_7),
+        d8_15: mapAging(row.aging?.sandbox?.d8_15),
+        d16_30: mapAging(row.aging?.sandbox?.d16_30),
+        d31_plus: mapAging(row.aging?.sandbox?.d31_plus),
+      },
+      production: {
+        d1_7: mapAging(row.aging?.production?.d1_7),
+        d8_15: mapAging(row.aging?.production?.d8_15),
+        d16_30: mapAging(row.aging?.production?.d16_30),
+        d31_plus: mapAging(row.aging?.production?.d31_plus),
+      },
     },
     entitlementEnforcement: "OFF",
   };
@@ -250,6 +313,7 @@ function mapCharge(row: RawCharge): PlatformBillingCharge | null {
     paidDate: row.paid_date ?? null,
     displayState: row.display_state,
     method: row.method && isBillingMethod(row.method) ? row.method : "UNDEFINED",
+    environment: row.environment && isBillingProviderEnvironment(row.environment) ? row.environment : null,
   };
 }
 
@@ -268,6 +332,7 @@ function mapPayment(row: RawPayment): PlatformBillingPayment | null {
     receivedDate: row.received_date ?? null,
     displayState: row.display_state,
     method: row.method && isBillingMethod(row.method) ? row.method : "UNDEFINED",
+    environment: row.environment && isBillingProviderEnvironment(row.environment) ? row.environment : null,
   };
 }
 
@@ -294,7 +359,12 @@ function mapEvent(row: RawEvent): PlatformBillingEvent | null {
 
 function mapTimeline(row: RawTimeline): ClinicBillingTimelineEvent | null {
   if (!row.id || !row.occurred_at || !row.type || !isTimelineEventType(row.type)) return null;
-  return { id: row.id, occurredAt: row.occurred_at, type: row.type };
+  return {
+    id: row.id,
+    occurredAt: row.occurred_at,
+    type: row.type,
+    environment: row.environment && isBillingProviderEnvironment(row.environment) ? row.environment : null,
+  };
 }
 
 function mapPage<TRaw, T>(

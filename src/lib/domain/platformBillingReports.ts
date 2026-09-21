@@ -1,10 +1,17 @@
 import type { PlatformCommercialMetrics } from "./billingCommercial";
 import { emptyCommercialMetrics } from "./billingCommercial";
 import {
+  emptyEnvironmentFinancialBucket,
+  type BillingProviderEnvironment,
+  type EnvironmentFinancialBucket,
+} from "./billingEnvScoping";
+import {
+  emptyEnvCount,
   formatPlatformDate,
   formatPlatformMoney,
   platformBillingErrorMessage,
   type PlatformAgingBucket,
+  type PlatformEnvCount,
 } from "./platformBilling";
 import { BILLING_CSV_MAX_EXPORT_ROWS, buildCsv, type CsvCell } from "./billingCsv";
 
@@ -12,6 +19,10 @@ export const REPORT_TIMEZONE = "America/Sao_Paulo";
 export const REPORT_MAX_PERIOD_DAYS = 366;
 export const REPORT_EXPORT_KINDS = ["payments", "delinquent", "received_by_plan"] as const;
 export type PlatformBillingReportKind = (typeof REPORT_EXPORT_KINDS)[number];
+export const REPORT_ENVIRONMENTS = ["sandbox", "production"] as const;
+export type PlatformBillingReportEnvironment = BillingProviderEnvironment;
+export const REPORT_ENVIRONMENT_VIEWS = ["comparison", "sandbox", "production"] as const;
+export type PlatformBillingReportEnvironmentView = (typeof REPORT_ENVIRONMENT_VIEWS)[number];
 
 export interface PlatformBillingReportPeriod {
   start: string;
@@ -19,6 +30,7 @@ export interface PlatformBillingReportPeriod {
 }
 
 export interface PlatformBillingPlanRow {
+  environment: PlatformBillingReportEnvironment | null;
   planCode: string | null;
   planDisplayName: string | null;
   planAttribution: "contract" | "unattributed";
@@ -27,6 +39,7 @@ export interface PlatformBillingPlanRow {
 }
 
 export interface PlatformBillingStatusRow {
+  environment: PlatformBillingReportEnvironment | null;
   status: string;
   paymentCount: number;
   amountCents: number;
@@ -35,6 +48,7 @@ export interface PlatformBillingStatusRow {
 export interface PlatformBillingDelinquentRow {
   clinicId: string;
   clinicName: string;
+  environment: PlatformBillingReportEnvironment | null;
   overdueCount: number;
   overdueCents: number;
   agingBucket: PlatformAgingBucket | null;
@@ -48,16 +62,14 @@ export interface PlatformBillingReport {
   asOf: string;
   notMrr: true;
   entitlementEnforcement: "OFF";
-  receivedInPeriodCents: number;
-  receivedInPeriodCount: number;
-  pendingInPeriodCents: number;
-  pendingInPeriodCount: number;
-  overdueInPeriodCents: number;
-  overdueInPeriodCount: number;
+  financial: {
+    sandbox: EnvironmentFinancialBucket;
+    production: EnvironmentFinancialBucket;
+  };
   receivedByPlan: PlatformBillingPlanRow[];
   paymentsByStatus: PlatformBillingStatusRow[];
-  activePixAutomaticAuthorizations: number;
-  delinquentClinics: number;
+  activePixAutomaticAuthorizations: PlatformEnvCount;
+  delinquent: PlatformEnvCount;
   delinquentItems: PlatformBillingDelinquentRow[];
   exportMaxRows: number;
   commercial: PlatformCommercialMetrics;
@@ -65,6 +77,7 @@ export interface PlatformBillingReport {
 
 export interface PlatformBillingExportRow {
   rowKind: string;
+  environment?: string | null;
   clinicName?: string | null;
   planCode?: string | null;
   planDisplayName?: string | null;
@@ -135,16 +148,14 @@ export function emptyPlatformBillingReport(
     asOf: period.end,
     notMrr: true,
     entitlementEnforcement: "OFF",
-    receivedInPeriodCents: 0,
-    receivedInPeriodCount: 0,
-    pendingInPeriodCents: 0,
-    pendingInPeriodCount: 0,
-    overdueInPeriodCents: 0,
-    overdueInPeriodCount: 0,
+    financial: {
+      sandbox: emptyEnvironmentFinancialBucket(),
+      production: emptyEnvironmentFinancialBucket(),
+    },
     receivedByPlan: [],
     paymentsByStatus: [],
-    activePixAutomaticAuthorizations: 0,
-    delinquentClinics: 0,
+    activePixAutomaticAuthorizations: emptyEnvCount(),
+    delinquent: emptyEnvCount(),
     delinquentItems: [],
     exportMaxRows: BILLING_CSV_MAX_EXPORT_ROWS,
     commercial: emptyCommercialMetrics(),
@@ -170,6 +181,9 @@ export function platformReportErrorMessage(error: unknown): string {
   if (code.includes("BILLING_REPORT_KIND_INVALID")) {
     return "Este recorte de exportação não é suportado.";
   }
+  if (code.includes("BILLING_REPORT_ENVIRONMENT_INVALID")) {
+    return "Informe Sandbox ou Produção.";
+  }
   return platformBillingErrorMessage(error);
 }
 
@@ -188,12 +202,21 @@ export function planAttributionLabel(value: string | null | undefined): string {
 
 export function reportExportHeaders(kind: PlatformBillingReportKind): string[] {
   if (kind === "delinquent") {
-    return ["clinica", "plano", "cobrancas_vencidas", "valor_vencido_centavos", "envelhecimento", "pix"];
+    return [
+      "ambiente",
+      "clinica",
+      "plano",
+      "cobrancas_vencidas",
+      "valor_vencido_centavos",
+      "envelhecimento",
+      "pix",
+    ];
   }
   if (kind === "received_by_plan") {
-    return ["plano", "nome_do_plano", "atribuicao", "recebido_centavos", "pagamentos"];
+    return ["ambiente", "plano", "nome_do_plano", "atribuicao", "recebido_centavos", "pagamentos"];
   }
   return [
+    "ambiente",
     "clinica",
     "plano",
     "atribuicao",
@@ -212,6 +235,7 @@ export function reportExportCells(
 ): CsvCell[] {
   if (kind === "delinquent") {
     return [
+      row.environment ?? "",
       row.clinicName ?? "",
       row.planCode ?? "",
       row.overdueCount ?? 0,
@@ -222,6 +246,7 @@ export function reportExportCells(
   }
   if (kind === "received_by_plan") {
     return [
+      row.environment ?? "",
       row.planCode ?? "",
       row.planDisplayName ?? "",
       row.planAttribution ?? "unattributed",
@@ -230,6 +255,7 @@ export function reportExportCells(
     ];
   }
   return [
+    row.environment ?? "",
     row.clinicName ?? "",
     row.planCode ?? "",
     row.planAttribution ?? "unattributed",

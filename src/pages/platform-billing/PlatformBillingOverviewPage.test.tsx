@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
 import type { PlatformBillingClinicRow, PlatformBillingOverview } from "@/lib/domain/platformBilling";
-import { emptyOverview } from "@/lib/domain/platformBilling";
+import { emptyOverview, emptyProviderEnvFacts } from "@/lib/domain/platformBilling";
 
 const overviewState = vi.hoisted(() => ({
   data: undefined as PlatformBillingOverview | undefined,
@@ -54,17 +55,19 @@ function clinic(over: Partial<PlatformBillingClinicRow> = {}): PlatformBillingCl
     contractEffectiveFrom: "2026-08-01",
     identityComplete: true,
     customerBound: true,
-    pixStatus: "ACTIVE",
-    pixGeneration: 1,
+    provider: {
+      sandbox: {
+        ...emptyProviderEnvFacts(),
+        pixStatus: "ACTIVE",
+        pixGeneration: 1,
+        overdueCount: 1,
+        overdueCents: 39000,
+        agingBucket: "d31_plus",
+        latestPaymentState: "overdue",
+      },
+      production: emptyProviderEnvFacts(),
+    },
     financialSummary: "overdue",
-    overdueCount: 1,
-    overdueCents: 39000,
-    pendingCents: null,
-    chargeCount: 2,
-    nextCharge: null,
-    latestPaymentState: "overdue",
-    latestPaymentDate: null,
-    agingBucket: "d31_plus",
     attention: true,
     attentionReason: "overdue",
     entitlementEnforcement: "OFF",
@@ -78,12 +81,28 @@ beforeEach(() => {
     ...emptyOverview(),
     periodStart: "2026-09-01",
     periodEnd: "2026-09-30",
-    receivedInPeriodCents: 39000,
-    overdueAmountCents: 39000,
-    delinquentClinics: 1,
+    financial: {
+      sandbox: {
+        receivedCents: 39000,
+        receivedCount: 1,
+        pendingCents: 0,
+        pendingCount: 0,
+        overdueCents: 39000,
+        overdueCount: 1,
+      },
+      production: {
+        receivedCents: 0,
+        receivedCount: 0,
+        pendingCents: 0,
+        pendingCount: 0,
+        overdueCents: 0,
+        overdueCount: 0,
+      },
+    },
+    delinquent: { sandbox: 1, production: 0 },
     attentionClinicCount: 1,
     activeCommercialContracts: 2,
-    activePixAutomaticAuthorizations: 1,
+    activePixAutomaticAuthorizations: { sandbox: 1, production: 0 },
   };
   overviewState.isLoading = false;
   overviewState.isError = false;
@@ -113,14 +132,16 @@ describe("PlatformBillingOverviewPage", () => {
         <PlatformBillingOverviewPage />
       </MemoryRouter>,
     );
-    expect(screen.getByText("Recebido no mês")).toBeInTheDocument();
-    expect(screen.getAllByText("Vencido").length).toBeGreaterThan(0);
+    expect(screen.getByText("Recebido Sandbox")).toBeInTheDocument();
+    expect(screen.getByText("Recebido Produção")).toBeInTheDocument();
     expect(screen.getByText(/clínica inadimplente/)).toBeInTheDocument();
     expect(screen.getByText(/isto não é MRR/i)).toBeInTheDocument();
     expect(screen.getAllByText("Clínica Norte").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Cobrança vencida").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pagamento recebido").length).toBeGreaterThan(0);
     expect(screen.queryByText(/qr|payload|asaas/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Envelhecimento do vencido · Sandbox")).toBeInTheDocument();
+    expect(screen.getByText("Envelhecimento do vencido · Produção")).toBeInTheDocument();
   });
 
   it("renders loading and error states", () => {
@@ -152,5 +173,33 @@ describe("PlatformBillingOverviewPage", () => {
       </MemoryRouter>,
     );
     expect(screen.getByText("Nenhuma clínica pede atenção agora")).toBeInTheDocument();
+  });
+
+  it("sandbox filter hides Production provider aging", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <PlatformBillingOverviewPage />
+      </MemoryRouter>,
+    );
+    await user.selectOptions(screen.getByLabelText("Ambiente"), "Sandbox");
+    expect(screen.getByText("Envelhecimento do vencido · Sandbox")).toBeInTheDocument();
+    expect(screen.queryByText("Envelhecimento do vencido · Produção")).not.toBeInTheDocument();
+    expect(screen.getByText("Recebido Sandbox")).toBeInTheDocument();
+    expect(screen.queryByText("Recebido Produção")).not.toBeInTheDocument();
+  });
+
+  it("production filter hides Sandbox provider aging", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <PlatformBillingOverviewPage />
+      </MemoryRouter>,
+    );
+    await user.selectOptions(screen.getByLabelText("Ambiente"), "Produção");
+    expect(screen.getByText("Envelhecimento do vencido · Produção")).toBeInTheDocument();
+    expect(screen.queryByText("Envelhecimento do vencido · Sandbox")).not.toBeInTheDocument();
+    expect(screen.getByText("Recebido Produção")).toBeInTheDocument();
+    expect(screen.queryByText("Recebido Sandbox")).not.toBeInTheDocument();
   });
 });

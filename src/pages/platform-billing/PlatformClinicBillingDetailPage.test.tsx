@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import type { PlatformClinicBillingDetail } from "@/lib/domain/platformBilling";
+import { emptyProviderEnvFacts } from "@/lib/domain/platformBilling";
 
 const detailState = vi.hoisted(() => ({
   data: undefined as PlatformClinicBillingDetail | undefined,
@@ -40,17 +41,24 @@ beforeEach(() => {
       contractEffectiveFrom: "2026-07-01",
       identityComplete: true,
       customerBound: true,
-      pixStatus: "CREATED",
-      pixGeneration: 1,
+      provider: {
+        sandbox: {
+          ...emptyProviderEnvFacts(),
+          pixStatus: "CREATED",
+          pixGeneration: 1,
+          latestPaymentDate: "2026-09-20",
+          latestPaymentState: "received",
+          nextCharge: { amountCents: 39000, dueDate: "2026-10-05", displayState: "PENDING" },
+        },
+        production: {
+          ...emptyProviderEnvFacts(),
+          pixStatus: "ACTIVE",
+          latestPaymentDate: "2026-09-01",
+          latestPaymentState: "received",
+          nextCharge: { amountCents: 89000, dueDate: "2026-10-20", displayState: "PENDING" },
+        },
+      },
       financialSummary: "no_charges",
-      overdueCount: 0,
-      overdueCents: null,
-      pendingCents: null,
-      chargeCount: 0,
-      nextCharge: null,
-      latestPaymentState: null,
-      latestPaymentDate: null,
-      agingBucket: null,
       attention: true,
       attentionReason: "pix_absent",
       entitlementEnforcement: "OFF",
@@ -78,7 +86,14 @@ describe("PlatformClinicBillingDetailPage", () => {
     renderDetail();
     expect(screen.getByText("Clínica Sul")).toBeInTheDocument();
     expect(screen.getByText(/Sync/)).toBeInTheDocument();
+    expect(screen.getByText("Pix Automático Sandbox")).toBeInTheDocument();
+    expect(screen.getByText("Pix Automático Produção")).toBeInTheDocument();
     expect(screen.getByText("Criado")).toBeInTheDocument();
+    expect(screen.getByText("Ativo")).toBeInTheDocument();
+    expect(screen.getByText("Próxima cobrança Sandbox")).toBeInTheDocument();
+    expect(screen.getByText("Próxima cobrança Produção")).toBeInTheDocument();
+    expect(screen.getByText("Último pagamento Sandbox")).toBeInTheDocument();
+    expect(screen.getByText("Último pagamento Produção")).toBeInTheDocument();
     expect(screen.getByText("Sem cobrança")).toBeInTheDocument();
     expect(screen.getByText("Desligada")).toBeInTheDocument();
     expect(screen.getByText("Ainda não há cobrança registrada.")).toBeInTheDocument();

@@ -108,6 +108,8 @@ export const qk = {
   platformBillingEvents: (filters: unknown) => ["platform", "billing", "events", filters] as const,
   platformBillingReport: (period: unknown) => ["platform", "billing", "report", period] as const,
   platformBillingCommercial: ["platform", "billing", "commercial"] as const,
+  platformCommercialAccess: ["platform", "billing", "commercialAccess"] as const,
+  clinicCommercialAccess: (clinicId: string) => ["billingCommercialAccess", clinicId] as const,
   platformClinicCommercialDetail: (clinicId: string) =>
     ["platform", "billing", "commercial", "clinic", clinicId] as const,
   platformCommercialPlanOptions: ["platform", "billing", "commercial", "plans"] as const,

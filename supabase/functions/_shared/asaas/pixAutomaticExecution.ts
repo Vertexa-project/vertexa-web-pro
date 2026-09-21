@@ -11,6 +11,7 @@ import {
   type AsaasCredentials,
   type AsaasEnvironment,
 } from "./client.ts";
+import { assertProductionProviderWriteForAccount } from "./productionWriteGuard.ts";
 import { PIX_AUTOMATIC_AUTHORIZATIONS_PATH } from "./pixAutomatic.ts";
 import {
   QR_UNAVAILABLE_CREATE_RESPONSE_NOT_AVAILABLE,
@@ -169,16 +170,13 @@ export function parseExecutePixAutomaticRequest(
 }
 
 export function assertExecutionEnvironment(
-  configuredRaw: string | undefined,
+  _configuredRaw: string | undefined,
   operationEnv: string,
 ): { ok: true; environment: AsaasEnvironment } | { ok: false; error: string } {
-  const configured = resolveOutboundEnvironment(configuredRaw);
-  if (!configured) return { ok: false, error: "asaas_outbound_not_configured" };
   if (operationEnv !== "sandbox" && operationEnv !== "production") {
     return { ok: false, error: "invalid_operation_environment" };
   }
-  if (operationEnv !== configured) return { ok: false, error: "environment_mismatch" };
-  return { ok: true, environment: configured };
+  return { ok: true, environment: operationEnv };
 }
 
 export function credentialsForEnvironment(environment: AsaasEnvironment): AsaasCredentials {
@@ -357,6 +355,15 @@ export async function executePreparedPixAutomaticAuthorization(params: {
 
   if (!loaded.facts.externalCustomerId) {
     return { ok: false, status: 409, body: { error: "customer_not_provisioned" } };
+  }
+
+  if (envGate.environment === "production") {
+    const writeGate = await assertProductionProviderWriteForAccount(
+      params.adminClient,
+      loaded.facts.billingAccountId,
+      "PIX_AUTOMATIC_CREATE",
+    );
+    if (!writeGate.ok) return { ok: false, status: 409, body: { error: writeGate.error } };
   }
 
   let creds: AsaasCredentials;

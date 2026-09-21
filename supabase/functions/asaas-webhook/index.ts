@@ -1,6 +1,6 @@
 // WP-ASAAS-02 — stub de webhook Asaas.
 // Caller = Asaas (verify_jwt=false). Auth real = header asaas-access-token.
-// Environment: somente ASAAS_WEBHOOK_ENVIRONMENT=sandbox|production (fail-closed).
+// Environment is attributed from the matching token, never from the body.
 // Sem HTTP outbound. Sem grant. Sem estado comercial.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";

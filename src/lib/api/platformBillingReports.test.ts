@@ -24,14 +24,27 @@ describe("platformBillingReports API", () => {
         as_of: "2026-09-20",
         not_mrr: true,
         entitlement_enforcement: "OFF",
-        received_in_period_cents: 40000,
-        received_in_period_count: 1,
-        pending_in_period_cents: 1000,
-        pending_in_period_count: 1,
-        overdue_in_period_cents: 0,
-        overdue_in_period_count: 0,
+        financial: {
+          sandbox: {
+            received_in_period_cents: 40000,
+            received_in_period_count: 1,
+            pending_in_period_cents: 1000,
+            pending_in_period_count: 1,
+            overdue_in_period_cents: 0,
+            overdue_in_period_count: 0,
+          },
+          production: {
+            received_in_period_cents: 0,
+            received_in_period_count: 0,
+            pending_in_period_cents: 0,
+            pending_in_period_count: 0,
+            overdue_in_period_cents: 0,
+            overdue_in_period_count: 0,
+          },
+        },
         received_by_plan: [
           {
+            environment: "sandbox",
             plan_code: "pulse",
             plan_display_name: "Pulse",
             plan_attribution: "contract",
@@ -40,8 +53,8 @@ describe("platformBillingReports API", () => {
           },
         ],
         payments_by_status: [{ status: "received", payment_count: 1, amount_cents: 40000 }],
-        active_pix_automatic_authorizations: 1,
-        delinquent_clinics: 0,
+        active_pix_automatic_authorizations: { sandbox: 1, production: 0 },
+        delinquent: { sandbox: 0, production: 0 },
         delinquent_items: [],
         export_max_rows: 500,
       },
@@ -53,7 +66,11 @@ describe("platformBillingReports API", () => {
       p_period_end: "2026-09-30",
     });
     expect(report.notMrr).toBe(true);
+    expect(report.financial.sandbox.receivedCents).toBe(40000);
+    expect(report.financial.production.receivedCents).toBe(0);
     expect(report.receivedByPlan[0]?.planAttribution).toBe("contract");
+    expect(report.activePixAutomaticAuthorizations.sandbox).toBe(1);
+    expect(report.activePixAutomaticAuthorizations.production).toBe(0);
     expect(JSON.stringify(report)).not.toMatch(/qr_payload|encoded_image|service_role|tax_id/i);
     expect(report.notMrr).toBe(true);
   });
@@ -90,8 +107,52 @@ describe("platformBillingReports API", () => {
       p_kind: "payments",
       p_limit: 999,
       p_offset: 0,
+      p_environment: null,
     });
     expect(page.maxLimit).toBe(500);
     expect(page.items).toHaveLength(1);
+  });
+
+  it("sends the environment filter to the export RPC instead of filtering only in the browser", async () => {
+    rpc.mockResolvedValue({
+      data: {
+        kind: "payments",
+        environment: "production",
+        limit: 200,
+        offset: 0,
+        max_limit: 500,
+        items: [{ row_kind: "payment", environment: "production", amount_cents: 0 }],
+      },
+      error: null,
+    });
+    await listPlatformBillingReportExport({ kind: "payments", environment: "production" });
+    expect(rpc).toHaveBeenCalledWith("list_platform_billing_report_export", {
+      p_period_start: null,
+      p_period_end: null,
+      p_kind: "payments",
+      p_limit: 200,
+      p_offset: 0,
+      p_environment: "production",
+    });
+    rpc.mockResolvedValue({
+      data: {
+        kind: "payments",
+        environment: "sandbox",
+        limit: 200,
+        offset: 0,
+        max_limit: 500,
+        items: [{ row_kind: "payment", environment: "sandbox", amount_cents: 39000 }],
+      },
+      error: null,
+    });
+    await listPlatformBillingReportExport({ kind: "payments", environment: "sandbox" });
+    expect(rpc).toHaveBeenCalledWith("list_platform_billing_report_export", {
+      p_period_start: null,
+      p_period_end: null,
+      p_kind: "payments",
+      p_limit: 200,
+      p_offset: 0,
+      p_environment: "sandbox",
+    });
   });
 });

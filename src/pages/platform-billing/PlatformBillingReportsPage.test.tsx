@@ -40,10 +40,27 @@ const { PlatformBillingReportsPage } = await import("./PlatformBillingReportsPag
 beforeEach(() => {
   reportState.data = {
     ...emptyPlatformBillingReport({ start: "2026-09-01", end: "2026-09-30" }),
-    receivedInPeriodCents: 40000,
-    receivedInPeriodCount: 1,
+    financial: {
+      sandbox: {
+        receivedCents: 40000,
+        receivedCount: 1,
+        pendingCents: 0,
+        pendingCount: 0,
+        overdueCents: 0,
+        overdueCount: 0,
+      },
+      production: {
+        receivedCents: 0,
+        receivedCount: 0,
+        pendingCents: 0,
+        pendingCount: 0,
+        overdueCents: 0,
+        overdueCount: 0,
+      },
+    },
     receivedByPlan: [
       {
+        environment: "sandbox",
         planCode: "pulse",
         planDisplayName: "Pulse",
         planAttribution: "contract",
@@ -51,9 +68,9 @@ beforeEach(() => {
         paymentCount: 1,
       },
     ],
-    paymentsByStatus: [{ status: "received", paymentCount: 1, amountCents: 40000 }],
-    activePixAutomaticAuthorizations: 1,
-    delinquentClinics: 0,
+    paymentsByStatus: [{ environment: "sandbox", status: "received", paymentCount: 1, amountCents: 40000 }],
+    activePixAutomaticAuthorizations: { sandbox: 1, production: 0 },
+    delinquent: { sandbox: 0, production: 0 },
     delinquentItems: [],
   };
   reportState.isLoading = false;
@@ -73,8 +90,18 @@ describe("PlatformBillingReportsPage", () => {
     expect(screen.getByRole("heading", { name: "Recebido por plano" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Pagamentos por situação" })).toBeInTheDocument();
     expect(screen.getByText(/Pix Automático ativo/)).toBeInTheDocument();
+    expect(screen.getByText(/Sandbox: 1 autorizações primárias/)).toBeInTheDocument();
+    expect(screen.getByText(/Produção: 0/)).toBeInTheDocument();
     expect(screen.getByText("Nenhuma clínica inadimplente")).toBeInTheDocument();
     expect(screen.getByText(/não é MRR/i)).toBeInTheDocument();
+  });
+
+  it("production filter hides Sandbox financial headlines", async () => {
+    const user = userEvent.setup();
+    render(<PlatformBillingReportsPage />);
+    await user.selectOptions(screen.getByLabelText("Ambiente"), "Produção");
+    expect(screen.getByText("Recebido Produção")).toBeInTheDocument();
+    expect(screen.queryByText("Recebido Sandbox")).not.toBeInTheDocument();
   });
 
   it("shows loading, empty and error states", () => {

@@ -5,6 +5,7 @@ import { useClinicBillingTimeline } from "@/hooks/useBillingHub";
 import {
   billingHubErrorMessage,
   formatBillingCivilDate,
+  providerEnvironmentLabel,
   sortTimelineNewestFirst,
   timelineEventLabel,
   type ClinicBillingTimelineEvent,
@@ -51,7 +52,14 @@ function TimelineList({ items }: { items: ClinicBillingTimelineEvent[] }) {
         <li key={item.id} className="flex gap-3">
           <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />
           <div className="min-w-0">
-            <p className="text-sm font-medium">{timelineEventLabel(item.type)}</p>
+            <p className="text-sm font-medium">
+              {timelineEventLabel(item.type)}
+              {providerEnvironmentLabel(item.environment) ? (
+                <span className="ml-2 inline-flex rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  {providerEnvironmentLabel(item.environment)}
+                </span>
+              ) : null}
+            </p>
             <p className="text-xs text-muted-foreground">{formatBillingCivilDate(item.occurredAt)}</p>
           </div>
         </li>

@@ -3,6 +3,7 @@ import type { PixAuthorizationStatus } from "@/lib/domain/billingCheckout";
 import {
   emptyBillingOverview,
   isBillingMethod,
+  isBillingProviderEnvironment,
   isChargeDisplayState,
   isPaymentDisplayState,
   isTimelineEventType,
@@ -30,6 +31,7 @@ interface RawNextCharge {
   currency?: string;
   due_date?: string;
   display_state?: string;
+  environment?: string | null;
 }
 
 interface RawSituation {
@@ -41,6 +43,7 @@ interface RawSituation {
 
 interface RawOverview {
   clinic_id?: string;
+  environment?: string | null;
   plan?: RawPlan | null;
   pix_authorization_status?: string | null;
   pix_generation?: number | null;
@@ -77,6 +80,7 @@ interface RawEvent {
   id?: string;
   occurred_at?: string;
   type?: string;
+  environment?: string | null;
 }
 
 interface RawList<T> {
@@ -119,8 +123,11 @@ function mapOverview(row: RawOverview, clinicId: string): ClinicBillingOverview 
       ? situation.overdue_cents
       : null;
   const latest = row.latest_payment_display_state;
+  const environment = isBillingProviderEnvironment(row.environment) ? row.environment : null;
+  const nextEnvironment = isBillingProviderEnvironment(next?.environment) ? next.environment : null;
   return {
     clinicId: row.clinic_id ?? clinicId,
+    environment,
     plan: mapPlan(row.plan),
     pixAuthorizationStatus: (row.pix_authorization_status as PixAuthorizationStatus | null) ?? null,
     pixGeneration: typeof row.pix_generation === "number" ? row.pix_generation : null,
@@ -137,6 +144,7 @@ function mapOverview(row: RawOverview, clinicId: string): ClinicBillingOverview 
             currency: next.currency === "BRL" ? "BRL" : "BRL",
             dueDate: next.due_date,
             displayState: next.display_state,
+            environment: nextEnvironment,
           }
         : null,
     financialSituation: {
@@ -186,7 +194,9 @@ function mapPayment(row: RawPayment): ClinicBillingPayment | null {
 
 function mapEvent(row: RawEvent): ClinicBillingTimelineEvent | null {
   if (!row.id || !row.occurred_at || !row.type || !isTimelineEventType(row.type)) return null;
-  return { id: row.id, occurredAt: row.occurred_at, type: row.type };
+  const environment =
+    row.environment && isBillingProviderEnvironment(row.environment) ? row.environment : null;
+  return { id: row.id, occurredAt: row.occurred_at, type: row.type, environment };
 }
 
 export async function getMyClinicBillingOverview(clinicId: string): Promise<ClinicBillingOverview> {

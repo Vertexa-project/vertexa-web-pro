@@ -15,7 +15,7 @@ describe("platformBillingReports period", () => {
     expect(validateReportPeriod("2026-09-01", "2026-09-30")).toBeNull();
   });
 
-  it("builds a payments CSV with stable headers and neutralized clinic names", () => {
+  it("builds a payments CSV with environment column, stable headers and neutralized clinic names", () => {
     const csv = buildBillingReportCsv("payments", {
       timezone: "America/Sao_Paulo",
       periodStart: "2026-09-01",
@@ -27,6 +27,7 @@ describe("platformBillingReports period", () => {
       items: [
         {
           rowKind: "payment",
+          environment: "sandbox",
           clinicName: "=evil clinic",
           planCode: "pulse",
           planAttribution: "contract",
@@ -39,9 +40,42 @@ describe("platformBillingReports period", () => {
         },
       ],
     });
-    expect(csv).toContain("clinica,plano,atribuicao,valor_centavos,moeda,situacao,vencimento,recebimento,metodo");
+    expect(csv).toContain(
+      "ambiente,clinica,plano,atribuicao,valor_centavos,moeda,situacao,vencimento,recebimento,metodo",
+    );
     expect(csv).toContain("'=evil clinic");
+    expect(csv).toContain("sandbox");
     expect(csv).toContain("39000");
-    expect(csv.split("\r\n")[0]?.replace(/^\uFEFF/, "").split(",")).toHaveLength(9);
+    expect(csv.startsWith("\uFEFF")).toBe(true);
+    expect(csv.split("\r\n")[0]?.replace(/^\uFEFF/, "").split(",")).toHaveLength(10);
+  });
+
+  it("keeps production rows labeled production in the same CSV schema", () => {
+    const csv = buildBillingReportCsv("payments", {
+      timezone: "America/Sao_Paulo",
+      periodStart: "2026-09-01",
+      periodEnd: "2026-09-30",
+      kind: "payments",
+      limit: 200,
+      offset: 0,
+      maxLimit: 500,
+      items: [
+        {
+          rowKind: "payment",
+          environment: "production",
+          clinicName: "Norte",
+          planCode: "pulse",
+          planAttribution: "contract",
+          amountCents: 0,
+          currency: "BRL",
+          financialState: "received",
+          dueDate: "2026-09-12",
+          paymentDate: "2026-09-12",
+          method: "PIX",
+        },
+      ],
+    });
+    expect(csv).toContain("production");
+    expect(csv).not.toContain("sandbox");
   });
 });

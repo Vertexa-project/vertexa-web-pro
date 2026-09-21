@@ -39,6 +39,8 @@ export type FinancialSummaryCode = (typeof FINANCIAL_SUMMARY_CODES)[number];
 export const OVERDUE_REGULARIZE_COPY =
   "Regularize esta cobrança pelo banco ou pelo mecanismo de pagamento atual. A Vertexa não cria outra cobrança.";
 
+export type BillingProviderEnvironment = "sandbox" | "production";
+
 export const NEXT_CHARGE_EMPTY_COPY = "Nenhuma cobrança futura está disponível no momento.";
 
 export const CHECKOUT_QR_RECOVERY = "NO_SUPPORTED_QR_RECOVERY" as const;
@@ -56,6 +58,7 @@ export interface ClinicBillingNextCharge {
   currency: string;
   dueDate: string;
   displayState: ChargeDisplayState;
+  environment?: BillingProviderEnvironment | null;
 }
 
 export interface ClinicBillingFinancialSituation {
@@ -67,6 +70,7 @@ export interface ClinicBillingFinancialSituation {
 
 export interface ClinicBillingOverview {
   clinicId: string;
+  environment?: BillingProviderEnvironment | null;
   plan: ClinicBillingPlanSummary | null;
   pixAuthorizationStatus: PixAuthorizationStatus | null;
   pixGeneration: number | null;
@@ -103,6 +107,17 @@ export interface ClinicBillingTimelineEvent {
   id: string;
   occurredAt: string;
   type: TimelineEventType;
+  environment?: BillingProviderEnvironment | null;
+}
+
+export function isBillingProviderEnvironment(value: string | null | undefined): value is BillingProviderEnvironment {
+  return value === "sandbox" || value === "production";
+}
+
+export function providerEnvironmentLabel(environment: string | null | undefined): string | null {
+  if (environment === "sandbox") return "Sandbox";
+  if (environment === "production") return "Produção";
+  return null;
 }
 
 export function isChargeDisplayState(value: string): value is ChargeDisplayState {
@@ -234,6 +249,7 @@ export function resolveHubFourStates(overview: ClinicBillingOverview): {
 export function emptyBillingOverview(clinicId: string): ClinicBillingOverview {
   return {
     clinicId,
+    environment: null,
     plan: null,
     pixAuthorizationStatus: null,
     pixGeneration: null,

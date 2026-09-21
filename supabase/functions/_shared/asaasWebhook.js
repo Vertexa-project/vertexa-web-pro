@@ -3,8 +3,7 @@
 //
 // Idempotência oficial = Asaas body.id (external_event_id).
 // payload_hash = integridade/auditoria. NÃO substitui external_event_id.
-// Environment vem SÓ de ASAAS_WEBHOOK_ENVIRONMENT (exato: sandbox|production).
-// Sem fallback, sem lowercase, sem escolha via body/header.
+// Environment is attributed from the matching webhook token, never from the body.
 
 import { parseAsaasDateTime } from "./asaas/datetime.js";
 
@@ -247,20 +246,45 @@ export async function handleAsaasWebhook(req, ctx) {
   return jsonResponse(200, { received: true });
 }
 
+export function resolveWebhookChannelFromToken(cfg) {
+  const sandboxToken = typeof cfg.sandboxToken === "string" ? cfg.sandboxToken : "";
+  const productionToken = typeof cfg.productionToken === "string" ? cfg.productionToken : "";
+  if (!sandboxToken && !productionToken) return { ok: false, reason: "webhook_not_configured" };
+  return { ok: true, sandboxToken, productionToken };
+}
+
 /**
- * Env server-side escolhe environment + secret. Sem fallback sandbox.
- * Secret do outro ambiente nunca autentica.
+ * Environment is attributed from the matching auth token, never from the body.
+ * Sandbox and Production tokens must be distinct. A missing Production token keeps
+ * current Sandbox receipts compatible.
  */
 export async function dispatchAsaasWebhook(req, cfg) {
-  const parsed = parseWebhookEnvironment(cfg.environmentRaw);
-  if (!parsed.ok) {
+  const channel = resolveWebhookChannelFromToken(cfg);
+  if (!channel.ok) return webhookMisconfiguredResponse();
+
+  const received = req.headers.get("asaas-access-token");
+  if (received == null || received === "") {
+    return jsonResponse(401, { error: "unauthorized" });
+  }
+
+  const sandboxMatch = tokensEqual(received, channel.sandboxToken);
+  const productionMatch = tokensEqual(received, channel.productionToken);
+  if (sandboxMatch && productionMatch) {
     return webhookMisconfiguredResponse();
   }
-  const expectedToken =
-    parsed.environment === "production" ? cfg.productionToken : cfg.sandboxToken;
-  return handleAsaasWebhook(req, {
-    environment: parsed.environment,
-    expectedToken: typeof expectedToken === "string" ? expectedToken : "",
-    ingest: cfg.ingest,
-  });
+  if (sandboxMatch) {
+    return handleAsaasWebhook(req, {
+      environment: "sandbox",
+      expectedToken: channel.sandboxToken,
+      ingest: cfg.ingest,
+    });
+  }
+  if (productionMatch) {
+    return handleAsaasWebhook(req, {
+      environment: "production",
+      expectedToken: channel.productionToken,
+      ingest: cfg.ingest,
+    });
+  }
+  return jsonResponse(403, { error: "forbidden" });
 }

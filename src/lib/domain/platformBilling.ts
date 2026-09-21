@@ -12,13 +12,19 @@ import {
   isTimelineEventType,
   paymentStateLabel,
   paymentStateTone,
+  providerEnvironmentLabel,
   timelineEventLabel,
   type BillingMethod,
+  type BillingProviderEnvironment,
   type ChargeDisplayState,
   type ClinicBillingTimelineEvent,
   type PaymentDisplayState,
 } from "./billingHub";
 import { formatBillingPriceCents } from "./billingCheckout";
+import {
+  emptyEnvironmentFinancialBucket,
+  type EnvironmentFinancialBucket,
+} from "./billingEnvScoping";
 import { pixAutomaticStatusLabel } from "./pixAutomaticReissue";
 
 export const PLATFORM_BILLING_PAGE_SIZE = 50;
@@ -54,6 +60,23 @@ export interface PlatformBillingNextCharge {
   displayState: ChargeDisplayState;
 }
 
+export interface PlatformProviderEnvFacts {
+  pixStatus: string | null;
+  pixGeneration: number | null;
+  latestPaymentState: PaymentDisplayState | null;
+  latestPaymentDate: string | null;
+  nextCharge: PlatformBillingNextCharge | null;
+  agingBucket: PlatformAgingBucket | null;
+  overdueCount: number;
+  overdueCents: number | null;
+  pendingCents: number | null;
+}
+
+export interface PlatformClinicProviderFacts {
+  sandbox: PlatformProviderEnvFacts;
+  production: PlatformProviderEnvFacts;
+}
+
 export interface PlatformBillingClinicRow {
   clinicId: string;
   clinicName: string;
@@ -66,17 +89,8 @@ export interface PlatformBillingClinicRow {
   contractEffectiveFrom: string | null;
   identityComplete: boolean;
   customerBound: boolean;
-  pixStatus: string | null;
-  pixGeneration: number | null;
+  provider: PlatformClinicProviderFacts;
   financialSummary: PlatformFinancialSummary;
-  overdueCount: number;
-  overdueCents: number | null;
-  pendingCents: number | null;
-  chargeCount: number;
-  nextCharge: PlatformBillingNextCharge | null;
-  latestPaymentState: PaymentDisplayState | null;
-  latestPaymentDate: string | null;
-  agingBucket: PlatformAgingBucket | null;
   attention: boolean;
   attentionReason: PlatformAttentionReason;
   entitlementEnforcement: "OFF";
@@ -88,20 +102,31 @@ export interface PlatformAgingBucketMetric {
   amountCents: number;
 }
 
+export type PlatformAgingByEnvironment = Record<
+  BillingProviderEnvironment,
+  Record<PlatformAgingBucket, PlatformAgingBucketMetric>
+>;
+
+export interface PlatformEnvCount {
+  sandbox: number;
+  production: number;
+}
+
 export interface PlatformBillingOverview {
   timezone: "America/Sao_Paulo";
   periodStart: string;
   periodEnd: string;
-  receivedInPeriodCents: number;
-  pendingAmountCents: number;
-  overdueAmountCents: number;
+  financial: {
+    sandbox: EnvironmentFinancialBucket;
+    production: EnvironmentFinancialBucket;
+  };
   clinicsWithReceived: number;
-  delinquentClinics: number;
+  delinquent: PlatformEnvCount;
   activeCommercialContracts: number;
-  activePixAutomaticAuthorizations: number;
+  activePixAutomaticAuthorizations: PlatformEnvCount;
   paymentSuccessCount: number;
   attentionClinicCount: number;
-  aging: Record<PlatformAgingBucket, PlatformAgingBucketMetric>;
+  aging: PlatformAgingByEnvironment;
   entitlementEnforcement: "OFF";
 }
 
@@ -109,6 +134,7 @@ export interface PlatformBillingCharge {
   id: string;
   clinicId: string;
   clinicName?: string;
+  environment?: BillingProviderEnvironment | null;
   amountCents: number;
   currency: string;
   dueDate: string | null;
@@ -121,6 +147,7 @@ export interface PlatformBillingPayment {
   id: string;
   clinicId: string;
   clinicName?: string;
+  environment?: BillingProviderEnvironment | null;
   amountCents: number;
   currency: string;
   dueDate: string | null;
@@ -313,6 +340,57 @@ export function nextChargeCopy(next: PlatformBillingNextCharge | null): string {
   return `${formatPlatformDate(next.dueDate)} · ${formatPlatformMoney(next.amountCents)}`;
 }
 
+export function emptyProviderEnvFacts(): PlatformProviderEnvFacts {
+  return {
+    pixStatus: null,
+    pixGeneration: null,
+    latestPaymentState: null,
+    latestPaymentDate: null,
+    nextCharge: null,
+    agingBucket: null,
+    overdueCount: 0,
+    overdueCents: null,
+    pendingCents: null,
+  };
+}
+
+export function emptyClinicProviderFacts(): PlatformClinicProviderFacts {
+  return {
+    sandbox: emptyProviderEnvFacts(),
+    production: emptyProviderEnvFacts(),
+  };
+}
+
+export function emptyAgingBuckets(): Record<PlatformAgingBucket, PlatformAgingBucketMetric> {
+  const zero: PlatformAgingBucketMetric = { clinicCount: 0, amountCents: 0 };
+  return { d1_7: zero, d8_15: zero, d16_30: zero, d31_plus: zero };
+}
+
+export function emptyEnvCount(): PlatformEnvCount {
+  return { sandbox: 0, production: 0 };
+}
+
+export function providerPixCopy(provider: PlatformClinicProviderFacts): string {
+  return `Sandbox: ${pixAutomaticStatusLabel(provider.sandbox.pixStatus)} · Produção: ${pixAutomaticStatusLabel(provider.production.pixStatus)}`;
+}
+
+export function providerNextChargeCopy(provider: PlatformClinicProviderFacts): string {
+  return `Sandbox: ${nextChargeCopy(provider.sandbox.nextCharge)} · Produção: ${nextChargeCopy(provider.production.nextCharge)}`;
+}
+
+export function providerOverdueCopy(facts: PlatformProviderEnvFacts): string {
+  return facts.overdueCount > 0
+    ? `${facts.overdueCount} · ${formatPlatformMoney(facts.overdueCents)}`
+    : "—";
+}
+
+export function providerLatestPaymentCopy(facts: PlatformProviderEnvFacts): string {
+  if (!facts.latestPaymentDate) return "—";
+  return `${formatPlatformDate(facts.latestPaymentDate)}${
+    facts.latestPaymentState ? ` · ${paymentStateLabel(facts.latestPaymentState)}` : ""
+  }`;
+}
+
 export function platformBillingErrorMessage(error: unknown): string {
   const hint =
     error && typeof error === "object" && "hint" in error
@@ -336,25 +414,23 @@ export function platformBillingErrorMessage(error: unknown): string {
 }
 
 export function emptyOverview(): PlatformBillingOverview {
-  const zero: PlatformAgingBucketMetric = { clinicCount: 0, amountCents: 0 };
   return {
     timezone: "America/Sao_Paulo",
     periodStart: "",
     periodEnd: "",
-    receivedInPeriodCents: 0,
-    pendingAmountCents: 0,
-    overdueAmountCents: 0,
+    financial: {
+      sandbox: emptyEnvironmentFinancialBucket(),
+      production: emptyEnvironmentFinancialBucket(),
+    },
     clinicsWithReceived: 0,
-    delinquentClinics: 0,
+    delinquent: emptyEnvCount(),
     activeCommercialContracts: 0,
-    activePixAutomaticAuthorizations: 0,
+    activePixAutomaticAuthorizations: emptyEnvCount(),
     paymentSuccessCount: 0,
     attentionClinicCount: 0,
     aging: {
-      d1_7: zero,
-      d8_15: zero,
-      d16_30: zero,
-      d31_plus: zero,
+      sandbox: emptyAgingBuckets(),
+      production: emptyAgingBuckets(),
     },
     entitlementEnforcement: "OFF",
   };
@@ -371,5 +447,6 @@ export {
   paymentStateLabel,
   paymentStateTone,
   pixAutomaticStatusLabel,
+  providerEnvironmentLabel,
   timelineEventLabel,
 };

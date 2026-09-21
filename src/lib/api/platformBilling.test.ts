@@ -24,28 +24,56 @@ describe("platformBilling API", () => {
         timezone: "America/Sao_Paulo",
         period_start: "2026-09-01",
         period_end: "2026-09-30",
-        received_in_period_cents: 39000,
-        pending_amount_cents: 1000,
-        overdue_amount_cents: 39000,
+        financial: {
+          sandbox: {
+            received_in_period_cents: 39000,
+            received_in_period_count: 1,
+            pending_in_period_cents: 1000,
+            pending_in_period_count: 1,
+            overdue_in_period_cents: 39000,
+            overdue_in_period_count: 1,
+          },
+          production: {
+            received_in_period_cents: 0,
+            received_in_period_count: 0,
+            pending_in_period_cents: 0,
+            pending_in_period_count: 0,
+            overdue_in_period_cents: 0,
+            overdue_in_period_count: 0,
+          },
+        },
         clinics_with_received: 1,
-        delinquent_clinics: 1,
         active_commercial_contracts: 2,
-        active_pix_automatic_authorizations: 1,
         payment_success_count: 1,
         attention_clinic_count: 2,
         aging: {
-          d1_7: { clinic_count: 0, amount_cents: 0 },
-          d8_15: { clinic_count: 0, amount_cents: 0 },
-          d16_30: { clinic_count: 0, amount_cents: 0 },
-          d31_plus: { clinic_count: 1, amount_cents: 39000 },
+          sandbox: {
+            d1_7: { clinic_count: 0, amount_cents: 0 },
+            d8_15: { clinic_count: 0, amount_cents: 0 },
+            d16_30: { clinic_count: 0, amount_cents: 0 },
+            d31_plus: { clinic_count: 1, amount_cents: 39000 },
+          },
+          production: {
+            d1_7: { clinic_count: 0, amount_cents: 0 },
+            d8_15: { clinic_count: 0, amount_cents: 0 },
+            d16_30: { clinic_count: 0, amount_cents: 0 },
+            d31_plus: { clinic_count: 0, amount_cents: 0 },
+          },
         },
+        delinquent: { sandbox: 1, production: 0 },
+        active_pix_automatic_authorizations: { sandbox: 1, production: 0 },
         entitlement_enforcement: "OFF",
       },
       error: null,
     });
     const overview = await getPlatformBillingOverview();
     expect(rpc).toHaveBeenCalledWith("get_platform_billing_overview");
-    expect(overview.delinquentClinics).toBe(1);
+    expect(overview.delinquent.sandbox).toBe(1);
+    expect(overview.delinquent.production).toBe(0);
+    expect(overview.aging.sandbox.d31_plus.amountCents).toBe(39000);
+    expect(overview.aging.production.d31_plus.amountCents).toBe(0);
+    expect(overview.financial.sandbox.receivedCents).toBe(39000);
+    expect(overview.financial.production.receivedCents).toBe(0);
     expect(overview.entitlementEnforcement).toBe("OFF");
     expect(JSON.stringify(overview)).not.toMatch(/mrr|qr_payload|encoded_image|cus_|pay_/i);
   });
@@ -67,7 +95,10 @@ describe("platformBilling API", () => {
             overdue_cents: 39000,
             attention: true,
             attention_reason: "overdue",
-            pix_status: "ACTIVE",
+            provider: {
+              sandbox: { pix_status: "ACTIVE", overdue_count: 1, overdue_cents: 39000 },
+              production: { pix_status: "CREATED" },
+            },
             identity_complete: true,
             customer_bound: true,
             entitlement_granted: true,
@@ -83,6 +114,11 @@ describe("platformBilling API", () => {
     );
     expect(page.items[0]?.entitlementGranted).toBe(false);
     expect(page.items[0]?.financialSummary).toBe("overdue");
+    expect(page.items[0]?.provider.sandbox.pixStatus).toBe("ACTIVE");
+    expect(page.items[0]?.provider.production.pixStatus).toBe("CREATED");
+    expect(page.items[0]?.provider.sandbox.pixStatus).not.toBe(
+      page.items[0]?.provider.production.pixStatus,
+    );
 
     rpc.mockResolvedValueOnce({
       data: {

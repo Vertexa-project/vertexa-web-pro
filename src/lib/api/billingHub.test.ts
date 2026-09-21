@@ -127,6 +127,7 @@ describe("billingHub API", () => {
     const events = await listMyClinicBillingTimeline("c1");
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe("plan_contracted");
+    expect(events[0].environment).toBeNull();
   });
 
   it("does not call asaas-outbound", async () => {
