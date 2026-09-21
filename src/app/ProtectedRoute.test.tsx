@@ -29,6 +29,23 @@ const state = vi.hoisted(() => ({
   platformAdminLoading: false,
   platformAdminError: false,
   isPlatformAdmin: false as boolean | undefined,
+  commercial: {
+    data: {
+      clinicId: "c1",
+      accessClass: "FULL",
+      reason: "ACTIVE_CONTRACT",
+      productAllowed: true,
+      rolloutMode: "OBSERVE",
+    } as {
+      clinicId: string;
+      accessClass: string;
+      reason: string;
+      productAllowed: boolean;
+      rolloutMode: string;
+    } | undefined,
+    isLoading: false,
+    isError: false,
+  },
 }));
 
 vi.mock("@/providers/auth-context", () => ({
@@ -56,6 +73,9 @@ vi.mock("@/hooks/useAmIPlatformAdmin", () => ({
     };
   },
 }));
+vi.mock("@/hooks/useCommercialAccess", () => ({
+  useMyClinicCommercialAccess: () => state.commercial,
+}));
 // As telas viram marcadores: o que se testa AQUI é o desvio, não o texto delas (que tem arquivo
 // próprio). Assim uma mudança de cópia não quebra o teste do roteamento.
 vi.mock("@/pages/ClinicAccessRevokedPage", () => ({
@@ -76,12 +96,15 @@ vi.mock("@/pages/PendingAccessPage", () => ({
     </div>
   ),
 }));
+vi.mock("@/pages/CommercialActivationPage", () => ({
+  CommercialActivationPage: () => <div data-testid="tela-pre-contrato" />,
+}));
 
 const { ProtectedRoute } = await import("./ProtectedRoute");
 
-function renderRoute() {
+function renderRoute(path = "/") {
   return render(
-    <MemoryRouter initialEntries={["/"]}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route
           path="/"
@@ -93,6 +116,14 @@ function renderRoute() {
         />
         <Route path="/login" element={<div data-testid="login" />} />
         <Route path="/platform" element={<div data-testid="plataforma" />} />
+        <Route
+          path="/configuracoes/faturamento"
+          element={
+            <ProtectedRoute>
+              <div data-testid="faturamento">Faturamento</div>
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </MemoryRouter>,
   );
@@ -114,6 +145,17 @@ beforeEach(() => {
   state.platformAdminLoading = false;
   state.platformAdminError = false;
   state.isPlatformAdmin = false;
+  state.commercial = {
+    data: {
+      clinicId: "c1",
+      accessClass: "FULL",
+      reason: "ACTIVE_CONTRACT",
+      productAllowed: true,
+      rolloutMode: "OBSERVE",
+    },
+    isLoading: false,
+    isError: false,
+  };
 });
 
 describe("ProtectedRoute — o desvio das duas telas novas", () => {
@@ -280,5 +322,64 @@ describe("ProtectedRoute — intercept Platform Admin (WP-10B2B)", () => {
     state.identity = { status: "pending" } as unknown as ResolvedIdentity;
     renderRoute();
     expect(state.platformAdminEnabled.some((enabled) => enabled === true)).toBe(true);
+  });
+});
+
+describe("ProtectedRoute — PRE_CONTRACT commercial gate", () => {
+  it("ENFORCE without contract replaces the clinical panel", () => {
+    state.commercial = {
+      data: {
+        clinicId: "c1",
+        accessClass: "PRE_CONTRACT",
+        reason: "NO_ACTIVE_CONTRACT",
+        productAllowed: false,
+        rolloutMode: "ENFORCE",
+      },
+      isLoading: false,
+      isError: false,
+    };
+    renderRoute();
+    expect(screen.getByTestId("tela-pre-contrato")).toBeInTheDocument();
+    expect(screen.queryByTestId("painel")).not.toBeInTheDocument();
+  });
+
+  it("still allows Faturamento / Planos while PRE_CONTRACT", () => {
+    state.commercial = {
+      data: {
+        clinicId: "c1",
+        accessClass: "PRE_CONTRACT",
+        reason: "NO_ACTIVE_CONTRACT",
+        productAllowed: false,
+        rolloutMode: "ENFORCE",
+      },
+      isLoading: false,
+      isError: false,
+    };
+    renderRoute("/configuracoes/faturamento");
+    expect(screen.getByTestId("faturamento")).toBeInTheDocument();
+    expect(screen.queryByTestId("tela-pre-contrato")).not.toBeInTheDocument();
+  });
+
+  it("OBSERVE without contract keeps current product access", () => {
+    state.commercial = {
+      data: {
+        clinicId: "c1",
+        accessClass: "PRE_CONTRACT",
+        reason: "OBSERVE_ONLY",
+        productAllowed: true,
+        rolloutMode: "OBSERVE",
+      },
+      isLoading: false,
+      isError: false,
+    };
+    renderRoute();
+    expect(screen.getByTestId("painel")).toBeInTheDocument();
+    expect(screen.queryByTestId("tela-pre-contrato")).not.toBeInTheDocument();
+  });
+
+  it("RPC error fail-opens so existing clinics are not locked out", () => {
+    state.commercial = { data: undefined, isLoading: false, isError: true };
+    renderRoute();
+    expect(screen.getByTestId("painel")).toBeInTheDocument();
   });
 });

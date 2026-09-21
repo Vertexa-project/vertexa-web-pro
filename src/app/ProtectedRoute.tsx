@@ -1,15 +1,18 @@
 import * as React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { useAmIPlatformAdmin } from "@/hooks/useAmIPlatformAdmin";
+import { useMyClinicCommercialAccess } from "@/hooks/useCommercialAccess";
 import { useIdentity } from "@/hooks/useIdentity";
 import { useMyClinicMemberships } from "@/hooks/useProfessionalStatus";
-import { resolveClinicAccess } from "@/lib/domain/professionalStatus";
+import { isCommercialOnboardingPath } from "@/lib/domain/commercialAccess";
+import { pickActingMembership, resolveClinicAccess } from "@/lib/domain/professionalStatus";
 import {
   resolvePendingOnboardingGate,
   resolvePlatformAdminAccess,
 } from "@/lib/domain/platformAdmin";
+import { CommercialActivationPage } from "@/pages/CommercialActivationPage";
 import {
   ClinicAccessRevokedPage,
   NoClinicMembershipPage,
@@ -22,6 +25,7 @@ import { PlatformAuthorityError } from "./PlatformAuthorityError";
 
 function ClinicAccessGate({ children }: { children: React.ReactNode }) {
   const identity = useIdentity();
+  const location = useLocation();
 
   const waitingIdentity = identity.status === "loading";
   const askMemberships = identity.status === "active";
@@ -33,6 +37,11 @@ function ClinicAccessGate({ children }: { children: React.ReactNode }) {
     isLoading: memberships.isLoading,
     isError: memberships.isError,
   });
+  const actingClinicId =
+    askMemberships && clinicAccess === "ok"
+      ? pickActingMembership(memberships.data ?? [])?.clinicId ?? null
+      : null;
+  const commercial = useMyClinicCommercialAccess(actingClinicId, Boolean(actingClinicId));
 
   if (waitingIdentity) {
     return (
@@ -83,6 +92,21 @@ function ClinicAccessGate({ children }: { children: React.ReactNode }) {
     }
     if (clinicAccess === "no-clinic") {
       return <NoClinicMembershipPage />;
+    }
+    if (clinicAccess === "ok") {
+      if (commercial.isLoading) {
+        return (
+          <div className="flex h-screen items-center justify-center">
+            <LoadingState />
+          </div>
+        );
+      }
+      if (
+        commercial.data?.productAllowed === false &&
+        !isCommercialOnboardingPath(location.pathname)
+      ) {
+        return <CommercialActivationPage />;
+      }
     }
   }
 

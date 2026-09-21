@@ -26,6 +26,7 @@ describe("PlatformBillingLayout", () => {
     expect(screen.getByRole("link", { name: "Eventos" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Relatórios" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Comercial" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Acesso" })).toBeInTheDocument();
     expect(screen.getByText(/Pix recusado não é atraso financeiro/)).toBeInTheDocument();
   });
 });

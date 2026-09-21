@@ -8,6 +8,11 @@ import { corsHeaders, preflight } from "../_shared/cors.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { supabaseUser } from "../_shared/supabaseUser.ts";
 import { readAsaasCredentials, resolveOutboundEnvironment } from "../_shared/asaas/client.ts";
+import { credentialsForEnvironment } from "../_shared/asaas/pixAutomaticExecution.ts";
+import {
+  assertProductionProviderWriteForClinic,
+  assertSandboxFixtureEnvironment,
+} from "../_shared/asaas/productionWriteGuard.ts";
 import {
   customerBodyFromIdentity,
   ensureCustomer,
@@ -174,14 +179,20 @@ Deno.serve(async (req: Request) => {
     if (ctx.identity_complete !== true) {
       return jsonResponse(409, { error: "identity_incomplete" });
     }
-    if (ctx.environment !== "sandbox") {
-      return jsonResponse(409, { error: "production_locked" });
-    }
     if (!ctx.billing_account_id) {
       return jsonResponse(409, { error: "billing_account_unknown" });
     }
-    if (environment !== "sandbox") {
-      return jsonResponse(409, { error: "production_locked" });
+    const accountEnv = ctx.environment === "production" || ctx.environment === "sandbox" ? ctx.environment : null;
+    if (!accountEnv) {
+      return jsonResponse(409, { error: "invalid_operation_environment" });
+    }
+    if (accountEnv === "production") {
+      const writeGate = await assertProductionProviderWriteForClinic(
+        adminClient,
+        parsed.clinicId,
+        "ENSURE_CUSTOMER_FROM_IDENTITY",
+      );
+      if (!writeGate.ok) return jsonResponse(409, { error: writeGate.error });
     }
 
     let identityBody: CustomerFixture;
@@ -196,10 +207,17 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(409, { error: "identity_incomplete" });
     }
 
+    let identityCreds;
+    try {
+      identityCreds = credentialsForEnvironment(accountEnv);
+    } catch {
+      return jsonResponse(503, { error: "asaas_not_configured" });
+    }
+
     const result = await ensureCustomer({
       adminClient,
-      environment: "sandbox",
-      creds: credentials,
+      environment: accountEnv,
+      creds: identityCreds,
       billingAccountId: ctx.billing_account_id,
       existingExternalCustomerId: ctx.external_customer_id ?? null,
       fixture: identityBody,
@@ -222,9 +240,6 @@ Deno.serve(async (req: Request) => {
       if (!loaded.ok) {
         return jsonResponse(loaded.error === "operation_not_found" ? 404 : 409, { error: loaded.error });
       }
-      if (loaded.facts.environment !== "sandbox") {
-        return jsonResponse(409, { error: "production_locked" });
-      }
       const { data: ownsAccount, error: ownsError } = await userClient.rpc(
         "am_i_clinic_admin_for_billing_account",
         { p_billing_account_id: loaded.facts.billingAccountId },
@@ -237,7 +252,6 @@ Deno.serve(async (req: Request) => {
       adminClient,
       configuredEnvironmentRaw: Deno.env.get("ASAAS_OUTBOUND_ENVIRONMENT"),
       operationId: parsed.operationId,
-      creds: credentials,
     });
     if (!isPlatformAdmin && executed.ok) {
       return jsonResponse(executed.status, sanitizeClinicExecuteResponse(executed.body as Record<string, unknown>));
@@ -260,6 +274,8 @@ Deno.serve(async (req: Request) => {
   const adminClient = supabaseAdmin();
 
   if (body.action === "ensure_customer") {
+    const fixtureGate = assertSandboxFixtureEnvironment(environment);
+    if (!fixtureGate.ok) return jsonResponse(409, { error: fixtureGate.error });
     const result = await ensureCustomer({
       adminClient,
       environment,
@@ -278,6 +294,8 @@ Deno.serve(async (req: Request) => {
   }
 
   if (body.action === "ensure_subscription") {
+    const fixtureGate = assertSandboxFixtureEnvironment(environment);
+    if (!fixtureGate.ok) return jsonResponse(409, { error: fixtureGate.error });
     if (!account.external_customer_id) {
       return jsonResponse(409, { error: "customer_not_ready" });
     }
@@ -317,6 +335,11 @@ Deno.serve(async (req: Request) => {
       paymentId: receipt.paymentId,
       events: receipt.events ?? [],
     });
+  }
+
+  if (body.action === "confirm_sandbox_payment") {
+    const fixtureGate = assertSandboxFixtureEnvironment(environment);
+    if (!fixtureGate.ok) return jsonResponse(409, { error: fixtureGate.error });
   }
 
   const paymentResult: PaymentActionResult =

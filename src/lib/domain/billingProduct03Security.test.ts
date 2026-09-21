@@ -31,8 +31,8 @@ describe("WP-BILLING-PRODUCT-03 — security source contracts", () => {
   it("product Edge path does not accept fixture or production override", () => {
     const src = readFileSync(resolve(root, OUTBOUND), "utf8");
     expect(src).toContain("customerBodyFromIdentity");
-    expect(src).toContain("production_locked");
-    expect(src).toContain('environment: "sandbox"');
+    expect(src).toContain("assertProductionProviderWriteForClinic");
+    expect(src).toContain("assertSandboxFixtureEnvironment");
     expect(src).toContain("sanitizeClinicCustomerResponse");
     expect(src).toContain("sanitizeClinicExecuteResponse");
     expect(src).not.toMatch(/console\.(log|debug|info|error|warn)\(/);

@@ -12,6 +12,7 @@ const SUBNAV = [
   { to: "/platform/billing/eventos", label: "Eventos", end: false },
   { to: "/platform/billing/relatorios", label: "Relatórios", end: false },
   { to: "/platform/billing/comercial", label: "Comercial", end: false },
+  { to: "/platform/billing/acesso", label: "Acesso", end: false },
 ] as const;
 
 export function PlatformBillingLayout() {

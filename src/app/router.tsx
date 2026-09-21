@@ -113,6 +113,11 @@ const PlatformBillingCommercialPage = lazy(() =>
     default: m.PlatformBillingCommercialPage,
   })),
 );
+const PlatformCommercialAccessPage = lazy(() =>
+  import("@/pages/platform-billing/PlatformCommercialAccessPage").then((m) => ({
+    default: m.PlatformCommercialAccessPage,
+  })),
+);
 const PlatformClinicBillingDetailPage = lazy(() =>
   import("@/pages/platform-billing/PlatformClinicBillingDetailPage").then((m) => ({
     default: m.PlatformClinicBillingDetailPage,
@@ -194,6 +199,7 @@ export const router = createBrowserRouter(
                 { path: "eventos", element: <PlatformBillingEventsPage /> },
                 { path: "relatorios", element: <PlatformBillingReportsPage /> },
                 { path: "comercial", element: <PlatformBillingCommercialPage /> },
+                { path: "acesso", element: <PlatformCommercialAccessPage /> },
                 { path: "clinicas/:clinicId", element: <PlatformClinicBillingDetailPage /> },
               ],
             },
