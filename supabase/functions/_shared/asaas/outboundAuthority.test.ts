@@ -5,9 +5,11 @@ import { fileURLToPath } from "node:url";
 
 import {
   ACTION_AUTHORITY,
+  CREATE_HOSTED_CARD_CHECKOUT_ACTION,
   ENSURE_CUSTOMER_FROM_IDENTITY_ACTION,
   hasForbiddenProductKeys,
   parseEnsureCustomerFromIdentityRequest,
+  parseCreateHostedCardCheckoutRequest,
   sanitizeClinicCustomerResponse,
   sanitizeClinicExecuteResponse,
 } from "./outboundAuthority.ts";
@@ -22,6 +24,20 @@ describe("outbound action authority", () => {
     expect(ACTION_AUTHORITY.reissue_pix_automatic_authorization).toBe("PA_ONLY");
     expect(ACTION_AUTHORITY.confirm_sandbox_payment).toBe("PA_ONLY");
     expect(ACTION_AUTHORITY.probe_pix_automatic_read).toBe("PA_ONLY");
+    expect(ACTION_AUTHORITY.create_hosted_card_checkout).toBe("CLINIC_ADMIN_OWN_CLINIC");
+  });
+
+  it("rejects browser price, provider, and expiry overrides on hosted card checkout", () => {
+    expect(parseCreateHostedCardCheckoutRequest({
+      action: CREATE_HOSTED_CARD_CHECKOUT_ACTION,
+      clinicId: "11111111-1111-4111-8111-111111111111",
+      valueCents: 1,
+    }).ok).toBe(false);
+    expect(parseCreateHostedCardCheckoutRequest({
+      action: CREATE_HOSTED_CARD_CHECKOUT_ACTION,
+      clinicId: "11111111-1111-4111-8111-111111111111",
+      minutesToExpire: 1,
+    }).ok).toBe(false);
   });
 
   it("rejects browser-supplied provider facts on the product customer action", () => {

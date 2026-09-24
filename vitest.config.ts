@@ -44,6 +44,12 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    // The complete component suite shares one jsdom document and contains real
+    // user-event interactions. Parallel file workers contend for that single
+    // browser-like runtime and intermittently exhaust the per-test budget;
+    // serial file execution keeps tests isolated without loosening timeouts.
+    fileParallelism: false,
+    maxWorkers: 1,
     setupFiles: ["./src/test/setup.ts"],
     // ASAAS-03C: segunda entrada cobre as funções puras de decisão/reconciliação outbound
     // Asaas (supabase/functions/_shared/asaas/**) — Deno em produção (o entrypoint importa
