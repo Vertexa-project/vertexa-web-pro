@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { useClinicBillingIdentity, useUpsertClinicBillingIdentity } from "@/hooks/useBillingProfile";
 import {
   billingProfileErrorMessage,
+  formatBillingPhone,
+  formatTaxId,
   isExpectedBillingProfileError,
   maskTaxId,
   validateBillingEmail,
@@ -37,9 +39,9 @@ export function BillingIdentityForm({
   useEffect(() => {
     if (!identity) return;
     setLegalName(identity.legalName ?? "");
-    setTaxId(identity.taxId ?? "");
+    setTaxId(formatTaxId(identity.taxId ?? ""));
     setEmail(identity.email ?? "");
-    setPhone(identity.mobilePhone ?? "");
+    setPhone(formatBillingPhone(identity.mobilePhone ?? ""));
     setEditing(!identity.exists);
   }, [identity]);
 
@@ -136,8 +138,10 @@ export function BillingIdentityForm({
           <Input
             id="billing-tax-id"
             value={taxId}
-            onChange={(e) => setTaxId(e.target.value)}
-            inputMode="numeric"
+            onChange={(e) => setTaxId(formatTaxId(e.target.value))}
+            inputMode="text"
+            autoCapitalize="characters"
+            placeholder="CPF ou CNPJ"
             autoComplete="off"
             disabled={busy}
             aria-required="true"
@@ -163,10 +167,12 @@ export function BillingIdentityForm({
       <div className="space-y-1.5">
         <Label htmlFor="billing-phone">Telefone (opcional)</Label>
         <Input
-          id="billing-phone"
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+            id="billing-phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(formatBillingPhone(e.target.value))}
+            inputMode="tel"
+            placeholder="(98) 99999-9999"
           autoComplete="tel"
           disabled={busy || showMasked}
         />

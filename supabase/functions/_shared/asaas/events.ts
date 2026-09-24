@@ -5,6 +5,8 @@ export type AsaasEventFamily =
   | "pix_automatic_eligibility"
   | "pix_automatic_authorization"
   | "pix_automatic_payment_instruction"
+  | "hosted_card_checkout"
+  | "hosted_card_subscription"
   | "unrecognized";
 
 export interface ClassifiedAsaasEvent {
@@ -54,6 +56,12 @@ export function classifyAsaasEvent(eventType: string | null | undefined): Classi
       recognized: true,
       processingSupported: true,
     };
+  }
+  if (["CHECKOUT_CREATED", "CHECKOUT_PAID", "CHECKOUT_CANCELED", "CHECKOUT_EXPIRED"].includes(value)) {
+    return { eventType: value, family: "hosted_card_checkout", recognized: true, processingSupported: true };
+  }
+  if (value === "SUBSCRIPTION_CREATED") {
+    return { eventType: value, family: "hosted_card_subscription", recognized: true, processingSupported: true };
   }
   if (value.startsWith("PAYMENT_")) {
     return {

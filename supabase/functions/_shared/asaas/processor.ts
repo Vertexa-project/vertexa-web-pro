@@ -555,6 +555,31 @@ async function processPixAutomaticPaymentIfCorrelated(
   return { ...base, outcome: "skipped", category: apply.outcome || "not_claimed" };
 }
 
+async function processHostedCardCheckoutEvent(
+  adminClient: SupabaseClient,
+  ev: ClaimedEvent,
+  base: { event_id: string; external_event_id: string },
+  eventType: string,
+): Promise<EventOutcome> {
+  const facts = ev.provider_facts && typeof ev.provider_facts === "object" ? ev.provider_facts : {};
+  const providerCheckoutId = factString(facts, "providerCheckoutId") || (ev.external_resource_type === "hosted_card_checkout" ? (ev.external_resource_id ?? "") : "");
+  const providerSubscriptionId = factString(facts, "providerSubscriptionId") || (ev.external_resource_type === "subscription" ? (ev.external_resource_id ?? "") : "");
+  const { data, error } = await adminClient.rpc("reconcile_hosted_card_checkout_event", {
+    p_event_id: ev.id,
+    p_environment: ev.environment,
+    p_event_type: eventType,
+    p_provider_checkout_id: providerCheckoutId || null,
+    p_provider_subscription_id: providerSubscriptionId || null,
+    p_external_reference: factString(facts, "externalReference") || null,
+  });
+  if (error) {
+    await failEvent(adminClient, ev.id, "hosted_card_checkout_reconciliation_error", true, backoffSeconds(ev.attempts));
+    return { ...base, outcome: "failed", category: "hosted_card_checkout_reconciliation_error" };
+  }
+  const outcome = (data as { outcome?: string } | null)?.outcome;
+  return { ...base, outcome: outcome === "ignored" ? "ignored" : "processed", category: "hosted_card_checkout_reconciled" };
+}
+
 function asNonEmptyPaymentId(value: unknown): string {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : "";
 }
@@ -578,6 +603,9 @@ async function processOneEvent(
   }
   if (classified.family === "pix_automatic_payment_instruction") {
     return processPixAutomaticInstruction(adminClient, environment, creds, ev, base);
+  }
+  if (classified.family === "hosted_card_checkout" || classified.family === "hosted_card_subscription") {
+    return processHostedCardCheckoutEvent(adminClient, ev, base, eventType);
   }
 
   // Só eventos de payment são materializáveis no pipeline financeiro. Qualquer outro => ignore.

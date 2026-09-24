@@ -19,6 +19,7 @@ import {
   type CustomerFixture,
 } from "../_shared/asaas/customer.ts";
 import { ensureSubscription, type SubscriptionFixture } from "../_shared/asaas/subscription.ts";
+import { createHostedCardCheckout, type HostedCardCheckoutIntent } from "../_shared/asaas/hostedCardCheckout.ts";
 import {
   listSubscriptionPayments,
   confirmSandboxPayment,
@@ -44,6 +45,8 @@ import {
   ENSURE_CUSTOMER_FROM_IDENTITY_ACTION,
   authorityForAction,
   parseEnsureCustomerFromIdentityRequest,
+  CREATE_HOSTED_CARD_CHECKOUT_ACTION,
+  parseCreateHostedCardCheckoutRequest,
   sanitizeClinicCustomerResponse,
   sanitizeClinicExecuteResponse,
 } from "../_shared/asaas/outboundAuthority.ts";
@@ -92,6 +95,37 @@ interface ProviderCustomerContext {
   billing_account_id?: string | null;
   environment?: string | null;
   external_customer_id?: string | null;
+}
+
+function hostedIntentFromPrepared(raw: unknown): HostedCardCheckoutIntent | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const text = (key: string) => typeof value[key] === "string" && value[key].trim() ? value[key].trim() : null;
+  const environment = text("environment");
+  const status = text("status");
+  const currency = text("currency");
+  const price = value.price_cents;
+  if (
+    !text("attempt_id") || !text("billing_account_id") || !text("external_reference") || !text("plan_name") || !text("expires_at") ||
+    (environment !== "sandbox" && environment !== "production") || currency !== "BRL" ||
+    !Number.isSafeInteger(price) || price <= 0 || typeof value.can_create !== "boolean" ||
+    !["CREATING", "ACTIVE", "PAID", "CANCELED", "EXPIRED", "FAILED"].includes(status ?? "")
+  ) return null;
+  return {
+    attemptId: text("attempt_id")!,
+    billingAccountId: text("billing_account_id")!,
+    environment,
+    externalCustomerId: text("external_customer_id"),
+    externalReference: text("external_reference")!,
+    priceCents: price,
+    currency: "BRL",
+    planName: text("plan_name")!,
+    expiresAt: text("expires_at")!,
+    hostedUrl: text("hosted_url"),
+    providerCheckoutId: text("provider_checkout_id"),
+    canCreate: value.can_create,
+    status: status as HostedCardCheckoutIntent["status"],
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -226,6 +260,35 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(502, { error: "provider_error", category: result.errorCode });
     }
     return jsonResponse(200, sanitizeClinicCustomerResponse());
+  }
+
+  if (body.action === CREATE_HOSTED_CARD_CHECKOUT_ACTION) {
+    const parsed = parseCreateHostedCardCheckoutRequest(body);
+    if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+    const appBaseUrl = (Deno.env.get("VERTEXA_WEB_APP_URL") ?? "").trim();
+    if (!/^https:\/\/[^\s/]+(?:\/[^\s]*)?$/i.test(appBaseUrl)) {
+      return jsonResponse(503, { error: "checkout_callback_url_not_configured" });
+    }
+    const { data: prepared, error: prepareError } = await userClient.rpc("prepare_my_clinic_hosted_card_checkout", {
+      p_clinic_id: parsed.clinicId,
+    });
+    if (prepareError) return jsonResponse(409, { error: "checkout_prepare_failed" });
+    const intent = hostedIntentFromPrepared(prepared);
+    if (!intent) return jsonResponse(409, { error: "checkout_prepare_invalid" });
+    const adminClient = supabaseAdmin();
+    if (intent.environment === "production") {
+      const writeGate = await assertProductionProviderWriteForClinic(adminClient, parsed.clinicId, "HOSTED_CARD_CHECKOUT_CREATE");
+      if (!writeGate.ok) return jsonResponse(409, { error: writeGate.error });
+    }
+    let checkoutCreds;
+    try {
+      checkoutCreds = credentialsForEnvironment(intent.environment);
+    } catch {
+      return jsonResponse(503, { error: "asaas_not_configured" });
+    }
+    const created = await createHostedCardCheckout({ adminClient, creds: checkoutCreds, intent, appBaseUrl });
+    if (!created.ok) return jsonResponse(502, { error: created.errorCode });
+    return jsonResponse(200, { hostedUrl: created.hostedUrl });
   }
 
   if (body.action === EXECUTE_PIX_AUTOMATIC_ACTION) {

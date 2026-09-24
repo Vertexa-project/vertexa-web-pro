@@ -13,15 +13,41 @@ export type BillingPhoneValidation =
   | { ok: true; value: string | null }
   | { ok: false; message: string };
 
-/** Remove tudo que não é dígito. Não valida checksum — isso é autoridade do servidor. */
+/**
+ * Canonical document representation for billing: CPF remains 11 digits and CNPJ
+ * remains 14 ASCII characters. Formatting punctuation is not persisted; CNPJ
+ * letters are deliberately preserved.
+ */
 export function normalizeTaxId(raw: string): string {
-  return raw.replace(/\D/g, "");
+  return raw.normalize("NFKC").toUpperCase().replace(/[.\-/\s]/g, "");
+}
+
+export function formatTaxId(raw: string): string {
+  const value = normalizeTaxId(raw);
+  if (/^\d{0,11}$/.test(value)) {
+    return [value.slice(0, 3), value.slice(3, 6), value.slice(6, 9)]
+      .filter((part, index) => part || index === 0)
+      .join(".")
+      .concat(value.length > 9 ? `-${value.slice(9, 11)}` : "");
+  }
+  if (/^[0-9A-Z]{0,14}$/.test(value)) {
+    const root = value.slice(0, 8);
+    const branch = value.slice(8, 12);
+    const check = value.slice(12, 14);
+    let formatted = root.slice(0, 2);
+    if (root.length > 2) formatted += `.${root.slice(2, 5)}`;
+    if (root.length > 5) formatted += `.${root.slice(5, 8)}`;
+    if (branch) formatted += `/${branch}`;
+    if (check) formatted += `-${check}`;
+    return formatted;
+  }
+  return value;
 }
 
 export function maskTaxId(raw: string): string {
-  const digits = normalizeTaxId(raw);
-  if (digits.length === 11) return `***.***.***-${digits.slice(-2)}`;
-  if (digits.length === 14) return `**.***.***/****-${digits.slice(-2)}`;
+  const value = normalizeTaxId(raw);
+  if (value.length === 11 && /^\d+$/.test(value)) return `***.***.***-${value.slice(-2)}`;
+  if (value.length === 14 && /^[0-9A-Z]{12}\d{2}$/.test(value)) return `**.***.***/****-${value.slice(-2)}`;
   return "****";
 }
 
@@ -43,27 +69,31 @@ function cpfCheckDigits(digits: string): boolean {
   return d2 === Number(digits[10]);
 }
 
-function cnpjCheckDigits(digits: string): boolean {
-  if (digits.length !== 14 || allSameDigits(digits)) return false;
+function cnpjCharacterValue(character: string): number {
+  return character.charCodeAt(0) - 48;
+}
+
+function cnpjCheckDigits(value: string): boolean {
+  if (!/^[0-9A-Z]{12}\d{2}$/.test(value) || value === "00000000000000") return false;
   const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
   const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
   let sum = 0;
-  for (let i = 0; i < 12; i += 1) sum += Number(digits[i]) * w1[i];
+  for (let i = 0; i < 12; i += 1) sum += cnpjCharacterValue(value[i]) * w1[i];
   let rest = sum % 11;
   const d1 = rest < 2 ? 0 : 11 - rest;
-  if (d1 !== Number(digits[12])) return false;
+  if (d1 !== Number(value[12])) return false;
   sum = 0;
-  for (let i = 0; i < 13; i += 1) sum += Number(digits[i]) * w2[i];
+  for (let i = 0; i < 13; i += 1) sum += cnpjCharacterValue(value[i]) * w2[i];
   rest = sum % 11;
   const d2 = rest < 2 ? 0 : 11 - rest;
-  return d2 === Number(digits[13]);
+  return d2 === Number(value[13]);
 }
 
 /** UX only. O servidor recalcula o checksum. */
 export function taxIdLooksValid(raw: string): boolean {
-  const digits = normalizeTaxId(raw);
-  if (digits.length === 11) return cpfCheckDigits(digits);
-  if (digits.length === 14) return cnpjCheckDigits(digits);
+  const value = normalizeTaxId(raw);
+  if (/^\d{11}$/.test(value)) return cpfCheckDigits(value);
+  if (value.length === 14) return cnpjCheckDigits(value);
   return false;
 }
 
@@ -104,9 +134,31 @@ export function validateBillingEmail(raw: string): BillingFieldValidation {
   return { ok: true, value };
 }
 
+const BILLING_PHONE_ALLOWED = /^[\d\s()+.-]*$/;
+
+/** Brazilian mobile canonical form: 11 national digits (DDD + 9-digit mobile). */
+export function normalizeBillingPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  return digits.length === 13 && digits.startsWith("55") ? digits.slice(2) : digits;
+}
+
+export function formatBillingPhone(raw: string): string {
+  const value = normalizeBillingPhone(raw).slice(0, 11);
+  if (value.length <= 2) return value ? `(${value}` : "";
+  if (value.length <= 7) return `(${value.slice(0, 2)}) ${value.slice(2)}`;
+  return `(${value.slice(0, 2)}) ${value.slice(2, 7)}-${value.slice(7)}`;
+}
+
 export function validateBillingPhone(raw: string): BillingPhoneValidation {
-  const value = raw.trim();
-  if (value === "") return { ok: true, value: null };
+  if (raw.trim() === "") return { ok: true, value: null };
+  if (!BILLING_PHONE_ALLOWED.test(raw)) {
+    return { ok: false, message: "Informe um celular brasileiro válido com DDD." };
+  }
+  const value = normalizeBillingPhone(raw);
+  const ddd = Number(value.slice(0, 2));
+  if (!/^\d{11}$/.test(value) || ddd < 11 || ddd > 99 || value[2] !== "9") {
+    return { ok: false, message: "Informe um celular brasileiro válido com DDD." };
+  }
   return { ok: true, value };
 }
 
@@ -117,6 +169,7 @@ const HINT_MESSAGES: Record<string, string> = {
   BILLING_INVALID_TAX_ID: "CPF ou CNPJ inválido. Confira os números.",
   BILLING_INVALID_LEGAL_NAME: "Informe um nome ou razão social válido.",
   BILLING_INVALID_EMAIL: "Informe um e-mail de cobrança válido.",
+  BILLING_INVALID_MOBILE_PHONE: "Informe um celular brasileiro válido com DDD.",
 };
 
 export function billingProfileErrorHint(error: unknown): string | null {
