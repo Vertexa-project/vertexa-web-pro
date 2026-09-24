@@ -24,12 +24,34 @@ export interface CustomerIdentitySource {
   mobilePhone?: string | null;
 }
 
+export interface AuthoritativeCustomerIdentity {
+  externalCustomerId: string;
+  normalizedTaxId: string;
+  name: string | null;
+  email: string | null;
+  mobilePhone: string | null;
+}
+
+export type AuthoritativeCustomerResult =
+  | { ok: true; customer: AuthoritativeCustomerIdentity }
+  | { ok: false; errorCode: string; retryable: boolean };
+
+export function normalizeCustomerTaxId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toUpperCase().replace(/[.\-/\s]/g, "");
+  return normalized || null;
+}
+
+function optionalText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 /** Server-derived Asaas body. Browser never supplies these fields. */
 export function customerBodyFromIdentity(identity: CustomerIdentitySource): CustomerFixture {
   const name = identity.legalName.trim();
   // The database already validates this source. Preserve alphanumeric CNPJ
   // characters; removing them here would silently corrupt a valid document.
-  const cpfCnpj = identity.taxId.toUpperCase().replace(/[.\-/\s]/g, "");
+  const cpfCnpj = normalizeCustomerTaxId(identity.taxId) ?? "";
   const email = identity.email.trim();
   const phone = identity.mobilePhone?.replace(/\D/g, "") ?? "";
   if (!name || !cpfCnpj || !email) {
@@ -41,6 +63,68 @@ export function customerBodyFromIdentity(identity: CustomerIdentitySource): Cust
     email,
     notificationDisabled: true,
     ...(phone.length >= 10 ? { mobilePhone: phone } : {}),
+  };
+}
+
+/**
+ * Loads a provider customer by its exact ID after transaction correlation.
+ * It never searches or links by PII.
+ */
+export async function getAuthoritativeCustomerIdentity(params: {
+  creds: AsaasCredentials;
+  environment: AsaasEnvironment;
+  externalCustomerId: string;
+}): Promise<AuthoritativeCustomerResult> {
+  const externalCustomerId = params.externalCustomerId.trim();
+  if (!externalCustomerId) {
+    return { ok: false, errorCode: "provider_customer_ambiguous", retryable: false };
+  }
+
+  const result = await asaasFetch<{
+    id?: unknown;
+    cpfCnpj?: unknown;
+    name?: unknown;
+    email?: unknown;
+    mobilePhone?: unknown;
+    phone?: unknown;
+  }>(
+    params.creds,
+    params.environment,
+    "GET",
+    `/customers/${encodeURIComponent(externalCustomerId)}`,
+  );
+
+  if (result.outcome === "unknown") {
+    return { ok: false, errorCode: "provider_customer_lookup_inconclusive", retryable: true };
+  }
+  if (result.outcome === "deterministic_rejection") {
+    if (result.status === 404) {
+      return { ok: false, errorCode: "provider_customer_not_found", retryable: false };
+    }
+    if (result.status === 401 || result.status === 403) {
+      return { ok: false, errorCode: "provider_auth_error", retryable: false };
+    }
+    if (result.category === "rate_limited") {
+      return { ok: false, errorCode: "rate_limited", retryable: true };
+    }
+    return { ok: false, errorCode: "provider_customer_lookup_rejected", retryable: false };
+  }
+
+  const customer = result.data;
+  const normalizedTaxId = normalizeCustomerTaxId(customer?.cpfCnpj);
+  if (!customer || customer.id !== externalCustomerId || !normalizedTaxId) {
+    return { ok: false, errorCode: "provider_customer_ambiguous", retryable: false };
+  }
+
+  return {
+    ok: true,
+    customer: {
+      externalCustomerId,
+      normalizedTaxId,
+      name: optionalText(customer.name),
+      email: optionalText(customer.email)?.toLowerCase() ?? null,
+      mobilePhone: optionalText(customer.mobilePhone ?? customer.phone)?.replace(/\D/g, "") || null,
+    },
   };
 }
 

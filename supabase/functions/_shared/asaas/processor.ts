@@ -22,6 +22,7 @@
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { asaasFetch, type AsaasCredentials, type AsaasEnvironment } from "./client.ts";
+import { getAuthoritativeCustomerIdentity, normalizeCustomerTaxId } from "./customer.ts";
 import { classifyAsaasEvent } from "./events.ts";
 import { parseAsaasAmountToCents } from "./money.ts";
 import {
@@ -591,6 +592,7 @@ function asHostedCheckoutSessionId(value: unknown): string {
 async function applyHostedCardCheckoutFallback(
   adminClient: SupabaseClient,
   environment: AsaasEnvironment,
+  creds: AsaasCredentials,
   ev: ClaimedEvent,
   base: { event_id: string; external_event_id: string },
   eventType: string,
@@ -602,7 +604,66 @@ async function applyHostedCardCheckoutFallback(
     await ignoreEvent(adminClient, ev.id, "ignored_unmanaged_resource");
     return { ...base, outcome: "ignored", category: "ignored_unmanaged_resource" };
   }
-  const { data, error } = await adminClient.rpc("apply_hosted_card_payment_with_checkout_fallback", {
+
+  // Prove exact transaction ownership before reading provider identity facts.
+  const { data: contextData, error: contextError } = await adminClient.rpc(
+    "load_hosted_card_customer_adoption_context",
+    {
+      p_environment: environment,
+      p_provider_checkout_id: checkoutSession,
+      p_external_subscription_id: snap.snapshot.externalSubscriptionId,
+      p_external_customer_id: snap.snapshot.externalCustomerId,
+    },
+  );
+  if (contextError) {
+    await failEvent(adminClient, ev.id, "hosted_card_customer_context_error", true, backoffSeconds(ev.attempts));
+    return { ...base, outcome: "failed", category: "hosted_card_customer_context_error" };
+  }
+  const context = (contextData ?? {}) as {
+    outcome?: string;
+    customer_adoption_required?: boolean;
+    canonical_tax_id?: string | null;
+  };
+  if (context.outcome === "unmanaged_checkout_session") {
+    await ignoreEvent(adminClient, ev.id, "ignored_unmanaged_resource");
+    return { ...base, outcome: "ignored", category: "ignored_unmanaged_resource" };
+  }
+  if (context.outcome !== "ready" && context.outcome !== "customer_adoption_required") {
+    const category = context.outcome || "hosted_card_customer_context_rejected";
+    await failEvent(adminClient, ev.id, category, false, 0);
+    return { ...base, outcome: "failed", category };
+  }
+
+  let providerCustomerTaxId: string | null = null;
+  if (context.customer_adoption_required === true || context.outcome === "customer_adoption_required") {
+    const canonicalTaxId = normalizeCustomerTaxId(context.canonical_tax_id);
+    if (!canonicalTaxId) {
+      await failEvent(adminClient, ev.id, "customer_identity_unavailable", false, 0);
+      return { ...base, outcome: "failed", category: "customer_identity_unavailable" };
+    }
+    const customer = await getAuthoritativeCustomerIdentity({
+      creds,
+      environment,
+      externalCustomerId: snap.snapshot.externalCustomerId,
+    });
+    if (!customer.ok) {
+      await failEvent(
+        adminClient,
+        ev.id,
+        customer.errorCode,
+        customer.retryable,
+        customer.retryable ? backoffSeconds(ev.attempts) : 0,
+      );
+      return { ...base, outcome: "failed", category: customer.errorCode };
+    }
+    if (customer.customer.normalizedTaxId !== canonicalTaxId) {
+      await failEvent(adminClient, ev.id, "customer_identity_mismatch", false, 0);
+      return { ...base, outcome: "failed", category: "customer_identity_mismatch" };
+    }
+    providerCustomerTaxId = customer.customer.normalizedTaxId;
+  }
+
+  const { data, error } = await adminClient.rpc("apply_hosted_card_payment_with_customer_adoption", {
     p_event_id: ev.id,
     p_external_event_id: ev.external_event_id,
     p_environment: environment,
@@ -610,6 +671,7 @@ async function applyHostedCardCheckoutFallback(
     p_external_payment_id: snap.snapshot.externalPaymentId,
     p_external_subscription_id: snap.snapshot.externalSubscriptionId,
     p_external_customer_id: snap.snapshot.externalCustomerId,
+    p_provider_customer_tax_id: providerCustomerTaxId,
     p_provider_status: snap.snapshot.providerStatus,
     p_financial_state: snap.snapshot.financialState,
     p_billing_type: snap.snapshot.billingType,
@@ -623,8 +685,8 @@ async function applyHostedCardCheckoutFallback(
     p_event_created_at: ev.event_created_at,
   });
   if (error) {
-    await failEvent(adminClient, ev.id, "hosted_card_checkout_fallback_error", true, backoffSeconds(ev.attempts));
-    return { ...base, outcome: "failed", category: "hosted_card_checkout_fallback_error" };
+    await failEvent(adminClient, ev.id, "hosted_card_customer_adoption_error", true, backoffSeconds(ev.attempts));
+    return { ...base, outcome: "failed", category: "hosted_card_customer_adoption_error" };
   }
   const outcome = (data as { outcome?: string } | null)?.outcome ?? "";
   if (outcome === "applied") return { ...base, outcome: "processed", category: snap.snapshot.financialState };
@@ -778,7 +840,7 @@ async function processOneEvent(
   if (!resolved?.found) {
     // Only an exact checkout session from the authoritative payment can establish
     // the missing hosted-card subscription binding.
-    return applyHostedCardCheckoutFallback(adminClient, environment, ev, base, eventType, payment, normalized);
+    return applyHostedCardCheckoutFallback(adminClient, environment, creds, ev, base, eventType, payment, normalized);
   }
 
   // Integridade de tenant: customer do payment DEVE bater com o da conta. FAIL CLOSED.

@@ -41,6 +41,7 @@ function callback(baseUrl: string, state: "success" | "cancel" | "expired"): str
 }
 
 export function hostedCardCheckoutPayload(intent: HostedCardCheckoutIntent, appBaseUrl: string): Record<string, unknown> {
+  if (!intent.externalCustomerId) throw new Error("customer_not_ready");
   const payload: Record<string, unknown> = {
     billingTypes: ["CREDIT_CARD"],
     chargeTypes: ["RECURRENT"],
@@ -61,10 +62,8 @@ export function hostedCardCheckoutPayload(intent: HostedCardCheckoutIntent, appB
       cycle: "MONTHLY",
       nextDueDate: firstDueDate(),
     },
+    customer: intent.externalCustomerId,
   };
-  // Existing canonical customer is safe to reuse. When absent, Asaas collects
-  // payer data on the hosted page; never combine customer and customerData.
-  if (intent.externalCustomerId) payload.customer = intent.externalCustomerId;
   return payload;
 }
 
@@ -80,6 +79,9 @@ export async function createHostedCardCheckout(params: {
   // replay it; it needs reconciliation before a fresh attempt is authorized.
   if (!intent.canCreate) {
     return { ok: false, errorCode: intent.status === "PAID" ? "checkout_paid_awaiting_reconciliation" : "outcome_unknown_requires_reconciliation" };
+  }
+  if (!intent.externalCustomerId) {
+    return { ok: false, errorCode: "customer_not_ready" };
   }
 
   const created = await asaasFetch<ProviderCheckout>(

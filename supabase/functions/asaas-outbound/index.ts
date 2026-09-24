@@ -276,9 +276,45 @@ Deno.serve(async (req: Request) => {
     const intent = hostedIntentFromPrepared(prepared);
     if (!intent) return jsonResponse(409, { error: "checkout_prepare_invalid" });
     const adminClient = supabaseAdmin();
+
+    // Never create a new canonical customer behind an already-created legacy
+    // checkout. That checkout must be reconciled from authoritative facts.
+    if (intent.hostedUrl && intent.providerCheckoutId && !intent.externalCustomerId) {
+      return jsonResponse(409, { error: "checkout_customer_unbound_requires_reconciliation" });
+    }
+    if (!intent.canCreate || (intent.hostedUrl && intent.providerCheckoutId)) {
+      let existingCreds;
+      try {
+        existingCreds = credentialsForEnvironment(intent.environment);
+      } catch {
+        return jsonResponse(503, { error: "asaas_not_configured" });
+      }
+      const existing = await createHostedCardCheckout({ adminClient, creds: existingCreds, intent, appBaseUrl });
+      if (!existing.ok) return jsonResponse(502, { error: existing.errorCode });
+      return jsonResponse(200, { hostedUrl: existing.hostedUrl });
+    }
+
+    const { data: ctxRaw, error: ctxError } = await adminClient.rpc(
+      "billing_load_provider_customer_context_outbound",
+      { p_clinic_id: parsed.clinicId },
+    );
+    if (ctxError || !ctxRaw) return jsonResponse(409, { error: "identity_context_unavailable" });
+    const ctx = ctxRaw as ProviderCustomerContext;
+    const accountEnv = ctx.environment === "production" || ctx.environment === "sandbox" ? ctx.environment : null;
+    if (
+      ctx.identity_complete !== true ||
+      !ctx.billing_account_id ||
+      ctx.billing_account_id !== intent.billingAccountId ||
+      accountEnv !== intent.environment
+    ) {
+      return jsonResponse(409, { error: ctx.identity_complete === true ? "checkout_customer_context_mismatch" : "identity_incomplete" });
+    }
+
     if (intent.environment === "production") {
-      const writeGate = await assertProductionProviderWriteForClinic(adminClient, parsed.clinicId, "HOSTED_CARD_CHECKOUT_CREATE");
-      if (!writeGate.ok) return jsonResponse(409, { error: writeGate.error });
+      const customerGate = await assertProductionProviderWriteForClinic(adminClient, parsed.clinicId, "ENSURE_CUSTOMER_FROM_IDENTITY");
+      if (!customerGate.ok) return jsonResponse(409, { error: customerGate.error });
+      const checkoutGate = await assertProductionProviderWriteForClinic(adminClient, parsed.clinicId, "HOSTED_CARD_CHECKOUT_CREATE");
+      if (!checkoutGate.ok) return jsonResponse(409, { error: checkoutGate.error });
     }
     let checkoutCreds;
     try {
@@ -286,6 +322,31 @@ Deno.serve(async (req: Request) => {
     } catch {
       return jsonResponse(503, { error: "asaas_not_configured" });
     }
+
+    let identityBody: CustomerFixture;
+    try {
+      identityBody = customerBodyFromIdentity({
+        legalName: ctx.legal_name ?? "",
+        taxId: ctx.tax_id ?? "",
+        email: ctx.email ?? "",
+        mobilePhone: ctx.mobile_phone,
+      });
+    } catch {
+      return jsonResponse(409, { error: "identity_incomplete" });
+    }
+    const customer = await ensureCustomer({
+      adminClient,
+      environment: intent.environment,
+      creds: checkoutCreds,
+      billingAccountId: intent.billingAccountId,
+      existingExternalCustomerId: ctx.external_customer_id ?? null,
+      fixture: identityBody,
+    });
+    if (!customer.ok || !customer.externalCustomerId) {
+      return jsonResponse(502, { error: "provider_error", category: customer.errorCode ?? "customer_not_ready" });
+    }
+    intent.externalCustomerId = customer.externalCustomerId;
+
     const created = await createHostedCardCheckout({ adminClient, creds: checkoutCreds, intent, appBaseUrl });
     if (!created.ok) return jsonResponse(502, { error: created.errorCode });
     return jsonResponse(200, { hostedUrl: created.hostedUrl });
