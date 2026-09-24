@@ -54,6 +54,8 @@ interface Cfg {
   applyAuthError?: unknown;
   applyEligibility?: unknown;
   applyInstruction?: unknown;
+  fallback?: unknown;
+  fallbackError?: unknown;
 }
 
 function makeClient(cfg: Cfg) {
@@ -72,6 +74,8 @@ function makeClient(cfg: Cfg) {
         };
       case "apply_billing_payment_snapshot":
         return { data: cfg.apply ?? null, error: cfg.applyError ?? null };
+      case "apply_hosted_card_payment_with_checkout_fallback":
+        return { data: cfg.fallback ?? null, error: cfg.fallbackError ?? null };
       case "apply_billing_pix_automatic_payment_snapshot":
         return { data: cfg.applyPix ?? null, error: cfg.applyPixError ?? null };
       case "handle_missing_payment_on_get":
@@ -170,6 +174,64 @@ describe("drainBillingEvents", () => {
     );
     expect(result.ignored).toBe(1);
     expect(findCall(calls, "ignore_billing_provider_event")?.params.p_reason).toBe("ignored_unmanaged_resource");
+    expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
+  });
+
+  it("R7: PAYMENT_CONFIRMED without a local subscription binds only through the authoritative checkout session", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent({ event_type: "PAYMENT_CONFIRMED" })],
+        resolve: { found: false },
+        fallback: { outcome: "applied", fallback: "checkout_session" },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_1",
+        customer: "cus_1",
+        subscription: "sub_1",
+        checkoutSession: "checkout_1",
+        status: "CONFIRMED",
+        value: 390,
+      }),
+    );
+    expect(result.processed).toBe(1);
+    const fallback = findCall(calls, "apply_hosted_card_payment_with_checkout_fallback");
+    expect(fallback?.params).toMatchObject({
+      p_provider_checkout_id: "checkout_1",
+      p_external_subscription_id: "sub_1",
+      p_financial_state: "confirmed",
+      p_environment: "sandbox",
+    });
+    expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
+  });
+
+  it("R7: missing checkoutSession remains unmanaged and creates no fallback or financial apply", async () => {
+    const { result, calls } = await run(
+      { events: [makeEvent()], resolve: { found: false } },
+      async () => jsonResponse(200, { id: "pay_1", customer: "cus_1", subscription: "sub_1", status: "CONFIRMED", value: 390 }),
+    );
+    expect(result.ignored).toBe(1);
+    expect(names(calls)).not.toContain("apply_hosted_card_payment_with_checkout_fallback");
+    expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
+  });
+
+  it("R7: conflicting checkout-session correlation fails closed without a financial apply", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent()],
+        resolve: { found: false },
+        fallback: { outcome: "provider_subscription_conflict" },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_1",
+        customer: "cus_1",
+        subscription: "sub_conflict",
+        checkoutSession: "checkout_conflict",
+        status: "CONFIRMED",
+        value: 390,
+      }),
+    );
+    expect(result.failed).toBe(1);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category).toBe("provider_subscription_conflict");
     expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
   });
 

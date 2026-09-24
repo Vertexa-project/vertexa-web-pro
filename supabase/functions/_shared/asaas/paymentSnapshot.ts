@@ -35,6 +35,8 @@ export interface AsaasPaymentFull {
   id?: unknown;
   customer?: unknown;
   subscription?: unknown;
+  /** Exact Asaas hosted Checkout identifier, used only for server-side fallback correlation. */
+  checkoutSession?: unknown;
   status?: unknown;
   value?: unknown;
   netValue?: unknown;
