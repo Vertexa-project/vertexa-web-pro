@@ -2,7 +2,13 @@
 // customer.ts só importa SupabaseClient como `import type` (apagado no transform), e o
 // fetch/AbortController usados por asaasFetch existem no Node deste runner. Sem Docker/Deno.
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { customerBodyFromIdentity, ensureCustomer, type CustomerFixture } from "./customer.ts";
+import {
+  customerBodyFromIdentity,
+  ensureCustomer,
+  getAuthoritativeCustomerIdentity,
+  normalizeCustomerTaxId,
+  type CustomerFixture,
+} from "./customer.ts";
 import type { AsaasCredentials, AsaasEnvironment } from "./client.ts";
 import { customerExternalReference } from "./keys.ts";
 import { emptyResponse, jsonResponse, makeAdminClient, malformedResponse, readSentBody } from "./testHelpers.ts";
@@ -57,6 +63,58 @@ describe("customerBodyFromIdentity", () => {
       email: "bill@t.test",
     });
     expect(body.cpfCnpj).toBe("12ABC34501DE35");
+  });
+
+  it("normalizes provider and canonical tax IDs with the same punctuation-safe rule", () => {
+    expect(normalizeCustomerTaxId(" 12.abc.345/01de-35 ")).toBe("12ABC34501DE35");
+    expect(normalizeCustomerTaxId("  ")).toBeNull();
+  });
+});
+
+describe("getAuthoritativeCustomerIdentity", () => {
+  it("accepts only the exact provider customer and returns normalized identity facts", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(200, {
+      id: "cus_exact",
+      cpfCnpj: "123.456.789-09",
+      name: "Synthetic",
+      email: "SYNTHETIC@INVALID",
+      mobilePhone: "(11) 98888-7777",
+    })));
+    await expect(getAuthoritativeCustomerIdentity({ creds, environment, externalCustomerId: "cus_exact" }))
+      .resolves.toEqual({
+        ok: true,
+        customer: {
+          externalCustomerId: "cus_exact",
+          normalizedTaxId: "12345678909",
+          name: "Synthetic",
+          email: "synthetic@invalid",
+          mobilePhone: "11988887777",
+        },
+      });
+  });
+
+  it("classifies a missing provider customer as a deterministic no-write failure", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(404, { errors: [{ code: "not_found" }] })));
+    await expect(getAuthoritativeCustomerIdentity({ creds, environment, externalCustomerId: "cus_missing" }))
+      .resolves.toEqual({ ok: false, errorCode: "provider_customer_not_found", retryable: false });
+  });
+
+  it("rejects a response for a different customer as ambiguous", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(200, { id: "cus_other", cpfCnpj: "12345678909" })));
+    await expect(getAuthoritativeCustomerIdentity({ creds, environment, externalCustomerId: "cus_expected" }))
+      .resolves.toEqual({ ok: false, errorCode: "provider_customer_ambiguous", retryable: false });
+  });
+
+  it("rejects an exact customer without an authoritative tax identity", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(200, { id: "cus_exact" })));
+    await expect(getAuthoritativeCustomerIdentity({ creds, environment, externalCustomerId: "cus_exact" }))
+      .resolves.toEqual({ ok: false, errorCode: "provider_customer_ambiguous", retryable: false });
+  });
+
+  it("keeps an inconclusive provider lookup retryable without creating anything", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("temporary", { status: 503 })));
+    await expect(getAuthoritativeCustomerIdentity({ creds, environment, externalCustomerId: "cus_exact" }))
+      .resolves.toEqual({ ok: false, errorCode: "provider_customer_lookup_inconclusive", retryable: true });
   });
 });
 
