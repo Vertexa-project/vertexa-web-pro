@@ -177,7 +177,8 @@ begin
   if coalesce(v_rep->>'timezone', '') <> 'America/Sao_Paulo' then
     raise exception 'BP06 T4 FAIL: timezone';
   end if;
-  if coalesce((v_rep->>'received_in_period_cents')::bigint, 0) < 39000 then
+  -- PREPROD-02 reports money and Pix independently per provider environment.
+  if coalesce((v_rep#>>'{financial,sandbox,received_in_period_cents}')::bigint, 0) < 39000 then
     raise exception 'BP06 T4 FAIL: received';
   end if;
   if v_rep->'received_by_plan'->0->>'plan_attribution' <> 'contract' then
@@ -186,7 +187,7 @@ begin
   if v_rep::text ~* 'qr_payload|encoded_image|webhook_payload|tax_id|service_role' then
     raise exception 'BP06 T4 FAIL: leaked secret/provider';
   end if;
-  if coalesce((v_rep->>'active_pix_automatic_authorizations')::int, 0) < 1 then
+  if coalesce((v_rep#>>'{active_pix_automatic_authorizations,sandbox}')::int, 0) < 1 then
     raise exception 'BP06 T4 FAIL: active pix';
   end if;
   if coalesce((v_rep->>'entitlement_enforcement'), '') <> 'OFF' then

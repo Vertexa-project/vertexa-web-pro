@@ -171,19 +171,24 @@ begin
   if v_status is distinct from 'active' then
     raise exception 'ASAAS05A T8 FAIL: status=%', v_status;
   end if;
-  if v_terms is distinct from '30% de desconto vitalício sobre reajustes futuros' then
+  -- U& escape avoids a client-encoding-dependent comparison in this SQL test.
+  if v_terms is distinct from U&'30% de desconto vital\00EDcio sobre reajustes futuros' then
     raise exception 'ASAAS05A T8 FAIL: commercial_terms adulterado';
   end if;
   if v_starts is not null or v_ends is not null then
     raise exception 'ASAAS05A T8 FAIL: janela inventada starts=% ends=%', v_starts, v_ends;
   end if;
 
-  select count(*) into v_n
+  -- PRODUCT-07 copies Founder pricing to immutable v2 catalog rows. Assert
+  -- coverage of the three plans; the loop below still validates every row.
+  select count(distinct p.code) into v_n
     from private.billing_offer_plan_prices opp
     join private.billing_offers o on o.id = opp.offer_id
+    join private.billing_plan_versions pv on pv.id = opp.plan_version_id
+    join private.billing_plans p on p.id = pv.plan_id
    where o.code = 'founder_2026';
   if v_n <> 3 then
-    raise exception 'ASAAS05A T5 FAIL: founder prices=%', v_n;
+    raise exception 'ASAAS05A T5 FAIL: founder plans=%', v_n;
   end if;
 
   for r in
@@ -276,7 +281,8 @@ begin
 end $$;
 rollback;
 
--- T10: sem RPC pública de catálogo
+-- T10: no direct public catalog RPC. PRODUCT-02 later added one authenticated,
+-- sanitized sellable-plan projection; private catalog internals remain hidden.
 begin;
 do $$
 declare
@@ -286,9 +292,15 @@ begin
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public'
-     and p.proname ~* '(billing_plan|billing_offer|billing_feature|commercial_catalog)';
+     and p.proname ~* '(billing_plan|billing_offer|billing_feature|commercial_catalog)'
+     and p.proname <> 'list_sellable_billing_plans';
   if v_n <> 0 then
-    raise exception 'ASAAS05A T10 FAIL: RPC pública de catálogo=%', v_n;
+    raise exception 'ASAAS05A T10 FAIL: direct public catalog RPC=%', v_n;
+  end if;
+  if to_regprocedure('public.list_sellable_billing_plans()') is null
+     or has_function_privilege('anon', 'public.list_sellable_billing_plans()', 'execute')
+     or not has_function_privilege('authenticated', 'public.list_sellable_billing_plans()', 'execute') then
+    raise exception 'ASAAS05A T10 FAIL: sellable catalog projection grants';
   end if;
 end $$;
 rollback;
@@ -366,16 +378,25 @@ declare
   v_old int;
   v_new int;
   v_n int;
+  v_before int;
+  v_next_version int;
 begin
   select id into v_plan from private.billing_plans where code = 'pulse';
   select standard_price_cents into v_old
     from private.billing_plan_versions
    where plan_id = v_plan and version = 1;
 
+  -- PRODUCT-07 introduced immutable v2 catalog rows. Keep asserting a new
+  -- version without assuming that v1 is the only pre-existing version.
+  select count(*), max(version) + 1
+    into v_before, v_next_version
+    from private.billing_plan_versions
+   where plan_id = v_plan;
+
   insert into private.billing_plan_versions (
     plan_id, version, currency_code, standard_price_cents,
     max_professionals, max_active_patients
-  ) values (v_plan, 2, 'BRL', 30000, 2, 30);
+  ) values (v_plan, v_next_version, 'BRL', 30000, 2, 30);
 
   select standard_price_cents into v_new
     from private.billing_plan_versions
@@ -387,8 +408,8 @@ begin
   select count(*) into v_n
     from private.billing_plan_versions
    where plan_id = v_plan;
-  if v_n <> 2 then
-    raise exception 'ASAAS05A T14 FAIL: versions=%', v_n;
+  if v_n <> v_before + 1 then
+    raise exception 'ASAAS05A T14 FAIL: versions=% expected=%', v_n, v_before + 1;
   end if;
 end $$;
 rollback;

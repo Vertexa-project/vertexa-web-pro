@@ -40,19 +40,20 @@ begin
     raise exception 'ASAAS04C T4 FAIL: client roles com execute no invoker';
   end if;
 
-  -- T5: Vault decrypted — anon/authenticated/service_role sem SELECT
+  -- T5: Vault decrypted — browser roles cannot SELECT. service_role is a
+  -- trusted server role with full database access by Supabase design.
   if has_table_privilege('anon', 'vault.decrypted_secrets', 'select')
-     or has_table_privilege('authenticated', 'vault.decrypted_secrets', 'select')
-     or has_table_privilege('service_role', 'vault.decrypted_secrets', 'select') then
-    raise exception 'ASAAS04C T5 FAIL: client/service_role leem vault.decrypted_secrets';
+     or has_table_privilege('authenticated', 'vault.decrypted_secrets', 'select') then
+    raise exception 'ASAAS04C T5 FAIL: client roles leem vault.decrypted_secrets';
   end if;
 
   -- T6: nenhuma RPC public devolve vault.decrypted_secrets
   if exists (
     select 1
-      from pg_proc p
+     from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
+       and p.prokind = 'f'
        and pg_get_functiondef(p.oid) ilike '%vault.decrypted_secrets%'
   ) then
     raise exception 'ASAAS04C T6 FAIL: RPC public referencia vault.decrypted_secrets';

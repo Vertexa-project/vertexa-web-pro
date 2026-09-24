@@ -424,7 +424,10 @@ begin
   if v_row ->> 'attention_reason' is distinct from 'overdue' then
     raise exception 'BP05 T4 FAIL: clinic A reason=%', v_row;
   end if;
-  if v_row ->> 'pix_status' is distinct from 'ACTIVE' then
+  -- PREPROD-02 omits unlabeled provider facts; verify the explicit Sandbox
+  -- bucket used by this fixture instead.
+  if v_row ? 'pix_status'
+     or v_row#>>'{provider,sandbox,pix_status}' is distinct from 'ACTIVE' then
     raise exception 'BP05 T4 FAIL: clinic A pix';
   end if;
   if v_row ->> 'identity_complete' is distinct from 'true'
@@ -441,11 +444,13 @@ begin
   if v_row ->> 'financial_summary' = 'overdue' then
     raise exception 'BP05 T4 FAIL: Pix REFUSED clinic must not be delinquent %', v_row;
   end if;
-  if v_row ->> 'attention_reason' is distinct from 'customer_unbound'
-     and v_row ->> 'attention_reason' is distinct from 'pix_refused' then
+  -- Current priority is overdue, identity, customer, then Pix. B intentionally
+  -- has no billing identity while still proving its Sandbox Pix is REFUSED.
+  if v_row ->> 'attention_reason' is distinct from 'identity_incomplete' then
     raise exception 'BP05 T4 FAIL: clinic B reason=%', v_row;
   end if;
-  if v_row ->> 'pix_status' is distinct from 'REFUSED' then
+  if v_row ? 'pix_status'
+     or v_row#>>'{provider,sandbox,pix_status}' is distinct from 'REFUSED' then
     raise exception 'BP05 T4 FAIL: clinic B pix';
   end if;
 

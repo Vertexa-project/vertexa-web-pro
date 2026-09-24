@@ -39,6 +39,8 @@ declare
   v_overview jsonb;
   v_hub jsonb;
   v_today date;
+  v_period_start date;
+  v_period_end date;
   v_lookup uuid;
 begin
   insert into public.profiles (id, auth_user_id, role, full_name, email, status)
@@ -198,6 +200,9 @@ begin
 
   -- Contract + Pix auth before payments (ledger_source_check requires pix or subscription).
   v_today := private.billing_hub_business_date();
+  -- Keep fixtures around the current business date; static dates become overdue.
+  v_period_start := v_today - 7;
+  v_period_end := v_today + 7;
   select pv.id into v_plan_version
     from private.billing_plan_versions pv
     join private.billing_plans p on p.id = pv.plan_id
@@ -241,13 +246,13 @@ begin
     value_cents, due_date, payment_date, pix_authorization_id
   ) values
     (v_sandbox, 'asaas', 'sandbox', 'pay-sbx-pp02r1', 'cus_sandbox_pp02', 'RECEIVED', 'received', 'PIX',
-     39000, date '2026-09-10', date '2026-09-11', v_pix_sbx),
+     39000, v_today - 1, v_today - 1, v_pix_sbx),
     (v_prod, 'asaas', 'production', 'pay-prd-pp02r1', 'cus_prod_pp02', 'RECEIVED', 'received', 'PIX',
-     89000, date '2026-09-10', date '2026-09-12', v_pix_prd),
+     89000, v_today - 1, v_today - 1, v_pix_prd),
     (v_sandbox, 'asaas', 'sandbox', 'pay-sbx-pend-pp02r1', 'cus_sandbox_pp02', 'PENDING', 'pending', 'PIX',
-     1000, date '2026-09-20', null, v_pix_sbx),
+     1000, v_today + 1, null, v_pix_sbx),
     (v_prod, 'asaas', 'production', 'pay-prd-pend-pp02r1', 'cus_prod_pp02', 'PENDING', 'pending', 'PIX',
-     2500, date '2026-09-21', null, v_pix_prd);
+     2500, v_today + 1, null, v_pix_prd);
 
   select f.customer_bound into v_bound
     from private.platform_billing_clinic_facts() f
@@ -284,7 +289,7 @@ begin
    where id = v_prod;
 
   perform pg_temp.pp02_as(v_auth_pa);
-  v_rep := public.get_platform_billing_report(date '2026-09-01', date '2026-09-30');
+  v_rep := public.get_platform_billing_report(v_period_start, v_period_end);
   if v_rep ? 'received_in_period_cents' then
     raise exception 'PP02R1 FAIL: unlabeled combined received total is still exposed';
   end if;
@@ -309,7 +314,7 @@ begin
   end if;
 
   v_export := public.list_platform_billing_report_export(
-    date '2026-09-01', date '2026-09-30', 'payments', 200, 0, 'sandbox'
+    v_period_start, v_period_end, 'payments', 200, 0, 'sandbox'
   );
   if exists (
     select 1
@@ -319,7 +324,7 @@ begin
     raise exception 'PP02R1 FAIL: sandbox CSV leaked another environment: %', v_export;
   end if;
   v_export := public.list_platform_billing_report_export(
-    date '2026-09-01', date '2026-09-30', 'payments', 200, 0, 'production'
+    v_period_start, v_period_end, 'payments', 200, 0, 'production'
   );
   if exists (
     select 1

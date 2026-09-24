@@ -15,8 +15,14 @@ begin
   if v_src !~ 'private.is_clinic_admin' then
     raise exception 'BP03 prepare must require clinic admin';
   end if;
-  if v_src !~ 'sandbox' then
-    raise exception 'BP03 prepare must force sandbox';
+  -- PREPROD-02 resolves the provider environment from the clinic's persisted
+  -- billing account and guarded write mode. A public checkout must not force
+  -- sandbox, or it could mix a production-account clinic with Sandbox facts.
+  if v_src !~ 'private.billing_clinic_provider_environment' then
+    raise exception 'BP03 prepare must resolve the clinic provider environment';
+  end if;
+  if v_src ~ 'billing_prepare_pix_automatic_authorization\\(v_contract_id, ''sandbox''\\)' then
+    raise exception 'BP03 prepare must not force sandbox';
   end if;
   if v_src ~* 'qr_payload|encoded_image|payload' then
     raise exception 'BP03 prepare must not persist QR';

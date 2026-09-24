@@ -197,9 +197,12 @@ begin
    where id = (r_prep->'authorization_operation'->>'operation_id')::uuid;
 
   r_refused := private.billing_prepare_pix_automatic_authorization(s.contract_id, 'sandbox');
+  -- The canonical response retains a stable JSON shape: absent operations are
+  -- represented by JSON null, not an omitted key. `->>` normalizes that to SQL
+  -- NULL while preserving the invariant that PREPARE creates no operation.
   if r_refused->>'outcome' is distinct from 'refused_requires_reissue'
      or r_refused->>'authorization_id' is distinct from r_prep->>'authorization_id'
-     or r_refused->'authorization_operation' is not null then
+     or r_refused->>'authorization_operation' is not null then
     raise exception 'ASAAS05E1EB T6 FAIL silent prepare: %', r_refused;
   end if;
 

@@ -107,9 +107,8 @@ begin
     raise exception 'FIX02 FAIL: OBSERVE no-contract should be true, got %', v_allowed;
   end if;
 
-  v_access := private.billing_resolve_commercial_access(v_clinic);
-  -- resolve is DEFINER nested — may fail direct call as authenticated; use
-  -- permitted boolean as the client-facing contract. Re-check as postgres role.
+  -- The resolver is intentionally not client-callable. The public contract is
+  -- the permitted boolean above; inspect resolver semantics only as postgres.
   reset role;
   v_access := private.billing_resolve_commercial_access(v_clinic);
   if v_access->>'reason' is distinct from 'OBSERVE_ONLY'

@@ -329,6 +329,9 @@ declare
   s record;
   v_env text;
   v_owner uuid;
+  v_result jsonb;
+  v_sandbox_count int;
+  v_production_count int;
 begin
   select * into s from pg_temp.bp02_seed();
   perform pg_temp.bp02_as(s.auth_admin_a);
@@ -356,14 +359,20 @@ begin
   insert into private.billing_accounts (owner_profile_id, clinic_id, provider, environment)
   values (s.owner_b, s.clinic_b, 'asaas', 'production');
   perform pg_temp.bp02_as(s.auth_owner_b);
-  begin
-    perform public.ensure_my_clinic_billing_account(s.clinic_b);
-    raise exception 'BP02 T6 FAIL: ensure adopted production account';
-  exception
-    when others then
-      if sqlerrm not like '%BILLING_PRODUCTION_LOCKED%' then
-        raise exception 'BP02 T6 FAIL: ensure production err=%', sqlerrm;
-      end if;
-  end;
+  -- PREPROD-02 permits distinct Sandbox and Production accounts per clinic.
+  -- Browser ensure must create/select only Sandbox and never adopt Production.
+  v_result := public.ensure_my_clinic_billing_account(s.clinic_b);
+  if v_result ->> 'created' is distinct from 'true' then
+    raise exception 'BP02 T6 FAIL: sandbox account was not created: %', v_result;
+  end if;
+  select count(*) filter (where environment = 'sandbox'),
+         count(*) filter (where environment = 'production')
+    into v_sandbox_count, v_production_count
+    from private.billing_accounts
+   where clinic_id = s.clinic_b;
+  if v_sandbox_count <> 1 or v_production_count <> 1 then
+    raise exception 'BP02 T6 FAIL: environment accounts sandbox=% production=%',
+      v_sandbox_count, v_production_count;
+  end if;
 end $$;
 rollback;

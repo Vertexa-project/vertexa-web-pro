@@ -482,6 +482,7 @@ declare
   s record;
   v_pulse uuid;
   v_plan uuid;
+  v_next_version int;
   r record;
 begin
   select * into s from pg_temp.asaas05c_seed();
@@ -491,10 +492,15 @@ begin
    where p.code = 'pulse' and pv.version = 1;
 
   perform private.billing_create_commercial_contract(s.c1, v_pulse, null, now(), null);
+  -- PRODUCT-07 already materializes v2. Create the next immutable catalog
+  -- version so this test continues to exercise snapshot isolation.
+  select max(version) + 1 into v_next_version
+    from private.billing_plan_versions
+   where plan_id = v_plan;
   insert into private.billing_plan_versions (
     plan_id, version, currency_code, standard_price_cents,
     max_professionals, max_active_patients
-  ) values (v_plan, 2, 'BRL', 99999, 9, 99);
+  ) values (v_plan, v_next_version, 'BRL', 99999, 9, 99);
 
   select * into r from private.billing_clinic_active_contract(s.c1);
   if r.contracted_price_cents is distinct from 39000

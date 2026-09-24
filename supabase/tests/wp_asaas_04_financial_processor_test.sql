@@ -80,7 +80,9 @@ begin
 end $$;
 rollback;
 
--- T2: billing_subscription_id e external_subscription_id NOT NULL (subscription-only)
+-- T2: every ledger row needs exactly one canonical source. Since 05F1, that is
+-- either a subscription pair or a Pix Automatic authorization; an uncorrelated
+-- row is rejected by billing_payments_ledger_source_check.
 begin;
 do $$
 declare s record;
@@ -90,9 +92,9 @@ begin
     insert into private.billing_payments (
       billing_account_id, billing_subscription_id, provider, environment, external_payment_id,
       external_customer_id, external_subscription_id, provider_status, financial_state, value_cents
-    ) values (s.account_id, null, 'asaas', 'sandbox', 'pay_x', 'cus_seed', 'sub_seed', 'RECEIVED', 'received', 1000);
-    raise exception 'ASAAS04 T2 FAIL: billing_subscription_id NULL deveria ser rejeitado';
-  exception when not_null_violation then null; end;
+    ) values (s.account_id, null, 'asaas', 'sandbox', 'pay_x', 'cus_seed', null, 'RECEIVED', 'received', 1000);
+    raise exception 'ASAAS04 T2 FAIL: payment without a canonical ledger source should be rejected';
+  exception when check_violation then null; end;
 end $$;
 rollback;
 
