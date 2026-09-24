@@ -27,7 +27,9 @@ export interface CustomerIdentitySource {
 /** Server-derived Asaas body. Browser never supplies these fields. */
 export function customerBodyFromIdentity(identity: CustomerIdentitySource): CustomerFixture {
   const name = identity.legalName.trim();
-  const cpfCnpj = identity.taxId.replace(/\D/g, "");
+  // The database already validates this source. Preserve alphanumeric CNPJ
+  // characters; removing them here would silently corrupt a valid document.
+  const cpfCnpj = identity.taxId.toUpperCase().replace(/[.\-/\s]/g, "");
   const email = identity.email.trim();
   const phone = identity.mobilePhone?.replace(/\D/g, "") ?? "";
   if (!name || !cpfCnpj || !email) {

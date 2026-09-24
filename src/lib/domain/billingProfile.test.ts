@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   billingProfileErrorMessage,
+  formatBillingPhone,
+  formatTaxId,
   isExpectedBillingProfileError,
   maskTaxId,
   normalizeBillingEmail,
@@ -10,12 +12,14 @@ import {
   validateBillingEmail,
   validateLegalName,
   validateTaxId,
+  validateBillingPhone,
 } from "./billingProfile";
 
 describe("normalizeTaxId", () => {
   it("remove pontuação de CPF e CNPJ", () => {
     expect(normalizeTaxId("123.456.789-00")).toBe("12345678900");
     expect(normalizeTaxId("12.345.678/0001-90")).toBe("12345678000190");
+    expect(normalizeTaxId("12.abc.345/01de-35")).toBe("12ABC34501DE35");
   });
 });
 
@@ -25,6 +29,7 @@ describe("taxIdLooksValid — UX only", () => {
     expect(taxIdLooksValid("999.911.111-40")).toBe(true);
     expect(taxIdLooksValid("11222333000181")).toBe(true);
     expect(taxIdLooksValid("11.222.333/0001-81")).toBe(true);
+    expect(taxIdLooksValid("12.ABC.345/01DE-35")).toBe(true);
   });
 
   it("rejeita checksum, repetidos, comprimento e vazio", () => {
@@ -32,8 +37,25 @@ describe("taxIdLooksValid — UX only", () => {
     expect(taxIdLooksValid("11111111111")).toBe(false);
     expect(taxIdLooksValid("00000000000000")).toBe(false);
     expect(taxIdLooksValid("11222333000180")).toBe(false);
+    expect(taxIdLooksValid("12.ABC.345/01DE-34")).toBe(false);
+    expect(taxIdLooksValid("12.ABC.345/01D!-35")).toBe(false);
     expect(taxIdLooksValid("123")).toBe(false);
     expect(taxIdLooksValid("")).toBe(false);
+  });
+});
+
+describe("billing document and phone formatting", () => {
+  it("formats alphanumeric CNPJ visually while preserving its canonical letters", () => {
+    expect(formatTaxId("12abc34501de35")).toBe("12.ABC.345/01DE-35");
+    expect(validateTaxId("12.ABC.345/01DE-35")).toEqual({ ok: true, value: "12ABC34501DE35" });
+  });
+
+  it("normalizes an authorized country prefix and rejects invalid mobile input", () => {
+    expect(formatBillingPhone("+55 (98) 99999-9999")).toBe("(98) 99999-9999");
+    expect(validateBillingPhone("+55 (98) 99999-9999")).toEqual({ ok: true, value: "98999999999" });
+    expect(validateBillingPhone("(10) 89999-9999").ok).toBe(false);
+    expect(validateBillingPhone("(98) 89999-9999").ok).toBe(false);
+    expect(validateBillingPhone("telefone").ok).toBe(false);
   });
 });
 

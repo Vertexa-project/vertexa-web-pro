@@ -49,6 +49,15 @@ describe("customerBodyFromIdentity", () => {
       mobilePhone: "11988887777",
     });
   });
+
+  it("preserves a validated alphanumeric CNPJ instead of reducing it to digits", () => {
+    const body = customerBodyFromIdentity({
+      legalName: "Clínica Sintética LTDA",
+      taxId: "12.abc.345/01de-35",
+      email: "bill@t.test",
+    });
+    expect(body.cpfCnpj).toBe("12ABC34501DE35");
+  });
 });
 
 describe("ensureCustomer", () => {
