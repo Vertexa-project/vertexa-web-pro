@@ -164,6 +164,9 @@ vi.mock("@/hooks/useBillingCommercial", () => ({
     isError: false,
   }),
 }));
+vi.mock("@/hooks/useBillingHostedCardCheckout", () => ({
+  useCreateHostedCardCheckout: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 vi.mock("@/hooks/useBillingHub", () => ({
   useClinicBillingOverview: () => ({
     data: {
@@ -302,6 +305,7 @@ describe("BillingProfilePage commercial checkout", () => {
     expect(screen.getByText("Uso e valor comercial")).toBeInTheDocument();
     expect(screen.getByText(/não é cobrança Asaas/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /configurar pix automático/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /continuar para pagamento seguro/i })).toBeEnabled();
     expect(screen.queryByText(/cus_/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /criar cobrança/i })).not.toBeInTheDocument();
   });

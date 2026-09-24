@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Loader2, ShieldAlert } from "lucide-react";
+import { useParams } from "react-router-dom";
 
 import { BillingCommercialUsagePanel } from "@/components/billing/BillingCommercialUsagePanel";
 import { BillingHubCharges } from "@/components/billing/BillingHubCharges";
@@ -8,6 +9,7 @@ import { BillingHubPayments } from "@/components/billing/BillingHubPayments";
 import { BillingHubTimeline } from "@/components/billing/BillingHubTimeline";
 import { BillingIdentityForm } from "@/components/billing/BillingIdentityForm";
 import { BillingPixCheckoutPanel } from "@/components/billing/BillingPixCheckoutPanel";
+import { BillingHostedCardCheckoutPanel } from "@/components/billing/BillingHostedCardCheckoutPanel";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,7 @@ const STEPS = [
 ] as const;
 
 export function BillingProfilePage() {
+  const { checkoutReturn } = useParams<{ checkoutReturn?: "success" | "cancel" | "expired" }>();
   const { data: me } = useCurrentProfessional();
   const clinicId = me?.clinicId ?? null;
   const { isClinicAdmin, isLoading: adminLoading } = useIsClinicAdmin(clinicId);
@@ -129,6 +132,18 @@ export function BillingProfilePage() {
         {clinicId ? <BillingHubCharges clinicId={clinicId} /> : null}
         {clinicId ? <BillingHubPayments clinicId={clinicId} /> : null}
         {clinicId ? <BillingHubTimeline clinicId={clinicId} /> : null}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Cartão de crédito</CardTitle>
+            <CardDescription>
+              Checkout hospedado para o plano {contract.planDisplayName}. O contrato comercial {contract.status}{" "}
+              não é confirmação de pagamento nem de acesso liberado.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {clinicId ? <BillingHostedCardCheckoutPanel clinicId={clinicId} returnState={checkoutReturn} /> : null}
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Pix Automático</CardTitle>

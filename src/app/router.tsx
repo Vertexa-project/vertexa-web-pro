@@ -225,6 +225,7 @@ export const router = createBrowserRouter(
             { path: "retencao", element: <RetentionPage /> },
             { path: "configuracoes", element: <SettingsPage /> },
             { path: "configuracoes/faturamento", element: <BillingProfilePage /> },
+            { path: "configuracoes/faturamento/checkout/:checkoutReturn", element: <BillingProfilePage /> },
             { path: "configuracoes/equipe", element: <TeamAdminPage /> },
             { path: "configuracoes/disciplinas", element: <DisciplinesAdminPage /> },
             { path: "configuracoes/jornada", element: <JourneyColumnsAdminPage /> },
