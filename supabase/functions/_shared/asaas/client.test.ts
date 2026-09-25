@@ -2,7 +2,13 @@
 // Roda sob Vitest/Node: asaasFetch só usa fetch/AbortController/setTimeout (disponíveis no
 // Node deste runner) e não importa nada Deno-específico.
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { asaasFetch, hasStringId, isOutcomeUnknownCategory, type AsaasCredentials } from "./client.ts";
+import {
+  asaasFetch,
+  hasStringId,
+  isOutcomeUnknownCategory,
+  parseSafeAsaasProviderErrors,
+  type AsaasCredentials,
+} from "./client.ts";
 import { emptyResponse, jsonResponse, malformedResponse } from "./testHelpers.ts";
 
 const creds: AsaasCredentials = { apiKey: "fake-sandbox-key-never-real", baseUrl: "https://api-sandbox.asaas.test" };
@@ -68,20 +74,28 @@ describe("asaasFetch — outcome classification", () => {
   });
 
   it("400 -> deterministic_rejection/http_4xx (validação, nunca criou o recurso)", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(400, { errors: [{ description: "invalid cpfCnpj" }] })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(400, {
+      errors: [{ code: "invalid_object", description: "invalid cpfCnpj" }],
+    })));
     const res = await asaasFetch(creds, "sandbox", "POST", "/customers", {});
     expect(res.outcome).toBe("deterministic_rejection");
     expect(res.category).toBe("http_4xx");
+    expect(res.providerErrors).toEqual([{ code: "invalid_object", description: "invalid cpfCnpj" }]);
   });
 
   it("H12: categoria nunca carrega texto bruto, mesmo quando a Asaas ecoa PII na resposta", async () => {
     const sensitiveCpf = "12345678900";
     const sensitiveEmail = "joao.silva@example.com";
+    const sensitiveName = "Maria da Silva";
+    const sensitiveAddress = "Rua das Flores 12";
+    const sensitivePhone = "(11) 99999-8888";
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         jsonResponse(400, {
-          errors: [{ description: `cpfCnpj ${sensitiveCpf} invalido para joao.silva@example.com` }],
+          errors: [{
+            description: `cpfCnpj ${sensitiveCpf} invalido para ${sensitiveEmail}; nome=${sensitiveName}; address: ${sensitiveAddress}; telefone ${sensitivePhone}`,
+          }],
         }),
       ),
     );
@@ -92,9 +106,60 @@ describe("asaasFetch — outcome classification", () => {
     const serialized = JSON.stringify(res);
     expect(serialized).not.toContain(sensitiveCpf);
     expect(serialized).not.toContain(sensitiveEmail);
+    expect(serialized).not.toContain(sensitiveName);
+    expect(serialized).not.toContain(sensitiveAddress);
+    expect(serialized).not.toContain(sensitivePhone);
     expect(serialized).not.toContain(creds.apiKey);
+    expect(serialized).toContain("[REDACTED_NUMBER]");
+    expect(serialized).toContain("[REDACTED_EMAIL]");
+    expect(serialized).toContain("[REDACTED_PII]");
     // A categoria é sempre uma das poucas strings fixas — nunca o texto da resposta.
     expect(res.category).toBe("http_4xx");
+  });
+
+  it("preserva no máximo três erros Asaas estruturados e sanitizados", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(400, {
+      errors: Array.from({ length: 8 }, (_, index) => ({
+        code: `invalid_field_${index}`,
+        description: `field ${index} is invalid`,
+      })),
+    })));
+    const res = await asaasFetch(creds, "sandbox", "POST", "/checkouts", {});
+    expect(res.providerErrors).toHaveLength(3);
+    expect(res.providerErrors?.map((error) => error.code)).toEqual([
+      "invalid_field_0",
+      "invalid_field_1",
+      "invalid_field_2",
+    ]);
+  });
+
+  it("401 nunca expõe credential mesmo se o provider a ecoar", async () => {
+    const echoedCredential = "credential_should_never_survive_123456789";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(401, {
+      errors: [{ code: "invalid_access_token", description: `invalid token ${echoedCredential}` }],
+    })));
+    const res = await asaasFetch(creds, "sandbox", "POST", "/checkouts", {});
+    expect(JSON.stringify(res)).not.toContain(echoedCredential);
+    expect(res.providerErrors?.[0]?.code).toBe("invalid_access_token");
+  });
+
+  it("5xx HTML e 4xx não JSON mantêm somente classificação genérica", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response("<html>upstream exploded</html>", { status: 500 }))
+      .mockResolvedValueOnce(new Response("bad request raw text", { status: 400 })));
+    const serverError = await asaasFetch(creds, "sandbox", "POST", "/checkouts", {});
+    const badRequest = await asaasFetch(creds, "sandbox", "POST", "/checkouts", {});
+    expect(serverError).toMatchObject({ outcome: "unknown", category: "provider_5xx" });
+    expect(serverError).not.toHaveProperty("providerErrors");
+    expect(badRequest).toMatchObject({ outcome: "deterministic_rejection", category: "http_4xx" });
+    expect(badRequest).not.toHaveProperty("providerErrors");
+  });
+
+  it("corpo enorme é descartado sem parsing parcial nem retenção", () => {
+    const huge = JSON.stringify({
+      errors: [{ code: "too_large", description: "x".repeat(20_000) }],
+    });
+    expect(parseSafeAsaasProviderErrors(huge)).toEqual([]);
   });
 });
 

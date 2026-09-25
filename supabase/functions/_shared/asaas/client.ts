@@ -60,6 +60,76 @@ export interface AsaasResult<T> {
   data: T | null;
   /** Categoria curta e fixa — nunca contém texto bruto da resposta. */
   category: string;
+  /** Erros 4xx estritamente limitados e sanitizados. Nunca contém o corpo bruto. */
+  providerErrors?: SafeAsaasProviderError[];
+}
+
+export interface SafeAsaasProviderError {
+  code: string;
+  description: string;
+}
+
+const MAX_PROVIDER_ERROR_BODY_CHARS = 16_384;
+const MAX_PROVIDER_ERRORS = 3;
+const MAX_PROVIDER_ERROR_CODE_CHARS = 80;
+const MAX_PROVIDER_ERROR_DESCRIPTION_CHARS = 240;
+
+function replaceControlCharacters(value: string): string {
+  return Array.from(value, (character) => {
+    const code = character.charCodeAt(0);
+    return code <= 31 || code === 127 ? " " : character;
+  }).join("");
+}
+
+function sanitizeProviderErrorCode(value: unknown): string {
+  if (typeof value !== "string") return "unknown_provider_error";
+  const safe = value.trim().replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, MAX_PROVIDER_ERROR_CODE_CHARS);
+  return safe || "unknown_provider_error";
+}
+
+function sanitizeProviderErrorDescription(value: unknown): string {
+  if (typeof value !== "string") return "Provider rejected the request";
+  const safe = replaceControlCharacters(value.slice(0, 2_048))
+    .replace(
+      /\b(nome|name|legalName|address|endereco|endereço|logradouro|complemento?)\b\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^,;]+)/gi,
+      "$1=[REDACTED_PII]",
+    )
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "[REDACTED_ID]")
+    .replace(/\b(?:cus|pay|sub|checkout|evt|tok|key)_[a-zA-Z0-9_-]+\b/gi, "[REDACTED_ID]")
+    .replace(/(?:\+?\d{1,3}\s*)?\(?\d{2,3}\)?[\s.-]*\d{4,5}[\s.-]*\d{4}\b/g, "[REDACTED_NUMBER]")
+    .replace(/\b(?:\d[.\s-]?){9,18}\d\b/g, "[REDACTED_NUMBER]")
+    .replace(/\b(?:https?:\/\/|www\.)\S+/gi, "[REDACTED_URL]")
+    .replace(/\b[a-zA-Z0-9_=-]{24,}\b/g, "[REDACTED_TOKEN]")
+    .replace(/\s+/g, " ")
+    .trim();
+  return (safe || "Provider rejected the request").slice(0, MAX_PROVIDER_ERROR_DESCRIPTION_CHARS);
+}
+
+/**
+ * Extrai somente o envelope documentado `errors[].code/description` de um 4xx.
+ * Corpos grandes, JSON fora desse shape e qualquer outro campo são descartados.
+ */
+export function parseSafeAsaasProviderErrors(rawBody: string): SafeAsaasProviderError[] {
+  if (!rawBody || rawBody.length > MAX_PROVIDER_ERROR_BODY_CHARS) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  const errors = (parsed as { errors?: unknown }).errors;
+  if (!Array.isArray(errors)) return [];
+  return errors.slice(0, MAX_PROVIDER_ERRORS).flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const item = entry as { code?: unknown; description?: unknown };
+    if (typeof item.code !== "string" && typeof item.description !== "string") return [];
+    return [{
+      code: sanitizeProviderErrorCode(item.code),
+      description: sanitizeProviderErrorDescription(item.description),
+    }];
+  });
 }
 
 const DETERMINISTIC_REJECTION_CATEGORIES = new Set(["http_4xx", "rate_limited"]);
@@ -142,7 +212,14 @@ export async function asaasFetch<T>(
   }
   if (res.status >= 400) {
     // Validação determinística: a Asaas recusou antes de criar o recurso.
-    return { outcome: "deterministic_rejection", status: res.status, data: null, category: "http_4xx" };
+    const providerErrors = parseSafeAsaasProviderErrors(text);
+    return {
+      outcome: "deterministic_rejection",
+      status: res.status,
+      data: null,
+      category: "http_4xx",
+      ...(providerErrors.length > 0 ? { providerErrors } : {}),
+    };
   }
 
   // 2xx a partir daqui — mas um 2xx sem corpo utilizável NUNCA prova "nada foi criado".

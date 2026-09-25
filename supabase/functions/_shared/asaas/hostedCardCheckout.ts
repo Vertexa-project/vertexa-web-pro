@@ -92,6 +92,16 @@ export async function createHostedCardCheckout(params: {
     hostedCardCheckoutPayload(intent, appBaseUrl),
   );
   if (created.outcome === "deterministic_rejection") {
+    // Operational diagnostics only. Never emit the request body, provider
+    // customer, credentials, auth headers, or the raw provider response.
+    console.error(JSON.stringify({
+      provider: "asaas",
+      operation: "create_checkout",
+      environment: intent.environment,
+      correlationId: intent.attemptId,
+      httpStatus: created.status,
+      errors: created.providerErrors ?? [],
+    }));
     await adminClient.rpc("fail_my_clinic_hosted_card_checkout", {
       p_attempt_id: intent.attemptId,
       p_error_category: "provider_rejected",

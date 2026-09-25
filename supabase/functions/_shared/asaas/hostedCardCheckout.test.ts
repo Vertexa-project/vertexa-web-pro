@@ -75,6 +75,50 @@ describe("hosted recurring card checkout", () => {
     expect(JSON.stringify(body)).not.toMatch(/cardNumber|cvv|creditCardToken/i);
   });
 
+  it("builds the exact server-authoritative Sync R$497 Preview payload", () => {
+    const sync = {
+      ...boundIntent,
+      priceCents: 49_700,
+      planName: "Sync",
+      externalReference: "vtx:hosted-card:33333333-3333-4333-8333-333333333333",
+    };
+    const body = hostedCardCheckoutPayload(sync, "https://preview.vertexa.test/");
+    expect(Object.keys(body).sort()).toEqual([
+      "billingTypes",
+      "callback",
+      "chargeTypes",
+      "customer",
+      "externalReference",
+      "items",
+      "minutesToExpire",
+      "subscription",
+    ]);
+    expect(body).toMatchObject({
+      billingTypes: ["CREDIT_CARD"],
+      chargeTypes: ["RECURRENT"],
+      minutesToExpire: 60,
+      externalReference: sync.externalReference,
+      customer: "cus_canonical",
+      callback: {
+        successUrl: "https://preview.vertexa.test/configuracoes/faturamento/checkout/success",
+        cancelUrl: "https://preview.vertexa.test/configuracoes/faturamento/checkout/cancel",
+        expiredUrl: "https://preview.vertexa.test/configuracoes/faturamento/checkout/expired",
+      },
+      items: [{
+        name: "Sync",
+        description: "Assinatura mensal Vertexa",
+        quantity: 1,
+        value: 497,
+      }],
+      subscription: { cycle: "MONTHLY" },
+    });
+    expect(body).not.toHaveProperty("customerData");
+    expect(body).not.toHaveProperty("subscription.endDate");
+    expect((body.subscription as { nextDueDate: string }).nextDueDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(sync.externalReference).toHaveLength(52);
+    expect(JSON.stringify(body)).not.toMatch(/clientPrice|browserPrice|priceOverride|cardNumber|cvv/i);
+  });
+
   it("does not replay a retained creating attempt after an unknown provider outcome", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
@@ -102,5 +146,37 @@ describe("hosted recurring card checkout", () => {
     await expect(createHostedCardCheckout({ adminClient: adminClient as never, creds, appBaseUrl: "https://app.vertexa.test", intent: boundIntent }))
       .resolves.toEqual({ ok: true, hostedUrl: "https://checkout.asaas.test/opaque" });
     expect(calls[0]?.name).toBe("complete_my_clinic_hosted_card_checkout");
+  });
+
+  it("logs only the bounded safe diagnostic on provider rejection", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(400, {
+      errors: [{
+        code: "invalid_item",
+        description: "customer 44444444-4444-4444-8444-444444444444 email qa@example.test is invalid",
+      }],
+      customer: "cus_must_not_be_logged",
+    })));
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { adminClient } = makeAdminClient(async (name) => {
+      if (name === "fail_my_clinic_hosted_card_checkout") return { data: true, error: null };
+      throw new Error(`unexpected rpc ${name}`);
+    });
+    const result = await createHostedCardCheckout({
+      adminClient: adminClient as never,
+      creds,
+      appBaseUrl: "https://app.vertexa.test",
+      intent: boundIntent,
+    });
+    expect(result).toEqual({ ok: false, errorCode: "provider_rejected" });
+    expect(consoleSpy).toHaveBeenCalledOnce();
+    const diagnostic = String(consoleSpy.mock.calls[0]?.[0]);
+    expect(diagnostic).toContain('"operation":"create_checkout"');
+    expect(diagnostic).toContain('"httpStatus":400');
+    expect(diagnostic).toContain('"code":"invalid_item"');
+    expect(diagnostic).toContain("[REDACTED_ID]");
+    expect(diagnostic).toContain("[REDACTED_EMAIL]");
+    expect(diagnostic).not.toContain("cus_must_not_be_logged");
+    expect(diagnostic).not.toContain(creds.apiKey);
+    expect(diagnostic).not.toContain("customerData");
   });
 });
