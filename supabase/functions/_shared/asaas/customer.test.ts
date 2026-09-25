@@ -3,9 +3,12 @@
 // fetch/AbortController usados por asaasFetch existem no Node deste runner. Sem Docker/Deno.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import {
+  checkoutReadinessError,
   customerBodyFromIdentity,
+  customerUpdatePayload,
   ensureCustomer,
   getAuthoritativeCustomerIdentity,
+  isCustomerCheckoutReady,
   normalizeCustomerTaxId,
   type CustomerFixture,
 } from "./customer.ts";
@@ -46,13 +49,18 @@ describe("customerBodyFromIdentity", () => {
       taxId: "999.911.111-40",
       email: "bill@t.test",
       mobilePhone: "11988887777",
+      billingAddress: "  Rua das Flores  ",
+      billingAddressNumber: " S/N ",
     });
     expect(body).toEqual({
       name: "Clínica Sintética LTDA",
       cpfCnpj: "99991111140",
       email: "bill@t.test",
       notificationDisabled: true,
+      phone: "11988887777",
       mobilePhone: "11988887777",
+      address: "Rua das Flores",
+      addressNumber: "S/N",
     });
   });
 
@@ -89,6 +97,9 @@ describe("getAuthoritativeCustomerIdentity", () => {
           name: "Synthetic",
           email: "synthetic@invalid",
           mobilePhone: "11988887777",
+          phone: null,
+          address: null,
+          addressNumber: null,
         },
       });
   });
@@ -118,9 +129,60 @@ describe("getAuthoritativeCustomerIdentity", () => {
   });
 });
 
+describe("checkout-ready customer", () => {
+  const source = {
+    legalName: "Clínica Sintética LTDA",
+    taxId: "99991111140",
+    email: "bill@t.test",
+    mobilePhone: "11988887777",
+    billingAddress: "Rua das Flores",
+    billingAddressNumber: "123",
+  };
+
+  it("distinguishes bound identity from local checkout readiness", () => {
+    expect(checkoutReadinessError({ ...source, mobilePhone: null })).toBe("billing_phone_required");
+    expect(checkoutReadinessError({ ...source, billingAddress: " " })).toBe("billing_address_required");
+    expect(checkoutReadinessError({ ...source, billingAddressNumber: " " })).toBe("billing_address_number_required");
+    expect(checkoutReadinessError(source)).toBeNull();
+  });
+
+  it("requires provider phone, address, and address number", () => {
+    expect(isCustomerCheckoutReady({ phone: null, address: "Rua A", addressNumber: "1" })).toBe(false);
+    expect(isCustomerCheckoutReady({ phone: "11988887777", address: null, addressNumber: "1" })).toBe(false);
+    expect(isCustomerCheckoutReady({ phone: "11988887777", address: "Rua A", addressNumber: null })).toBe(false);
+    expect(isCustomerCheckoutReady({ phone: "11988887777", address: "Rua A", addressNumber: "S/N" })).toBe(true);
+  });
+
+  it("maps only authoritative changed fields and never maps tax/provider identity", () => {
+    const payload = customerUpdatePayload(customerBodyFromIdentity(source), {
+      externalCustomerId: "cus_existing",
+      normalizedTaxId: "99991111140",
+      name: "Clínica Sintética LTDA",
+      email: "bill@t.test",
+      mobilePhone: null,
+      phone: null,
+      address: null,
+      addressNumber: null,
+    });
+    expect(payload).toEqual({
+      phone: "11988887777",
+      mobilePhone: "11988887777",
+      address: "Rua das Flores",
+      addressNumber: "123",
+    });
+    expect(payload).not.toHaveProperty("cpfCnpj");
+    expect(payload).not.toHaveProperty("externalCustomerId");
+  });
+});
+
 describe("ensureCustomer", () => {
-  it("H02: customer já persistido -> retorna direto, zero RPC, zero fetch", async () => {
-    const fetchSpy = vi.fn();
+  it("H02: customer já persistido -> exact-ID readback, zero RPC, zero provider write", async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(200, {
+      id: "cus_existing",
+      cpfCnpj: fixture.cpfCnpj,
+      name: fixture.name,
+      email: fixture.email,
+    }));
     vi.stubGlobal("fetch", fetchSpy);
     const { adminClient, calls } = makeAdminClient(async () => {
       throw new Error("não deveria chamar RPC nenhuma");
@@ -129,8 +191,109 @@ describe("ensureCustomer", () => {
     const result = await ensureCustomer(baseParams(adminClient, "cus_existing"));
 
     expect(result).toEqual({ ok: true, externalCustomerId: "cus_existing" });
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(fetchSpy.mock.calls[0]?.[1]?.method ?? "GET").toBe("GET");
     expect(calls).toHaveLength(0);
+  });
+
+  it("updates an incomplete bound customer once, reads it back, and proves checkout readiness", async () => {
+    const readyFixture: CustomerFixture = {
+      ...fixture,
+      phone: "11988887777",
+      mobilePhone: "11988887777",
+      address: "Rua das Flores",
+      addressNumber: "S/N",
+    };
+    const fetchSpy = vi.fn(async (_url: string, init?: RequestInit) => {
+      const call = fetchSpy.mock.calls.length;
+      if (call === 1) {
+        return jsonResponse(200, {
+          id: "cus_existing",
+          cpfCnpj: fixture.cpfCnpj,
+          name: fixture.name,
+          email: fixture.email,
+        });
+      }
+      if (call === 2) {
+        expect(init?.method).toBe("PUT");
+        expect(readSentBody(init)).toEqual({
+          phone: "11988887777",
+          mobilePhone: "11988887777",
+          address: "Rua das Flores",
+          addressNumber: "S/N",
+        });
+        return jsonResponse(200, { id: "cus_existing" });
+      }
+      return jsonResponse(200, {
+        id: "cus_existing",
+        cpfCnpj: fixture.cpfCnpj,
+        name: fixture.name,
+        email: fixture.email,
+        phone: "11988887777",
+        mobilePhone: "11988887777",
+        address: "Rua das Flores",
+        addressNumber: "S/N",
+      });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient, calls } = makeAdminClient(async () => {
+      throw new Error("bound customer update must not touch the local outbound-create ledger");
+    });
+
+    await expect(ensureCustomer({
+      ...baseParams(adminClient, "cus_existing"),
+      fixture: readyFixture,
+      requireCheckoutReady: true,
+    })).resolves.toEqual({ ok: true, externalCustomerId: "cus_existing" });
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("is idempotent when the bound customer is already checkout-ready", async () => {
+    const readyFixture: CustomerFixture = {
+      ...fixture,
+      phone: "11988887777",
+      mobilePhone: "11988887777",
+      address: "Rua das Flores",
+      addressNumber: "123",
+    };
+    const fetchSpy = vi.fn(async () => jsonResponse(200, {
+      id: "cus_existing",
+      cpfCnpj: fixture.cpfCnpj,
+      name: fixture.name,
+      email: fixture.email,
+      phone: "11988887777",
+      mobilePhone: "11988887777",
+      address: "Rua das Flores",
+      addressNumber: "123",
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = makeAdminClient(async () => {
+      throw new Error("no RPC expected");
+    });
+
+    await expect(ensureCustomer({
+      ...baseParams(adminClient, "cus_existing"),
+      fixture: readyFixture,
+      requireCheckoutReady: true,
+    })).resolves.toEqual({ ok: true, externalCustomerId: "cus_existing" });
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(fetchSpy.mock.calls[0]?.[1]?.method ?? "GET").toBe("GET");
+  });
+
+  it("fails closed on a bound provider tax identity conflict", async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(200, {
+      id: "cus_existing",
+      cpfCnpj: "11222333000181",
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = makeAdminClient(async () => {
+      throw new Error("no RPC expected");
+    });
+
+    await expect(ensureCustomer(baseParams(adminClient, "cus_existing")))
+      .resolves.toEqual({ ok: false, errorCode: "provider_customer_identity_conflict" });
+    expect(fetchSpy).toHaveBeenCalledOnce();
   });
 
   it("H01: primeira tentativa (reserved) cria com sucesso, exatamente 1 POST", async () => {

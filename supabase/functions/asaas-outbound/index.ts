@@ -88,10 +88,14 @@ interface BillingAccountResult {
 
 interface ProviderCustomerContext {
   identity_complete?: boolean;
+  checkout_ready?: boolean;
+  checkout_readiness_error?: string | null;
   legal_name?: string | null;
   tax_id?: string | null;
   email?: string | null;
   mobile_phone?: string | null;
+  billing_address?: string | null;
+  billing_address_number?: string | null;
   billing_account_id?: string | null;
   environment?: string | null;
   external_customer_id?: string | null;
@@ -236,6 +240,8 @@ Deno.serve(async (req: Request) => {
         taxId: ctx.tax_id ?? "",
         email: ctx.email ?? "",
         mobilePhone: ctx.mobile_phone,
+        billingAddress: ctx.billing_address,
+        billingAddressNumber: ctx.billing_address_number,
       });
     } catch {
       return jsonResponse(409, { error: "identity_incomplete" });
@@ -269,13 +275,45 @@ Deno.serve(async (req: Request) => {
     if (!/^https:\/\/[^\s/]+(?:\/[^\s]*)?$/i.test(appBaseUrl)) {
       return jsonResponse(503, { error: "checkout_callback_url_not_configured" });
     }
+    const { data: clinicAdmin, error: clinicAdminError } = await userClient.rpc("am_i_clinic_admin", {
+      p_clinic: parsed.clinicId,
+    });
+    if (clinicAdminError) return jsonResponse(401, { error: "unauthorized" });
+    if (clinicAdmin !== true) return jsonResponse(403, { error: "forbidden" });
+
+    const adminClient = supabaseAdmin();
+    const { data: ctxRaw, error: ctxError } = await adminClient.rpc(
+      "billing_load_provider_customer_context_outbound",
+      { p_clinic_id: parsed.clinicId },
+    );
+    if (ctxError || !ctxRaw) return jsonResponse(409, { error: "identity_context_unavailable" });
+    const ctx = ctxRaw as ProviderCustomerContext;
+    if (ctx.identity_complete !== true) return jsonResponse(409, { error: "identity_incomplete" });
+    if (ctx.checkout_ready !== true) {
+      const readinessError = ctx.checkout_readiness_error;
+      const safeError = readinessError === "billing_phone_required" ||
+          readinessError === "billing_address_required" ||
+          readinessError === "billing_address_number_required"
+        ? readinessError
+        : "identity_incomplete";
+      return jsonResponse(409, { error: safeError });
+    }
+    if (!ctx.billing_account_id) return jsonResponse(409, { error: "billing_account_unknown" });
+    const accountEnv = ctx.environment === "production" || ctx.environment === "sandbox" ? ctx.environment : null;
+    if (!accountEnv) return jsonResponse(409, { error: "invalid_operation_environment" });
+
+    // The local readiness gate runs before this RPC can reserve a new checkout
+    // attempt, so missing address data can never produce a provider request or
+    // leave an ambiguous creating attempt behind.
     const { data: prepared, error: prepareError } = await userClient.rpc("prepare_my_clinic_hosted_card_checkout", {
       p_clinic_id: parsed.clinicId,
     });
     if (prepareError) return jsonResponse(409, { error: "checkout_prepare_failed" });
     const intent = hostedIntentFromPrepared(prepared);
     if (!intent) return jsonResponse(409, { error: "checkout_prepare_invalid" });
-    const adminClient = supabaseAdmin();
+    if (ctx.billing_account_id !== intent.billingAccountId || accountEnv !== intent.environment) {
+      return jsonResponse(409, { error: "checkout_customer_context_mismatch" });
+    }
 
     // Never create a new canonical customer behind an already-created legacy
     // checkout. That checkout must be reconciled from authoritative facts.
@@ -292,22 +330,6 @@ Deno.serve(async (req: Request) => {
       const existing = await createHostedCardCheckout({ adminClient, creds: existingCreds, intent, appBaseUrl });
       if (!existing.ok) return jsonResponse(502, { error: existing.errorCode });
       return jsonResponse(200, { hostedUrl: existing.hostedUrl });
-    }
-
-    const { data: ctxRaw, error: ctxError } = await adminClient.rpc(
-      "billing_load_provider_customer_context_outbound",
-      { p_clinic_id: parsed.clinicId },
-    );
-    if (ctxError || !ctxRaw) return jsonResponse(409, { error: "identity_context_unavailable" });
-    const ctx = ctxRaw as ProviderCustomerContext;
-    const accountEnv = ctx.environment === "production" || ctx.environment === "sandbox" ? ctx.environment : null;
-    if (
-      ctx.identity_complete !== true ||
-      !ctx.billing_account_id ||
-      ctx.billing_account_id !== intent.billingAccountId ||
-      accountEnv !== intent.environment
-    ) {
-      return jsonResponse(409, { error: ctx.identity_complete === true ? "checkout_customer_context_mismatch" : "identity_incomplete" });
     }
 
     if (intent.environment === "production") {
@@ -330,6 +352,8 @@ Deno.serve(async (req: Request) => {
         taxId: ctx.tax_id ?? "",
         email: ctx.email ?? "",
         mobilePhone: ctx.mobile_phone,
+        billingAddress: ctx.billing_address,
+        billingAddressNumber: ctx.billing_address_number,
       });
     } catch {
       return jsonResponse(409, { error: "identity_incomplete" });
@@ -341,6 +365,7 @@ Deno.serve(async (req: Request) => {
       billingAccountId: intent.billingAccountId,
       existingExternalCustomerId: ctx.external_customer_id ?? null,
       fixture: identityBody,
+      requireCheckoutReady: true,
     });
     if (!customer.ok || !customer.externalCustomerId) {
       return jsonResponse(502, { error: "provider_error", category: customer.errorCode ?? "customer_not_ready" });

@@ -7,12 +7,14 @@ import { Label } from "@/components/ui/label";
 import { useClinicBillingIdentity, useUpsertClinicBillingIdentity } from "@/hooks/useBillingProfile";
 import {
   billingProfileErrorMessage,
+  validateBillingAddress,
+  validateBillingAddressNumber,
   formatBillingPhone,
   formatTaxId,
   isExpectedBillingProfileError,
   maskTaxId,
   validateBillingEmail,
-  validateBillingPhone,
+  validateRequiredBillingPhone,
   validateLegalName,
   validateTaxId,
 } from "@/lib/domain/billingProfile";
@@ -31,6 +33,8 @@ export function BillingIdentityForm({
   const [taxId, setTaxId] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [billingAddress, setBillingAddress] = useState("");
+  const [billingAddressNumber, setBillingAddressNumber] = useState("");
   const [editing, setEditing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -42,6 +46,8 @@ export function BillingIdentityForm({
     setTaxId(formatTaxId(identity.taxId ?? ""));
     setEmail(identity.email ?? "");
     setPhone(formatBillingPhone(identity.mobilePhone ?? ""));
+    setBillingAddress(identity.billingAddress ?? "");
+    setBillingAddressNumber(identity.billingAddressNumber ?? "");
     setEditing(!identity.exists);
   }, [identity]);
 
@@ -62,9 +68,19 @@ export function BillingIdentityForm({
       setFormError(emailCheck.message);
       return;
     }
-    const phoneCheck = validateBillingPhone(phone);
+    const phoneCheck = validateRequiredBillingPhone(phone);
     if (!phoneCheck.ok) {
       setFormError(phoneCheck.message);
+      return;
+    }
+    const addressCheck = validateBillingAddress(billingAddress);
+    if (!addressCheck.ok) {
+      setFormError(addressCheck.message);
+      return;
+    }
+    const addressNumberCheck = validateBillingAddressNumber(billingAddressNumber);
+    if (!addressNumberCheck.ok) {
+      setFormError(addressNumberCheck.message);
       return;
     }
 
@@ -76,6 +92,8 @@ export function BillingIdentityForm({
         taxId: taxCheck.value,
         email: emailCheck.value,
         mobilePhone: phoneCheck.value,
+        billingAddress: addressCheck.value,
+        billingAddressNumber: addressNumberCheck.value,
       },
       {
         onSuccess: () => {
@@ -165,7 +183,7 @@ export function BillingIdentityForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="billing-phone">Telefone (opcional)</Label>
+        <Label htmlFor="billing-phone">Telefone de cobrança</Label>
         <Input
             id="billing-phone"
             type="tel"
@@ -175,7 +193,38 @@ export function BillingIdentityForm({
             placeholder="(98) 99999-9999"
           autoComplete="tel"
           disabled={busy || showMasked}
+          aria-required="true"
+          aria-invalid={Boolean(formError)}
         />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_8rem]">
+        <div className="space-y-1.5">
+          <Label htmlFor="billing-address">Endereço de cobrança</Label>
+          <Input
+            id="billing-address"
+            value={billingAddress}
+            onChange={(e) => setBillingAddress(e.target.value)}
+            placeholder="Rua, avenida ou logradouro"
+            autoComplete="street-address"
+            disabled={busy || showMasked}
+            aria-required="true"
+            aria-invalid={Boolean(formError)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="billing-address-number">Número</Label>
+          <Input
+            id="billing-address-number"
+            value={billingAddressNumber}
+            onChange={(e) => setBillingAddressNumber(e.target.value)}
+            placeholder="123 ou S/N"
+            autoComplete="address-line2"
+            disabled={busy || showMasked}
+            aria-required="true"
+            aria-invalid={Boolean(formError)}
+          />
+        </div>
       </div>
 
       {formError ? (

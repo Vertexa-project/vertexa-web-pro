@@ -23,6 +23,8 @@ export function useUpsertClinicBillingIdentity(clinicId: string | null) {
       taxId: string;
       email: string;
       mobilePhone: string | null;
+      billingAddress: string;
+      billingAddressNumber: string;
     }) => {
       if (!clinicId) throw new Error("BILLING_CLINIC_REQUIRED");
       return upsertMyClinicBillingIdentity({ clinicId, ...input });

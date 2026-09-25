@@ -7,22 +7,30 @@ const fixtures = vi.hoisted(() => ({
     clinicId: "c1",
     exists: false,
     isComplete: false,
+    isCheckoutReady: false,
+    checkoutReadinessError: "identity_incomplete" as string | null,
     legalName: null as string | null,
     taxId: null as string | null,
     taxIdMasked: null as string | null,
     email: null as string | null,
     mobilePhone: null as string | null,
+    billingAddress: null as string | null,
+    billingAddressNumber: null as string | null,
     updatedAt: null as string | null,
   },
   savedIdentity: {
     clinicId: "c1",
     exists: true,
     isComplete: true,
+    isCheckoutReady: true,
+    checkoutReadinessError: null as string | null,
     legalName: "Clínica Sintética LTDA",
     taxId: "99991111140",
     taxIdMasked: "***.***.***-40",
     email: "bill@t.test",
-    mobilePhone: null as string | null,
+    mobilePhone: "98999999999" as string | null,
+    billingAddress: "Rua das Flores" as string | null,
+    billingAddressNumber: "S/N" as string | null,
     updatedAt: "2026-09-12T00:00:00Z",
   },
   pulse: {
@@ -241,6 +249,9 @@ describe("BillingProfilePage commercial checkout", () => {
     await user.click(screen.getByRole("button", { name: /^continuar$/i }));
     expect(screen.getByLabelText(/razão social \/ nome legal/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/cpf\/cnpj/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/telefone de cobrança/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/endereço de cobrança/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^número$/i)).toBeInTheDocument();
   });
 
   it("valida CPF no passo de cobrança e não chama contrato", async () => {

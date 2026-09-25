@@ -7,12 +7,17 @@ import {
   isExpectedBillingProfileError,
   maskTaxId,
   normalizeBillingEmail,
+  normalizeBillingAddress,
+  normalizeBillingAddressNumber,
   normalizeTaxId,
   taxIdLooksValid,
   validateBillingEmail,
   validateLegalName,
   validateTaxId,
   validateBillingPhone,
+  validateRequiredBillingPhone,
+  validateBillingAddress,
+  validateBillingAddressNumber,
 } from "./billingProfile";
 
 describe("normalizeTaxId", () => {
@@ -56,6 +61,26 @@ describe("billing document and phone formatting", () => {
     expect(validateBillingPhone("(10) 89999-9999").ok).toBe(false);
     expect(validateBillingPhone("(98) 89999-9999").ok).toBe(false);
     expect(validateBillingPhone("telefone").ok).toBe(false);
+  });
+
+  it("requires the billing phone only for checkout-ready collection", () => {
+    expect(validateBillingPhone("")).toEqual({ ok: true, value: null });
+    expect(validateRequiredBillingPhone("")).toEqual({ ok: false, message: "Informe o telefone de cobrança." });
+    expect(validateRequiredBillingPhone("(98) 99999-9999")).toEqual({ ok: true, value: "98999999999" });
+  });
+});
+
+describe("billing address", () => {
+  it("trims address fields and accepts a Brazilian S/N representation", () => {
+    expect(normalizeBillingAddress("  Rua das Flores  ")).toBe("Rua das Flores");
+    expect(normalizeBillingAddressNumber(" S/N ")).toBe("S/N");
+    expect(validateBillingAddress(" Rua das Flores ")).toEqual({ ok: true, value: "Rua das Flores" });
+    expect(validateBillingAddressNumber(" S/N ")).toEqual({ ok: true, value: "S/N" });
+  });
+
+  it("rejects whitespace-only address fields with actionable copy", () => {
+    expect(validateBillingAddress("  ")).toEqual({ ok: false, message: "Informe o endereço de cobrança." });
+    expect(validateBillingAddressNumber("  ")).toEqual({ ok: false, message: "Informe o número do endereço." });
   });
 });
 

@@ -162,6 +162,34 @@ export function validateBillingPhone(raw: string): BillingPhoneValidation {
   return { ok: true, value };
 }
 
+export function validateRequiredBillingPhone(raw: string): BillingFieldValidation {
+  if (raw.trim() === "") return { ok: false, message: "Informe o telefone de cobrança." };
+  const result = validateBillingPhone(raw);
+  if (!result.ok) return result;
+  if (!result.value) return { ok: false, message: "Informe o telefone de cobrança." };
+  return { ok: true, value: result.value };
+}
+
+export function normalizeBillingAddress(raw: string): string {
+  return raw.trim();
+}
+
+export function validateBillingAddress(raw: string): BillingFieldValidation {
+  const value = normalizeBillingAddress(raw);
+  if (!value) return { ok: false, message: "Informe o endereço de cobrança." };
+  return { ok: true, value };
+}
+
+export function normalizeBillingAddressNumber(raw: string): string {
+  return raw.trim();
+}
+
+export function validateBillingAddressNumber(raw: string): BillingFieldValidation {
+  const value = normalizeBillingAddressNumber(raw);
+  if (!value) return { ok: false, message: "Informe o número do endereço." };
+  return { ok: true, value };
+}
+
 const HINT_MESSAGES: Record<string, string> = {
   BILLING_NOT_AUTHENTICATED: "Sua sessão expirou. Entre novamente para continuar.",
   BILLING_NOT_CLINIC_ADMIN: "Apenas o administrador da clínica gerencia os dados de faturamento.",
@@ -170,6 +198,9 @@ const HINT_MESSAGES: Record<string, string> = {
   BILLING_INVALID_LEGAL_NAME: "Informe um nome ou razão social válido.",
   BILLING_INVALID_EMAIL: "Informe um e-mail de cobrança válido.",
   BILLING_INVALID_MOBILE_PHONE: "Informe um celular brasileiro válido com DDD.",
+  BILLING_PHONE_REQUIRED: "Informe o telefone de cobrança.",
+  BILLING_ADDRESS_REQUIRED: "Informe o endereço de cobrança.",
+  BILLING_ADDRESS_NUMBER_REQUIRED: "Informe o número do endereço.",
 };
 
 export function billingProfileErrorHint(error: unknown): string | null {
@@ -194,10 +225,14 @@ export interface ClinicBillingIdentity {
   clinicId: string;
   exists: boolean;
   isComplete: boolean;
+  isCheckoutReady: boolean;
+  checkoutReadinessError: string | null;
   legalName: string | null;
   taxId: string | null;
   taxIdMasked: string | null;
   email: string | null;
   mobilePhone: string | null;
+  billingAddress: string | null;
+  billingAddressNumber: string | null;
   updatedAt: string | null;
 }

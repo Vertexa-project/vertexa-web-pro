@@ -15,6 +15,9 @@ export interface CustomerFixture {
   email: string;
   notificationDisabled: boolean;
   mobilePhone?: string;
+  phone?: string;
+  address?: string;
+  addressNumber?: string;
 }
 
 export interface CustomerIdentitySource {
@@ -22,6 +25,8 @@ export interface CustomerIdentitySource {
   taxId: string;
   email: string;
   mobilePhone?: string | null;
+  billingAddress?: string | null;
+  billingAddressNumber?: string | null;
 }
 
 export interface AuthoritativeCustomerIdentity {
@@ -30,6 +35,9 @@ export interface AuthoritativeCustomerIdentity {
   name: string | null;
   email: string | null;
   mobilePhone: string | null;
+  phone: string | null;
+  address: string | null;
+  addressNumber: string | null;
 }
 
 export type AuthoritativeCustomerResult =
@@ -46,6 +54,22 @@ function optionalText(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function phoneDigits(value: unknown): string | null {
+  const text = optionalText(value);
+  return text ? text.replace(/\D/g, "") || null : null;
+}
+
+export function checkoutReadinessError(identity: CustomerIdentitySource): string | null {
+  if (!phoneDigits(identity.mobilePhone)) return "billing_phone_required";
+  if (!optionalText(identity.billingAddress)) return "billing_address_required";
+  if (!optionalText(identity.billingAddressNumber)) return "billing_address_number_required";
+  return null;
+}
+
+export function isCustomerCheckoutReady(customer: Pick<AuthoritativeCustomerIdentity, "phone" | "address" | "addressNumber">): boolean {
+  return Boolean(phoneDigits(customer.phone) && optionalText(customer.address) && optionalText(customer.addressNumber));
+}
+
 /** Server-derived Asaas body. Browser never supplies these fields. */
 export function customerBodyFromIdentity(identity: CustomerIdentitySource): CustomerFixture {
   const name = identity.legalName.trim();
@@ -54,6 +78,8 @@ export function customerBodyFromIdentity(identity: CustomerIdentitySource): Cust
   const cpfCnpj = normalizeCustomerTaxId(identity.taxId) ?? "";
   const email = identity.email.trim();
   const phone = identity.mobilePhone?.replace(/\D/g, "") ?? "";
+  const address = identity.billingAddress?.trim() ?? "";
+  const addressNumber = identity.billingAddressNumber?.trim() ?? "";
   if (!name || !cpfCnpj || !email) {
     throw new Error("identity_incomplete");
   }
@@ -62,8 +88,31 @@ export function customerBodyFromIdentity(identity: CustomerIdentitySource): Cust
     cpfCnpj,
     email,
     notificationDisabled: true,
-    ...(phone.length >= 10 ? { mobilePhone: phone } : {}),
+    ...(phone.length >= 10 ? { phone, mobilePhone: phone } : {}),
+    ...(address ? { address } : {}),
+    ...(addressNumber ? { addressNumber } : {}),
   };
+}
+
+export function customerUpdatePayload(
+  fixture: CustomerFixture,
+  current: AuthoritativeCustomerIdentity,
+): Record<string, string> {
+  const payload: Record<string, string> = {};
+  if (optionalText(fixture.name) !== current.name) payload.name = fixture.name.trim();
+  if (optionalText(fixture.email)?.toLowerCase() !== current.email) payload.email = fixture.email.trim().toLowerCase();
+  const desiredPhone = phoneDigits(fixture.phone ?? fixture.mobilePhone);
+  if (desiredPhone && desiredPhone !== phoneDigits(current.phone)) {
+    payload.phone = desiredPhone;
+    payload.mobilePhone = desiredPhone;
+  }
+  const desiredAddress = optionalText(fixture.address);
+  if (desiredAddress && desiredAddress !== current.address) payload.address = desiredAddress;
+  const desiredAddressNumber = optionalText(fixture.addressNumber);
+  if (desiredAddressNumber && desiredAddressNumber !== current.addressNumber) {
+    payload.addressNumber = desiredAddressNumber;
+  }
+  return payload;
 }
 
 /**
@@ -87,6 +136,8 @@ export async function getAuthoritativeCustomerIdentity(params: {
     email?: unknown;
     mobilePhone?: unknown;
     phone?: unknown;
+    address?: unknown;
+    addressNumber?: unknown;
   }>(
     params.creds,
     params.environment,
@@ -124,6 +175,9 @@ export async function getAuthoritativeCustomerIdentity(params: {
       name: optionalText(customer.name),
       email: optionalText(customer.email)?.toLowerCase() ?? null,
       mobilePhone: optionalText(customer.mobilePhone ?? customer.phone)?.replace(/\D/g, "") || null,
+      phone: phoneDigits(customer.phone),
+      address: optionalText(customer.address),
+      addressNumber: optionalText(customer.addressNumber),
     },
   };
 }
@@ -175,10 +229,62 @@ export async function ensureCustomer(params: {
   billingAccountId: string;
   existingExternalCustomerId: string | null;
   fixture: CustomerFixture;
+  requireCheckoutReady?: boolean;
 }): Promise<EnsureCustomerResult> {
-  const { adminClient, environment, creds, billingAccountId, existingExternalCustomerId, fixture } = params;
+  const {
+    adminClient,
+    environment,
+    creds,
+    billingAccountId,
+    existingExternalCustomerId,
+    fixture,
+    requireCheckoutReady = false,
+  } = params;
 
   if (existingExternalCustomerId) {
+    const initial = await getAuthoritativeCustomerIdentity({ creds, environment, externalCustomerId: existingExternalCustomerId });
+    if (!initial.ok) return { ok: false, errorCode: initial.errorCode };
+    if (initial.customer.normalizedTaxId !== normalizeCustomerTaxId(fixture.cpfCnpj)) {
+      return { ok: false, errorCode: "provider_customer_identity_conflict" };
+    }
+
+    const update = customerUpdatePayload(fixture, initial.customer);
+    let authoritative = initial.customer;
+    if (Object.keys(update).length > 0) {
+      const updateResult = await asaasFetch<AsaasCustomer>(
+        creds,
+        environment,
+        "PUT",
+        `/customers/${encodeURIComponent(existingExternalCustomerId)}`,
+        update,
+      );
+      if (updateResult.outcome === "deterministic_rejection") {
+        return {
+          ok: false,
+          errorCode: updateResult.category === "rate_limited" ? "rate_limited" : "provider_customer_update_rejected",
+        };
+      }
+
+      // A PUT is idempotent, but a transport/5xx outcome is still reconciled
+      // through an exact-ID GET instead of assuming that the provider ignored it.
+      const readback = await getAuthoritativeCustomerIdentity({ creds, environment, externalCustomerId: existingExternalCustomerId });
+      if (!readback.ok) {
+        return {
+          ok: false,
+          errorCode: updateResult.outcome === "unknown"
+            ? "provider_customer_update_inconclusive"
+            : readback.errorCode,
+        };
+      }
+      authoritative = readback.customer;
+      if (authoritative.normalizedTaxId !== normalizeCustomerTaxId(fixture.cpfCnpj)) {
+        return { ok: false, errorCode: "provider_customer_identity_conflict" };
+      }
+    }
+
+    if (requireCheckoutReady && !isCustomerCheckoutReady(authoritative)) {
+      return { ok: false, errorCode: "provider_customer_not_checkout_ready" };
+    }
     return { ok: true, externalCustomerId: existingExternalCustomerId };
   }
 
@@ -251,6 +357,9 @@ export async function ensureCustomer(params: {
     email: fixture.email,
     notificationDisabled: fixture.notificationDisabled,
     ...(fixture.mobilePhone ? { mobilePhone: fixture.mobilePhone } : {}),
+    ...(fixture.phone ? { phone: fixture.phone } : {}),
+    ...(fixture.address ? { address: fixture.address } : {}),
+    ...(fixture.addressNumber ? { addressNumber: fixture.addressNumber } : {}),
     externalReference,
   });
 
@@ -275,7 +384,22 @@ export async function ensureCustomer(params: {
     return { ok: false, errorCode: "outcome_unknown_requires_reconciliation" };
   }
 
-  return await completeCustomer(adminClient, operationId, extracted.externalCustomerId);
+  const completed = await completeCustomer(adminClient, operationId, extracted.externalCustomerId);
+  if (!completed.ok || !requireCheckoutReady) return completed;
+
+  const readback = await getAuthoritativeCustomerIdentity({
+    creds,
+    environment,
+    externalCustomerId: extracted.externalCustomerId,
+  });
+  if (!readback.ok) return { ok: false, errorCode: readback.errorCode };
+  if (readback.customer.normalizedTaxId !== normalizeCustomerTaxId(fixture.cpfCnpj)) {
+    return { ok: false, errorCode: "provider_customer_identity_conflict" };
+  }
+  if (!isCustomerCheckoutReady(readback.customer)) {
+    return { ok: false, errorCode: "provider_customer_not_checkout_ready" };
+  }
+  return completed;
 }
 
 async function completeCustomer(

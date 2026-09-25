@@ -85,8 +85,32 @@ describe("outbound action authority", () => {
       src.indexOf("if (body.action === EXECUTE_PIX_AUTOMATIC_ACTION)"),
     );
     expect(product).toContain("customerBodyFromIdentity");
+    expect(product).toContain("billingAddress: ctx.billing_address");
+    expect(product).toContain("billingAddressNumber: ctx.billing_address_number");
+    expect(product).toContain("requireCheckoutReady: true");
     expect(product).not.toContain("CUSTOMER_FIXTURE");
     expect(src).toContain("am_i_clinic_admin");
     expect(hasForbiddenProductKeys({ fixture: true })).toBe(true);
+  });
+
+  it("blocks incomplete hosted-card identity before reserving an attempt or calling the provider", () => {
+    const src = readFileSync(resolve(here, "../../asaas-outbound/index.ts"), "utf8");
+    const hosted = src.slice(
+      src.indexOf("if (body.action === CREATE_HOSTED_CARD_CHECKOUT_ACTION)"),
+      src.indexOf("if (body.action === EXECUTE_PIX_AUTOMATIC_ACTION)"),
+    );
+    const readinessGate = hosted.indexOf("ctx.checkout_ready !== true");
+    const prepareAttempt = hosted.indexOf("prepare_my_clinic_hosted_card_checkout");
+    const ensure = hosted.indexOf("await ensureCustomer");
+    const firstCreateCheckout = hosted.indexOf("await createHostedCardCheckout");
+    const newAttemptCreateCheckout = hosted.lastIndexOf("await createHostedCardCheckout");
+    expect(readinessGate).toBeGreaterThan(-1);
+    expect(readinessGate).toBeLessThan(prepareAttempt);
+    expect(readinessGate).toBeLessThan(firstCreateCheckout);
+    expect(prepareAttempt).toBeLessThan(ensure);
+    expect(ensure).toBeLessThan(newAttemptCreateCheckout);
+    expect(hosted).toContain("billing_phone_required");
+    expect(hosted).toContain("billing_address_required");
+    expect(hosted).toContain("billing_address_number_required");
   });
 });

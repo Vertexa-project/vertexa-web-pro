@@ -164,7 +164,7 @@ export function hasStringId(data: unknown): data is { id: string } {
 export async function asaasFetch<T>(
   creds: AsaasCredentials,
   environment: AsaasEnvironment,
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT",
   path: string,
   body?: unknown,
   timeoutMs = DEFAULT_TIMEOUT_MS,
