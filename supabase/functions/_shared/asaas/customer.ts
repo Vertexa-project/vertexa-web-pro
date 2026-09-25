@@ -18,6 +18,8 @@ export interface CustomerFixture {
   phone?: string;
   address?: string;
   addressNumber?: string;
+  postalCode?: string;
+  province?: string;
 }
 
 export interface CustomerIdentitySource {
@@ -27,6 +29,8 @@ export interface CustomerIdentitySource {
   mobilePhone?: string | null;
   billingAddress?: string | null;
   billingAddressNumber?: string | null;
+  billingPostalCode?: string | null;
+  billingProvince?: string | null;
 }
 
 export interface AuthoritativeCustomerIdentity {
@@ -38,6 +42,11 @@ export interface AuthoritativeCustomerIdentity {
   phone: string | null;
   address: string | null;
   addressNumber: string | null;
+  postalCode: string | null;
+  province: string | null;
+  city: string | null;
+  cityName: string | null;
+  state: string | null;
 }
 
 export type AuthoritativeCustomerResult =
@@ -63,11 +72,26 @@ export function checkoutReadinessError(identity: CustomerIdentitySource): string
   if (!phoneDigits(identity.mobilePhone)) return "billing_phone_required";
   if (!optionalText(identity.billingAddress)) return "billing_address_required";
   if (!optionalText(identity.billingAddressNumber)) return "billing_address_number_required";
+  if (!normalizePostalCode(identity.billingPostalCode)) return "billing_postal_code_required";
+  if (!optionalText(identity.billingProvince)) return "billing_province_required";
   return null;
 }
 
-export function isCustomerCheckoutReady(customer: Pick<AuthoritativeCustomerIdentity, "phone" | "address" | "addressNumber">): boolean {
-  return Boolean(phoneDigits(customer.phone) && optionalText(customer.address) && optionalText(customer.addressNumber));
+function normalizePostalCode(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().replace(/[\s-]/g, "");
+  return /^\d{8}$/.test(normalized) ? normalized : null;
+}
+
+export function isCustomerCheckoutReady(customer: Pick<AuthoritativeCustomerIdentity, "phone" | "mobilePhone" | "address" | "addressNumber" | "postalCode" | "province" | "city">): boolean {
+  return Boolean(
+    phoneDigits(customer.phone ?? customer.mobilePhone) &&
+      optionalText(customer.address) &&
+      optionalText(customer.addressNumber) &&
+      normalizePostalCode(customer.postalCode) &&
+      optionalText(customer.province) &&
+      optionalText(customer.city),
+  );
 }
 
 /** Server-derived Asaas body. Browser never supplies these fields. */
@@ -80,6 +104,8 @@ export function customerBodyFromIdentity(identity: CustomerIdentitySource): Cust
   const phone = identity.mobilePhone?.replace(/\D/g, "") ?? "";
   const address = identity.billingAddress?.trim() ?? "";
   const addressNumber = identity.billingAddressNumber?.trim() ?? "";
+  const postalCode = normalizePostalCode(identity.billingPostalCode) ?? "";
+  const province = identity.billingProvince?.trim() ?? "";
   if (!name || !cpfCnpj || !email) {
     throw new Error("identity_incomplete");
   }
@@ -91,6 +117,8 @@ export function customerBodyFromIdentity(identity: CustomerIdentitySource): Cust
     ...(phone.length >= 10 ? { phone, mobilePhone: phone } : {}),
     ...(address ? { address } : {}),
     ...(addressNumber ? { addressNumber } : {}),
+    ...(postalCode ? { postalCode } : {}),
+    ...(province ? { province } : {}),
   };
 }
 
@@ -112,6 +140,12 @@ export function customerUpdatePayload(
   if (desiredAddressNumber && desiredAddressNumber !== current.addressNumber) {
     payload.addressNumber = desiredAddressNumber;
   }
+  const desiredPostalCode = normalizePostalCode(fixture.postalCode);
+  if (desiredPostalCode && desiredPostalCode !== normalizePostalCode(current.postalCode)) {
+    payload.postalCode = desiredPostalCode;
+  }
+  const desiredProvince = optionalText(fixture.province);
+  if (desiredProvince && desiredProvince !== current.province) payload.province = desiredProvince;
   return payload;
 }
 
@@ -138,6 +172,11 @@ export async function getAuthoritativeCustomerIdentity(params: {
     phone?: unknown;
     address?: unknown;
     addressNumber?: unknown;
+    postalCode?: unknown;
+    province?: unknown;
+    city?: unknown;
+    cityName?: unknown;
+    state?: unknown;
   }>(
     params.creds,
     params.environment,
@@ -178,6 +217,11 @@ export async function getAuthoritativeCustomerIdentity(params: {
       phone: phoneDigits(customer.phone),
       address: optionalText(customer.address),
       addressNumber: optionalText(customer.addressNumber),
+      postalCode: normalizePostalCode(customer.postalCode),
+      province: optionalText(customer.province),
+      city: optionalText(customer.city),
+      cityName: optionalText(customer.cityName),
+      state: optionalText(customer.state),
     },
   };
 }
@@ -283,7 +327,12 @@ export async function ensureCustomer(params: {
     }
 
     if (requireCheckoutReady && !isCustomerCheckoutReady(authoritative)) {
-      return { ok: false, errorCode: "provider_customer_not_checkout_ready" };
+      return {
+        ok: false,
+        errorCode: !optionalText(authoritative.city)
+          ? "provider_customer_city_missing"
+          : "provider_customer_not_checkout_ready",
+      };
     }
     return { ok: true, externalCustomerId: existingExternalCustomerId };
   }
@@ -397,7 +446,12 @@ export async function ensureCustomer(params: {
     return { ok: false, errorCode: "provider_customer_identity_conflict" };
   }
   if (!isCustomerCheckoutReady(readback.customer)) {
-    return { ok: false, errorCode: "provider_customer_not_checkout_ready" };
+    return {
+      ok: false,
+      errorCode: !optionalText(readback.customer.city)
+        ? "provider_customer_city_missing"
+        : "provider_customer_not_checkout_ready",
+    };
   }
   return completed;
 }

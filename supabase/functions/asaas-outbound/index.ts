@@ -96,6 +96,8 @@ interface ProviderCustomerContext {
   mobile_phone?: string | null;
   billing_address?: string | null;
   billing_address_number?: string | null;
+  billing_postal_code?: string | null;
+  billing_province?: string | null;
   billing_account_id?: string | null;
   environment?: string | null;
   external_customer_id?: string | null;
@@ -242,6 +244,8 @@ Deno.serve(async (req: Request) => {
         mobilePhone: ctx.mobile_phone,
         billingAddress: ctx.billing_address,
         billingAddressNumber: ctx.billing_address_number,
+        billingPostalCode: ctx.billing_postal_code,
+        billingProvince: ctx.billing_province,
       });
     } catch {
       return jsonResponse(409, { error: "identity_incomplete" });
@@ -293,7 +297,9 @@ Deno.serve(async (req: Request) => {
       const readinessError = ctx.checkout_readiness_error;
       const safeError = readinessError === "billing_phone_required" ||
           readinessError === "billing_address_required" ||
-          readinessError === "billing_address_number_required"
+          readinessError === "billing_address_number_required" ||
+          readinessError === "billing_postal_code_required" ||
+          readinessError === "billing_province_required"
         ? readinessError
         : "identity_incomplete";
       return jsonResponse(409, { error: safeError });
@@ -354,6 +360,8 @@ Deno.serve(async (req: Request) => {
         mobilePhone: ctx.mobile_phone,
         billingAddress: ctx.billing_address,
         billingAddressNumber: ctx.billing_address_number,
+        billingPostalCode: ctx.billing_postal_code,
+        billingProvince: ctx.billing_province,
       });
     } catch {
       return jsonResponse(409, { error: "identity_incomplete" });

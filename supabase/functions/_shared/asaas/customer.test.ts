@@ -64,6 +64,18 @@ describe("customerBodyFromIdentity", () => {
     });
   });
 
+  it("maps the validated CEP and bairro to provider fields", () => {
+    const body = customerBodyFromIdentity({
+      legalName: "Clínica Sintética LTDA",
+      taxId: "99991111140",
+      email: "bill@t.test",
+      billingPostalCode: "65000-000",
+      billingProvince: "Centro",
+    });
+    expect(body.postalCode).toBe("65000000");
+    expect(body.province).toBe("Centro");
+  });
+
   it("preserves a validated alphanumeric CNPJ instead of reducing it to digits", () => {
     const body = customerBodyFromIdentity({
       legalName: "Clínica Sintética LTDA",
@@ -100,6 +112,11 @@ describe("getAuthoritativeCustomerIdentity", () => {
           phone: null,
           address: null,
           addressNumber: null,
+          postalCode: null,
+          province: null,
+          city: null,
+          cityName: null,
+          state: null,
         },
       });
   });
@@ -137,20 +154,28 @@ describe("checkout-ready customer", () => {
     mobilePhone: "11988887777",
     billingAddress: "Rua das Flores",
     billingAddressNumber: "123",
+    billingPostalCode: "65000-000",
+    billingProvince: "Centro",
   };
 
   it("distinguishes bound identity from local checkout readiness", () => {
     expect(checkoutReadinessError({ ...source, mobilePhone: null })).toBe("billing_phone_required");
     expect(checkoutReadinessError({ ...source, billingAddress: " " })).toBe("billing_address_required");
     expect(checkoutReadinessError({ ...source, billingAddressNumber: " " })).toBe("billing_address_number_required");
+    expect(checkoutReadinessError({ ...source, billingPostalCode: " " })).toBe("billing_postal_code_required");
+    expect(checkoutReadinessError({ ...source, billingProvince: " " })).toBe("billing_province_required");
     expect(checkoutReadinessError(source)).toBeNull();
   });
 
-  it("requires provider phone, address, and address number", () => {
-    expect(isCustomerCheckoutReady({ phone: null, address: "Rua A", addressNumber: "1" })).toBe(false);
-    expect(isCustomerCheckoutReady({ phone: "11988887777", address: null, addressNumber: "1" })).toBe(false);
-    expect(isCustomerCheckoutReady({ phone: "11988887777", address: "Rua A", addressNumber: null })).toBe(false);
-    expect(isCustomerCheckoutReady({ phone: "11988887777", address: "Rua A", addressNumber: "S/N" })).toBe(true);
+  it("requires provider phone, address, number, CEP, bairro and city", () => {
+    const ready = { phone: "11988887777", address: "Rua A", addressNumber: "S/N", postalCode: "65000000", province: "Centro", city: "São Luís" };
+    expect(isCustomerCheckoutReady({ ...ready, phone: null })).toBe(false);
+    expect(isCustomerCheckoutReady({ ...ready, address: null })).toBe(false);
+    expect(isCustomerCheckoutReady({ ...ready, addressNumber: null })).toBe(false);
+    expect(isCustomerCheckoutReady({ ...ready, postalCode: null })).toBe(false);
+    expect(isCustomerCheckoutReady({ ...ready, province: null })).toBe(false);
+    expect(isCustomerCheckoutReady({ ...ready, city: null })).toBe(false);
+    expect(isCustomerCheckoutReady(ready)).toBe(true);
   });
 
   it("maps only authoritative changed fields and never maps tax/provider identity", () => {
@@ -163,12 +188,19 @@ describe("checkout-ready customer", () => {
       phone: null,
       address: null,
       addressNumber: null,
+      postalCode: null,
+      province: null,
+      city: null,
+      cityName: null,
+      state: null,
     });
     expect(payload).toEqual({
       phone: "11988887777",
       mobilePhone: "11988887777",
       address: "Rua das Flores",
       addressNumber: "123",
+      postalCode: "65000000",
+      province: "Centro",
     });
     expect(payload).not.toHaveProperty("cpfCnpj");
     expect(payload).not.toHaveProperty("externalCustomerId");
@@ -203,6 +235,8 @@ describe("ensureCustomer", () => {
       mobilePhone: "11988887777",
       address: "Rua das Flores",
       addressNumber: "S/N",
+      postalCode: "65000000",
+      province: "Centro",
     };
     const fetchSpy = vi.fn(async (_url: string, init?: RequestInit) => {
       const call = fetchSpy.mock.calls.length;
@@ -221,6 +255,8 @@ describe("ensureCustomer", () => {
           mobilePhone: "11988887777",
           address: "Rua das Flores",
           addressNumber: "S/N",
+          postalCode: "65000000",
+          province: "Centro",
         });
         return jsonResponse(200, { id: "cus_existing" });
       }
@@ -233,6 +269,11 @@ describe("ensureCustomer", () => {
         mobilePhone: "11988887777",
         address: "Rua das Flores",
         addressNumber: "S/N",
+        postalCode: "65000000",
+        province: "Centro",
+        city: "São Luís",
+        cityName: "São Luís",
+        state: "MA",
       });
     });
     vi.stubGlobal("fetch", fetchSpy);
@@ -256,6 +297,8 @@ describe("ensureCustomer", () => {
       mobilePhone: "11988887777",
       address: "Rua das Flores",
       addressNumber: "123",
+      postalCode: "65000000",
+      province: "Centro",
     };
     const fetchSpy = vi.fn(async () => jsonResponse(200, {
       id: "cus_existing",
@@ -266,6 +309,11 @@ describe("ensureCustomer", () => {
       mobilePhone: "11988887777",
       address: "Rua das Flores",
       addressNumber: "123",
+      postalCode: "65000000",
+      province: "Centro",
+      city: "São Luís",
+      cityName: "São Luís",
+      state: "MA",
     }));
     vi.stubGlobal("fetch", fetchSpy);
     const { adminClient } = makeAdminClient(async () => {
@@ -279,6 +327,41 @@ describe("ensureCustomer", () => {
     })).resolves.toEqual({ ok: true, externalCustomerId: "cus_existing" });
     expect(fetchSpy).toHaveBeenCalledOnce();
     expect(fetchSpy.mock.calls[0]?.[1]?.method ?? "GET").toBe("GET");
+  });
+
+  it("fails closed when provider city is absent", async () => {
+    const readyFixture: CustomerFixture = {
+      ...fixture,
+      phone: "11988887777",
+      mobilePhone: "11988887777",
+      address: "Rua das Flores",
+      addressNumber: "123",
+      postalCode: "65000000",
+      province: "Centro",
+    };
+    const fetchSpy = vi.fn(async () => jsonResponse(200, {
+      id: "cus_existing",
+      cpfCnpj: fixture.cpfCnpj,
+      name: fixture.name,
+      email: fixture.email,
+      phone: "11988887777",
+      mobilePhone: "11988887777",
+      address: "Rua das Flores",
+      addressNumber: "123",
+      postalCode: "65000000",
+      province: "Centro",
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = makeAdminClient(async () => {
+      throw new Error("no RPC expected");
+    });
+
+    await expect(ensureCustomer({
+      ...baseParams(adminClient, "cus_existing"),
+      fixture: readyFixture,
+      requireCheckoutReady: true,
+    })).resolves.toEqual({ ok: false, errorCode: "provider_customer_city_missing" });
+    expect(fetchSpy).toHaveBeenCalledOnce();
   });
 
   it("fails closed on a bound provider tax identity conflict", async () => {

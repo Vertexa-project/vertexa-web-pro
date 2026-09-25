@@ -9,6 +9,8 @@ import {
   normalizeBillingEmail,
   normalizeBillingAddress,
   normalizeBillingAddressNumber,
+  normalizeBillingPostalCode,
+  normalizeBillingProvince,
   normalizeTaxId,
   taxIdLooksValid,
   validateBillingEmail,
@@ -18,6 +20,9 @@ import {
   validateRequiredBillingPhone,
   validateBillingAddress,
   validateBillingAddressNumber,
+  validateRequiredBillingPostalCode,
+  validateRequiredBillingProvince,
+  formatBillingPostalCode,
 } from "./billingProfile";
 
 describe("normalizeTaxId", () => {
@@ -91,6 +96,26 @@ describe("validateTaxId", () => {
 
   it("rejeita em branco", () => {
     expect(validateTaxId("   ")).toEqual({ ok: false, message: "Informe o CPF ou CNPJ." });
+  });
+});
+
+describe("billing postal code and province", () => {
+  it("normalizes and formats CEP", () => {
+    expect(normalizeBillingPostalCode(" 65000-000 ")).toBe("65000000");
+    expect(formatBillingPostalCode("65000000")).toBe("65000-000");
+    expect(validateRequiredBillingPostalCode("65000-000")).toEqual({ ok: true, value: "65000000" });
+  });
+
+  it("rejects invalid CEP without silently removing letters", () => {
+    expect(validateRequiredBillingPostalCode("65000-00").ok).toBe(false);
+    expect(validateRequiredBillingPostalCode("65000A000").ok).toBe(false);
+    expect(validateRequiredBillingPostalCode(" ").ok).toBe(false);
+  });
+
+  it("trims bairro and requires a nonblank value", () => {
+    expect(normalizeBillingProvince("  Centro ")).toBe("Centro");
+    expect(validateRequiredBillingProvince("  Centro ")).toEqual({ ok: true, value: "Centro" });
+    expect(validateRequiredBillingProvince("  ").ok).toBe(false);
   });
 });
 

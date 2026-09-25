@@ -16,6 +16,8 @@ const fixtures = vi.hoisted(() => ({
     mobilePhone: null as string | null,
     billingAddress: null as string | null,
     billingAddressNumber: null as string | null,
+    billingPostalCode: null as string | null,
+    billingProvince: null as string | null,
     updatedAt: null as string | null,
   },
   savedIdentity: {
@@ -31,6 +33,8 @@ const fixtures = vi.hoisted(() => ({
     mobilePhone: "98999999999" as string | null,
     billingAddress: "Rua das Flores" as string | null,
     billingAddressNumber: "S/N" as string | null,
+    billingPostalCode: "65000000" as string | null,
+    billingProvince: "Centro" as string | null,
     updatedAt: "2026-09-12T00:00:00Z",
   },
   pulse: {
@@ -250,8 +254,10 @@ describe("BillingProfilePage commercial checkout", () => {
     expect(screen.getByLabelText(/razão social \/ nome legal/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/cpf\/cnpj/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/telefone de cobrança/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^CEP$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/endereço de cobrança/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^número$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^bairro$/i)).toBeInTheDocument();
   });
 
   it("valida CPF no passo de cobrança e não chama contrato", async () => {

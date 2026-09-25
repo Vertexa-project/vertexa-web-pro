@@ -87,6 +87,8 @@ describe("outbound action authority", () => {
     expect(product).toContain("customerBodyFromIdentity");
     expect(product).toContain("billingAddress: ctx.billing_address");
     expect(product).toContain("billingAddressNumber: ctx.billing_address_number");
+    expect(product).toContain("billingPostalCode: ctx.billing_postal_code");
+    expect(product).toContain("billingProvince: ctx.billing_province");
     expect(product).toContain("requireCheckoutReady: true");
     expect(product).not.toContain("CUSTOMER_FIXTURE");
     expect(src).toContain("am_i_clinic_admin");
@@ -112,5 +114,7 @@ describe("outbound action authority", () => {
     expect(hosted).toContain("billing_phone_required");
     expect(hosted).toContain("billing_address_required");
     expect(hosted).toContain("billing_address_number_required");
+    expect(hosted).toContain("billing_postal_code_required");
+    expect(hosted).toContain("billing_province_required");
   });
 });

@@ -190,6 +190,41 @@ export function validateBillingAddressNumber(raw: string): BillingFieldValidatio
   return { ok: true, value };
 }
 
+/** CEP can be typed formatted or unformatted, but is persisted as eight digits. */
+export function normalizeBillingPostalCode(raw: string): string {
+  return raw.trim().replace(/[\s-]/g, "");
+}
+
+export function formatBillingPostalCode(raw: string): string {
+  if (/[^\d\s-]/.test(raw)) return raw;
+  const value = normalizeBillingPostalCode(raw).slice(0, 8);
+  if (value.length <= 5) return value;
+  return `${value.slice(0, 5)}-${value.slice(5)}`;
+}
+
+export function validateRequiredBillingPostalCode(raw: string): BillingFieldValidation {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: false, message: "Informe o CEP de cobrança." };
+  if (!/^[\d\s-]+$/.test(trimmed)) {
+    return { ok: false, message: "Informe um CEP válido com 8 dígitos." };
+  }
+  const value = normalizeBillingPostalCode(trimmed);
+  if (!/^\d{8}$/.test(value)) {
+    return { ok: false, message: "Informe um CEP válido com 8 dígitos." };
+  }
+  return { ok: true, value };
+}
+
+export function normalizeBillingProvince(raw: string): string {
+  return raw.trim();
+}
+
+export function validateRequiredBillingProvince(raw: string): BillingFieldValidation {
+  const value = normalizeBillingProvince(raw);
+  if (!value) return { ok: false, message: "Informe o bairro de cobrança." };
+  return { ok: true, value };
+}
+
 const HINT_MESSAGES: Record<string, string> = {
   BILLING_NOT_AUTHENTICATED: "Sua sessão expirou. Entre novamente para continuar.",
   BILLING_NOT_CLINIC_ADMIN: "Apenas o administrador da clínica gerencia os dados de faturamento.",
@@ -201,6 +236,9 @@ const HINT_MESSAGES: Record<string, string> = {
   BILLING_PHONE_REQUIRED: "Informe o telefone de cobrança.",
   BILLING_ADDRESS_REQUIRED: "Informe o endereço de cobrança.",
   BILLING_ADDRESS_NUMBER_REQUIRED: "Informe o número do endereço.",
+  BILLING_POSTAL_CODE_REQUIRED: "Informe o CEP de cobrança.",
+  BILLING_INVALID_POSTAL_CODE: "Informe um CEP válido com 8 dígitos.",
+  BILLING_PROVINCE_REQUIRED: "Informe o bairro de cobrança.",
 };
 
 export function billingProfileErrorHint(error: unknown): string | null {
@@ -234,5 +272,7 @@ export interface ClinicBillingIdentity {
   mobilePhone: string | null;
   billingAddress: string | null;
   billingAddressNumber: string | null;
+  billingPostalCode: string | null;
+  billingProvince: string | null;
   updatedAt: string | null;
 }

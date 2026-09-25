@@ -10,6 +10,8 @@ function errorMessage(error: unknown): string {
   if (code.includes("billing_phone_required")) return "Informe o telefone de cobrança.";
   if (code.includes("billing_address_number_required")) return "Informe o número do endereço.";
   if (code.includes("billing_address_required")) return "Informe o endereço de cobrança.";
+  if (code.includes("billing_postal_code_required")) return "Informe o CEP de cobrança.";
+  if (code.includes("billing_province_required")) return "Informe o bairro de cobrança.";
   if (code.includes("identity_incomplete")) return "Salve os dados de cobrança antes de continuar com o cartão.";
   if (code.includes("outcome_unknown_requires_reconciliation")) return "Estamos confirmando uma tentativa anterior. Aguarde antes de iniciar outra.";
   if (code.includes("attempt_expired")) return "Esta tentativa expirou. Inicie uma nova tentativa de pagamento.";

@@ -14,6 +14,8 @@ interface RawIdentity {
   mobile_phone?: string | null;
   billing_address?: string | null;
   billing_address_number?: string | null;
+  billing_postal_code?: string | null;
+  billing_province?: string | null;
   updated_at?: string | null;
 }
 
@@ -31,6 +33,8 @@ function mapIdentity(row: RawIdentity, fallbackClinicId: string): ClinicBillingI
     mobilePhone: row.mobile_phone ?? null,
     billingAddress: row.billing_address ?? null,
     billingAddressNumber: row.billing_address_number ?? null,
+    billingPostalCode: row.billing_postal_code ?? null,
+    billingProvince: row.billing_province ?? null,
     updatedAt: row.updated_at ?? null,
   };
 }
@@ -51,6 +55,8 @@ export async function upsertMyClinicBillingIdentity(input: {
   mobilePhone: string | null;
   billingAddress: string;
   billingAddressNumber: string;
+  billingPostalCode: string;
+  billingProvince: string;
 }): Promise<ClinicBillingIdentity> {
   const { data, error } = await supabase.rpc("upsert_my_clinic_billing_identity", {
     p_clinic_id: input.clinicId,
@@ -60,6 +66,8 @@ export async function upsertMyClinicBillingIdentity(input: {
     p_mobile_phone: input.mobilePhone,
     p_billing_address: input.billingAddress,
     p_billing_address_number: input.billingAddressNumber,
+    p_billing_postal_code: input.billingPostalCode,
+    p_billing_province: input.billingProvince,
   });
   if (error) throw error;
   return mapIdentity((data ?? {}) as RawIdentity, input.clinicId);

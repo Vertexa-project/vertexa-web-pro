@@ -9,12 +9,15 @@ import {
   billingProfileErrorMessage,
   validateBillingAddress,
   validateBillingAddressNumber,
+  formatBillingPostalCode,
   formatBillingPhone,
   formatTaxId,
   isExpectedBillingProfileError,
   maskTaxId,
   validateBillingEmail,
   validateRequiredBillingPhone,
+  validateRequiredBillingPostalCode,
+  validateRequiredBillingProvince,
   validateLegalName,
   validateTaxId,
 } from "@/lib/domain/billingProfile";
@@ -35,6 +38,8 @@ export function BillingIdentityForm({
   const [phone, setPhone] = useState("");
   const [billingAddress, setBillingAddress] = useState("");
   const [billingAddressNumber, setBillingAddressNumber] = useState("");
+  const [billingPostalCode, setBillingPostalCode] = useState("");
+  const [billingProvince, setBillingProvince] = useState("");
   const [editing, setEditing] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -48,6 +53,8 @@ export function BillingIdentityForm({
     setPhone(formatBillingPhone(identity.mobilePhone ?? ""));
     setBillingAddress(identity.billingAddress ?? "");
     setBillingAddressNumber(identity.billingAddressNumber ?? "");
+    setBillingPostalCode(identity.billingPostalCode ?? "");
+    setBillingProvince(identity.billingProvince ?? "");
     setEditing(!identity.exists);
   }, [identity]);
 
@@ -83,6 +90,16 @@ export function BillingIdentityForm({
       setFormError(addressNumberCheck.message);
       return;
     }
+    const postalCodeCheck = validateRequiredBillingPostalCode(billingPostalCode);
+    if (!postalCodeCheck.ok) {
+      setFormError(postalCodeCheck.message);
+      return;
+    }
+    const provinceCheck = validateRequiredBillingProvince(billingProvince);
+    if (!provinceCheck.ok) {
+      setFormError(provinceCheck.message);
+      return;
+    }
 
     setFormError(null);
     setSaved(false);
@@ -94,6 +111,8 @@ export function BillingIdentityForm({
         mobilePhone: phoneCheck.value,
         billingAddress: addressCheck.value,
         billingAddressNumber: addressNumberCheck.value,
+        billingPostalCode: postalCodeCheck.value,
+        billingProvince: provinceCheck.value,
       },
       {
         onSuccess: () => {
@@ -198,6 +217,21 @@ export function BillingIdentityForm({
         />
       </div>
 
+      <div className="space-y-1.5">
+        <Label htmlFor="billing-postal-code">CEP</Label>
+        <Input
+          id="billing-postal-code"
+          value={billingPostalCode}
+          onChange={(e) => setBillingPostalCode(formatBillingPostalCode(e.target.value))}
+          inputMode="numeric"
+          placeholder="65000-000"
+          autoComplete="postal-code"
+          disabled={busy || showMasked}
+          aria-required="true"
+          aria-invalid={Boolean(formError)}
+        />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_8rem]">
         <div className="space-y-1.5">
           <Label htmlFor="billing-address">Endereço de cobrança</Label>
@@ -225,6 +259,20 @@ export function BillingIdentityForm({
             aria-invalid={Boolean(formError)}
           />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="billing-province">Bairro</Label>
+        <Input
+          id="billing-province"
+          value={billingProvince}
+          onChange={(e) => setBillingProvince(e.target.value)}
+          placeholder="Bairro"
+          autoComplete="address-line3"
+          disabled={busy || showMasked}
+          aria-required="true"
+          aria-invalid={Boolean(formError)}
+        />
       </div>
 
       {formError ? (

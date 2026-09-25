@@ -46,6 +46,20 @@ begin
   update private.billing_customer_identities
      set billing_address_number = ' S/N '
    where clinic_id = v_clinic;
+  if private.billing_customer_identity_checkout_readiness_error(v_clinic) is distinct from 'billing_postal_code_required' then
+    raise exception 'R6 FAIL: missing CEP was not classified locally';
+  end if;
+
+  update private.billing_customer_identities
+     set billing_postal_code = '65000-000'
+   where clinic_id = v_clinic;
+  if private.billing_customer_identity_checkout_readiness_error(v_clinic) is distinct from 'billing_province_required' then
+    raise exception 'R6 FAIL: missing bairro was not classified locally';
+  end if;
+
+  update private.billing_customer_identities
+     set billing_province = ' Centro '
+   where clinic_id = v_clinic;
   if private.billing_customer_identity_checkout_ready(v_clinic) is not true then
     raise exception 'R4 FAIL: complete checkout identity was not accepted';
   end if;
@@ -55,6 +69,8 @@ begin
        and i.mobile_phone = '98999999999'
        and i.billing_address = 'Rua das Flores'
        and i.billing_address_number = 'S/N'
+       and i.billing_postal_code = '65000000'
+       and i.billing_province = 'Centro'
   ) then
     raise exception 'R4 FAIL: billing address normalization drift';
   end if;
