@@ -219,3 +219,83 @@ export async function createPatient(input: CreatePatientInput): Promise<string> 
   if (error) throw error;
   return data as string; // patients.id do paciente criado
 }
+
+// ===== Edição de cadastro (WP-PATIENT-ADMIN-EDIT-01) =====
+// Única via de escrita: RPC SECURITY DEFINER `update_patient_registration`. O servidor deriva a
+// clínica do PACIENTE (nunca do browser), exige admin da clínica, serializa a decisão de identidade
+// por e-mail e nunca toca auth_user_id/clinic_id/profile_id/current_weight/billing. Sem `.from()`.
+export interface UpdatePatientRegistrationInput {
+  patientId: string;
+  fullName: string;
+  /** Enviado sempre; com Auth o servidor só aceita o valor atual (no-op). */
+  email: string | null;
+  birthDate: string | null; // yyyy-mm-dd
+  sex: string | null;
+  heightCm: number | null;
+  goal: string | null;
+  startWeight: number | null;
+  targetWeight: number | null;
+  /** Nulo = manter a data atual. */
+  startDate: string | null;
+}
+
+export interface UpdatePatientRegistrationResult {
+  patientId: string;
+  changedFields: string[];
+  loginEmailLocked: boolean;
+}
+
+export async function updatePatientRegistration(
+  input: UpdatePatientRegistrationInput,
+): Promise<UpdatePatientRegistrationResult> {
+  const fullName = input.fullName.trim();
+  if (!fullName) throw new Error("Nome do paciente é obrigatório.");
+
+  const { data, error } = await supabase.rpc("update_patient_registration", {
+    p_patient_id: input.patientId,
+    p_full_name: fullName,
+    p_email: input.email?.trim() || null,
+    p_birth_date: input.birthDate || null,
+    p_sex: input.sex || null,
+    p_height_cm: input.heightCm ?? null,
+    p_goal: input.goal?.trim() || null,
+    p_start_weight: input.startWeight ?? null,
+    p_target_weight: input.targetWeight ?? null,
+    p_start_date: input.startDate || null,
+  });
+  if (error) throw error;
+
+  const row = (data ?? {}) as {
+    patient_id?: string;
+    changed_fields?: string[];
+    login_email_locked?: boolean;
+  };
+  return {
+    patientId: row.patient_id ?? input.patientId,
+    changedFields: row.changed_fields ?? [],
+    loginEmailLocked: row.login_email_locked === true,
+  };
+}
+
+export interface PatientRegistrationAccess {
+  hasLoginAccount: boolean;
+  /** null quando não há conta; false = e-mail do cadastro diverge do da conta (drift legado). */
+  loginEmailMatchesRegistration: boolean | null;
+}
+
+/** Estado de acesso (admin-only, só booleanos). Define se o e-mail é editável na UI. */
+export async function getPatientRegistrationAccess(patientId: string): Promise<PatientRegistrationAccess> {
+  const { data, error } = await supabase.rpc("get_patient_registration_access", {
+    p_patient_id: patientId,
+  });
+  if (error) throw error;
+  const row = (data ?? {}) as {
+    has_login_account?: boolean;
+    login_email_matches_registration?: boolean | null;
+  };
+  return {
+    hasLoginAccount: row.has_login_account === true,
+    loginEmailMatchesRegistration:
+      row.login_email_matches_registration === undefined ? null : row.login_email_matches_registration,
+  };
+}
