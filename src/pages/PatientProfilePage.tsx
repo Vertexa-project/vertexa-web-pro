@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Pencil } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { AnthropometryTab } from "@/components/patient/AnthropometryTab";
@@ -7,15 +8,18 @@ import { EvolutionTab } from "@/components/patient/EvolutionTab";
 import { ExportPatientReportButton } from "@/components/patient/ExportPatientReportButton";
 import { NutritionTab } from "@/components/patient/NutritionTab";
 import { OverviewTab } from "@/components/patient/OverviewTab";
+import { PatientEditDialog } from "@/components/patient/PatientEditDialog";
 import { ProfileHeader } from "@/components/patient/ProfileHeader";
 import { RecoveryTab } from "@/components/patient/RecoveryTab";
 import { SupplementsTab } from "@/components/patient/SupplementsTab";
 import { TimelineTab } from "@/components/patient/TimelineTab";
 import { WorkoutTab } from "@/components/patient/WorkoutTab";
 import { ErrorState } from "@/components/feedback/ErrorState";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdherenceSnapshot } from "@/hooks/useAdherenceSnapshot";
+import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import { usePatient } from "@/hooks/usePatients";
 
 const TABS = [
@@ -46,8 +50,19 @@ export function PatientProfilePage() {
   const { id = "" } = useParams();
   const [tab, setTab] = useState("overview");
 
+  const [editOpen, setEditOpen] = useState(false);
+  const [savedNotice, setSavedNotice] = useState(false);
+
   const patientQ = usePatient(id);
   const snapshotQ = useAdherenceSnapshot(id);
+  // Admin da clínica DO PACIENTE (sinal real do banco, fail-closed). O servidor é a autoridade.
+  const { isClinicAdmin } = useIsClinicAdmin(patientQ.data?.clinic_id ?? null);
+
+  useEffect(() => {
+    if (!savedNotice) return;
+    const t = setTimeout(() => setSavedNotice(false), 4000);
+    return () => clearTimeout(t);
+  }, [savedNotice]);
 
   if (patientQ.isLoading || snapshotQ.isLoading) return <ProfileSkeleton />;
 
@@ -80,9 +95,29 @@ export function PatientProfilePage() {
     <div className="space-y-6">
       <ProfileHeader patient={patient} snapshot={snapshot} />
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-3">
+        {savedNotice ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            Cadastro atualizado.
+          </p>
+        ) : null}
+        {isClinicAdmin ? (
+          <Button variant="outline" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-4 w-4" />
+            Editar cadastro
+          </Button>
+        ) : null}
         <ExportPatientReportButton patientId={patient.id} />
       </div>
+
+      {isClinicAdmin ? (
+        <PatientEditDialog
+          patient={patient}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          onSaved={() => setSavedNotice(true)}
+        />
+      ) : null}
 
       <Tabs value={tab} onValueChange={setTab}>
         <div className="overflow-x-auto pb-1">
