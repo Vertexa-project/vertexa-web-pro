@@ -17,12 +17,14 @@ declare
   p1     constant uuid := 'f1000000-0000-0000-0000-000000000001'; au_p1     constant uuid := 'a1000000-0000-0000-0000-000000000001';
   p2     constant uuid := 'f2000000-0000-0000-0000-000000000001'; au_p2     constant uuid := 'a2000000-0000-0000-0000-000000000001';
   p3     constant uuid := 'f3000000-0000-0000-0000-000000000001'; au_p3     constant uuid := 'a3000000-0000-0000-0000-000000000001';
+  p4     constant uuid := 'f4000000-0000-0000-0000-000000000001'; au_p4     constant uuid := 'a4000000-0000-0000-0000-000000000001';
   adminB constant uuid := 'fbb00000-0000-0000-0000-000000000001'; au_adminB constant uuid := 'abb00000-0000-0000-0000-000000000001';
   pxProf constant uuid := 'fc000000-0000-0000-0000-000000000001'; au_px     constant uuid := 'ac000000-0000-0000-0000-000000000001';
   pzProf constant uuid := 'fc000000-0000-0000-0000-000000000002'; au_pz     constant uuid := 'ac000000-0000-0000-0000-000000000002';
   -- clinics / professionals / patients
   clA constant uuid := 'ca000000-0000-0000-0000-000000000001'; clB constant uuid := 'cb000000-0000-0000-0000-000000000001';
   e1  constant uuid := 'e1000000-0000-0000-0000-000000000001'; e2 constant uuid := 'e2000000-0000-0000-0000-000000000001'; e3 constant uuid := 'e3000000-0000-0000-0000-000000000001';
+  e4  constant uuid := 'e4000000-0000-0000-0000-000000000001';
   daX constant uuid := 'da000000-0000-0000-0000-000000000001'; daZ constant uuid := 'da000000-0000-0000-0000-000000000002';
   -- channels
   chX constant uuid := 'c8000000-0000-0000-0000-0000000000a1'; chZ constant uuid := 'c8000000-0000-0000-0000-0000000000b1';
@@ -40,6 +42,7 @@ begin
     (p1, au_p1,'professional','P1 (participante)','active'),
     (p2, au_p2,'professional','P2 (vinculado, NAO participante)','active'),
     (p3, au_p3,'professional','P3 (clinica B)','active'),
+    (p4, au_p4,'professional','P4 (clinica A, vinculo PERDIDO)','active'),
     (adminB, au_adminB,'admin','AdminB','active'),
     (pxProf, au_px,'patient','Paciente X','active'),
     (pzProf, au_pz,'patient','Paciente Z','active');
@@ -47,11 +50,14 @@ begin
   insert into public.professionals (id, profile_id, clinic_id, type, clinic_role) values
     (e1, p1, clA,'nutritionist','member'),
     (e2, p2, clA,'physiotherapist','member'),
-    (e3, p3, clB,'doctor','member');
+    (e3, p3, clB,'doctor','member'),
+    (e4, p4, clA,'doctor','member');
   insert into public.patients (id, profile_id, clinic_id) values (daX, pxProf, clA), (daZ, pzProf, clB);
-  -- P1 E P2 vinculados a X; P2 é o vetor de vazamento (vinculado mas fora do canal)
+  -- P1 e P2 vinculados (ATIVOS) a X. WP-CHAT-FIX (20260804090000), decisão de produto "PARTICIPAÇÃO =
+  -- VÍNCULO VIVO": vinculado ativo LÊ o canal mesmo fora do roster. O vetor de vazamento agora é P4:
+  -- mesma clínica, vínculo PERDIDO (inativo) — não pode ler objeto nem metadado.
   insert into public.professional_patient_links (professional_id, patient_id, is_external, status) values
-    (e1, daX, false, 'active'), (e2, daX, false, 'active');
+    (e1, daX, false, 'active'), (e2, daX, false, 'active'), (e4, daX, false, 'inactive');
   insert into public.chat_channels (id, patient_id) values (chX, daX), (chZ, daZ);
   -- participantes: canal X = {P1, paciente X}; canal Z = {P3}
   insert into public.chat_participants (channel_id, profile_id, role) values
@@ -90,10 +96,14 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub',au_adminA::text)::text, true);
   if (select count(*) from storage.objects where name=attRef)<>1 then fails:=fails||'ADMIN_read_obj '; end if;
   if (select count(*) from public.chat_messages where channel_id=chX)<>1 then fails:=fails||'ADMIN_read_meta '; end if;
-  -- *** VAZAMENTO *** P2 (VINCULADO a X, NÃO participante): ⟂ objeto E ⟂ metadado.
+  -- P2 (VINCULADO ATIVO a X, fora do roster): LÊ objeto e metadado (vínculo vivo — WP-CHAT-FIX).
   perform set_config('request.jwt.claims', json_build_object('sub',au_p2::text)::text, true);
-  if (select count(*) from storage.objects where name=attRef)<>0 then fails:=fails||'LEAK_P2_obj '; end if;
-  if (select count(*) from public.chat_messages where channel_id=chX)<>0 then fails:=fails||'LEAK_P2_meta '; end if;
+  if (select count(*) from storage.objects where name=attRef)<>1 then fails:=fails||'P2_linked_read_obj '; end if;
+  if (select count(*) from public.chat_messages where channel_id=chX)<>1 then fails:=fails||'P2_linked_read_meta '; end if;
+  -- *** VAZAMENTO *** P4 (mesma clínica, vínculo PERDIDO, fora do roster): ⟂ objeto E ⟂ metadado.
+  perform set_config('request.jwt.claims', json_build_object('sub',au_p4::text)::text, true);
+  if (select count(*) from storage.objects where name=attRef)<>0 then fails:=fails||'LEAK_P4_obj '; end if;
+  if (select count(*) from public.chat_messages where channel_id=chX)<>0 then fails:=fails||'LEAK_P4_meta '; end if;
   -- P3 (clínica B): isolamento — ⟂ objeto e metadado do canal X.
   perform set_config('request.jwt.claims', json_build_object('sub',au_p3::text)::text, true);
   if (select count(*) from storage.objects where name=attRef)<>0 then fails:=fails||'P3_iso_obj '; end if;

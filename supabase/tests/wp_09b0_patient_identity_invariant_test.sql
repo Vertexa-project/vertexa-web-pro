@@ -111,12 +111,15 @@ rollback;
 
 
 -- T5 múltiplos profile_id NULL permitidos. Sem NOT NULL.
+-- (fixture: desde o gate comercial de billing, todo patients exige clínica conhecida —
+--  BILLING_CLINIC_UNKNOWN — então os NULLs entram numa clínica do seed; a asserção é a mesma)
 begin;
 do $$
 declare
-  n int; nullable text;
+  s record; n int; nullable text;
 begin
-  insert into public.patients (profile_id) values (null), (null);
+  select * into s from pg_temp.wp09b0_seed();
+  insert into public.patients (profile_id, clinic_id) values (null, s.c1), (null, s.c1);
   select count(*) into n from public.patients where profile_id is null;
   if n < 2 then raise exception 'WP-09B0 T5 FAIL: nulls=%', n; end if;
   select is_nullable into nullable
@@ -209,8 +212,10 @@ begin
            E'\n' order by schemaname, tablename, policyname, cmd))
     into n, h
     from pg_policies where schemaname = 'public';
-  if n <> 113 then raise exception 'WP-09B0 T14 FAIL n=%', n; end if;
-  if h is distinct from 'bec1ea2443ea4b225e4823a258e32de8' then
+  -- inventário exato de policies de public na main de 2026-10-10 (138 migrations, até
+  -- 20261010120100). Atualizar junto com qualquer migration que crie/altere/remova policy.
+  if n <> 122 then raise exception 'WP-09B0 T14 FAIL n=%', n; end if;
+  if h is distinct from '6cdc6847680b2794509cb5e8de29eba0' then
     raise exception 'WP-09B0 T14 FAIL h=%', h;
   end if;
   raise notice 'WP-09B0 T14: PASS';
