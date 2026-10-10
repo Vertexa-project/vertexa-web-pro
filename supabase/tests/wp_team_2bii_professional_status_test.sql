@@ -361,6 +361,19 @@ begin
   if v_n <> 1 then fails := fails || 'P5_export_nao_voltou '; end if;
   reset role;
 
+  -- (I2 roda AQUI, antes de P6: desde o WP-05A1 reativar o vínculo devolve A1 ao roster — o
+  --  próprio P6 prova isso —, então só antes dele A1 é o "autor que saiu do roster".)
+  -- ── (I2) channel_professionals: false = idêntico; true traz o autor fora do roster ──
+  perform set_config('request.jwt.claims', json_build_object('sub',a_a2,'role','authenticated')::text, true);
+  set local role authenticated;
+  select string_agg(t::text,'|') into v_new  from public.channel_professionals(ch1) t;
+  select string_agg(t::text,'|') into v_old  from public.channel_professionals(ch1,false) t;
+  select string_agg(t::text,'|') into v_true from public.channel_professionals(ch1,true) t;
+  reset role;
+  if v_new is distinct from v_old then fails := fails || 'I2_default_diferente_de_false '; end if;
+  if coalesce(v_new,'') like '%'||p_a1::text||'%' then fails := fails || 'I2_false_trouxe_quem_saiu_do_roster '; end if;
+  if coalesce(v_true,'') not like '%'||p_a1::text||'%' then fails := fails || 'I2_true_nao_trouxe_o_autor '; end if;
+
   -- ── (P6) reativar o VÍNCULO devolve o eixo clínico E o roster (WP-05A1) ─────────────
   perform set_config('request.jwt.claims', json_build_object('sub',a_adm,'role','authenticated')::text, true);
   set local role authenticated;
@@ -412,17 +425,6 @@ begin
   reset role;
   select status into v_txt from public.clinic_join_requests where id = req4;
   if v_ret is distinct from v_prof_act or v_txt <> 'approved' then fails := fails || 'P8_dedup_mudou '; end if;
-
-  -- ── (I2) channel_professionals: false = idêntico; true traz o autor fora do roster ──
-  perform set_config('request.jwt.claims', json_build_object('sub',a_a2,'role','authenticated')::text, true);
-  set local role authenticated;
-  select string_agg(t::text,'|') into v_new  from public.channel_professionals(ch1) t;
-  select string_agg(t::text,'|') into v_old  from public.channel_professionals(ch1,false) t;
-  select string_agg(t::text,'|') into v_true from public.channel_professionals(ch1,true) t;
-  reset role;
-  if v_new is distinct from v_old then fails := fails || 'I2_default_diferente_de_false '; end if;
-  if coalesce(v_new,'') like '%'||p_a1::text||'%' then fails := fails || 'I2_false_trouxe_quem_saiu_do_roster '; end if;
-  if coalesce(v_true,'') not like '%'||p_a1::text||'%' then fails := fails || 'I2_true_nao_trouxe_o_autor '; end if;
 
   -- ── veredito ───────────────────────────────────────────────────────────────────────
   if fails <> '' then

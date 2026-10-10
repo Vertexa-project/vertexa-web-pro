@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -49,12 +50,14 @@ function ListProbe() {
 
 function renderPage() {
   render(
-    <MemoryRouter initialEntries={["/pacientes/pat-1"]}>
-      <Routes>
-        <Route path="/pacientes/:id" element={<PatientProfilePage />} />
-        <Route path="/pacientes" element={<ListProbe />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter initialEntries={["/pacientes/pat-1"]}>
+        <Routes>
+          <Route path="/pacientes/:id" element={<PatientProfilePage />} />
+          <Route path="/pacientes" element={<ListProbe />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

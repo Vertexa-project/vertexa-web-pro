@@ -42,6 +42,13 @@ begin
     (E1,'f1000000-0000-0000-0000-000000000001',A,'nutritionist','member'),
     ('e2000000-0000-0000-0000-000000000001','f2000000-0000-0000-0000-000000000001',A,'physiotherapist','member'),
     ('ee000000-0000-0000-0000-000000000001','fe000000-0000-0000-0000-000000000001',B,'personal_trainer','member');
+  -- WP-DISC-A: prescrever exige disciplina (nutricionista / educador_fisico|fisioterapeuta).
+  -- P1 recebe as duas para prescrever; P2 e Ext recebem a de treino para que as negações abaixo
+  -- continuem provando o motivo original (sem vínculo / externo), não "sem disciplina".
+  insert into public.professional_disciplines (professional_id, discipline) values
+    (E1,'nutricionista'), (E1,'educador_fisico'),
+    ('e2000000-0000-0000-0000-000000000001','fisioterapeuta'),
+    ('ee000000-0000-0000-0000-000000000001','educador_fisico');
   insert into public.patients (id, profile_id, clinic_id) values
     (X,'fc000000-0000-0000-0000-000000000001',A);
   insert into public.professional_patient_links (professional_id, patient_id, is_external, status) values

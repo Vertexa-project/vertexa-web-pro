@@ -50,15 +50,18 @@ export const usePatientDeletionEligibility = (patientId: string, enabled: boolea
   });
 
 /**
- * Exclui cadastro não utilizado (RPC canônica). A lista é invalidada (o paciente some sem reload)
- * e todo cache `["patient", id, ...]` é descartado — sem refetch de um id que não existe mais.
+ * Exclui cadastro não utilizado (RPC canônica). Só invalida a lista (o paciente some sem reload).
+ *
+ * O cache `["patient", id, ...]` NÃO é removido aqui: com `v7_startTransition` a navegação de saída
+ * é uma transição, então a ficha ainda re-renderiza uma vez (fechamento do diálogo, urgente) antes
+ * de desmontar — se a query sumisse agora, o `useQuery` montado buscaria de novo o paciente
+ * excluído (406 do `.single()`). Quem descarta esse cache é a própria ficha, ao desmontar.
  */
 export const useDeleteUnusedPatientRegistration = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (patientId: string) => deleteUnusedPatientRegistration(patientId),
-    onSuccess: (_res, patientId) => {
-      qc.removeQueries({ queryKey: qk.patient(patientId) });
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.patients });
     },
   });

@@ -28,6 +28,7 @@ import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import { useListPatients } from "@/hooks/usePatients";
 import { usePatientsWithoutActiveProfessional } from "@/hooks/usePatientTeam";
 import { formatPercent, formatRelative, professionalTypeLabel } from "@/lib/domain/format";
+import { matchesPatientSearch, normalizePatientSearchTerm } from "@/lib/domain/patientSearch";
 import { patientsWithoutProfessionalIds } from "@/lib/domain/patientTeam";
 import { statusLabel } from "@/lib/domain/vri";
 import type { PatientListItem, PatientStatus } from "@/types/db";
@@ -122,12 +123,12 @@ export function PatientsPage() {
   }, [data]);
 
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = normalizePatientSearchTerm(search);
     return (data ?? []).filter((p) => {
       if (tab === "pendentes" && p.snapshot?.status !== "atencao" && p.snapshot?.status !== "em_risco") {
         return false;
       }
-      if (term && !(p.profile?.full_name ?? "").toLowerCase().includes(term)) return false;
+      if (!matchesPatientSearch(p.profile, term)) return false;
       if (statusFilter !== "all" && p.snapshot?.status !== statusFilter) return false;
       if (professionalFilter !== "all" && !p.professionals.some((pr) => pr.id === professionalFilter)) {
         return false;
@@ -248,7 +249,7 @@ export function PatientsPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
               type="search"
-              placeholder="Buscar por nome…"
+              placeholder="Buscar por nome ou e-mail…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 sm:w-56"
