@@ -283,6 +283,34 @@ export interface PatientRegistrationAccess {
   loginEmailMatchesRegistration: boolean | null;
 }
 
+// ===== Exclusão de cadastro não utilizado (WP-PATIENT-DIAG-DELETE-01) =====
+// Única via: RPCs SECURITY DEFINER. O servidor deriva paciente/profile/clínica, exige admin da
+// clínica do paciente e recalcula a elegibilidade sob lock. Sem `.from().delete()`.
+export interface PatientDeletionEligibility {
+  eligible: boolean;
+  /** Código UPPER_SNAKE do servidor (PATIENT_DELETE_*). */
+  reason: string;
+}
+
+export async function getPatientDeletionEligibility(patientId: string): Promise<PatientDeletionEligibility> {
+  const { data, error } = await supabase.rpc("get_patient_deletion_eligibility", {
+    p_patient_id: patientId,
+  });
+  if (error) throw error;
+  const row = (data ?? {}) as { eligible?: boolean; reason?: string };
+  return { eligible: row.eligible === true, reason: row.reason ?? "" };
+}
+
+export async function deleteUnusedPatientRegistration(patientId: string): Promise<void> {
+  const { data, error } = await supabase.rpc("delete_unused_patient_registration", {
+    p_patient_id: patientId,
+  });
+  if (error) throw error;
+  if ((data as { deleted?: boolean } | null)?.deleted !== true) {
+    throw new Error("Exclusão não confirmada pelo servidor.");
+  }
+}
+
 /** Estado de acesso (admin-only, só booleanos). Define se o e-mail é editável na UI. */
 export async function getPatientRegistrationAccess(patientId: string): Promise<PatientRegistrationAccess> {
   const { data, error } = await supabase.rpc("get_patient_registration_access", {

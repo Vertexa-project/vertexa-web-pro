@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Download, Eye, Search, UserPlus, Users } from "lucide-react";
 
 import { ClinicCapacityNotice } from "@/components/billing/ClinicCapacityNotice";
@@ -99,6 +99,19 @@ export function PatientsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | PatientStatus>("all");
   const [professionalFilter, setProfessionalFilter] = useState<string>("all");
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Aviso vindo da ficha (ex.: "Cadastro excluído."). Lido uma vez e retirado do histórico para
+  // não reaparecer em reload/voltar.
+  const location = useLocation();
+  const [notice, setNotice] = useState<string | null>(
+    () => (location.state as { notice?: string } | null)?.notice ?? null,
+  );
+  useEffect(() => {
+    if (!notice) return;
+    navigate(location.pathname, { replace: true, state: null });
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice, navigate, location.pathname]);
 
   const professionalOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -215,6 +228,11 @@ export function PatientsPage() {
           </>
         }
       />
+      {notice ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {notice}
+        </p>
+      ) : null}
       <ClinicCapacityNotice clinicId={clinicId} kind="patient" />
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

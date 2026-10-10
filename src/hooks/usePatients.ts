@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createPatient,
+  deleteUnusedPatientRegistration,
   getPatient,
+  getPatientDeletionEligibility,
   getPatientRegistrationAccess,
   listPatients,
   updatePatientRegistration,
@@ -33,6 +35,30 @@ export const useUpdatePatientRegistration = () => {
     mutationFn: (input: UpdatePatientRegistrationInput) => updatePatientRegistration(input),
     onSuccess: (_res, input) => {
       qc.invalidateQueries({ queryKey: qk.patient(input.patientId) });
+      qc.invalidateQueries({ queryKey: qk.patients });
+    },
+  });
+};
+
+/** Elegibilidade de exclusão (admin-only). Só consulta quando `enabled` (diálogo aberto). */
+export const usePatientDeletionEligibility = (patientId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: qk.patientDeletionEligibility(patientId),
+    queryFn: () => getPatientDeletionEligibility(patientId),
+    enabled: Boolean(patientId) && enabled,
+    staleTime: 0,
+  });
+
+/**
+ * Exclui cadastro não utilizado (RPC canônica). A lista é invalidada (o paciente some sem reload)
+ * e todo cache `["patient", id, ...]` é descartado — sem refetch de um id que não existe mais.
+ */
+export const useDeleteUnusedPatientRegistration = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patientId: string) => deleteUnusedPatientRegistration(patientId),
+    onSuccess: (_res, patientId) => {
+      qc.removeQueries({ queryKey: qk.patient(patientId) });
       qc.invalidateQueries({ queryKey: qk.patients });
     },
   });

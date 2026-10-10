@@ -4,6 +4,7 @@ export const qk = {
   patient: (id: string) => ["patient", id] as const,
   patientTimeline: (id: string) => ["patient", id, "timeline"] as const,
   patientRegistrationAccess: (id: string) => ["patient", id, "registrationAccess"] as const,
+  patientDeletionEligibility: (id: string) => ["patient", id, "deletionEligibility"] as const,
   workoutPlan: (patientId: string) => ["patient", patientId, "workoutPlan"] as const,
   nutritionPlan: (patientId: string) => ["patient", patientId, "nutritionPlan"] as const,
   bodyAssessments: (patientId: string) => ["patient", patientId, "bodyAssessments"] as const,
