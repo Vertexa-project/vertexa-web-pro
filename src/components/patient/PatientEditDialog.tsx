@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
+import { PatientDeleteSection } from "@/components/patient/PatientDeleteSection";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -74,12 +75,15 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   /** Chamado após salvar com sucesso (a ficha já foi invalidada/refeita pelo hook). */
   onSaved?: () => void;
+  /** Chamado após excluir um cadastro não utilizado (lista já invalidada pelo hook). */
+  onDeleted?: () => void;
 }
 
-export function PatientEditDialog({ patient, open, onOpenChange, onSaved }: Props) {
+export function PatientEditDialog({ patient, open, onOpenChange, onSaved, onDeleted }: Props) {
   const initial = useMemo(() => initialForm(patient), [patient]);
   const [form, setForm] = useState<FormState>(initial);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const update = useUpdatePatientRegistration();
   const accessQ = usePatientRegistrationAccess(patient.id, open);
@@ -173,7 +177,7 @@ export function PatientEditDialog({ patient, open, onOpenChange, onSaved }: Prop
   const shownError = error ?? (update.isError ? patientRegistrationErrorMessage(update.error) : null);
 
   return (
-    <Dialog open={open} onOpenChange={(o) => (update.isPending ? undefined : onOpenChange(o))}>
+    <Dialog open={open} onOpenChange={(o) => (update.isPending || deleting ? undefined : onOpenChange(o))}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Editar cadastro</DialogTitle>
@@ -313,6 +317,19 @@ export function PatientEditDialog({ patient, open, onOpenChange, onSaved }: Prop
             <p id="pe-form-error" className="text-sm text-destructive" role="alert">
               {shownError}
             </p>
+          ) : null}
+
+          {onDeleted ? (
+            <PatientDeleteSection
+              patientId={patient.id}
+              patientName={patient.profile?.full_name ?? "este paciente"}
+              enabled={open}
+              onPendingChange={setDeleting}
+              onDeleted={() => {
+                onOpenChange(false);
+                onDeleted();
+              }}
+            />
           ) : null}
         </DialogBody>
 

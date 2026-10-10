@@ -116,6 +116,7 @@ export function PatientProfilePage() {
           open={editOpen}
           onOpenChange={setEditOpen}
           onSaved={() => setSavedNotice(true)}
+          onDeleted={() => navigate("/pacientes", { state: { notice: "Cadastro excluído." } })}
         />
       ) : null}
 
