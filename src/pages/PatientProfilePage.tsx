@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -21,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdherenceSnapshot } from "@/hooks/useAdherenceSnapshot";
 import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import { usePatient } from "@/hooks/usePatients";
+import { qk } from "@/lib/queryKeys";
 
 const TABS = [
   { value: "overview", label: "Visão geral" },
@@ -63,6 +65,18 @@ export function PatientProfilePage() {
     const t = setTimeout(() => setSavedNotice(false), 4000);
     return () => clearTimeout(t);
   }, [savedNotice]);
+
+  // Cadastro excluído nesta ficha: o cache ["patient", id, ...] só é descartado DEPOIS que a ficha
+  // desmonta (fim da transição de navegação). Antes disso os dados continuam no cache, então o
+  // re-render final não dispara nenhuma busca pelo paciente que já não existe.
+  const qc = useQueryClient();
+  const deletedRef = useRef(false);
+  useEffect(
+    () => () => {
+      if (deletedRef.current) qc.removeQueries({ queryKey: qk.patient(id) });
+    },
+    [qc, id],
+  );
 
   if (patientQ.isLoading || snapshotQ.isLoading) return <ProfileSkeleton />;
 
@@ -116,7 +130,10 @@ export function PatientProfilePage() {
           open={editOpen}
           onOpenChange={setEditOpen}
           onSaved={() => setSavedNotice(true)}
-          onDeleted={() => navigate("/pacientes", { state: { notice: "Cadastro excluído." } })}
+          onDeleted={() => {
+            deletedRef.current = true;
+            navigate("/pacientes", { state: { notice: "Cadastro excluído." } });
+          }}
         />
       ) : null}
 

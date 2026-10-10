@@ -18,7 +18,7 @@ const { useDeleteUnusedPatientRegistration } = await import("./usePatients");
 const { qk } = await import("@/lib/queryKeys");
 
 describe("useDeleteUnusedPatientRegistration", () => {
-  it("após excluir: invalida a lista e descarta todo o cache da ficha excluída (sem tocar outra ficha)", async () => {
+  it("após excluir: invalida a lista e NÃO remove o cache da ficha (quem descarta é a ficha, ao desmontar)", async () => {
     api.deleteUnusedPatientRegistration.mockResolvedValue(undefined);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     qc.setQueryData(qk.patients, [{ id: "pat-1" }, { id: "pat-2" }]);
@@ -39,8 +39,10 @@ describe("useDeleteUnusedPatientRegistration", () => {
 
     expect(api.deleteUnusedPatientRegistration).toHaveBeenCalledWith("pat-1");
     expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.patients });
-    expect(qc.getQueryData(qk.patient("pat-1"))).toBeUndefined();
-    expect(qc.getQueryData(qk.patientDeletionEligibility("pat-1"))).toBeUndefined();
+    // remover aqui faria a ficha ainda montada buscar o paciente excluído (406) — ver
+    // PatientProfilePage.deleteLifecycle.test.tsx
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: qk.patient("pat-1") });
+    expect(qc.getQueryData(qk.patient("pat-1"))).toEqual({ id: "pat-1" });
     expect(qc.getQueryData(qk.patient("pat-2"))).toEqual({ id: "pat-2" });
   });
 });
