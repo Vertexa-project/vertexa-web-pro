@@ -11,6 +11,9 @@ import { Document, Page, View, Text, Image, Svg, Path, StyleSheet } from "@react
 import { BRAND, NEUTRAL, STATUS, FONT, PAGE, SP, RADIUS, vriColor } from "./theme";
 
 // ============================================================ STYLES
+/** Altura da moldura das fotos: comporta retrato 3:4 inteiro na largura de meia página A4. */
+const PHOTO_BOX_HEIGHT = 300;
+
 const s = StyleSheet.create({
   page: {
     backgroundColor: NEUTRAL.canvas,
@@ -134,10 +137,12 @@ const s = StyleSheet.create({
   // ---- PhotoPair ----
   photoRow: { flexDirection: "row" },
   photoCol: { flex: 1 },
-  photo: { width: "100%", height: 210, borderRadius: RADIUS.md, objectFit: "cover", borderWidth: 1, borderColor: NEUTRAL.hair },
+  // contain: a foto aparece INTEIRA (cabeça aos pés) em qualquer proporção (retrato 3:4, 9:16, paisagem),
+  // com fundo neutro nas sobras. "cover" cortava o corpo e deformava a leitura da evolução.
+  photo: { width: "100%", height: PHOTO_BOX_HEIGHT, borderRadius: RADIUS.md, objectFit: "contain", backgroundColor: NEUTRAL.surfaceAlt, borderWidth: 1, borderColor: NEUTRAL.hair },
   photoPlaceholder: {
     width: "100%",
-    height: 210,
+    height: PHOTO_BOX_HEIGHT,
     borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: NEUTRAL.hair,

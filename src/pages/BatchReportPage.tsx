@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useListPatients } from "@/hooks/usePatients";
-import { DEFAULT_REPORT_SECTIONS, MAX_BATCH_PATIENTS } from "@/lib/api/report";
+import { BATCH_REPORT_SECTIONS, MAX_BATCH_PATIENTS } from "@/lib/api/report";
 import { captureException } from "@/lib/observability/sentry";
 
 const PERIODS = [
@@ -85,7 +85,7 @@ export function BatchReportPage() {
     try {
       const { downloadBatchReport } = await import("@/lib/pdf/generateBatchReport");
       const outcome = await downloadBatchReport(
-        { patientIds: ids, from: ymd(from), to: ymd(now), sections: DEFAULT_REPORT_SECTIONS, patientNames: nameById },
+        { patientIds: ids, from: ymd(from), to: ymd(now), sections: BATCH_REPORT_SECTIONS, patientNames: nameById },
         (done, total) => setProgress({ done, total }),
         now,
       );

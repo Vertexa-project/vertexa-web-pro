@@ -29,6 +29,7 @@ const s = StyleSheet.create({
   noticeTitle: { fontSize: 9, fontWeight: 700, color: BRAND.orangeDeep, marginBottom: 2 },
   noticeText: { fontSize: 8.5, color: NEUTRAL.inkSoft },
   sectionBody: { marginTop: SP.xs },
+  tableAfterKpis: { marginTop: SP.md },
 });
 
 export interface PatientReportPhotos {
@@ -59,19 +60,19 @@ export function PatientReportSections({
         <View key={sec.key} wrap={false}>
           <SectionTitle title={sec.title} />
           <View style={s.sectionBody}>
-            {sec.kpis ? (
-              <KpiRow items={sec.kpis.map((k) => ({ label: k.label, value: k.value, sub: k.sub }))} />
-            ) : sec.table ? (
-              <DataTable columns={sec.table.columns} rows={sec.table.rows} />
-            ) : (
-              <EmptyState text={sec.emptyText ?? "Sem dados."} />
-            )}
+            {sec.kpis ? <KpiRow items={sec.kpis.map((k) => ({ label: k.label, value: k.value, sub: k.sub }))} /> : null}
+            {sec.table ? (
+              <View style={sec.kpis ? s.tableAfterKpis : undefined}>
+                <DataTable columns={sec.table.columns} rows={sec.table.rows} />
+              </View>
+            ) : null}
+            {!sec.kpis && !sec.table ? <EmptyState text={sec.emptyText ?? "Sem dados."} /> : null}
           </View>
         </View>
       ))}
 
       {photos ? (
-        <View>
+        <View wrap={false}>
           <SectionTitle title="Fotos comparativas" />
           <View style={s.sectionBody}>
             <PhotoPair before={photos.before} after={photos.after} />

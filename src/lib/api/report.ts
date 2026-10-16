@@ -19,11 +19,31 @@ export const REPORT_SECTIONS = [
   "photos",
   "achievements",
   "timeline",
+  "hydration",
+  "supplement_intakes",
 ] as const;
 export type ReportSection = (typeof REPORT_SECTIONS)[number];
 
-/** Conjunto padrão exportado pelo botão (essenciais + planos + adesão). */
+/** Conjunto padrão exportado pelo botão: identidade, evolução (peso/medidas/fotos), treino, água,
+ *  suplementação, planos e adesão — tudo no período escolhido. */
 export const DEFAULT_REPORT_SECTIONS: ReportSection[] = [
+  "identity",
+  "weight",
+  "anthropometry",
+  "photos",
+  "workout_plan",
+  "workout_execution",
+  "nutrition_plan",
+  "hydration",
+  "supplements",
+  "supplement_intakes",
+  "adherence",
+  "recovery",
+];
+
+/** Conjunto do relatório em LOTE (inalterado): sem fotos (o lote não as embute, por tamanho do arquivo)
+ *  e sem as séries diárias do relatório individual. */
+export const BATCH_REPORT_SECTIONS: ReportSection[] = [
   "identity",
   "weight",
   "anthropometry",
