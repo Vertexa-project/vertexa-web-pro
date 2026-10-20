@@ -28,6 +28,7 @@ import { WeightChartPdf } from "./WeightChartPdf";
 import { BRAND, STATUS, NEUTRAL, SP } from "./theme";
 import { formatWeight, professionalTypeLabel } from "@/lib/domain/format";
 import type { BodyAssessment, ProfessionalType, WeightPoint } from "@/types/db";
+import type { ReportBrand } from "./primitives";
 
 export interface EvolutionReportData {
   patientName: string;
@@ -37,6 +38,8 @@ export interface EvolutionReportData {
   professionalName: string | null;
   professionalType: ProfessionalType | null;
   clinicName: string;
+  /** Identidade da clínica (logo/cor) — null = marca Vertexa. */
+  brand?: ReportBrand | null;
   periodLabel: string; // ex.: "01/04/2026 – 30/06/2026"
   emittedAt: string; // ex.: "30 de jun. de 2026"
   startWeight: number | null;
@@ -207,6 +210,7 @@ export function EvolutionReportDoc({ data }: { data: EvolutionReportData }) {
         identity={identity}
         clinicName={data.clinicName}
         emittedAt={data.emittedAt}
+        brand={data.brand ?? null}
       >
         <SectionTitle title="Indicadores" />
         <KpiRow items={buildKpis(data)} />

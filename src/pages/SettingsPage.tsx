@@ -5,6 +5,7 @@ import { Bell, Building2, CalendarDays, CreditCard, Monitor, Moon, ShieldCheck, 
 
 import { OwnAvatarControl } from "@/components/avatar/OwnAvatarControl";
 import { GoogleCalendarConnection } from "@/components/calendar/GoogleCalendarConnection";
+import { ClinicBrandRow } from "@/components/settings/ClinicBrandRow";
 import { ClinicJoinCodeRow } from "@/components/settings/ClinicJoinCodeRow";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -157,6 +158,11 @@ export function SettingsPage() {
         <SectionCard icon={Building2} title="Clínica" description="Dados da clínica e equipe.">
           <SettingRow label="Clínica" value={clinicName} />
           <SettingRow label="Profissionais" value={teamSummary} />
+          {isClinicAdmin ? (
+            <SettingRow label="Identidade (logo e cor)">
+              <ClinicBrandRow />
+            </SettingRow>
+          ) : null}
           {isClinicAdmin ? (
             <SettingRow label="Equipe">
               <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/equipe")}>

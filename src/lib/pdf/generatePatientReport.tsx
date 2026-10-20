@@ -10,6 +10,7 @@ import { PatientReportDoc, type PatientReportPhotos } from "./PatientReport";
 import { buildPatientReportModel } from "./patientReportModel";
 import { registerReportFonts } from "./fonts";
 import { urlToDataUri } from "./images";
+import { loadReportBrand } from "./reportBrand";
 import { buildPairs, POSE_LABEL } from "@/lib/domain/photoPose";
 import { exportPatientReport, type ReportExportInput, type ReportExportResponse } from "@/lib/api/report";
 import { supabase } from "@/lib/supabase";
@@ -71,9 +72,9 @@ async function buildPhotoPairs(model: ReturnType<typeof buildPatientReportModel>
 
 export async function generatePatientReportBlob(rpc: ReportExportResponse, now: Date): Promise<{ blob: Blob; patientName: string }> {
   const model = buildPatientReportModel(rpc, now);
-  const photos = await buildPhotoPairs(model);
+  const [photos, brand] = await Promise.all([buildPhotoPairs(model), loadReportBrand()]);
   registerReportFonts();
-  const blob = await pdf(<PatientReportDoc model={model} photos={photos} />).toBlob();
+  const blob = await pdf(<PatientReportDoc model={model} photos={photos} brand={brand} />).toBlob();
   return { blob, patientName: model.patientName };
 }
 

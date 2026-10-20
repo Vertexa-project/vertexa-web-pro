@@ -181,12 +181,29 @@ function Wordmark() {
   );
 }
 
+/** Assinatura da clínica: logo (altura fixa, proporção preservada) + nome em destaque. */
+function ClinicMark({ name, logoUri }: { name: string; logoUri: string | null }) {
+  return (
+    <View style={s.wordmarkRow}>
+      {logoUri ? <Image src={logoUri} style={{ height: 30, maxWidth: 90, objectFit: "contain", marginRight: SP.md }} /> : null}
+      <Text style={s.wordmark}>{name}</Text>
+    </View>
+  );
+}
+
 // ============================================================ REPORT SHELL
 export interface IdentityField {
   label: string;
   value: string;
 }
+/** Identidade da clínica no cabeçalho: logo (data URI PNG/JPG) e cor do traço de destaque. */
+export interface ReportBrand {
+  logoUri: string | null;
+  color: string | null;
+}
 export interface ReportShellProps {
+  /** Quando presente, a CLÍNICA assina o cabeçalho (logo + nome) e a Vertexa vira assinatura secundária. */
+  brand?: ReportBrand | null;
   eyebrow: string; // ex.: "Relatório de Evolução"
   patientName: string;
   subtitle?: string; // ex.: "Período: 01/04 – 30/06/2026"
@@ -199,15 +216,15 @@ export interface ReportShellProps {
 }
 
 /** Uma <Page> A4 com capa/cabeçalho + rodapé fixo (marca/clínica/emissão). Reutilizável por todos os relatórios. */
-export function ReportShell({ eyebrow, patientName, subtitle, identity, clinicName, emittedAt, footerLabel = "Relatório de Evolução", children }: ReportShellProps) {
+export function ReportShell({ eyebrow, patientName, subtitle, identity, clinicName, emittedAt, footerLabel = "Relatório de Evolução", children, brand }: ReportShellProps) {
   return (
     <Page size="A4" style={s.page}>
       <View style={s.header}>
         <View style={s.headerTop}>
-          <Wordmark />
+          {brand ? <ClinicMark name={clinicName} logoUri={brand.logoUri} /> : <Wordmark />}
           <Text style={s.eyebrow}>{eyebrow}</Text>
         </View>
-        <View style={s.accentRule} />
+        <View style={brand?.color ? [s.accentRule, { backgroundColor: brand.color }] : s.accentRule} />
         <Text style={s.patientName}>{patientName}</Text>
         {subtitle ? <Text style={s.docSubtitle}>{subtitle}</Text> : <View style={{ marginBottom: SP.md }} />}
         <View style={s.identity}>
@@ -228,7 +245,7 @@ export function ReportShell({ eyebrow, patientName, subtitle, identity, clinicNa
       <Text fixed style={s.footerLeft}>
         {clinicName} · Emitido em {emittedAt} · Documento confidencial (LGPD)
       </Text>
-      <Text fixed style={s.footerRight}>VERTEXA · {footerLabel}</Text>
+      <Text fixed style={s.footerRight}>{brand ? "via VERTEXA" : "VERTEXA"} · {footerLabel}</Text>
     </Page>
   );
 }

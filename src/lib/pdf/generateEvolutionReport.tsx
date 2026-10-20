@@ -8,6 +8,7 @@ import { pdf } from "@react-pdf/renderer";
 import { EvolutionReportDoc, type EvolutionReportData } from "./EvolutionReport";
 import { registerReportFonts } from "./fonts";
 import { urlToDataUri } from "./images";
+import { loadReportBrand } from "./reportBrand";
 import { formatDate } from "@/lib/domain/format";
 import { buildPairs, POSE_LABEL } from "@/lib/domain/photoPose";
 import type { AdherenceSnapshot, BodyAssessment, PatientDetail, ProfessionalType, ProgressPhoto, WeightPoint } from "@/types/db";
@@ -94,6 +95,7 @@ export async function buildEvolutionReportData(input: EvolutionReportInput): Pro
     professionalName: input.professional?.fullName ?? null,
     professionalType: input.professional?.type ?? null,
     clinicName: input.clinicName?.trim() || "Clínica",
+    brand: await loadReportBrand(),
     periodLabel,
     emittedAt: formatDate(now),
     startWeight: input.patient.start_weight,

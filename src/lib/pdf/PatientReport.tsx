@@ -12,6 +12,7 @@ import {
   ReportShell,
   SectionTitle,
   type PhotoSlot,
+  type ReportBrand,
 } from "./primitives";
 import type { PatientReportModel } from "./patientReportModel";
 import { BRAND, NEUTRAL, RADIUS, SP } from "./theme";
@@ -95,9 +96,11 @@ export function PatientReportSections({
 export function PatientReportDoc({
   model,
   photos,
+  brand = null,
 }: {
   model: PatientReportModel;
   photos: PatientReportPhotos | null;
+  brand?: ReportBrand | null;
 }) {
   return (
     <Document>
@@ -109,6 +112,7 @@ export function PatientReportDoc({
         clinicName={model.clinicName}
         emittedAt={model.emittedAt}
         footerLabel="Relatório do paciente"
+        brand={brand}
       >
         <PatientReportSections model={model} photos={photos} />
       </ReportShell>

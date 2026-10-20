@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun } from "lucide-react";
 
 import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
-import { BrandMark } from "@/components/Brand";
+import { ClinicIdentity } from "@/components/ClinicIdentity";
 import { StaffNotificationsBell } from "@/components/notifications/StaffNotificationsBell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +45,7 @@ export function Topbar() {
 
       {/* Marca só no mobile (no desktop ela vive na sidebar). */}
       <div className="md:hidden">
-        <BrandMark className="h-8 w-8" />
+        <ClinicIdentity compact markClassName="h-8 w-8" />
       </div>
 
       <div className="relative hidden max-w-xs flex-1 sm:block">

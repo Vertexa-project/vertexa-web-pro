@@ -1,5 +1,5 @@
 import { footerNav, mainNav } from "@/app/routes";
-import { Brand } from "@/components/Brand";
+import { ClinicIdentity } from "@/components/ClinicIdentity";
 import { useUnreadMentions } from "@/hooks/useChat";
 import { NavRow } from "./NavRow";
 
@@ -8,7 +8,7 @@ export function Sidebar() {
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex h-16 items-center px-5">
-        <Brand markClassName="h-8 w-8" />
+        <ClinicIdentity />
       </div>
 
       <nav className="flex-1 space-y-0.5 px-3 py-2" aria-label="Navegação principal">
