@@ -238,6 +238,43 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
     }
   }
 
+  if ("sleep" in sec) {
+    const nights = arr(sec.sleep)
+      .map((r) => ({ day: String(r.day ?? ""), hours: toNum(r.hours), quality: toNum(r.quality) }))
+      .filter((r): r is { day: string; hours: number; quality: number | null } => r.day !== "" && r.hours != null);
+    if (nights.length) {
+      const avg = nights.reduce((a, r) => a + r.hours, 0) / nights.length;
+      const best = nights.reduce((a, r) => (r.hours > a.hours ? r : a), nights[0]);
+      const rated = nights.filter((r) => r.quality != null);
+      const kpis: Array<{ label: string; value: string; sub?: string }> = [
+        { label: "Média por noite registrada", value: `${dec(avg)} h` },
+        { label: "Noites com registro", value: nDays > 0 ? `${nights.length} de ${nDays}` : String(nights.length) },
+        { label: "Maior sono", value: `${dec(best.hours)} h`, sub: fmtD(best.day) },
+      ];
+      if (rated.length) kpis.push({ label: "Qualidade média (1 a 5)", value: dec(rated.reduce((a, r) => a + (r.quality as number), 0) / rated.length) });
+      const weeks = new Map<string, { sum: number; n: number }>();
+      for (const r of nights) {
+        const k = weekStart(r.day);
+        const w = weeks.get(k) ?? { sum: 0, n: 0 };
+        w.sum += r.hours;
+        w.n += 1;
+        weeks.set(k, w);
+      }
+      const rows = [...weeks.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .slice(-RECENT_WEEKS)
+        .map(([k, w]) => ({ week: fmtWeek(k), avg: `${dec(w.sum / w.n)} h`, days: String(w.n) }));
+      push({
+        key: "sleep",
+        title: "Sono",
+        kpis,
+        table: { columns: [{ key: "week", label: "Semana de" }, { key: "avg", label: "Média/noite", align: "right" }, { key: "days", label: "Noites com registro", align: "right" }], rows },
+      });
+    } else {
+      push({ key: "sleep", title: "Sono", emptyText: "Sem registros de sono no período." });
+    }
+  }
+
   if ("supplement_intakes" in sec) {
     const days = arr(sec.supplement_intakes)
       .map((i) => ({ day: String(i.day ?? ""), taken: toNum(i.taken), total: toNum(i.total) }))
@@ -300,7 +337,7 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
   }
 
   // Ordem de leitura do período: evolução → dados corporais → treino → alimentação/água → suplementos → adesão.
-  const ORDER = ["evolution", "weight", "anthropometry", "workout_execution", "workout_plan", "nutrition_plan", "hydration", "supplements", "supplement_intakes", "adherence", "recovery", "documents", "appointments", "achievements", "timeline"];
+  const ORDER = ["evolution", "weight", "anthropometry", "workout_execution", "workout_plan", "nutrition_plan", "hydration", "sleep", "supplements", "supplement_intakes", "adherence", "recovery", "documents", "appointments", "achievements", "timeline"];
   const rank = (k: string) => { const i = ORDER.indexOf(k); return i === -1 ? ORDER.length : i; };
   sections.sort((a, b) => rank(a.key) - rank(b.key));
 

@@ -266,11 +266,50 @@ describe("buildPatientReportModel — treino, água, suplementação e evoluçã
     expect(s?.emptyText).toMatch(/Sem marcações de suplementos/);
   });
 
+  it("sono: média, noites com registro, maior sono, qualidade média e semanas", () => {
+    const m = withSections({
+      sleep: [
+        { day: "2026-06-01", hours: 7, quality: 4 }, // seg
+        { day: "2026-06-02", hours: 8, quality: null },
+        { day: "2026-06-09", hours: 6, quality: 2 }, // seg da semana seguinte
+      ],
+    });
+    const x = m.sections.find((e) => e.key === "sleep");
+    expect(x?.title).toBe("Sono");
+    expect(x?.kpis).toEqual([
+      { label: "Média por noite registrada", value: "7 h" },
+      { label: "Noites com registro", value: "3 de 21" },
+      { label: "Maior sono", value: "8 h", sub: "02/06/2026" },
+      { label: "Qualidade média (1 a 5)", value: "3" },
+    ]);
+    expect(x?.table?.rows).toEqual([
+      { week: "01/06", avg: "7.5 h", days: "2" },
+      { week: "08/06", avg: "6 h", days: "1" },
+    ]);
+  });
+
+  it("sono: sem nenhuma qualidade informada, não inventa o KPI de qualidade", () => {
+    const x = withSections({ sleep: [{ day: "2026-06-01", hours: 7, quality: null }] }).sections.find((e) => e.key === "sleep");
+    expect(x?.kpis?.map((k) => k.label)).toEqual(["Média por noite registrada", "Noites com registro", "Maior sono"]);
+  });
+
+  it("sono: horas não numéricas são ignoradas, sem entrar na média", () => {
+    const x = withSections({ sleep: [{ day: "2026-06-01", hours: 8, quality: null }, { day: "2026-06-02", hours: "x", quality: null }] }).sections.find((e) => e.key === "sleep");
+    expect(x?.kpis?.[0].value).toBe("8 h");
+    expect(x?.kpis?.[1].value).toBe("1 de 21");
+  });
+
+  it("sono: sem registros → emptyText", () => {
+    const x = withSections({ sleep: [] }).sections.find((e) => e.key === "sleep");
+    expect(x?.emptyText).toMatch(/Sem registros de sono/);
+  });
+
   it("ordem: evolução → treino → hidratação → suplementos/adesão (leitura do período)", () => {
     const m = withSections({
       recovery: [],
       supplement_intakes: [],
       hydration: [],
+      sleep: [],
       workout_execution: [],
       weight: [{ measured_at: "2026-06-01", weight_kg: 80, source: "app" }],
     });
@@ -279,6 +318,7 @@ describe("buildPatientReportModel — treino, água, suplementação e evoluçã
       "weight",
       "workout_execution",
       "hydration",
+      "sleep",
       "supplement_intakes",
       "recovery",
     ]);

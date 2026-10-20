@@ -66,9 +66,9 @@ begin
   begin
     perform set_config('request.jwt.claims', json_build_object('sub',au_p1::text)::text, true);
     set local role authenticated;
-      perform public.export_patient_report(daX, current_date-30, current_date, array['sleep'], 'web');
+      perform public.export_patient_report(daX, current_date-30, current_date, array['xyz'], 'web');
     reset role;
-    fails:=fails||'sleep_should_be_unknown ';
+    fails:=fails||'unknown_should_be_refused ';
   exception when others then
     reset role;
     get stacked diagnostics st = returned_sqlstate;

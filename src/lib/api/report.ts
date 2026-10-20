@@ -21,6 +21,7 @@ export const REPORT_SECTIONS = [
   "timeline",
   "hydration",
   "supplement_intakes",
+  "sleep",
 ] as const;
 export type ReportSection = (typeof REPORT_SECTIONS)[number];
 
@@ -35,6 +36,7 @@ export const DEFAULT_REPORT_SECTIONS: ReportSection[] = [
   "workout_execution",
   "nutrition_plan",
   "hydration",
+  "sleep",
   "supplements",
   "supplement_intakes",
   "adherence",
