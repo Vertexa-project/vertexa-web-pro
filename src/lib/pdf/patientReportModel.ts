@@ -251,7 +251,7 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
         { label: "Noites com registro", value: nDays > 0 ? `${nights.length} de ${nDays}` : String(nights.length) },
         { label: "Maior sono", value: `${dec(best.hours)} h`, sub: fmtD(best.day) },
       ];
-      if (rated.length) kpis.push({ label: "Qualidade média (1 a 5)", value: dec(rated.reduce((a, r) => a + (r.quality as number), 0) / rated.length) });
+      if (rated.length) kpis.push({ label: "Qualidade média", value: dec(rated.reduce((a, r) => a + (r.quality as number), 0) / rated.length), sub: "escala de 1 a 5" });
       const weeks = new Map<string, { sum: number; n: number }>();
       for (const r of nights) {
         const k = weekStart(r.day);

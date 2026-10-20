@@ -280,7 +280,7 @@ describe("buildPatientReportModel — treino, água, suplementação e evoluçã
       { label: "Média por noite registrada", value: "7 h" },
       { label: "Noites com registro", value: "3 de 21" },
       { label: "Maior sono", value: "8 h", sub: "02/06/2026" },
-      { label: "Qualidade média (1 a 5)", value: "3" },
+      { label: "Qualidade média", value: "3", sub: "escala de 1 a 5" },
     ]);
     expect(x?.table?.rows).toEqual([
       { week: "01/06", avg: "7.5 h", days: "2" },
