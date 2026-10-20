@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { centsToInput, formatBRL, fmtDay, monthInRange, monthShort, monthStart, monthTitle, parseBRL, shiftMonth, statusText, validateBilling } from "./finance";
+import { centsToInput, tenureText, formatBRL, fmtDay, monthInRange, monthShort, monthStart, monthTitle, parseBRL, shiftMonth, statusText, validateBilling } from "./finance";
 
 describe("finance domain", () => {
   it("parseBRL aceita formatos brasileiros", () => {
@@ -39,6 +39,11 @@ describe("finance domain", () => {
     expect(monthInRange("2026-12-01", "2026-10-01")).toBe(false);
     expect(monthInRange("2025-10-01", "2026-10-01")).toBe(true);
     expect(monthInRange("2025-09-01", "2026-10-01")).toBe(false);
+  });
+  it("permanência no singular e com vírgula", () => {
+    expect(tenureText(1)).toBe("1 mês");
+    expect(tenureText(4)).toBe("4 meses");
+    expect(tenureText(2.5)).toBe("2,5 meses");
   });
   it("situação da cobrança", () => {
     expect(fmtDay("2026-10-05")).toBe("05/10");

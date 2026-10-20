@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCancelCharge, useFinanceCharges, useFinanceOverview, useFinancePatients, useGenerateCharges, useMarkPaid, useReopenCharge } from "@/hooks/useFinance";
 import { useClinicBrand } from "@/hooks/useClinicBrand";
 import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
-import { formatBRL, monthInRange, monthShort, monthStart, monthTitle, shiftMonth, statusText, type FinanceCharge, type FinancePatient } from "@/lib/domain/finance";
+import { formatBRL, tenureText, monthInRange, monthShort, monthStart, monthTitle, shiftMonth, statusText, type FinanceCharge, type FinancePatient } from "@/lib/domain/finance";
 
 const tone = (c: FinanceCharge) => (c.status === "paid" ? "success" : c.status === "canceled" ? "muted" : c.overdue ? "destructive" : "warning");
 
@@ -64,7 +64,7 @@ export function FinancePage() {
         actions={
           <div className="flex items-center gap-1" role="group" aria-label="Mês">
             <Button variant="outline" size="icon" aria-label="Mês anterior" disabled={!monthInRange(shiftMonth(month, -1), today)} onClick={() => setMonth(shiftMonth(month, -1))}><ChevronLeft className="h-4 w-4" /></Button>
-            <span className="min-w-40 text-center text-sm font-medium capitalize text-foreground" aria-live="polite">{monthTitle(month.slice(0, 7))}</span>
+            <span className="min-w-40 text-center text-sm font-medium text-foreground first-letter:uppercase" aria-live="polite">{monthTitle(month.slice(0, 7))}</span>
             <Button variant="outline" size="icon" aria-label="Próximo mês" disabled={!monthInRange(shiftMonth(month, 1), today)} onClick={() => setMonth(shiftMonth(month, 1))}><ChevronRight className="h-4 w-4" /></Button>
           </div>
         }
@@ -137,7 +137,7 @@ export function FinancePage() {
                 </div>
                 <dl className="grid grid-cols-3 gap-3 text-sm">
                   <div><dt className="text-xs text-muted-foreground">Ticket médio</dt><dd className="font-medium tabular-nums">{o.ticket_avg_cents == null ? "—" : formatBRL(o.ticket_avg_cents)}</dd></div>
-                  <div><dt className="text-xs text-muted-foreground">Permanência média</dt><dd className="font-medium tabular-nums">{o.tenure_avg_months == null ? "—" : `${String(o.tenure_avg_months).replace(".", ",")} meses`}</dd></div>
+                  <div><dt className="text-xs text-muted-foreground">Permanência média</dt><dd className="font-medium tabular-nums">{o.tenure_avg_months == null ? "—" : tenureText(o.tenure_avg_months)}</dd></div>
                   <div><dt className="text-xs text-muted-foreground">Valor por paciente (estimado)</dt><dd className="font-medium tabular-nums">{o.ticket_avg_cents == null || o.tenure_avg_months == null ? "—" : formatBRL(Math.round(o.ticket_avg_cents * o.tenure_avg_months))}</dd></div>
                 </dl>
                 <p className="text-xs text-muted-foreground">Projeção = mensalidades ativas de hoje repetidas; não considera entradas nem saídas futuras. O valor por paciente é uma estimativa (ticket médio × permanência média).</p>

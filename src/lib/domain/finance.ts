@@ -72,3 +72,8 @@ export function statusText(c: Pick<FinanceCharge, "status" | "overdue" | "paid_o
   if (c.status === "canceled") return "Cancelada";
   return c.overdue ? "Em atraso" : "A vencer";
 }
+
+/** 1 → "1 mês"; 4 → "4 meses"; 2.5 → "2,5 meses". */
+export function tenureText(months: number): string {
+  return months === 1 ? "1 mês" : `${String(months).replace(".", ",")} meses`;
+}
