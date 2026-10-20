@@ -26,6 +26,12 @@ export interface CreateSupplementInput {
   name: string;
   dose?: string | null;
   timeLabel?: string | null;
+  /** 'supplement' (padrão) ou 'medication' (só médico — a RLS impõe). */
+  kind?: "supplement" | "medication";
+  brand?: string | null;
+  notes?: string | null;
+  /** "HH:MM:SS" ou null. */
+  reminderTime?: string | null;
   /** Posição na lista; se omitido, entra no fim (max(order_index)+1). */
   orderIndex?: number;
 }
@@ -52,6 +58,10 @@ export async function createSupplement(input: CreateSupplementInput): Promise<Su
       name: name.trim(),
       dose: input.dose?.trim() || null,
       time_label: input.timeLabel?.trim() || null,
+      kind: input.kind ?? "supplement",
+      brand: input.brand?.trim() || null,
+      notes: input.notes?.trim() || null,
+      reminder_time: input.reminderTime || null,
       order_index: orderIndex,
     })
     .select("*")
@@ -65,6 +75,9 @@ export interface UpdateSupplementInput {
   name?: string;
   dose?: string | null;
   timeLabel?: string | null;
+  brand?: string | null;
+  notes?: string | null;
+  reminderTime?: string | null;
   orderIndex?: number;
 }
 
@@ -73,6 +86,9 @@ export async function updateSupplement(input: UpdateSupplementInput): Promise<Su
   if (input.name !== undefined) patch.name = input.name.trim();
   if (input.dose !== undefined) patch.dose = input.dose?.trim() || null;
   if (input.timeLabel !== undefined) patch.time_label = input.timeLabel?.trim() || null;
+  if (input.brand !== undefined) patch.brand = input.brand?.trim() || null;
+  if (input.notes !== undefined) patch.notes = input.notes?.trim() || null;
+  if (input.reminderTime !== undefined) patch.reminder_time = input.reminderTime || null;
   if (input.orderIndex !== undefined) patch.order_index = input.orderIndex;
 
   const { data, error } = await supabase

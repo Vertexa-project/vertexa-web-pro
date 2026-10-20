@@ -175,6 +175,12 @@ export interface Supplement {
   time_label: string | null;
   order_index: number;
   created_at: string;
+  /** 'supplement' (padrão) | 'medication' — imutável após criar (migration 20261024090000). */
+  kind?: "supplement" | "medication";
+  brand?: string | null;
+  notes?: string | null;
+  /** hora do lembrete no app ("HH:MM:SS") ou null. */
+  reminder_time?: string | null;
 }
 
 // Documento/exame do paciente (PDF/imagem) — bucket PRIVADO 'patient-documents' + URL assinada

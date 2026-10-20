@@ -4,7 +4,8 @@
 // espelho). A autorização REAL é a RLS por disciplina no banco; isto é gating de UI, não autorização.
 //
 // Regras (do banco):
-//   nutrition_plans, meals, supplements ......... nutricionista
+//   nutrition_plans, meals, supplements ......... nutricionista (suplementos)
+//   supplements.kind='medication' ................ medico (medicamentos — migration 20261024090000)
 //   workout_plans, workouts, workout_exercises .. educador_fisico OU fisioterapeuta
 //   body_assessments ............................ nutricionista | educador_fisico | fisioterapeuta | medico
 //   patient_documents, appointments ............. NÃO escopados (ausentes deste mapa de propósito)
@@ -22,12 +23,13 @@ export const DISCIPLINE_CODES = [
 export type DisciplineCode = (typeof DISCIPLINE_CODES)[number];
 
 /** Superfícies de escrita ESCOPADAS por disciplina (documentos/agenda NÃO entram — não são escopados). */
-export type ScopedSurface = "nutrition" | "supplements" | "workout" | "bodyAssessment";
+export type ScopedSurface = "nutrition" | "supplements" | "medications" | "workout" | "bodyAssessment";
 
 /** ESPELHO do mapa do banco: superfície → disciplinas que podem escrever (UNIÃO). */
 export const DISCIPLINE_WRITE_MAP: Record<ScopedSurface, readonly DisciplineCode[]> = {
   nutrition: ["nutricionista"],
   supplements: ["nutricionista"],
+  medications: ["medico"],
   workout: ["educador_fisico", "fisioterapeuta"],
   bodyAssessment: ["nutricionista", "educador_fisico", "fisioterapeuta", "medico"],
 };
@@ -35,6 +37,7 @@ export const DISCIPLINE_WRITE_MAP: Record<ScopedSurface, readonly DisciplineCode
 export interface DisciplinePermissions {
   canEditNutrition: boolean;
   canEditSupplements: boolean;
+  canEditMedications: boolean;
   canEditWorkout: boolean;
   canEditBodyAssessment: boolean;
 }
@@ -49,6 +52,7 @@ export function derivePermissions(disciplines: readonly string[]): DisciplinePer
   return {
     canEditNutrition: owns(DISCIPLINE_WRITE_MAP.nutrition),
     canEditSupplements: owns(DISCIPLINE_WRITE_MAP.supplements),
+    canEditMedications: owns(DISCIPLINE_WRITE_MAP.medications),
     canEditWorkout: owns(DISCIPLINE_WRITE_MAP.workout),
     canEditBodyAssessment: owns(DISCIPLINE_WRITE_MAP.bodyAssessment),
   };
@@ -61,6 +65,7 @@ export const NO_DISCIPLINE_PERMISSIONS: DisciplinePermissions = derivePermission
 export const DISCIPLINE_REASON: Record<ScopedSurface, string> = {
   nutrition: "Requer a disciplina Nutricionista.",
   supplements: "Requer a disciplina Nutricionista.",
+  medications: "Medicamentos só podem ser prescritos por quem tem a disciplina Médico.",
   workout: "Requer a disciplina Educador Físico ou Fisioterapeuta.",
   bodyAssessment:
     "Requer uma disciplina clínica (Nutricionista, Educador Físico, Fisioterapeuta ou Médico).",
@@ -73,6 +78,8 @@ export function canWriteSurface(perms: DisciplinePermissions, surface: ScopedSur
       return perms.canEditNutrition;
     case "supplements":
       return perms.canEditSupplements;
+    case "medications":
+      return perms.canEditMedications;
     case "workout":
       return perms.canEditWorkout;
     case "bodyAssessment":

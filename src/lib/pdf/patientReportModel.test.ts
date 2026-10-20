@@ -299,6 +299,23 @@ describe("buildPatientReportModel — treino, água, suplementação e evoluçã
     expect(x?.kpis?.[1].value).toBe("1 de 21");
   });
 
+  it("suplementos e medicamentos: tipo, marca e lembrete no relatório", () => {
+    const m = withSections({
+      supplements: [
+        { name: "Creatina", dose: "5 g", time_label: "Pós-treino", kind: "supplement", brand: "Marca X", reminder_time: "18:30:00" },
+        { name: "Losartana", dose: "50 mg", time_label: null, kind: "medication", brand: null, reminder_time: null },
+        { name: "Antigo", dose: null, time_label: null }, // linha sem os campos novos
+      ],
+    });
+    const s = m.sections.find((x) => x.key === "supplements");
+    expect(s?.title).toBe("Suplementos e medicamentos");
+    expect(s?.table?.rows).toEqual([
+      { name: "Creatina", kind: "Suplemento", dose: "5 g", time: "Pós-treino", brand: "Marca X", reminder: "18:30" },
+      { name: "Losartana", kind: "Medicamento", dose: "50 mg", time: "—", brand: "—", reminder: "—" },
+      { name: "Antigo", kind: "Suplemento", dose: "—", time: "—", brand: "—", reminder: "—" },
+    ]);
+  });
+
   it("sono: sem registros → emptyText", () => {
     const x = withSections({ sleep: [] }).sections.find((e) => e.key === "sleep");
     expect(x?.emptyText).toMatch(/Sem registros de sono/);

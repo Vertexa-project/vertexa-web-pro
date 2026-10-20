@@ -25,7 +25,7 @@ export const useCreateSupplement = (patientId: string) => {
   const guard = useWriteGuard();
   return useMutation({
     mutationFn: (input: CreateSupplementInput) => {
-      guard("supplements");
+      guard(input.kind === "medication" ? "medications" : "supplements");
       return createSupplement(input);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.patientSupplements(patientId) }),
@@ -36,8 +36,9 @@ export const useUpdateSupplement = (patientId: string) => {
   const qc = useQueryClient();
   const guard = useWriteGuard();
   return useMutation({
-    mutationFn: (input: UpdateSupplementInput) => {
-      guard("supplements");
+    // `kind` só serve ao guard da UI (a RLS decide); não é enviado ao banco (kind é imutável).
+    mutationFn: ({ kind, ...input }: UpdateSupplementInput & { kind?: "supplement" | "medication" }) => {
+      guard(kind === "medication" ? "medications" : "supplements");
       return updateSupplement(input);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.patientSupplements(patientId) }),
@@ -48,8 +49,8 @@ export const useDeleteSupplement = (patientId: string) => {
   const qc = useQueryClient();
   const guard = useWriteGuard();
   return useMutation({
-    mutationFn: (id: string) => {
-      guard("supplements");
+    mutationFn: ({ id, kind }: { id: string; kind?: "supplement" | "medication" }) => {
+      guard(kind === "medication" ? "medications" : "supplements");
       return deleteSupplement(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.patientSupplements(patientId) }),

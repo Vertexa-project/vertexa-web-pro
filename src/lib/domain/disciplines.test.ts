@@ -13,6 +13,7 @@ describe("derivePermissions — UNIÃO das disciplinas (nunca interseção; nunc
     expect(derivePermissions(["nutricionista"])).toEqual({
       canEditNutrition: true,
       canEditSupplements: true,
+      canEditMedications: false,
       canEditWorkout: false,
       canEditBodyAssessment: true,
     });
@@ -33,10 +34,11 @@ describe("derivePermissions — UNIÃO das disciplinas (nunca interseção; nunc
     expect(p.canEditBodyAssessment).toBe(true);
   });
 
-  it("1 disciplina — medico: só avaliação corporal", () => {
+  it("1 disciplina — medico: avaliação corporal e medicamentos (não suplementos)", () => {
     expect(derivePermissions(["medico"])).toEqual({
       canEditNutrition: false,
       canEditSupplements: false,
+      canEditMedications: true,
       canEditWorkout: false,
       canEditBodyAssessment: true,
     });
@@ -46,6 +48,7 @@ describe("derivePermissions — UNIÃO das disciplinas (nunca interseção; nunc
     expect(derivePermissions(["medico", "nutricionista"])).toEqual({
       canEditNutrition: true,
       canEditSupplements: true,
+      canEditMedications: true,
       canEditWorkout: false,
       canEditBodyAssessment: true,
     });
@@ -61,6 +64,7 @@ describe("derivePermissions — UNIÃO das disciplinas (nunca interseção; nunc
     expect(derivePermissions(["medico", "nutricionista", "educador_fisico"])).toEqual({
       canEditNutrition: true,
       canEditSupplements: true,
+      canEditMedications: true,
       canEditWorkout: true,
       canEditBodyAssessment: true,
     });
@@ -70,6 +74,7 @@ describe("derivePermissions — UNIÃO das disciplinas (nunca interseção; nunc
     expect(derivePermissions([])).toEqual({
       canEditNutrition: false,
       canEditSupplements: false,
+      canEditMedications: false,
       canEditWorkout: false,
       canEditBodyAssessment: false,
     });
@@ -80,6 +85,7 @@ describe("derivePermissions — UNIÃO das disciplinas (nunca interseção; nunc
     expect(derivePermissions([])).toEqual({
       canEditNutrition: false,
       canEditSupplements: false,
+      canEditMedications: false,
       canEditWorkout: false,
       canEditBodyAssessment: false,
     });
@@ -88,7 +94,7 @@ describe("derivePermissions — UNIÃO das disciplinas (nunca interseção; nunc
   it("UNIÃO só AMPLIA, nunca restringe: superset de disciplinas ⇒ superset de permissões", () => {
     const base = derivePermissions(["nutricionista"]);
     const more = derivePermissions(["nutricionista", "educador_fisico"]);
-    (["canEditNutrition", "canEditSupplements", "canEditWorkout", "canEditBodyAssessment"] as const).forEach(
+    (["canEditNutrition", "canEditSupplements", "canEditMedications", "canEditWorkout", "canEditBodyAssessment"] as const).forEach(
       (k) => {
         if (base[k]) expect(more[k]).toBe(true); // nada que era permitido vira negado
       },
@@ -100,6 +106,7 @@ describe("derivePermissions — UNIÃO das disciplinas (nunca interseção; nunc
     expect(derivePermissions(["psicologo", "outro"])).toEqual({
       canEditNutrition: false,
       canEditSupplements: false,
+      canEditMedications: false,
       canEditWorkout: false,
       canEditBodyAssessment: false,
     });
@@ -111,6 +118,7 @@ describe("mapa da UI == mapa do BANCO (espelho travado — migration 20260725090
     expect(DISCIPLINE_WRITE_MAP).toEqual({
       nutrition: ["nutricionista"],
       supplements: ["nutricionista"],
+      medications: ["medico"],
       workout: ["educador_fisico", "fisioterapeuta"],
       bodyAssessment: ["nutricionista", "educador_fisico", "fisioterapeuta", "medico"],
     });
@@ -122,6 +130,9 @@ describe("helpers (guard, detecção de negação)", () => {
     const p = derivePermissions(["educador_fisico"]);
     expect(canWriteSurface(p, "workout")).toBe(true);
     expect(canWriteSurface(p, "nutrition")).toBe(false);
+    expect(canWriteSurface(p, "medications")).toBe(false);
+    expect(canWriteSurface(derivePermissions(["medico"]), "medications")).toBe(true);
+    expect(canWriteSurface(derivePermissions(["nutricionista"]), "medications")).toBe(false);
   });
 
   it("isDisciplineDenied detecta o erro do cliente e do banco (sem falso positivo)", () => {

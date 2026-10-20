@@ -168,10 +168,17 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
       : { key: "nutrition_plan", title: "Plano alimentar", emptyText: "Sem plano alimentar ativo." });
   }
   if ("supplements" in sec) {
-    const rows = arr(sec.supplements).map((x) => ({ name: (x.name as string) || "—", dose: (x.dose as string) || "—", time: (x.time_label as string) || "—" }));
+    const rows = arr(sec.supplements).map((x) => ({
+      name: (x.name as string) || "—",
+      kind: x.kind === "medication" ? "Medicamento" : "Suplemento",
+      dose: (x.dose as string) || "—",
+      time: (x.time_label as string) || "—",
+      brand: (x.brand as string) || "—",
+      reminder: typeof x.reminder_time === "string" && x.reminder_time ? x.reminder_time.slice(0, 5) : "—",
+    }));
     push(rows.length
-      ? { key: "supplements", title: "Suplementos", table: { columns: [{ key: "name", label: "Nome" }, { key: "dose", label: "Dose" }, { key: "time", label: "Horário" }], rows } }
-      : { key: "supplements", title: "Suplementos", emptyText: "Sem suplementos." });
+      ? { key: "supplements", title: "Suplementos e medicamentos", table: { columns: [{ key: "name", label: "Nome" }, { key: "kind", label: "Tipo" }, { key: "dose", label: "Dose" }, { key: "brand", label: "Marca" }, { key: "time", label: "Momento" }, { key: "reminder", label: "Lembrete", align: "right" }], rows } }
+      : { key: "supplements", title: "Suplementos e medicamentos", emptyText: "Sem suplementos ou medicamentos." });
   }
   if ("recovery" in sec) {
     const rows = arr(sec.recovery).map((r) => ({ muscle: (r.muscle_group as string) || "—", status: (r.status as string) || "—", last: fmtD(r.last_trained_at) }));
