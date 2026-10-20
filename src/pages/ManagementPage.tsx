@@ -117,7 +117,7 @@ export function ManagementPage() {
                   {o.new_by_month.map((m) => (
                     <div key={m.month} className="flex flex-1 flex-col items-center gap-1">
                       <span className="text-xs tabular-nums text-muted-foreground">{m.n}</span>
-                      <div className="w-full rounded-t bg-primary" style={{ height: `${Math.max(4, Math.round((m.n / monthMax) * 100))}%` }} />
+                      <div className="w-full rounded-t bg-primary" style={{ height: `${Math.max(4, Math.round((m.n / monthMax) * 96))}px` }} data-testid="month-bar" />
                       <span className="text-xs text-muted-foreground">{monthLabel(m.month)}</span>
                     </div>
                   ))}

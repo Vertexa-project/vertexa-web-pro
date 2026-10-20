@@ -43,6 +43,9 @@ describe("ManagementPage", () => {
     expect(screen.getAllByText("Sem profissional").length).toBeGreaterThan(0);
     expect(screen.getByText(/2 pacientes estão sem profissional/)).toBeTruthy();
     expect(screen.getByRole("img", { name: /Novos pacientes/ })).toBeTruthy();
+    // barras com altura real em px (o maior mês = 96px; mês vazio = mínimo de 4px)
+    const heights = screen.getAllByTestId("month-bar").map((b) => (b as HTMLElement).style.height);
+    expect(heights).toEqual(["4px", "24px", "48px", "96px", "24px", "72px"]);
   });
   it("trocar o limite de dias refaz a consulta", async () => {
     renderPage();
