@@ -8,6 +8,17 @@ export const ASSESSMENT_METHODS: Array<{ value: string; label: string }> = [
   { value: "dexa", label: "DEXA" },
 ];
 
+/** Métodos que já existem gravados em avaliações antigas/importadas (não oferecidos para novas, mas preservados na edição). */
+export const LEGACY_METHODS: Array<{ value: string; label: string }> = [
+  { value: "bioimpedance", label: "Bioimpedância" },
+  { value: "skinfold", label: "Dobras cutâneas" },
+];
+
+export function methodLabel(method: string | null | undefined): string {
+  if (!method) return "—";
+  return [...ASSESSMENT_METHODS, ...LEGACY_METHODS].find((m) => m.value === method)?.label ?? method;
+}
+
 /** Circunferências lançáveis (chaves do jsonb `measurements`, em cm). As 3 primeiras já existiam no relatório. */
 export const MEASURE_FIELDS: Array<{ key: string; label: string }> = [
   { key: "cintura", label: "Cintura" },
@@ -61,7 +72,7 @@ export function validateAssessment(form: AssessmentForm, today: string, existing
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.day)) return { ok: false, error: "Informe a data da avaliação." };
   if (form.day > today) return { ok: false, error: "A data da avaliação não pode ser futura." };
   if (form.day < "1900-01-01") return { ok: false, error: "Data inválida." };
-  if (!ASSESSMENT_METHODS.some((m) => m.value === form.method)) return { ok: false, error: "Escolha o método da avaliação." };
+  if (![...ASSESSMENT_METHODS, ...LEGACY_METHODS].some((m) => m.value === form.method)) return { ok: false, error: "Escolha o método da avaliação." };
 
   const weight = parseDecimal(form.weight);
   if (Number.isNaN(weight) || (weight != null && !inRange(weight, LIMITS.weight))) return { ok: false, error: "Peso inválido (entre 20 e 400 kg)." };
@@ -101,7 +112,7 @@ export function assessmentToForm(a: { assessed_at: string | null; method: string
   const str = (v: unknown) => (v == null || v === "" ? "" : String(v).replace(".", ","));
   return {
     day: a.assessed_at ?? today,
-    method: a.method && ASSESSMENT_METHODS.some((x) => x.value === a.method) ? a.method : "manual",
+    method: a.method && [...ASSESSMENT_METHODS, ...LEGACY_METHODS].some((x) => x.value === a.method) ? a.method : "manual",
     weight: str(a.weight),
     bodyFat: str(a.body_fat_pct),
     measures: Object.fromEntries(MEASURE_FIELDS.map((f) => [f.key, str(m[f.key])])),

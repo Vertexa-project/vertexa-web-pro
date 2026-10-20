@@ -11,6 +11,7 @@ import { assessmentErrorMessage } from "@/lib/api/assessments";
 import {
   assessmentToForm,
   ASSESSMENT_METHODS,
+  LEGACY_METHODS,
   emptyAssessmentForm,
   MEASURE_FIELDS,
   NOTES_MAX,
@@ -92,7 +93,7 @@ export function AssessmentDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ASSESSMENT_METHODS.map((m) => (
+                  {[...ASSESSMENT_METHODS, ...(LEGACY_METHODS.some((m) => m.value === form.method) ? LEGACY_METHODS.filter((m) => m.value === form.method) : [])].map((m) => (
                     <SelectItem key={m.value} value={m.value}>
                       {m.label}
                     </SelectItem>

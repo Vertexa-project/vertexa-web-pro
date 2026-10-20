@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assessmentToForm, emptyAssessmentForm, parseDecimal, validateAssessment } from "./anthropometry";
+import { assessmentToForm, emptyAssessmentForm, methodLabel, parseDecimal, validateAssessment } from "./anthropometry";
 
 const TODAY = "2026-10-20";
 const base = () => ({ ...emptyAssessmentForm(TODAY), day: "2026-03-10", weight: "72,5" });
@@ -57,6 +57,13 @@ describe("anthropometry (lançamento manual)", () => {
     expect(v.measurements).toEqual({ extra: "x" });
     const v2 = ok({ ...base(), measures: { cintura: "88" }, notes: "nova" }, existing);
     expect(v2.measurements).toEqual({ cintura: 88, notes: "nova", extra: "x" });
+  });
+  it("método legado (bioimpedance/skinfold) é aceito e preservado na edição", () => {
+    const f = assessmentToForm({ assessed_at: "2026-03-10", method: "skinfold", weight: 70, body_fat_pct: null, measurements: null }, TODAY);
+    expect(f.method).toBe("skinfold");
+    expect(ok(f).method).toBe("skinfold");
+    expect(methodLabel("bioimpedance")).toBe("Bioimpedância");
+    expect(methodLabel(null)).toBe("—");
   });
   it("observações têm limite", () => {
     expect(err({ ...base(), notes: "a".repeat(1001) })).toMatch(/passam de 1000/);

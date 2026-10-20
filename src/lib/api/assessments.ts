@@ -194,6 +194,6 @@ export class AssessmentError extends Error {
 export function assessmentErrorMessage(err: unknown): string {
   if (err instanceof AssessmentError) return err.message;
   const e = err as { code?: string } | null;
-  if (e?.code === "42501") return "Você não tem permissão para lançar avaliações deste paciente.";
+  if (e?.code === "42501") return "Você não tem permissão para lançar avaliações deste paciente. Confira se sua disciplina (nutrição, educação física, fisioterapia ou medicina) está definida em Configurações → Disciplinas da equipe.";
   return "Não foi possível salvar. Tente novamente.";
 }

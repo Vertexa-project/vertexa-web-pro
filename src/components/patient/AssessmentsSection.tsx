@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBodyAssessments, useDeleteAssessment } from "@/hooks/useBodyAssessments";
 import { assessmentErrorMessage } from "@/lib/api/assessments";
-import { ASSESSMENT_METHODS, MEASURE_FIELDS } from "@/lib/domain/anthropometry";
+import { MEASURE_FIELDS, methodLabel } from "@/lib/domain/anthropometry";
 import { formatDate, formatWeight } from "@/lib/domain/format";
 import type { BodyAssessment } from "@/types/db";
 
@@ -99,7 +99,7 @@ export function AssessmentsSection({ patientId }: { patientId: string }) {
                     return (
                       <tr key={a.id} className="border-b last:border-0">
                         <td className="py-2 pr-3 whitespace-nowrap">{when}</td>
-                        <td className="py-2 pr-3">{ASSESSMENT_METHODS.find((m) => m.value === a.method)?.label ?? a.method ?? "—"}</td>
+                        <td className="py-2 pr-3">{methodLabel(a.method)}</td>
                         <td className="py-2 pr-3 text-right">{a.weight != null ? formatWeight(Number(a.weight)) : "—"}</td>
                         <td className="py-2 pr-3 text-right">{a.body_fat_pct != null ? `${a.body_fat_pct}%` : "—"}</td>
                         <td className="py-2 pr-3 text-muted-foreground">{measuresSummary(a)}</td>
