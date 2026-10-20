@@ -4,6 +4,7 @@ import {
   LayoutTemplate,
   Megaphone,
   MessageSquare,
+  BarChart3,
   Settings,
   Users,
   type LucideIcon,
@@ -15,6 +16,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Item de roadmap: aparece com cadeado, desabilitado (não navega). */
   locked?: boolean;
+  /** Só administrador da clínica vê o item (o servidor também nega aos demais). */
+  adminOnly?: boolean;
 }
 
 // Fonte única do sidebar (núcleo enxuto: tudo gira em torno do paciente).
@@ -29,6 +32,7 @@ export const mainNav: NavItem[] = [
   { path: "/jornada", label: "Jornada", icon: KanbanSquare },
   { path: "/mensagens", label: "Mensagens", icon: MessageSquare },
   { path: "/campanhas", label: "Campanhas", icon: Megaphone },
+  { path: "/gestao", label: "Gestão", icon: BarChart3, adminOnly: true },
   // Roadmap (não implementado): modelos de plano/treino/mensagem reutilizáveis.
   // Aparece com cadeado para sinalizar o que vem, sem virar módulo solto.
   { path: "/modelos", label: "Modelos", icon: LayoutTemplate, locked: true },

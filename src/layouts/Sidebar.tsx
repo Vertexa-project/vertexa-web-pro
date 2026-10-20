@@ -1,10 +1,12 @@
-import { footerNav, mainNav } from "@/app/routes";
+import { footerNav } from "@/app/routes";
+import { useVisibleMainNav } from "@/hooks/useVisibleNav";
 import { ClinicIdentity } from "@/components/ClinicIdentity";
 import { useUnreadMentions } from "@/hooks/useChat";
 import { NavRow } from "./NavRow";
 
 export function Sidebar() {
   const { data: mentions } = useUnreadMentions();
+  const visibleMainNav = useVisibleMainNav();
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex h-16 items-center px-5">
@@ -15,7 +17,7 @@ export function Sidebar() {
         <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Menu
         </p>
-        {mainNav.map((item) => (
+        {visibleMainNav.map((item) => (
           <NavRow
             key={item.path}
             item={item}

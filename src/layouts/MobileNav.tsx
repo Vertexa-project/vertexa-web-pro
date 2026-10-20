@@ -9,7 +9,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { footerNav, mainNav } from "@/app/routes";
+import { footerNav } from "@/app/routes";
+import { useVisibleMainNav } from "@/hooks/useVisibleNav";
 import { Brand } from "@/components/Brand";
 import { useUnreadMentions } from "@/hooks/useChat";
 import { NavRow } from "./NavRow";
@@ -18,6 +19,7 @@ export function MobileNav() {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const { data: mentions } = useUnreadMentions();
+  const visibleMainNav = useVisibleMainNav();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -35,7 +37,7 @@ export function MobileNav() {
         </div>
 
         <nav className="flex-1 space-y-0.5 px-3">
-          {mainNav.map((item) => (
+          {visibleMainNav.map((item) => (
             <NavRow
               key={item.path}
               item={item}
