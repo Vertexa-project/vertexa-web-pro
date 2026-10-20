@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/observability/sentry";
 import type { BodyAssessment, ProgressPhoto } from "@/types/db";
 import { photoStorageKey, validatePhotoFile, type PhotoPose } from "@/lib/domain/photoPose";
+import type { AssessmentPayload } from "@/lib/domain/anthropometry";
 
 // Bucket PRIVADO de fotos desde WP-STORAGE P1 (public=false). Exibição = createSignedUrl.
 const PROGRESS_PHOTOS_BUCKET = "progress-photos";
@@ -150,4 +151,49 @@ export async function uploadProgressPhotoForPatient(input: UploadPatientPhotoInp
 export async function setProgressPhotoPose(photoId: string, pose: PhotoPose | null): Promise<void> {
   const { error } = await supabase.rpc("set_progress_photo_pose", { p_photo_id: photoId, p_pose: pose });
   if (error) throw error;
+}
+
+// ───────────────────────── Avaliações antropométricas (lançamento manual, inclusive antigas)
+// A barreira real é a RLS de body_assessments (disciplinas autorizadas + vínculo com o paciente).
+export interface SaveAssessmentInput extends AssessmentPayload {
+  patientId: string;
+  /** professionals.id do autor (na criação). */
+  professionalId?: string | null;
+}
+
+export async function createBodyAssessment(input: SaveAssessmentInput): Promise<BodyAssessment> {
+  const { patientId, professionalId, ...payload } = input;
+  const { data, error } = await supabase
+    .from("body_assessments")
+    .insert({ ...payload, patient_id: patientId, professional_id: professionalId ?? null })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as BodyAssessment;
+}
+
+export async function updateBodyAssessment(id: string, payload: AssessmentPayload): Promise<void> {
+  const { data, error } = await supabase.from("body_assessments").update(payload).eq("id", id).select("id");
+  if (error) throw error;
+  if (!data?.length) throw new AssessmentError("Sem permissão para alterar esta avaliação.");
+}
+
+export async function deleteBodyAssessment(id: string): Promise<void> {
+  const { data, error } = await supabase.from("body_assessments").delete().eq("id", id).select("id");
+  if (error) throw error;
+  if (!data?.length) throw new AssessmentError("Sem permissão para excluir esta avaliação.");
+}
+
+export class AssessmentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AssessmentError";
+  }
+}
+
+export function assessmentErrorMessage(err: unknown): string {
+  if (err instanceof AssessmentError) return err.message;
+  const e = err as { code?: string } | null;
+  if (e?.code === "42501") return "Você não tem permissão para lançar avaliações deste paciente.";
+  return "Não foi possível salvar. Tente novamente.";
 }

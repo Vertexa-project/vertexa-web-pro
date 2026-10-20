@@ -73,6 +73,10 @@ const MEAS_ROWS: Array<{ key: string; label: string }> = [
   { key: "cintura", label: "Cintura" },
   { key: "quadril", label: "Quadril" },
   { key: "abdomen", label: "Abdômen" },
+  { key: "torax", label: "Tórax" },
+  { key: "braco", label: "Braço" },
+  { key: "coxa", label: "Coxa" },
+  { key: "panturrilha", label: "Panturrilha" },
 ];
 
 function buildKpis(data: EvolutionReportData): Kpi[] {

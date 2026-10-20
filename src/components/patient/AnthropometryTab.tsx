@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Droplet, Ruler } from "lucide-react";
 
+import { AssessmentsSection } from "./AssessmentsSection";
 import { AsyncSection } from "./AsyncSection";
 import { WeightChart } from "@/components/charts/WeightChart";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,8 @@ export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
   const bodyFat = latestAssessment?.body_fat_pct ?? null;
 
   return (
+    <div className="space-y-6">
+    <AssessmentsSection patientId={patient.id} />
     <AsyncSection
       isLoading={series.isLoading}
       isError={series.isError}
@@ -182,5 +185,6 @@ export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
         </Card>
       </div>
     </AsyncSection>
+    </div>
   );
 }

@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  createBodyAssessment,
+  deleteBodyAssessment,
+  updateBodyAssessment,
+  type SaveAssessmentInput,
   getBodyAssessments,
   getPatientDocuments,
   getProgressPhotosWithUrls,
@@ -57,5 +61,36 @@ export const useSetProgressPhotoPose = (patientId: string) => {
   return useMutation({
     mutationFn: (v: { photoId: string; pose: PhotoPose | null }) => setProgressPhotoPose(v.photoId, v.pose),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.progressPhotos(patientId) }),
+  });
+};
+
+const invalidateBody = (qc: ReturnType<typeof useQueryClient>, patientId: string) =>
+  Promise.all([
+    qc.invalidateQueries({ queryKey: qk.bodyAssessments(patientId) }),
+    qc.invalidateQueries({ queryKey: qk.weightSeries(patientId) }),
+  ]);
+
+/** Cria avaliação (inclusive antiga). Recarrega a lista e o gráfico de peso. */
+export const useCreateAssessment = (patientId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Omit<SaveAssessmentInput, "patientId">) => createBodyAssessment({ ...input, patientId }),
+    onSuccess: () => invalidateBody(qc, patientId),
+  });
+};
+
+export const useUpdateAssessment = (patientId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; payload: Parameters<typeof updateBodyAssessment>[1] }) => updateBodyAssessment(v.id, v.payload),
+    onSuccess: () => invalidateBody(qc, patientId),
+  });
+};
+
+export const useDeleteAssessment = (patientId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteBodyAssessment(id),
+    onSuccess: () => invalidateBody(qc, patientId),
   });
 };
