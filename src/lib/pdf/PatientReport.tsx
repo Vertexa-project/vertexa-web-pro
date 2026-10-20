@@ -30,12 +30,16 @@ const s = StyleSheet.create({
   noticeText: { fontSize: 8.5, color: NEUTRAL.inkSoft },
   sectionBody: { marginTop: SP.xs },
   tableAfterKpis: { marginTop: SP.md },
+  photoPoseLabel: { fontSize: 9, fontWeight: 700, color: NEUTRAL.inkSoft, marginBottom: SP.sm },
 });
 
-export interface PatientReportPhotos {
+/** Um par antes/depois de UMA posição. `label` = "Frente" etc.; null quando não há distinção por posição. */
+export interface PatientReportPhotoPair {
+  label: string | null;
   before: PhotoSlot;
   after: PhotoSlot;
 }
+export type PatientReportPhotos = PatientReportPhotoPair[];
 
 /** Corpo do relatório de UM paciente (aviso de truncamento + seções + fotos). Reutilizado pelo
  *  relatório individual e por CADA paciente do relatório de LOTE (dentro do próprio ReportShell). */
@@ -71,14 +75,19 @@ export function PatientReportSections({
         </View>
       ))}
 
-      {photos ? (
-        <View wrap={false}>
-          <SectionTitle title="Fotos comparativas" />
-          <View style={s.sectionBody}>
-            <PhotoPair before={photos.before} after={photos.after} />
-          </View>
-        </View>
-      ) : null}
+      {photos && photos.length > 0
+        ? photos.map((pair, i) => (
+            // Um título só ("Fotos comparativas"); cada par leva o rótulo da posição. Cada bloco não quebra
+            // entre páginas, e o primeiro carrega o título (título nunca fica sozinho no fim da página).
+            <View key={pair.label ?? `p${i}`} wrap={false} style={i > 0 ? { marginTop: SP.lg } : undefined}>
+              {i === 0 ? <SectionTitle title="Fotos comparativas" /> : null}
+              <View style={s.sectionBody}>
+                {pair.label ? <Text style={s.photoPoseLabel}>{pair.label}</Text> : null}
+                <PhotoPair before={pair.before} after={pair.after} />
+              </View>
+            </View>
+          ))
+        : null}
     </>
   );
 }

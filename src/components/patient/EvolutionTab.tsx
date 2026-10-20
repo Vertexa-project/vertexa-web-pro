@@ -1,10 +1,7 @@
-import { ImageIcon } from "lucide-react";
-
-import { AsyncSection } from "./AsyncSection";
 import { ExportEvolutionButton } from "./ExportEvolutionButton";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useProgressPhotos } from "@/hooks/useBodyAssessments";
-import { formatDate, formatWeight } from "@/lib/domain/format";
+import { PhotosSection } from "./PhotosSection";
+import { Card, CardContent } from "@/components/ui/card";
+import { formatWeight } from "@/lib/domain/format";
 import type { PatientDetail } from "@/types/db";
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
@@ -20,12 +17,10 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 
 /**
  * Evolução visual do paciente: resumo de peso (início → atual → meta) + galeria de
- * fotos comparativas. As fotos são enviadas pelo paciente no app (progress_photos);
- * a web só LÊ. Bucket público na sprint — privado + signed URL é dívida (#12/Sessão 8).
+ * fotos por posição. O paciente envia pelo app; o profissional também pode adicionar fotos antigas
+ * (data retroativa) e classificar a posição. Bucket privado + signed URL.
  */
 export function EvolutionTab({ patient }: { patient: PatientDetail }) {
-  const photos = useProgressPhotos(patient.id);
-
   const start = patient.start_weight ?? null;
   const current = patient.current_weight ?? null;
   const target = patient.target_weight ?? null;
@@ -54,48 +49,7 @@ export function EvolutionTab({ patient }: { patient: PatientDetail }) {
         <SummaryCard label="Variação" value={deltaLabel} />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Fotos comparativas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <AsyncSection
-            isLoading={photos.isLoading}
-            isError={photos.isError}
-            isEmpty={!photos.data || photos.data.length === 0}
-            onRetry={() => photos.refetch()}
-            emptyIcon={ImageIcon}
-            emptyTitle="Sem fotos de progresso"
-            emptyDescription="As fotos enviadas pelo paciente no app aparecerão aqui, mês a mês."
-          >
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-              {(photos.data ?? []).map((p) => (
-                <figure key={p.id} className="space-y-1">
-                  {p.display_url ? (
-                    <img
-                      src={p.display_url}
-                      alt={`Foto de progresso de ${formatDate(p.taken_at)}`}
-                      loading="lazy"
-                      className="aspect-[3/4] w-full rounded-md bg-muted object-cover"
-                    />
-                  ) : (
-                    // Sem signed URL (linha sem storage_path ou falha ao assinar → já reportada
-                    // ao Sentry): placeholder, nunca <img> quebrada.
-                    <div
-                      role="img"
-                      aria-label={`Foto de progresso de ${formatDate(p.taken_at)} indisponível`}
-                      className="flex aspect-[3/4] w-full items-center justify-center rounded-md bg-muted text-muted-foreground"
-                    >
-                      <ImageIcon className="h-6 w-6" />
-                    </div>
-                  )}
-                  <figcaption className="text-xs text-muted-foreground">{formatDate(p.taken_at)}</figcaption>
-                </figure>
-              ))}
-            </div>
-          </AsyncSection>
-        </CardContent>
-      </Card>
+      <PhotosSection patientId={patient.id} />
     </div>
   );
 }

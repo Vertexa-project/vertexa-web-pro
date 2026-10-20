@@ -17,6 +17,8 @@ export interface ReportSectionView {
   emptyText?: string;
 }
 export interface ReportPhotoMeta {
+  /** Posição (front/side/back) ou null = sem posição (inclui todas as fotos antigas). */
+  pose: string | null;
   takenAt: string | null;
   storagePath: string | null;
   photoUrl: string | null;
@@ -303,6 +305,7 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
   sections.sort((a, b) => rank(a.key) - rank(b.key));
 
   const photos: ReportPhotoMeta[] = arr(sec.photos).map((ph) => ({
+    pose: (ph.pose as string) ?? null,
     takenAt: (ph.taken_at as string) ?? null,
     storagePath: (ph.storage_path as string) ?? null,
     photoUrl: (ph.photo_url as string) ?? null,

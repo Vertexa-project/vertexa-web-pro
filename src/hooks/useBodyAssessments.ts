@@ -1,6 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getBodyAssessments, getPatientDocuments, getProgressPhotosWithUrls } from "@/lib/api/assessments";
+import {
+  getBodyAssessments,
+  getPatientDocuments,
+  getProgressPhotosWithUrls,
+  setProgressPhotoPose,
+  uploadProgressPhotoForPatient,
+  type UploadPatientPhotoInput,
+} from "@/lib/api/assessments";
+import type { PhotoPose } from "@/lib/domain/photoPose";
 import { getWeightSeries } from "@/lib/api/weight";
 import { qk } from "@/lib/queryKeys";
 
@@ -33,3 +41,21 @@ export const useProgressPhotos = (patientId: string) =>
     queryFn: () => getProgressPhotosWithUrls(patientId),
     enabled: Boolean(patientId),
   });
+
+/** Envio de foto pelo profissional (inclusive retroativa). Recarrega a galeria ao concluir. */
+export const useUploadProgressPhoto = (patientId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Omit<UploadPatientPhotoInput, "patientId">) => uploadProgressPhotoForPatient({ ...input, patientId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.progressPhotos(patientId) }),
+  });
+};
+
+/** Classifica a posição de uma foto já existente. */
+export const useSetProgressPhotoPose = (patientId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { photoId: string; pose: PhotoPose | null }) => setProgressPhotoPose(v.photoId, v.pose),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.progressPhotos(patientId) }),
+  });
+};

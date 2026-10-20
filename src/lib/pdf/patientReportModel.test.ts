@@ -94,7 +94,15 @@ describe("buildPatientReportModel — montagem do PDF a partir do JSON da RPC", 
       rpc({ sections: { photos: [{ taken_at: "2026-06-01", storage_path: "c1/x.jpg", photo_url: null }] } }),
       NOW,
     );
-    expect(m.photos).toEqual([{ takenAt: "2026-06-01", storagePath: "c1/x.jpg", photoUrl: null }]);
+    expect(m.photos).toEqual([{ pose: null, takenAt: "2026-06-01", storagePath: "c1/x.jpg", photoUrl: null }]);
+  });
+
+  it("fotos: a posição vinda da RPC é repassada (null quando não classificada)", () => {
+    const m = buildPatientReportModel(
+      rpc({ sections: { photos: [{ taken_at: "2026-06-01", storage_path: "c1/a.jpg", photo_url: null, pose: "front" }, { taken_at: "2026-06-02", storage_path: "c1/b.jpg", photo_url: null }] } }),
+      NOW,
+    );
+    expect(m.photos.map((p) => p.pose)).toEqual(["front", null]);
   });
 
   it("planos: workout_plan e nutrition_plan viram tabelas resumidas", () => {

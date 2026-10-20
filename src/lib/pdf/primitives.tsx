@@ -11,8 +11,8 @@ import { Document, Page, View, Text, Image, Svg, Path, StyleSheet } from "@react
 import { BRAND, NEUTRAL, STATUS, FONT, PAGE, SP, RADIUS, vriColor } from "./theme";
 
 // ============================================================ STYLES
-/** Altura da moldura das fotos: comporta retrato 3:4 inteiro na largura de meia página A4. */
-const PHOTO_BOX_HEIGHT = 300;
+/** Altura da moldura das fotos: retrato inteiro, e dois pares (posições) cabem numa página A4. */
+const PHOTO_BOX_HEIGHT = 250;
 
 const s = StyleSheet.create({
   page: {

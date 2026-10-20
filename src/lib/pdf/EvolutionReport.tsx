@@ -45,7 +45,8 @@ export interface EvolutionReportData {
   adherence: { score: number | null; level: string | null; streak: number | null; weeklyRate: number | null } | null;
   weightPoints: WeightPoint[]; // já filtrados ao período
   assessments: BodyAssessment[]; // já filtrados ao período (asc)
-  photos: { beforeUri: string | null; beforeCaption: string; afterUri: string | null; afterCaption: string } | null;
+  /** Um par antes/depois por posição (frente/lado/costas); `label` null quando as fotos não têm posição. */
+  photos: Array<{ label: string | null; beforeUri: string | null; beforeCaption: string; afterUri: string | null; afterCaption: string }> | null;
 }
 
 const num = (v: number, digits = 1) => v.toLocaleString("pt-BR", { maximumFractionDigits: digits });
@@ -195,7 +196,8 @@ export function EvolutionReportDoc({ data }: { data: EvolutionReportData }) {
         ? `${data.assessments.length} avaliação(ões) clínica(s) no período`
         : null;
 
-  const hasPhotos = Boolean(data.photos && (data.photos.beforeUri || data.photos.afterUri));
+  const photoPairs = (data.photos ?? []).filter((p) => p.beforeUri || p.afterUri);
+  const hasPhotos = photoPairs.length > 0;
 
   return (
     <Document title={`Relatório de Evolução — ${data.patientName}`} author={data.clinicName} subject="Relatório de Evolução do paciente" creator="VERTEXA">
@@ -237,11 +239,13 @@ export function EvolutionReportDoc({ data }: { data: EvolutionReportData }) {
         )}
 
         <SectionTitle title="Fotos comparativas" />
-        {hasPhotos && data.photos ? (
-          <PhotoPair
-            before={{ uri: data.photos.beforeUri, caption: data.photos.beforeCaption }}
-            after={{ uri: data.photos.afterUri, caption: data.photos.afterCaption }}
-          />
+        {hasPhotos ? (
+          photoPairs.map((p, i) => (
+            <View key={p.label ?? `p${i}`} wrap={false} style={i > 0 ? { marginTop: SP.lg } : undefined}>
+              {p.label ? <Text style={{ fontSize: 9, fontWeight: 700, color: NEUTRAL.inkSoft, marginBottom: SP.sm }}>{p.label}</Text> : null}
+              <PhotoPair before={{ uri: p.beforeUri, caption: p.beforeCaption }} after={{ uri: p.afterUri, caption: p.afterCaption }} />
+            </View>
+          ))
         ) : (
           <EmptyState text="Sem fotos de progresso no período. As fotos enviadas pelo paciente no app aparecerão aqui." />
         )}

@@ -9,6 +9,7 @@ import { EvolutionReportDoc, type EvolutionReportData } from "./EvolutionReport"
 import { registerReportFonts } from "./fonts";
 import { urlToDataUri } from "./images";
 import { formatDate } from "@/lib/domain/format";
+import { buildPairs, POSE_LABEL } from "@/lib/domain/photoPose";
 import type { AdherenceSnapshot, BodyAssessment, PatientDetail, ProfessionalType, ProgressPhoto, WeightPoint } from "@/types/db";
 
 export interface EvolutionReportInput {
@@ -58,28 +59,30 @@ export async function buildEvolutionReportData(input: EvolutionReportInput): Pro
   const weightPoints = input.weightSeries.filter((p) => inPeriod(p.date));
   const assessments = input.assessments.filter((a) => inPeriod(a.assessed_at)); // já vem asc
 
-  // Fotos do período, ascendente por data → antes (mais antiga) / depois (mais recente).
-  const photosAsc = [...input.photos]
-    .filter((p) => inPeriod(p.taken_at))
-    .sort((a, b) => new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime());
-  let photos: EvolutionReportData["photos"] = null;
-  if (photosAsc.length > 0) {
-    const first = photosAsc[0];
-    const last = photosAsc[photosAsc.length - 1];
-    const twoDistinct = photosAsc.length >= 2;
-    // Sob bucket privado (P1), a foto vem por signed URL (display_url). Fallback ao photo_url
-    // legado só p/ linhas antigas sem storage_path. Falha de fetch → null → placeholder no PDF.
-    const [beforeUri, afterUri] = await Promise.all([
-      twoDistinct ? urlToDataUri(first.display_url ?? first.photo_url) : Promise.resolve(null),
-      urlToDataUri(last.display_url ?? last.photo_url),
-    ]);
-    photos = {
-      beforeUri,
-      beforeCaption: twoDistinct ? formatDate(first.taken_at) : "—",
-      afterUri,
-      afterCaption: formatDate(last.taken_at),
-    };
-  }
+  // Fotos do período: um par antes/depois POR POSIÇÃO (a mais antiga × a mais recente da MESMA posição).
+  // Sob bucket privado (P1), a foto vem por signed URL (display_url); fallback ao photo_url legado só p/ linhas
+  // antigas sem storage_path. Falha de fetch → null → placeholder no PDF.
+  const inPeriodPhotos = input.photos.filter((p) => inPeriod(p.taken_at));
+  const pairs = buildPairs(inPeriodPhotos);
+  const labelled = pairs.some((p) => p.pose !== "none");
+  const photos: EvolutionReportData["photos"] =
+    pairs.length === 0
+      ? null
+      : await Promise.all(
+          pairs.map(async (pair) => {
+            const [beforeUri, afterUri] = await Promise.all([
+              pair.before ? urlToDataUri(pair.before.display_url ?? pair.before.photo_url) : Promise.resolve(null),
+              urlToDataUri(pair.after.display_url ?? pair.after.photo_url),
+            ]);
+            return {
+              label: labelled ? POSE_LABEL[pair.pose] : null,
+              beforeUri,
+              beforeCaption: pair.before ? formatDate(pair.before.taken_at) : "—",
+              afterUri,
+              afterCaption: formatDate(pair.after.taken_at),
+            };
+          }),
+        );
 
   const periodLabel = from ? `${fmtShort(from)} – ${fmtShort(now)}` : "Todo o período";
 

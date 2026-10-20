@@ -158,6 +158,10 @@ export interface ProgressPhoto {
   storage_path: string | null;
   captured_in_app: boolean;
   taken_at: string;
+  /** WP-PHOTOS-A: 'front' | 'side' | 'back' | null (sem posição — inclui todas as fotos antigas). */
+  pose?: "front" | "side" | "back" | null;
+  /** WP-PHOTOS-A: quem enviou quando foi o profissional (null = paciente, pelo app). */
+  uploaded_by_profile_id?: string | null;
 }
 
 // Suplemento do paciente (tabela `supplements`, criada pela S3 do app). AUTORIA do profissional:

@@ -10,6 +10,7 @@ import { PatientReportDoc, type PatientReportPhotos } from "./PatientReport";
 import { buildPatientReportModel } from "./patientReportModel";
 import { registerReportFonts } from "./fonts";
 import { urlToDataUri } from "./images";
+import { buildPairs, POSE_LABEL } from "@/lib/domain/photoPose";
 import { exportPatientReport, type ReportExportInput, type ReportExportResponse } from "@/lib/api/report";
 import { supabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/domain/format";
@@ -42,26 +43,35 @@ async function resolvePhotoUri(storagePath: string | null, photoUrl: string | nu
   return urlToDataUri(photoUrl);
 }
 
-/** Monta o par de fotos (mais antiga × mais recente) do período, com URLs assinadas → data URI. */
-async function buildPhotoPair(model: ReturnType<typeof buildPatientReportModel>): Promise<PatientReportPhotos | null> {
-  const photos = [...model.photos].filter((p) => p.takenAt).sort((a, b) => new Date(a.takenAt as string).getTime() - new Date(b.takenAt as string).getTime());
-  if (photos.length === 0) return null;
-  const first = photos[0];
-  const last = photos[photos.length - 1];
-  const twoDistinct = photos.length >= 2;
-  const [beforeUri, afterUri] = await Promise.all([
-    twoDistinct ? resolvePhotoUri(first.storagePath, first.photoUrl) : Promise.resolve(null),
-    resolvePhotoUri(last.storagePath, last.photoUrl),
-  ]);
-  return {
-    before: { uri: beforeUri, caption: twoDistinct ? formatDate(first.takenAt as string) : "—" },
-    after: { uri: afterUri, caption: formatDate(last.takenAt as string) },
-  };
+/**
+ * Um par antes/depois POR POSIÇÃO (frente, lado, costas): a mais antiga × a mais recente DA MESMA posição
+ * no período — nunca frente × costas. Fotos antigas sem posição formam o grupo "Sem posição" (comportamento
+ * anterior). Só rotula por posição quando há alguma foto classificada.
+ */
+async function buildPhotoPairs(model: ReturnType<typeof buildPatientReportModel>): Promise<PatientReportPhotos | null> {
+  const dated = model.photos.filter((p) => p.takenAt).map((p) => ({ ...p, taken_at: p.takenAt }));
+  const pairs = buildPairs(dated);
+  if (pairs.length === 0) return null;
+  const labelled = pairs.some((p) => p.pose !== "none");
+  const out = await Promise.all(
+    pairs.map(async (pair) => {
+      const [beforeUri, afterUri] = await Promise.all([
+        pair.before ? resolvePhotoUri(pair.before.storagePath, pair.before.photoUrl) : Promise.resolve(null),
+        resolvePhotoUri(pair.after.storagePath, pair.after.photoUrl),
+      ]);
+      return {
+        label: labelled ? POSE_LABEL[pair.pose] : null,
+        before: { uri: beforeUri, caption: pair.before ? formatDate(pair.before.takenAt as string) : "—" },
+        after: { uri: afterUri, caption: formatDate(pair.after.takenAt as string) },
+      };
+    }),
+  );
+  return out;
 }
 
 export async function generatePatientReportBlob(rpc: ReportExportResponse, now: Date): Promise<{ blob: Blob; patientName: string }> {
   const model = buildPatientReportModel(rpc, now);
-  const photos = await buildPhotoPair(model);
+  const photos = await buildPhotoPairs(model);
   registerReportFonts();
   const blob = await pdf(<PatientReportDoc model={model} photos={photos} />).toBlob();
   return { blob, patientName: model.patientName };
