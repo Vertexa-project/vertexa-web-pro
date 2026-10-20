@@ -84,6 +84,8 @@ export const qk = {
   journeyState: ["journey", "state"] as const,
   journeyAcks: ["journey", "acks"] as const,
   campaigns: ["campaigns"] as const,
+  campaignSends: ["campaigns", "sends"] as const,
+  campaignBroadcasts: ["campaigns", "broadcasts"] as const,
   allPlans: ["plans", "all"] as const,
   // Agenda interna (Sessão 6/12) — escopada por clínica + faixa visível do calendário [from, to).
   appointments: (clinicId: string, fromISO: string, toISO: string) =>

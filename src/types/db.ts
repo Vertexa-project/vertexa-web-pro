@@ -305,6 +305,22 @@ export interface Campaign {
   message_template: string | null;
   is_active: boolean;
   created_at: string;
+  /** Título da notificação ({nome} é substituído). Migration 20261025090000. */
+  title?: string | null;
+  /** Dias do gatilho (check-in/retorno/reativação). */
+  days_threshold?: number | null;
+}
+
+export interface CampaignBroadcast {
+  id: string;
+  clinic_id: string;
+  sender_profile_id: string;
+  audience: "mine" | "mine_inactive" | "all" | "all_inactive";
+  inactive_days: number | null;
+  title: string;
+  body: string;
+  recipients: number;
+  created_at: string;
 }
 
 // Agenda interna do profissional (Sessão 6) — web-only (o app paciente NÃO usa).
