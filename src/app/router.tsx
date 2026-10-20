@@ -28,6 +28,7 @@ const PlansPage = lazy(() => import("@/pages/PlansPage").then((m) => ({ default:
 const MessagesPage = lazy(() => import("@/pages/MessagesPage").then((m) => ({ default: m.MessagesPage })));
 const CampaignsPage = lazy(() => import("@/pages/CampaignsPage").then((m) => ({ default: m.CampaignsPage })));
 const ManagementPage = lazy(() => import("@/pages/ManagementPage").then((m) => ({ default: m.ManagementPage })));
+const FinancePage = lazy(() => import("@/pages/FinancePage").then((m) => ({ default: m.FinancePage })));
 const RetentionPage = lazy(() => import("@/pages/RetentionPage").then((m) => ({ default: m.RetentionPage })));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const BillingProfilePage = lazy(() =>
@@ -224,6 +225,7 @@ export const router = createBrowserRouter(
             { path: "mensagens", element: <MessagesPage /> },
             { path: "campanhas", element: <CampaignsPage /> },
             { path: "gestao", element: <ManagementPage /> },
+            { path: "financeiro", element: <FinancePage /> },
             { path: "retencao", element: <RetentionPage /> },
             { path: "configuracoes", element: <SettingsPage /> },
             { path: "configuracoes/faturamento", element: <BillingProfilePage /> },

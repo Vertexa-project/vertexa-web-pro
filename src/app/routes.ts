@@ -5,6 +5,7 @@ import {
   Megaphone,
   MessageSquare,
   BarChart3,
+  Wallet,
   Settings,
   Users,
   type LucideIcon,
@@ -33,6 +34,7 @@ export const mainNav: NavItem[] = [
   { path: "/mensagens", label: "Mensagens", icon: MessageSquare },
   { path: "/campanhas", label: "Campanhas", icon: Megaphone },
   { path: "/gestao", label: "Gestão", icon: BarChart3, adminOnly: true },
+  { path: "/financeiro", label: "Financeiro", icon: Wallet, adminOnly: true },
   // Roadmap (não implementado): modelos de plano/treino/mensagem reutilizáveis.
   // Aparece com cadeado para sinalizar o que vem, sem virar módulo solto.
   { path: "/modelos", label: "Modelos", icon: LayoutTemplate, locked: true },

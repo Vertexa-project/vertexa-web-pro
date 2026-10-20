@@ -33,6 +33,8 @@ describe("management domain", () => {
   it("menu: Gestão só para administrador", () => {
     expect(filterNav(mainNav, false).map((i) => i.path)).not.toContain("/gestao");
     expect(filterNav(mainNav, true).map((i) => i.path)).toContain("/gestao");
-    expect(filterNav(mainNav, false).length).toBe(mainNav.length - 1);
+    expect(filterNav(mainNav, true).map((i) => i.path)).toContain("/financeiro");
+    expect(filterNav(mainNav, false).map((i) => i.path)).not.toContain("/financeiro");
+    expect(filterNav(mainNav, false).length).toBe(mainNav.length - 2);
   });
 });
