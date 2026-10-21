@@ -13,7 +13,7 @@ import {
   type UploadPatientPhotoInput,
 } from "@/lib/api/assessments";
 import type { PhotoPose } from "@/lib/domain/photoPose";
-import { getWeightSeries } from "@/lib/api/weight";
+import { getPendingWeights, getWeightSeries, reviewWeightLog } from "@/lib/api/weight";
 import { qk } from "@/lib/queryKeys";
 
 export const useBodyAssessments = (patientId: string) =>
@@ -92,5 +92,24 @@ export const useDeleteAssessment = (patientId: string) => {
   return useMutation({
     mutationFn: (id: string) => deleteBodyAssessment(id),
     onSuccess: () => invalidateBody(qc, patientId),
+  });
+};
+
+export const usePendingWeights = (patientId: string) =>
+  useQuery({
+    queryKey: [...qk.weightSeries(patientId), "pending"],
+    queryFn: () => getPendingWeights(patientId),
+    enabled: Boolean(patientId),
+  });
+
+/** Aprovar entra na curva e emite o marcador do VRI; recusar tira o valor. Recarrega peso e linha do tempo. */
+export const useReviewWeight = (patientId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; decision: "approved" | "rejected" }) => reviewWeightLog(v.id, v.decision),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: qk.weightSeries(patientId) }),
+      qc.invalidateQueries({ queryKey: ["patient", patientId] }),
+    ]),
   });
 };

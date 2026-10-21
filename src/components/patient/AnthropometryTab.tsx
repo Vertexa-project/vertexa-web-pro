@@ -3,6 +3,7 @@ import { Droplet, Ruler } from "lucide-react";
 
 import { AssessmentsSection } from "./AssessmentsSection";
 import { AsyncSection } from "./AsyncSection";
+import { WeightReviewCard } from "./WeightReviewCard";
 import { WeightChart } from "@/components/charts/WeightChart";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,6 +82,7 @@ export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
 
   return (
     <div className="space-y-6">
+    <WeightReviewCard patientId={patient.id} />
     <AssessmentsSection patientId={patient.id} />
     <AsyncSection
       isLoading={series.isLoading}

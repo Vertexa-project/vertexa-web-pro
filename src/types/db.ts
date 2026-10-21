@@ -220,6 +220,8 @@ export interface WeightLog {
   measured_at: string;
   source: string; // 'app' (paciente) | 'web' (profissional) | outros
   created_at: string;
+  /** ok | pending (variação >2 kg/dia confirmada pelo paciente) | approved | rejected */
+  review_status?: "ok" | "pending" | "approved" | "rejected";
 }
 
 // Ponto unificado do gráfico de peso: avaliações clínicas (body_assessments) +

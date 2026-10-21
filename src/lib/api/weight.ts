@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type { WeightLog, WeightPoint } from "@/types/db";
 import { getBodyAssessments } from "./assessments";
+import { isCountedWeight } from "@/lib/domain/weightReview";
 
 /** Pesos auto-reportados pelo paciente (app) em ordem cronológica (asc). */
 export async function getWeightLogs(patientId: string): Promise<WeightLog[]> {
@@ -36,9 +37,26 @@ export async function getWeightSeries(patientId: string): Promise<WeightPoint[]>
     }
   }
   for (const l of logs) {
-    if (l.weight_kg == null || !l.measured_at) continue;
+    if (l.weight_kg == null || !l.measured_at || !isCountedWeight(l.review_status)) continue;
     points.push({ date: l.measured_at, weight: Number(l.weight_kg), source: "app", method: null });
   }
   points.sort((x, y) => new Date(x.date).getTime() - new Date(y.date).getTime());
   return points;
+}
+
+/** Pesos que o paciente confirmou mesmo com variação suspeita e aguardam a equipe (mais recentes primeiro). */
+export async function getPendingWeights(patientId: string): Promise<WeightLog[]> {
+  const { data, error } = await supabase
+    .from("weight_logs")
+    .select("*")
+    .eq("patient_id", patientId)
+    .eq("review_status", "pending")
+    .order("measured_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as WeightLog[];
+}
+
+export async function reviewWeightLog(id: string, decision: "approved" | "rejected"): Promise<void> {
+  const { error } = await supabase.rpc("review_weight_log", { p_id: id, p_decision: decision });
+  if (error) throw error;
 }
