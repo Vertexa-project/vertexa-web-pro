@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Dumbbell, Target, Utensils } from "lucide-
 import { ExportPointsButton } from "./ExportPointsButton";
 import { PatientTeamSection } from "./PatientTeamSection";
 import { RiskSignalsPanel } from "./RiskSignalsPanel";
+import { WeeklyNoteCard } from "./WeeklyNoteCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +56,8 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
         <SummaryCard label="Sequência" value={snapshot?.streak != null ? `${snapshot.streak} dias` : "—"} />
         <SummaryCard label="Adesão semanal" value={formatPercent(snapshot?.weekly_completion_rate)} />
       </div>
+
+      <WeeklyNoteCard patientId={patient.id} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
