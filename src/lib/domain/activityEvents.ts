@@ -3,6 +3,7 @@ import {
   Activity,
   Camera,
   Droplet,
+  Gauge,
   Dumbbell,
   Moon,
   Scale,
@@ -30,6 +31,8 @@ export function activityEventMeta(type: string): ActivityMeta {
       return { label: "Hidratação", icon: Droplet, tone: "info" };
     case "sleep_logged":
       return { label: "Sono registrado", icon: Moon, tone: "info" };
+    case "workout_effort":
+      return { label: "Esforço do treino", icon: Gauge, tone: "info" };
     case "meal_plan_viewed":
       return { label: "Plano alimentar visto", icon: Utensils, tone: "muted" };
     default:
@@ -45,6 +48,10 @@ export function activityEventDescription(
   switch (type) {
     case "workout_checked":
       return typeof payload.workout === "string" ? payload.workout : null;
+    case "workout_effort": {
+      const e = Number(payload.effort);
+      return Number.isInteger(e) && e >= 1 && e <= 10 ? `${e} de 10` : null;
+    }
     case "weight_logged":
       return payload.weight != null ? `${payload.weight} kg` : null;
     case "hydration_logged": {
