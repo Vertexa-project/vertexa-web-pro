@@ -1,3 +1,4 @@
+import { parseOptions } from "@/lib/domain/mealOptions";
 import { useState } from "react";
 import { Pencil, Plus, Utensils } from "lucide-react";
 
@@ -79,6 +80,11 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
                           <li key={i}>{item}</li>
                         ))}
                       </ul>
+                    ) : null}
+                    {parseOptions(meal.options).length > 0 ? (
+                      <p className="mt-2 text-xs text-muted-foreground" data-testid="meal-options-count">
+                        + {parseOptions(meal.options).length} {parseOptions(meal.options).length === 1 ? "opção de troca" : "opções de troca"}
+                      </p>
                     ) : null}
                   </div>
                   {meal.calories != null ? (

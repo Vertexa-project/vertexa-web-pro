@@ -19,20 +19,26 @@ import { useDisciplinePermissions } from "@/hooks/useDisciplines";
 import { DISCIPLINE_REASON, isDisciplineDenied, writeDeniedMessage } from "@/lib/domain/disciplines";
 import { captureException } from "@/lib/observability/sentry";
 import type { SaveNutritionPlanInput } from "@/lib/api/planMutations";
+import { MAX_ALTERNATIVES, kcalWarning, parseOptions } from "@/lib/domain/mealOptions";
 import type { NutritionPlanFull, PatientDetail } from "@/types/db";
 
+interface OptionForm {
+  items: string;
+  calories: string;
+}
 interface MealForm {
   time: string;
   name: string;
   items: string;
   calories: string;
+  options: OptionForm[];
 }
 interface PlanForm {
   title: string;
   meals: MealForm[];
 }
 
-const emptyMeal = (): MealForm => ({ time: "", name: "", items: "", calories: "" });
+const emptyMeal = (): MealForm => ({ time: "", name: "", items: "", calories: "", options: [] });
 
 function fromExisting(plan: NutritionPlanFull | null): PlanForm {
   if (!plan) return { title: "", meals: [emptyMeal()] };
@@ -44,6 +50,7 @@ function fromExisting(plan: NutritionPlanFull | null): PlanForm {
           name: m.name ?? "",
           items: (m.items ?? []).join("\n"),
           calories: m.calories?.toString() ?? "",
+          options: parseOptions(m.options).map((o) => ({ items: o.items.join("\n"), calories: o.calories?.toString() ?? "" })),
         }))
       : [emptyMeal()],
   };
@@ -74,6 +81,10 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
     setForm((f) => ({ ...f, meals: f.meals.map((m, idx) => (idx === i ? { ...m, ...patch } : m)) }));
   }
 
+  function patchOption(i: number, j: number, patch: Partial<OptionForm>) {
+    patchMeal(i, { options: form.meals[i].options.map((o, k) => (k === j ? { ...o, ...patch } : o)) });
+  }
+
   function handleSave() {
     if (!canEdit) {
       setError(DISCIPLINE_REASON.nutrition);
@@ -97,6 +108,9 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
         name: m.name.trim() || null,
         items: m.items.split("\n").map((s) => s.trim()).filter(Boolean),
         calories: m.calories ? Number(m.calories) : null,
+        options: m.options
+          .map((o) => ({ items: o.items.split("\n").map((x) => x.trim()).filter(Boolean), calories: o.calories ? Number(o.calories) : null }))
+          .filter((o) => o.items.length > 0),
       })),
     };
     save.mutate(input, {
@@ -174,6 +188,47 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
                 placeholder={"Itens (um por linha)\n2 ovos\n1 fatia de pão integral"}
                 aria-label="Itens da refeição"
               />
+
+              {m.options.map((o, j) => {
+                const warn = kcalWarning(m.calories ? Number(m.calories) : null, o.calories ? Number(o.calories) : null);
+                return (
+                  <div key={j} className="space-y-2 rounded-md border border-dashed p-3" data-testid="meal-option">
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 text-xs font-semibold text-muted-foreground">Opção {j + 2}</span>
+                      <Input
+                        type="number"
+                        className="w-28"
+                        value={o.calories}
+                        onChange={(e) => patchOption(i, j, { calories: e.target.value })}
+                        placeholder="kcal"
+                        aria-label={`Calorias da opção ${j + 2}`}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="ml-auto shrink-0 text-muted-foreground hover:text-destructive"
+                        aria-label={`Remover opção ${j + 2}`}
+                        onClick={() => patchMeal(i, { options: m.options.filter((_, k) => k !== j) })}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Textarea
+                      value={o.items}
+                      onChange={(e) => patchOption(i, j, { items: e.target.value })}
+                      placeholder={"Itens da opção (um por linha)"}
+                      aria-label={`Itens da opção ${j + 2}`}
+                    />
+                    {warn ? <p className="text-xs text-amber-600" role="note">{warn}</p> : null}
+                  </div>
+                );
+              })}
+              {m.options.length < MAX_ALTERNATIVES ? (
+                <Button variant="ghost" size="sm" onClick={() => patchMeal(i, { options: [...m.options, { items: "", calories: "" }] })}>
+                  <Plus className="h-4 w-4" />
+                  Adicionar opção de troca
+                </Button>
+              ) : null}
             </div>
           ))}
 

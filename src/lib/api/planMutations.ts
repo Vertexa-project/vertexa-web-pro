@@ -59,6 +59,7 @@ export interface MealInput {
   name: string | null;
   items: string[];
   calories: number | null;
+  options?: { items: string[]; calories: number | null }[];
 }
 
 export interface SaveNutritionPlanInput {
@@ -82,6 +83,7 @@ export async function saveNutritionPlan(input: SaveNutritionPlanInput): Promise<
       name: m.name,
       items: m.items,
       calories: m.calories,
+      options: m.options ?? [],
     })),
   });
   if (error) throw error;

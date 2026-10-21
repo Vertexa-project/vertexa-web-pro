@@ -131,6 +131,8 @@ export interface Meal {
   items: string[] | null;
   calories: number | null;
   order_index: number | null;
+  /** Alternativas à refeição (a "Opção 1" é a própria refeição): [{ items, calories }] */
+  options?: { items: string[]; calories: number | null }[];
 }
 
 export interface BodyAssessment {
