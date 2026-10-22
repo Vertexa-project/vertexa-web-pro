@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { executeAccountDeletion, listOpenDeletionRequests, removeStoredFiles, type DeletionRequest } from "@/lib/api/accountDeletion";
 
-const DATE = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" });
+const DATE = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long" });
 
 /** Pedidos de exclusão de conta feitos pelos pacientes (LGPD). Só o admin vê; some quando não há pedido. */
 export function AccountDeletionCard() {
@@ -40,7 +40,7 @@ export function AccountDeletionCard() {
           <div key={r.id} className="flex flex-wrap items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium text-foreground">{r.patientName}</p>
-              <p className="text-xs text-muted-foreground">Pediu em {DATE.format(new Date(r.requestedAt))}. Ao excluir: nome, e-mail, nascimento, fotos e documentos são removidos e o acesso é bloqueado; peso, refeições e treinos ficam sem identificação.</p>
+              <p className="text-xs text-muted-foreground">Pedido de {DATE.format(new Date(r.requestedAt))}. Ao excluir: nome, e-mail, nascimento, fotos e documentos são removidos e o acesso é bloqueado; peso, refeições e treinos ficam sem identificação.</p>
             </div>
             {confirming === r.id ? (
               <div className="flex gap-2">
