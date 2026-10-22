@@ -38,6 +38,7 @@ export function BatchReportPage() {
   const { data, isLoading, isError, refetch } = useListPatients();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [periodValue, setPeriodValue] = useState("90");
+  const [format, setFormat] = useState<"zip" | "single">("zip");
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -83,9 +84,10 @@ export function BatchReportPage() {
     setGenerating(true);
     setProgress({ done: 0, total: ids.length });
     try {
-      const { downloadBatchReport } = await import("@/lib/pdf/generateBatchReport");
-      const outcome = await downloadBatchReport(
-        { patientIds: ids, from: ymd(from), to: ymd(now), sections: BATCH_REPORT_SECTIONS, patientNames: nameById },
+      const { downloadBatchReport, downloadBatchZip } = await import("@/lib/pdf/generateBatchReport");
+      const run = format === "zip" ? downloadBatchZip : downloadBatchReport;
+      const outcome = await run(
+        { patientIds: ids, from: ymd(from), to: ymd(now), sections: format === "zip" ? [] : BATCH_REPORT_SECTIONS, patientNames: nameById },
         (done, total) => setProgress({ done, total }),
         now,
       );
@@ -107,9 +109,18 @@ export function BatchReportPage() {
     <div className="space-y-6">
       <PageHeader
         title="Exportar relatórios em lote"
-        description="Selecione pacientes e gere um PDF único com um relatório por paciente."
+        description={format === "zip" ? "Selecione pacientes e baixe um arquivo ZIP com um relatório PDF por paciente." : "Selecione pacientes e gere um PDF único com um bloco por paciente."}
         actions={
           <div className="flex items-center gap-2">
+            <Select value={format} onValueChange={(v) => setFormat(v as "zip" | "single")} disabled={generating}>
+              <SelectTrigger className="h-9 w-56" aria-label="Formato do relatório">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zip">Um PDF por paciente (ZIP)</SelectItem>
+                <SelectItem value="single">PDF único (resumo)</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={periodValue} onValueChange={setPeriodValue} disabled={generating}>
               <SelectTrigger className="h-9 w-40" aria-label="Período do relatório">
                 <SelectValue />
