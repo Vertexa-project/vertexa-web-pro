@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRightLeft, UserMinus, Users, UserX } from "lucide-r
 
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ErrorState } from "@/components/feedback/ErrorState";
+import { AccountDeletionCard } from "@/components/management/AccountDeletionCard";
 import { TransferDialog } from "@/components/management/TransferDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -156,6 +157,8 @@ export function ManagementPage() {
           </div>
         </>
       )}
+
+      {isClinicAdmin ? <AccountDeletionCard /> : null}
 
       {clinicId && o ? <TransferDialog clinicId={clinicId} professionals={o.professionals} fromId={transferFrom} open={transferOpen} onOpenChange={setTransferOpen} /> : null}
     </div>
