@@ -9,6 +9,7 @@ interface ExerciseLibraryRow {
   group_order: number;
   sort_order: number;
   aliases: string[] | null;
+  muscle_groups: string[] | null;
   media_webp: string;
   media_gif: string;
 }
@@ -17,7 +18,7 @@ interface ExerciseLibraryRow {
 export async function listExerciseLibrary(): Promise<ExerciseLibraryItem[]> {
   const { data, error } = await supabase
     .from("exercise_library")
-    .select("id, name, group_key, group_label, group_order, sort_order, aliases, media_webp, media_gif")
+    .select("id, name, group_key, group_label, group_order, sort_order, aliases, muscle_groups, media_webp, media_gif")
     .order("group_order", { ascending: true })
     .order("sort_order", { ascending: true });
   if (error) throw error;
@@ -30,6 +31,7 @@ export async function listExerciseLibrary(): Promise<ExerciseLibraryItem[]> {
     groupOrder: r.group_order,
     sortOrder: r.sort_order,
     aliases: r.aliases ?? [],
+    muscleGroups: r.muscle_groups ?? [],
     mediaUrl: exerciseMediaUrl(base, r.media_webp),
     gifUrl: exerciseMediaUrl(base, r.media_gif),
   }));

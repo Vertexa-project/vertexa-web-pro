@@ -64,15 +64,31 @@ function mapProfessional(row: RawProfessionalRow, profileId: string): CurrentPro
   };
 }
 
-export async function getCurrentProfessional(profileId: string): Promise<CurrentProfessional | null> {
+/** Linhas de `professionals` do profile (uma por clínica), sem escolher a atuante. */
+export async function listProfessionalRows(profileId: string): Promise<CurrentProfessional[]> {
   const { data, error } = await supabase
     .from("professionals")
     .select("id, profile_id, clinic_id, type, profile:profiles!professionals_profile_id_fkey ( full_name, role )")
     .eq("profile_id", profileId);
   if (error) throw error;
-  const rows = ((data ?? []) as unknown as RawProfessionalRow[]).map((row) =>
-    mapProfessional(row, profileId),
-  );
+  return ((data ?? []) as unknown as RawProfessionalRow[]).map((row) => mapProfessional(row, profileId));
+}
+
+/**
+ * Escolhe a linha atuante dado o resultado das memberships. Falha ao ler memberships
+ * (undefined) cai no comportamento antigo: 1 linha = ela; várias = pickActingProfessional sem memberships.
+ */
+export function chooseActingProfessional(
+  rows: readonly CurrentProfessional[],
+  memberships: Parameters<typeof pickActingProfessional>[1] | undefined,
+): CurrentProfessional | null {
+  if (rows.length === 0) return null;
+  if (!memberships) return rows.length === 1 ? rows[0] : pickActingProfessional(rows, []);
+  return pickActingProfessional(rows, memberships);
+}
+
+export async function getCurrentProfessional(profileId: string): Promise<CurrentProfessional | null> {
+  const rows = await listProfessionalRows(profileId);
   if (rows.length === 0) return null;
 
   let memberships = [];

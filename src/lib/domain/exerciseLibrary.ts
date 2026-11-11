@@ -14,6 +14,8 @@ export interface ExerciseLibraryItem {
   groupOrder: number;
   sortOrder: number;
   aliases: string[];
+  /** Grupos musculares (chaves da ficha: chest, biceps, lats...); vazio em cardio/mobilidade. */
+  muscleGroups: string[];
   /** URL pública da animação leve (webp animado), usada na tela. */
   mediaUrl: string;
   /** URL pública do GIF original, alternativa quando o webp não carrega. */
@@ -78,4 +80,27 @@ export function groupExercises(items: ExerciseLibraryItem[], query = ""): Exerci
     groups.set(item.groupKey, g);
   }
   return [...groups.values()].sort((a, b) => a.order - b.order).map(({ key, label, items: list }) => ({ key, label, items: list }));
+}
+
+/**
+ * Sugestões para o campo do exercício: cada palavra digitada precisa aparecer no nome, num apelido
+ * ou no grupo (sem acento/caixa). Ordem: nome que começa com o texto, nome que contém, apelido.
+ */
+export function searchExercises(items: ExerciseLibraryItem[], query: string, limit = 8): ExerciseLibraryItem[] {
+  const q = normalizeExerciseName(query);
+  if (!q) return [];
+  const tokens = q.split(" ");
+  const scored: { item: ExerciseLibraryItem; score: number }[] = [];
+  for (const item of items) {
+    const name = normalizeExerciseName(item.name);
+    const aliases = item.aliases.map(normalizeExerciseName);
+    const haystack = [name, ...aliases, normalizeExerciseName(item.groupLabel)].join(" | ");
+    if (!tokens.every((t) => haystack.includes(t))) continue;
+    const score = name.startsWith(q) ? 0 : name.includes(q) ? 1 : aliases.some((a) => a.includes(q)) ? 2 : tokens.every((t) => name.includes(t)) ? 3 : 4;
+    scored.push({ item, score });
+  }
+  return scored
+    .sort((a, b) => a.score - b.score || a.item.groupOrder - b.item.groupOrder || a.item.sortOrder - b.item.sortOrder)
+    .slice(0, limit)
+    .map((s) => s.item);
 }

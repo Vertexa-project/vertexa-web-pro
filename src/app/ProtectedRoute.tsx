@@ -38,8 +38,11 @@ function ClinicAccessGate({ children }: { children: React.ReactNode }) {
     isLoading: memberships.isLoading,
     isError: memberships.isError,
   });
+  // As memberships já chegam pelo cache que a identidade preenche; a consulta comercial começa
+  // assim que elas chegam, em paralelo com o resto da identidade (a decisão abaixo continua
+  // esperando a identidade ficar ativa).
   const actingClinicId =
-    askMemberships && clinicAccess === "ok"
+    identity.status !== "pending" && clinicAccess === "ok"
       ? pickActingMembership(memberships.data ?? [])?.clinicId ?? null
       : null;
   const commercial = useMyClinicCommercialAccess(actingClinicId, Boolean(actingClinicId));

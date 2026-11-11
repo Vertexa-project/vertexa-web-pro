@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
 import { ExerciseMedia } from "@/components/exercise/ExerciseMedia";
+import { ExerciseNameInput } from "@/components/exercise/ExerciseNameInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -133,7 +134,11 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
           .filter((e) => e.name.trim())
           .map((e) => ({
             name: e.name.trim(),
-            muscle_groups: e.muscleGroups.split(",").map((s) => s.trim()).filter(Boolean),
+            muscle_groups: (() => {
+              const typed = e.muscleGroups.split(",").map((s) => s.trim()).filter(Boolean);
+              if (typed.length > 0) return typed;
+              return findLibraryExercise(library.index, e.name)?.muscleGroups ?? [];
+            })(),
             sets: e.sets ? Number(e.sets) : null,
             reps: e.reps ? Number(e.reps) : null,
             load_kg: e.load ? Number(e.load) : null,
@@ -164,13 +169,6 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
         </DialogHeader>
 
         <DialogBody className="space-y-5">
-          <datalist id="biblioteca-exercicios">
-            {library.items.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.groupLabel}
-              </option>
-            ))}
-          </datalist>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="wp-title">Título</Label>
@@ -258,13 +256,13 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
                             aria-hidden
                           />
                         )}
-                        <Input
+                        <ExerciseNameInput
                           value={ex.name}
-                          onChange={(e) => patchExercise(wi, ei, { name: e.target.value })}
-                          placeholder="Exercício (buscar na Biblioteca)"
-                          aria-label="Nome do exercício"
-                          list="biblioteca-exercicios"
-                          autoComplete="off"
+                          items={library.items}
+                          onChange={(name) => patchExercise(wi, ei, { name })}
+                          onPick={(item) =>
+                            patchExercise(wi, ei, { name: item.name, muscleGroups: item.muscleGroups.join(", ") })
+                          }
                         />
                       </div>
                       <Input

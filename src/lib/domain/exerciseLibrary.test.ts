@@ -6,6 +6,7 @@ import {
   findLibraryExercise,
   groupExercises,
   normalizeExerciseName,
+  searchExercises,
   type ExerciseLibraryItem,
 } from "./exerciseLibrary";
 
@@ -17,6 +18,7 @@ const item = (over: Partial<ExerciseLibraryItem>): ExerciseLibraryItem => ({
   groupOrder: 0,
   sortOrder: 0,
   aliases: [],
+  muscleGroups: [],
   mediaUrl: "m",
   gifUrl: "g",
   ...over,
@@ -62,6 +64,20 @@ describe("biblioteca de exercícios", () => {
     expect(found[0].items[0].id).toBe("triceps_corda-polia");
     expect(groupExercises(items, "posterior")[0].key).toBe("posterior");
     expect(groupExercises(items, "nada disso")).toEqual([]);
+  });
+
+  it("sugere pelo nome curto, sem acento e por palavras soltas", () => {
+    const list = [
+      item({ id: "s1", name: "Supino sentado na máquina", aliases: ["supino maquina"], groupLabel: "Peito" }),
+      item({ id: "s2", name: "Supino reto com halteres", groupLabel: "Peito", sortOrder: 1 }),
+      item({ id: "m", name: "Mesa flexora", groupLabel: "Posterior" }),
+    ];
+    expect(searchExercises(list, "Supino máquina").map((i) => i.id)).toEqual(["s1"]);
+    expect(searchExercises(list, "supino").map((i) => i.id)).toEqual(["s1", "s2"]);
+    expect(searchExercises(list, "SUPINO MAQUINA")[0].id).toBe("s1");
+    expect(searchExercises(list, "posterior").map((i) => i.id)).toEqual(["m"]);
+    expect(searchExercises(list, "")).toEqual([]);
+    expect(searchExercises(list, "xyz")).toEqual([]);
   });
 
   it("monta a URL pública do bucket", () => {
