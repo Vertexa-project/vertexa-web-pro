@@ -1,5 +1,6 @@
 // Factory central de query keys — hierárquica por paciente para facilitar invalidação.
 export const qk = {
+  exerciseLibrary: ["exerciseLibrary"] as const,
   patients: ["patients"] as const,
   patient: (id: string) => ["patient", id] as const,
   patientTimeline: (id: string) => ["patient", id, "timeline"] as const,

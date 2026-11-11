@@ -1,4 +1,5 @@
 import {
+  Dumbbell,
   KanbanSquare,
   LayoutDashboard,
   LayoutTemplate,
@@ -31,6 +32,7 @@ export const mainNav: NavItem[] = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
   { path: "/pacientes", label: "Pacientes", icon: Users },
   { path: "/jornada", label: "Jornada", icon: KanbanSquare },
+  { path: "/biblioteca", label: "Biblioteca", icon: Dumbbell },
   { path: "/mensagens", label: "Mensagens", icon: MessageSquare },
   { path: "/campanhas", label: "Campanhas", icon: Megaphone },
   { path: "/gestao", label: "Gestão", icon: BarChart3, adminOnly: true },

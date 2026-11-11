@@ -2,11 +2,14 @@ import { useState } from "react";
 import { Dumbbell, Pencil, Plus } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
+import { ExerciseMedia } from "@/components/exercise/ExerciseMedia";
 import { GatedAction } from "./GatedAction";
 import { WorkoutPlanEditor } from "./WorkoutPlanEditor";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWorkoutPlan } from "@/hooks/usePlans";
+import { useExerciseLibrary } from "@/hooks/useExerciseLibrary";
+import { findLibraryExercise } from "@/lib/domain/exerciseLibrary";
 import { formatWeight } from "@/lib/domain/format";
 import { muscleGroupLabel } from "@/lib/domain/muscleRecovery";
 import { useDisciplinePermissions } from "@/hooks/useDisciplines";
@@ -18,6 +21,7 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
   const [editing, setEditing] = useState(false);
   const { perms } = useDisciplinePermissions();
   const canEdit = perms.canEditWorkout;
+  const library = useExerciseLibrary();
 
   return (
     <>
@@ -90,7 +94,17 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
                   <tbody className="divide-y">
                     {w.workout_exercises.map((ex) => (
                       <tr key={ex.id}>
-                        <td className="px-6 py-3 font-medium text-foreground">{ex.name}</td>
+                        <td className="px-6 py-3 font-medium text-foreground">
+                          <div className="flex items-center gap-3">
+                            {(() => {
+                              const match = findLibraryExercise(library.index, ex.name);
+                              return match ? (
+                                <ExerciseMedia item={match} className="h-10 w-12 shrink-0 rounded-md" />
+                              ) : null;
+                            })()}
+                            <span>{ex.name}</span>
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {ex.sets ?? "—"} × {ex.reps ?? "—"}
                         </td>

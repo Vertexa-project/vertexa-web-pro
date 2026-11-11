@@ -19,6 +19,9 @@ const ForgotPasswordPage = lazy(() =>
 const UpdatePasswordPage = lazy(() =>
   import("@/pages/UpdatePasswordPage").then((m) => ({ default: m.UpdatePasswordPage })),
 );
+const ExerciseLibraryPage = lazy(() =>
+  import("@/pages/ExerciseLibraryPage").then((m) => ({ default: m.ExerciseLibraryPage })),
+);
 const DashboardPage = lazy(() => import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
 const PatientsPage = lazy(() => import("@/pages/PatientsPage").then((m) => ({ default: m.PatientsPage })));
 const PatientProfilePage = lazy(() =>
@@ -222,6 +225,7 @@ export const router = createBrowserRouter(
             { path: "pacientes/:id", element: <PatientProfilePage /> },
             { path: "jornada", element: <JourneyBoardPage /> },
             { path: "planos", element: <PlansPage /> },
+            { path: "biblioteca", element: <ExerciseLibraryPage /> },
             { path: "mensagens", element: <MessagesPage /> },
             { path: "campanhas", element: <CampaignsPage /> },
             { path: "gestao", element: <ManagementPage /> },

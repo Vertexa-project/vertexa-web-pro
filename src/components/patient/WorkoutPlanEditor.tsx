@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
+import { ExerciseMedia } from "@/components/exercise/ExerciseMedia";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSaveWorkoutPlan } from "@/hooks/usePlanMutations";
 import { useDisciplinePermissions } from "@/hooks/useDisciplines";
+import { useExerciseLibrary } from "@/hooks/useExerciseLibrary";
+import { findLibraryExercise } from "@/lib/domain/exerciseLibrary";
 import { DISCIPLINE_REASON, isDisciplineDenied, writeDeniedMessage } from "@/lib/domain/disciplines";
 import { captureException } from "@/lib/observability/sentry";
 import type { SaveWorkoutPlanInput } from "@/lib/api/planMutations";
@@ -79,6 +82,7 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
   const save = useSaveWorkoutPlan(patient.id);
   const { perms } = useDisciplinePermissions();
   const canEdit = perms.canEditWorkout;
+  const library = useExerciseLibrary();
 
   useEffect(() => {
     if (open) {
@@ -154,10 +158,19 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{existing ? "Editar plano de treino" : "Novo plano de treino"}</DialogTitle>
-          <DialogDescription>O paciente verá este plano no app.</DialogDescription>
+          <DialogDescription>
+            O paciente verá este plano no app. Escolha o exercício pela lista da Biblioteca para ele ver a animação.
+          </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="space-y-5">
+          <datalist id="biblioteca-exercicios">
+            {library.items.map((item) => (
+              <option key={item.id} value={item.name}>
+                {item.groupLabel}
+              </option>
+            ))}
+          </datalist>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="wp-title">Título</Label>
@@ -227,15 +240,33 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
               </div>
 
               <div className="space-y-2">
-                {w.exercises.map((ex, ei) => (
+                {w.exercises.map((ex, ei) => {
+                  const match = findLibraryExercise(library.index, ex.name);
+                  return (
                   <div key={ei} className="grid grid-cols-[1fr_auto] gap-2">
-                    <div className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_1fr]">
-                      <Input
-                        value={ex.name}
-                        onChange={(e) => patchExercise(wi, ei, { name: e.target.value })}
-                        placeholder="Exercício"
-                        aria-label="Nome do exercício"
-                      />
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="flex min-w-0 items-center gap-2">
+                        {match ? (
+                          <ExerciseMedia
+                            item={match}
+                            className="h-10 w-10 shrink-0 rounded-md"
+                          />
+                        ) : (
+                          <span
+                            className="h-10 w-10 shrink-0 rounded-md border border-dashed border-border"
+                            title="Sem animação: o nome não está na Biblioteca"
+                            aria-hidden
+                          />
+                        )}
+                        <Input
+                          value={ex.name}
+                          onChange={(e) => patchExercise(wi, ei, { name: e.target.value })}
+                          placeholder="Exercício (buscar na Biblioteca)"
+                          aria-label="Nome do exercício"
+                          list="biblioteca-exercicios"
+                          autoComplete="off"
+                        />
+                      </div>
                       <Input
                         type="number"
                         value={ex.sets}
@@ -270,7 +301,8 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                ))}
+                  );
+                })}
                 <Button
                   variant="outline"
                   size="sm"
