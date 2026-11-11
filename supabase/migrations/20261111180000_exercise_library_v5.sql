@@ -1,0 +1,108 @@
+-- Biblioteca de exercícios, bloco v5 (Oficina #608): "MAGNIFIC_v5_corrigidos.zip" + "Exercicios_Corrigidos_v5.html".
+-- 14 exercícios novos (incluindo o grupo novo Funcional) e a animação corrigida de 3 que já existiam
+-- (barra fixa assistida, hiperextensão 45°, puxada neutra). Mídia nova em caminhos .v5.* (cache longo do bucket).
+-- Ordem igual ao bloco anterior: grupos em ordem alfabética, exercícios pela ordem do arquivo.
+-- Rollback: delete dos 14 ids novos; media_* dos 3 corrigidos de volta para <grupo>/<id>.<ext>; reaplicar 20261111160000.
+do $$ begin
+  if (select count(*) from public.exercise_library) <> 61 then raise exception 'exercise_library: esperado 61 itens antes do bloco v5'; end if;
+end $$;
+
+insert into public.exercise_library (id, name, group_key, group_label, group_order, sort_order, aliases, media_webp, media_gif, media_mp4) values
+  ('cardio_eliptico', 'Elíptico', 'cardio', 'Cardio', 2, 8, array['eliptico','Transport']::text[], 'cardio/cardio_eliptico.v5.webp', 'cardio/cardio_eliptico.v5.gif', 'cardio/cardio_eliptico.v5.mp4'),
+  ('core_crunch-polia', 'Abdominal ajoelhado na polia', 'core', 'Core', 3, 14, array['crunch polia','Abdominal na polia']::text[], 'core/core_crunch-polia.v5.webp', 'core/core_crunch-polia.v5.gif', 'core/core_crunch-polia.v5.mp4'),
+  ('costas_remada-maquina', 'Remada sentada na máquina', 'costas', 'Costas', 4, 31, array['remada maquina','Remada máquina']::text[], 'costas/costas_remada-maquina.v5.webp', 'costas/costas_remada-maquina.v5.gif', 'costas/costas_remada-maquina.v5.mp4'),
+  ('funcional_kettlebell-swing', 'Kettlebell swing', 'funcional', 'Funcional', 7, 37, array['kettlebell swing','Swing com kettlebell']::text[], 'funcional/funcional_kettlebell-swing.v5.webp', 'funcional/funcional_kettlebell-swing.v5.gif', 'funcional/funcional_kettlebell-swing.v5.mp4'),
+  ('mobilidade_wall-slide', 'Deslizamento dos braços na parede', 'mobilidade', 'Mobilidade', 9, 46, array['wall slide']::text[], 'mobilidade/mobilidade_wall-slide.v5.webp', 'mobilidade/mobilidade_wall-slide.v5.gif', 'mobilidade/mobilidade_wall-slide.v5.mp4'),
+  ('ombro_desenvolvimento-maquina', 'Desenvolvimento na máquina', 'ombro', 'Ombro', 10, 48, array['desenvolvimento maquina','Desenvolvimento máquina']::text[], 'ombro/ombro_desenvolvimento-maquina.v5.webp', 'ombro/ombro_desenvolvimento-maquina.v5.gif', 'ombro/ombro_desenvolvimento-maquina.v5.mp4'),
+  ('peito_crucifixo-halteres', 'Crucifixo reto com halteres', 'peito', 'Peito', 11, 50, array['crucifixo halteres','Crucifixo com halteres']::text[], 'peito/peito_crucifixo-halteres.v5.webp', 'peito/peito_crucifixo-halteres.v5.gif', 'peito/peito_crucifixo-halteres.v5.mp4'),
+  ('peito_peck-deck', 'Voador (peck deck)', 'peito', 'Peito', 11, 52, array['peck deck','Voador','Crucifixo máquina','Crucifixo na máquina']::text[], 'peito/peito_peck-deck.v5.webp', 'peito/peito_peck-deck.v5.gif', 'peito/peito_peck-deck.v5.mp4'),
+  ('peito_supino-declinado', 'Supino declinado com barra', 'peito', 'Peito', 11, 53, array['supino declinado']::text[], 'peito/peito_supino-declinado.v5.webp', 'peito/peito_supino-declinado.v5.gif', 'peito/peito_supino-declinado.v5.mp4'),
+  ('peito_supino-maquina', 'Supino sentado na máquina', 'peito', 'Peito', 11, 54, array['supino maquina','Supino máquina','Supino na máquina']::text[], 'peito/peito_supino-maquina.v5.webp', 'peito/peito_supino-maquina.v5.gif', 'peito/peito_supino-maquina.v5.mp4'),
+  ('posterior_flexao-nordica', 'Flexão nórdica', 'posterior', 'Posterior', 12, 56, array['flexao nordica']::text[], 'posterior/posterior_flexao-nordica.v5.webp', 'posterior/posterior_flexao-nordica.v5.gif', 'posterior/posterior_flexao-nordica.v5.mp4'),
+  ('posterior_good-morning', 'Good morning com barra', 'posterior', 'Posterior', 12, 57, array['good morning']::text[], 'posterior/posterior_good-morning.v5.webp', 'posterior/posterior_good-morning.v5.gif', 'posterior/posterior_good-morning.v5.mp4'),
+  ('quadriceps_hack', 'Agachamento hack na máquina', 'quadriceps', 'Quadríceps', 13, 65, array['hack','Hack','Agachamento hack']::text[], 'quadriceps/quadriceps_hack.v5.webp', 'quadriceps/quadriceps_hack.v5.gif', 'quadriceps/quadriceps_hack.v5.mp4'),
+  ('quadriceps_leg-press-horizontal', 'Leg press horizontal', 'quadriceps', 'Quadríceps', 13, 66, array['leg press horizontal']::text[], 'quadriceps/quadriceps_leg-press-horizontal.v5.webp', 'quadriceps/quadriceps_leg-press-horizontal.v5.gif', 'quadriceps/quadriceps_leg-press-horizontal.v5.mp4')
+on conflict (id) do nothing;
+
+update public.exercise_library set media_webp = group_key || '/' || id || '.v5.webp', media_gif = group_key || '/' || id || '.v5.gif',
+  media_mp4 = group_key || '/' || id || '.v5.mp4'
+where id in ('costas_barra-fixa-assistida','costas_hiperextensao-45','costas_puxada-neutra');
+
+update public.exercise_library e set group_order = v.gorder, sort_order = v.sorder
+from (values
+  ('abdutores_cadeira-abdutora', 0, 0),
+  ('biceps_rosca-alternada', 1, 1),
+  ('biceps_rosca-concentrada', 1, 2),
+  ('biceps_rosca-polia', 1, 3),
+  ('biceps_rosca-scott', 1, 4),
+  ('cardio_bicicleta', 2, 5),
+  ('cardio_burpee', 2, 6),
+  ('cardio_caminhada-esteira', 2, 7),
+  ('cardio_eliptico', 2, 8),
+  ('cardio_escalador', 2, 9),
+  ('cardio_marcha-estacionaria', 2, 10),
+  ('cardio_polichinelo', 2, 11),
+  ('cardio_remo-ergometro', 2, 12),
+  ('core_abdominal-crunch', 3, 13),
+  ('core_crunch-polia', 3, 14),
+  ('core_dead-bug', 3, 15),
+  ('core_elevacao-pernas', 3, 16),
+  ('core_pallof-press', 3, 17),
+  ('core_perdigueiro', 3, 18),
+  ('core_prancha-frontal', 3, 19),
+  ('core_prancha-lateral', 3, 20),
+  ('core_prancha-toque-ombro', 3, 21),
+  ('costas_barra-fixa-assistida', 4, 22),
+  ('costas_barra-fixa-pronada', 4, 23),
+  ('costas_barra-fixa-supinada', 4, 24),
+  ('costas_hiperextensao-45', 4, 25),
+  ('costas_levantamento-terra', 4, 26),
+  ('costas_pulldown-bracos-estendidos', 4, 27),
+  ('costas_puxada-neutra', 4, 28),
+  ('costas_remada-baixa-polia', 4, 29),
+  ('costas_remada-cavalinho', 4, 30),
+  ('costas_remada-maquina', 4, 31),
+  ('costas_terra-sumo', 4, 32),
+  ('elastico_caminhada-lateral', 5, 33),
+  ('elastico_remada', 5, 34),
+  ('elastico_rosca', 5, 35),
+  ('equilibrio_apoio-unipodal', 6, 36),
+  ('funcional_kettlebell-swing', 7, 37),
+  ('gluteo_abducao-deitado', 8, 38),
+  ('gluteo_elevacao-pelvica-barra', 8, 39),
+  ('mobilidade_flexor-quadril', 9, 40),
+  ('mobilidade_gato-camelo', 9, 41),
+  ('mobilidade_isquiotibiais', 9, 42),
+  ('mobilidade_quadril-90-90', 9, 43),
+  ('mobilidade_rotacao-toracica', 9, 44),
+  ('mobilidade_tornozelo-parede', 9, 45),
+  ('mobilidade_wall-slide', 9, 46),
+  ('ombro_crucifixo-inverso', 10, 47),
+  ('ombro_desenvolvimento-maquina', 10, 48),
+  ('ombro_desenvolvimento-militar', 10, 49),
+  ('peito_crucifixo-halteres', 11, 50),
+  ('peito_flexao-inclinada', 11, 51),
+  ('peito_peck-deck', 11, 52),
+  ('peito_supino-declinado', 11, 53),
+  ('peito_supino-maquina', 11, 54),
+  ('peito_supino-reto-halteres', 11, 55),
+  ('posterior_flexao-nordica', 12, 56),
+  ('posterior_good-morning', 12, 57),
+  ('posterior_mesa-flexora', 12, 58),
+  ('posterior_terra-romeno-halteres', 12, 59),
+  ('quadriceps_agachamento-bulgaro', 13, 60),
+  ('quadriceps_agachamento-frontal', 13, 61),
+  ('quadriceps_agachamento-goblet', 13, 62),
+  ('quadriceps_agachamento-smith', 13, 63),
+  ('quadriceps_agachamento-sumo', 13, 64),
+  ('quadriceps_hack', 13, 65),
+  ('quadriceps_leg-press-horizontal', 13, 66),
+  ('quadriceps_passada-caminhando', 13, 67),
+  ('quadriceps_sentar-levantar', 13, 68),
+  ('quadriceps_step-up', 13, 69),
+  ('triceps_coice-halter', 14, 70),
+  ('triceps_corda-polia', 14, 71),
+  ('triceps_frances-halter', 14, 72),
+  ('triceps_mergulho-banco', 14, 73),
+  ('triceps_paralelas', 14, 74)
+) as v(id, gorder, sorder) where e.id = v.id;
