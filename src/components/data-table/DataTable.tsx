@@ -52,7 +52,9 @@ export function DataTable<T>({
 
   return (
     <Card className="overflow-hidden">
-      <div className="overflow-x-auto">
+      {/* relative: o texto só para leitor de tela (sr-only, absoluto) fica preso à rolagem da tabela
+          e não estica a página no celular. */}
+      <div className="relative overflow-x-auto">
         <table className="w-full text-left text-sm" aria-label={ariaLabel}>
           <thead className="border-b bg-muted/40 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <tr>
