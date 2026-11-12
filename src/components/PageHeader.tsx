@@ -23,7 +23,8 @@ export function PageHeader({ title, description, actions, className }: PageHeade
           ) : null}
         </div>
       </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+      {/* flex-wrap: no celular os botões descem de linha em vez de empurrar a página para o lado. */}
+      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }
