@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquareText } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -12,7 +12,7 @@ import { mondayKey, noteError, NOTE_MAX } from "@/lib/domain/weeklyNote";
 export function WeeklyNoteCard({ patientId }: { patientId: string }) {
   const week = mondayKey(new Date());
   const qc = useQueryClient();
-  const key = ["weeklyNote", patientId, week];
+  const key = useMemo(() => ["weeklyNote", patientId, week], [patientId, week]);
   const saved = useQuery({ queryKey: key, queryFn: () => getWeeklyNote(patientId, week) });
   const [text, setText] = useState("");
   // Traz o recado salvo uma única vez (e de novo ao trocar de semana/paciente): não pisa no que a pessoa está digitando.

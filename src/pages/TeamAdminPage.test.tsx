@@ -19,6 +19,9 @@ import type { ProfessionalStatusEvent } from "@/lib/api/professionalStatus";
 const OWNER_PROFILE = "pf-dono";
 const ME_PROF = "pr-eu";
 
+// A coluna de papéis do Financeiro/Estoque tem a sua própria cobertura (StaffRolesDialog.test.tsx).
+vi.mock("@/components/fin/StaffRolesDialog", () => ({ StaffRolesCell: () => null }));
+
 const state = vi.hoisted(() => ({
   isClinicAdmin: true,
   adminLoading: false,

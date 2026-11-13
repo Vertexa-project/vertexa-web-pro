@@ -37,3 +37,28 @@ describe("visibilidade do menu pela matriz de papéis", () => {
     expect(rowToAccess(null)).toEqual(NO_FIN_ACCESS);
   });
 });
+
+import { mainNav } from "@/app/routes";
+import { filterNav } from "@/hooks/useVisibleNav";
+
+describe("menu lateral pela matriz de papéis", () => {
+  const paths = (a: ReturnType<typeof acc>, admin = false) => filterNav(mainNav, admin, a).map((i) => i.path);
+  it("financeiro vê Financeiro e Estoque, mas não Gestão", () => {
+    const p = paths(acc({ services_read: true, stock_items_read: true }));
+    expect(p).toContain("/financeiro");
+    expect(p).toContain("/estoque");
+    expect(p).not.toContain("/gestao");
+  });
+  it("estoquista vê só Estoque; recepção não vê nenhum dos dois", () => {
+    const e = paths(acc({ stock_items_read: true, stock_items_write: true }));
+    expect(e).toContain("/estoque");
+    expect(e).not.toContain("/financeiro");
+    const r = paths(acc({ units_read: true }));
+    expect(r).not.toContain("/estoque");
+    expect(r).not.toContain("/financeiro");
+  });
+  it("admin vê todos", () => {
+    const p = paths(NO_FIN_ACCESS, true);
+    expect(p).toEqual(expect.arrayContaining(["/financeiro", "/estoque", "/gestao"]));
+  });
+});
