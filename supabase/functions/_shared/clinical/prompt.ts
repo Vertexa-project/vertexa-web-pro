@@ -3,7 +3,7 @@ import type { TemplateSection } from "./template.ts";
 import { fieldKey } from "./template.ts";
 import type { RecordFields } from "./record.ts";
 
-export const STRUCTURE_PROMPT_VERSION = "v1-2026-11";
+export const STRUCTURE_PROMPT_VERSION = "v2-2026-11";
 
 export interface PromptSegment {
   ord: number;
@@ -20,7 +20,11 @@ export function buildSystemPrompt(): string {
     "3. Cada campo preenchido deve citar em `sources` o `ord` dos trechos da transcrição de onde veio a informação.",
     "4. Escreva de forma objetiva, em linguagem de prontuário, em português. Listas: uma linha por item.",
     "5. Em 'combinados', registre o que cada pessoa (profissional ou paciente) vai enviar/fazer e até quando, só se foi dito.",
-    "6. Responda apenas com o JSON do esquema pedido.",
+    "6. Linguagem clínica objetiva, em terceira pessoa. Números sempre com unidade (kg, cm, mmHg, bpm, mg/dL...).",
+    "7. Não calcule o que não foi medido ou dito (ex.: IMC só se o profissional falou os valores). Guarde a queixa principal como frase do paciente entre aspas.",
+    "8. Registre \"Nega\" apenas quando o paciente negou explicitamente. Em uso de medicações/suplementos separe uso atual de uso anterior.",
+    "9. A seção 'profissional' é preenchida pelo sistema: nunca a preencha.",
+    "10. Responda apenas com o JSON do esquema pedido.",
     `(prompt ${STRUCTURE_PROMPT_VERSION})`,
   ].join("\n");
 }
@@ -30,7 +34,7 @@ export function buildUserPrompt(
   segments: PromptSegment[],
   current: RecordFields,
 ): string {
-  const schemaLines = sections.flatMap((s) =>
+  const schemaLines = sections.filter((s) => !s.system).flatMap((s) =>
     s.fields.map((f) => `- ${fieldKey(s.id, f.id)}: ${s.title} / ${f.label}`),
   );
   const transcript = segments.map((g) => `[${g.ord}] ${g.speaker ? g.speaker + ": " : ""}${g.text}`).join("\n");

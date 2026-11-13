@@ -64,7 +64,7 @@ export function validateAiOutput(
 export function buildJsonSchema(sections: TemplateSection[]): Record<string, unknown> {
   const props: Record<string, unknown> = {};
   const required: string[] = [];
-  for (const s of sections) {
+  for (const s of sections.filter((x) => !x.system)) {
     for (const f of s.fields) {
       const key = fieldKey(s.id, f.id);
       props[key] = {
