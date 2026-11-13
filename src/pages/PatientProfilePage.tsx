@@ -3,6 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { StartEncounterButton } from "@/components/clinical/StartEncounterButton";
+import { ClinicalRecordTab } from "@/components/patient/ClinicalRecordTab";
 import { AnthropometryTab } from "@/components/patient/AnthropometryTab";
 import { DocumentsTab } from "@/components/patient/DocumentsTab";
 import { EvolutionTab } from "@/components/patient/EvolutionTab";
@@ -30,6 +32,7 @@ const TABS = [
   { value: "anthropometry", label: "Antropometria" },
   { value: "evolution", label: "Evolução/Fotos" },
   { value: "documents", label: "Documentos" },
+  { value: "prontuario", label: "Prontuário" },
   { value: "nutrition", label: "Plano alimentar" },
   { value: "supplements", label: "Suplementos" },
   { value: "workout", label: "Treino" },
@@ -121,6 +124,7 @@ export function PatientProfilePage() {
             Editar cadastro
           </Button>
         ) : null}
+        <StartEncounterButton patientId={patient.id} variant="outline" />
         <ExportPatientReportButton patientId={patient.id} />
       </div>
 
@@ -162,6 +166,9 @@ export function PatientProfilePage() {
         </TabsContent>
         <TabsContent value="documents">
           <DocumentsTab patientId={patient.id} />
+        </TabsContent>
+        <TabsContent value="prontuario">
+          <ClinicalRecordTab patientId={patient.id} />
         </TabsContent>
         <TabsContent value="nutrition">
           <NutritionTab patient={patient} />

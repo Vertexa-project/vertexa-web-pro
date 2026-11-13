@@ -69,6 +69,9 @@ export interface Addendum {
 
 export interface EncounterPeople {
   professional: string | null;
+  registry: string | null;
+  specialty: string | null;
+  type: string | null;
   addenda: Addendum[];
 }
 
@@ -143,6 +146,17 @@ export async function listChunks(encounterId: string): Promise<ChunkRow[]> {
 }
 
 export const getPeople = (encounterId: string) => rpc<EncounterPeople | null>("clinical_encounter_people", { p_encounter: encounterId });
+
+export interface VersionRow {
+  id: number;
+  action: "ai" | "manual" | "unlock" | "finalize" | "addendum" | "consent" | "status";
+  field_key: string | null;
+  before_value: { value?: string } | null;
+  after_value: { value?: string } | null;
+  actor_name: string | null;
+  created_at: string;
+}
+export const listVersions = (encounterId: string) => rpc<VersionRow[]>("clinical_list_versions", { p_encounter: encounterId });
 
 export const recordConsent = (encounterId: string, version: string, text: string) =>
   rpc<void>("clinical_record_consent", { p_encounter: encounterId, p_version: version, p_text: text });
