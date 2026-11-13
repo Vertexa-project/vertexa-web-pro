@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { ClinicCapacityNotice } from "@/components/billing/ClinicCapacityNotice";
+import { StaffRolesCell } from "@/components/fin/StaffRolesDialog";
 import { ProfileAvatarUrlScope } from "@/components/avatar/ProfileAvatarUrlScope";
 import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { AsyncSection } from "@/components/patient/AsyncSection";
@@ -466,6 +467,10 @@ export function TeamAdminPage() {
                             ? "Sem disciplina — não registra nada clínico"
                             : p.disciplines.map(labelOf).join(" · ")}
                         </p>
+                        {/* Papéis do Financeiro/Estoque (Entrega 1): só o admin atribui; o servidor é quem autoriza. */}
+                        {active && clinicId ? (
+                          <StaffRolesCell clinicId={clinicId} professionalId={p.professionalId} name={name} canEdit={isClinicAdmin} />
+                        ) : null}
 
                         {/* Quem desativou, quando e por quê — da trilha IMUTÁVEL
                             professional_status_events, gravada pelo SERVIDOR dentro da RPC.

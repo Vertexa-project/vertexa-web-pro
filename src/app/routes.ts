@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   Megaphone,
+  Package,
   MessageSquare,
   BarChart3,
   Wallet,
@@ -20,6 +21,11 @@ export interface NavItem {
   locked?: boolean;
   /** Só administrador da clínica vê o item (o servidor também nega aos demais). */
   adminOnly?: boolean;
+  /**
+   * Financeiro/Estoque (Entrega 1): além do admin, também aparece para quem tem papel adicional que alcança a área
+   * (matriz de papéis, escopo-v1 §3). Só decide o que MOSTRAR — o servidor recusa o resto.
+   */
+  finMenu?: "finance" | "stock";
 }
 
 // Fonte única do sidebar (núcleo enxuto: tudo gira em torno do paciente).
@@ -36,7 +42,8 @@ export const mainNav: NavItem[] = [
   { path: "/mensagens", label: "Mensagens", icon: MessageSquare },
   { path: "/campanhas", label: "Campanhas", icon: Megaphone },
   { path: "/gestao", label: "Gestão", icon: BarChart3, adminOnly: true },
-  { path: "/financeiro", label: "Financeiro", icon: Wallet, adminOnly: true },
+  { path: "/financeiro", label: "Financeiro", icon: Wallet, adminOnly: true, finMenu: "finance" },
+  { path: "/estoque", label: "Estoque", icon: Package, adminOnly: true, finMenu: "stock" },
   // Roadmap (não implementado): modelos de plano/treino/mensagem reutilizáveis.
   // Aparece com cadeado para sinalizar o que vem, sem virar módulo solto.
   { path: "/modelos", label: "Modelos", icon: LayoutTemplate, locked: true },

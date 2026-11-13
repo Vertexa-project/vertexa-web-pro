@@ -31,7 +31,17 @@ const PlansPage = lazy(() => import("@/pages/PlansPage").then((m) => ({ default:
 const MessagesPage = lazy(() => import("@/pages/MessagesPage").then((m) => ({ default: m.MessagesPage })));
 const CampaignsPage = lazy(() => import("@/pages/CampaignsPage").then((m) => ({ default: m.CampaignsPage })));
 const ManagementPage = lazy(() => import("@/pages/ManagementPage").then((m) => ({ default: m.ManagementPage })));
-const FinancePage = lazy(() => import("@/pages/FinancePage").then((m) => ({ default: m.FinancePage })));
+const FinanceLayout = lazy(() => import("@/pages/finance/FinanceLayout").then((m) => ({ default: m.FinanceLayout })));
+const FinanceMensalidades = lazy(() => import("@/pages/finance/FinanceLayout").then((m) => ({ default: m.FinanceMensalidades })));
+const CadastrosLayout = lazy(() => import("@/pages/finance/CadastrosLayout").then((m) => ({ default: m.CadastrosLayout })));
+const ServicesTab = lazy(() => import("@/pages/finance/ServicesTab").then((m) => ({ default: m.ServicesTab })));
+const PackagesTab = lazy(() => import("@/pages/finance/PackagesTab").then((m) => ({ default: m.PackagesTab })));
+const ProfessionalsFinanceTab = lazy(() => import("@/pages/finance/ProfessionalsFinanceTab").then((m) => ({ default: m.ProfessionalsFinanceTab })));
+const PaymentMethodsTab = lazy(() => import("@/pages/finance/PaymentMethodsTab").then((m) => ({ default: m.PaymentMethodsTab })));
+const TaxSettingsTab = lazy(() => import("@/pages/finance/TaxSettingsTab").then((m) => ({ default: m.TaxSettingsTab })));
+const AuditTab = lazy(() => import("@/pages/finance/AuditTab").then((m) => ({ default: m.AuditTab })));
+const StockPage = lazy(() => import("@/pages/StockPage").then((m) => ({ default: m.StockPage })));
+const UnitsPage = lazy(() => import("@/pages/UnitsPage").then((m) => ({ default: m.UnitsPage })));
 const RetentionPage = lazy(() => import("@/pages/RetentionPage").then((m) => ({ default: m.RetentionPage })));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const BillingProfilePage = lazy(() =>
@@ -229,11 +239,32 @@ export const router = createBrowserRouter(
             { path: "mensagens", element: <MessagesPage /> },
             { path: "campanhas", element: <CampaignsPage /> },
             { path: "gestao", element: <ManagementPage /> },
-            { path: "financeiro", element: <FinancePage /> },
+            {
+              // Financeiro com abas: Mensalidades (a tela de sempre) e Cadastros (Entrega 1 do módulo Financeiro/Estoque).
+              path: "financeiro",
+              element: <FinanceLayout />,
+              children: [
+                { index: true, element: <FinanceMensalidades /> },
+                {
+                  path: "cadastros",
+                  element: <CadastrosLayout />,
+                  children: [
+                    { path: "servicos", element: <ServicesTab /> },
+                    { path: "pacotes", element: <PackagesTab /> },
+                    { path: "profissionais", element: <ProfessionalsFinanceTab /> },
+                    { path: "meios-de-pagamento", element: <PaymentMethodsTab /> },
+                    { path: "impostos", element: <TaxSettingsTab /> },
+                    { path: "historico", element: <AuditTab /> },
+                  ],
+                },
+              ],
+            },
+            { path: "estoque", element: <StockPage /> },
             { path: "retencao", element: <RetentionPage /> },
             { path: "configuracoes", element: <SettingsPage /> },
             { path: "configuracoes/faturamento", element: <BillingProfilePage /> },
             { path: "configuracoes/equipe", element: <TeamAdminPage /> },
+            { path: "configuracoes/unidades", element: <UnitsPage /> },
             { path: "configuracoes/disciplinas", element: <DisciplinesAdminPage /> },
             { path: "configuracoes/jornada", element: <JourneyColumnsAdminPage /> },
             { path: "configuracoes/auditoria", element: <ReportAuditPage /> },

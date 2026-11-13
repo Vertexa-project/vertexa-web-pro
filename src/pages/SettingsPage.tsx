@@ -171,6 +171,13 @@ export function SettingsPage() {
             </SettingRow>
           ) : null}
           {isClinicAdmin ? (
+            <SettingRow label="Unidades">
+              <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/unidades")}>
+                Gerenciar
+              </Button>
+            </SettingRow>
+          ) : null}
+          {isClinicAdmin ? (
             <SettingRow label="Disciplinas da equipe">
               <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/disciplinas")}>
                 Gerenciar
