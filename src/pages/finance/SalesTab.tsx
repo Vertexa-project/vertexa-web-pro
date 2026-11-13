@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Receipt, Plus } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
-import { ExportButtons, Field, FinTable, FormDialog, TableShell, Td, Th } from "@/components/fin/FinUi";
+import { ExportButtons, Field, FinTable, FormDialog } from "@/components/fin/FinUi";
 import { FilterBar } from "@/components/fin/FinFilters";
 import { NewSaleDialog } from "@/components/fin/NewSaleDialog";
 import { PaymentDialog } from "@/components/fin/PaymentDialog";
@@ -57,30 +57,47 @@ function SaleDetail({ clinicId, saleId, onClose }: { clinicId: string; saleId: s
                 {s.discount_cents > 0 ? <span className="text-muted-foreground">Desconto {formatBRL(s.discount_cents)}</span> : null}
               </div>
               {s.cancel_reason ? <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">Cancelada: {s.cancel_reason}</p> : null}
-              <TableShell label="Itens da venda">
-                <thead><tr><Th>Item</Th><Th>Qtd.</Th><Th>Preço</Th><Th>Desconto</Th><Th>Líquido</Th></tr></thead>
-                <tbody>{s.items.map((i) => (
-                  <tr key={i.id}><Td className="font-medium">{i.description}</Td><Td>{Number(i.quantity)}</Td><Td className="tabular-nums">{formatBRL(i.unit_price_cents)}</Td>
-                    <Td className="tabular-nums">{formatBRL(i.discount_item_cents + i.discount_share_cents)}</Td><Td className="tabular-nums">{formatBRL(i.net_cents)}</Td></tr>
-                ))}</tbody>
-              </TableShell>
+              <FinTable
+                label="Itens da venda"
+                rows={s.items}
+                rowKey={(i) => i.id}
+                columns={[
+                  { header: "Item", role: "title", cell: (i) => i.description },
+                  { header: "Qtd.", cell: (i) => Number(i.quantity) },
+                  { header: "Preço", nowrap: true, className: "tabular-nums", cell: (i) => formatBRL(i.unit_price_cents) },
+                  { header: "Desconto", nowrap: true, className: "tabular-nums", cell: (i) => formatBRL(i.discount_item_cents + i.discount_share_cents) },
+                  { header: "Líquido", nowrap: true, className: "tabular-nums", cell: (i) => formatBRL(i.net_cents) },
+                ]}
+              />
               {s.payments.length > 0 ? (
-                <TableShell label="Recebimentos">
-                  <thead><tr><Th>Data</Th><Th>Forma</Th><Th>Parcelas</Th><Th>Valor</Th><Th>NSU</Th><Th>Situação</Th></tr></thead>
-                  <tbody>{s.payments.map((p) => (
-                    <tr key={p.id}><Td>{br(p.paid_on)}</Td><Td>{p.acquirer_name}{p.brand ? ` · ${p.brand}` : ""}</Td><Td>{p.installments}×</Td><Td className="tabular-nums">{formatBRL(p.amount_cents)}</Td><Td>{p.nsu ?? "—"}</Td>
-                      <Td><Badge tone={p.status === "active" ? "success" : "muted"}>{p.status === "active" ? "Ativo" : "Estornado"}</Badge></Td></tr>
-                  ))}</tbody>
-                </TableShell>
+                <FinTable
+                  label="Recebimentos"
+                  rows={s.payments}
+                  rowKey={(p) => p.id}
+                  columns={[
+                    { header: "Forma", role: "title", cell: (p) => `${p.acquirer_name}${p.brand ? ` · ${p.brand}` : ""}` },
+                    { header: "Situação", role: "badge", cell: (p) => <Badge tone={p.status === "active" ? "success" : "muted"}>{p.status === "active" ? "Ativo" : "Estornado"}</Badge> },
+                    { header: "Data", nowrap: true, cell: (p) => br(p.paid_on) },
+                    { header: "Parcelas", cell: (p) => `${p.installments}×` },
+                    { header: "Valor", nowrap: true, className: "tabular-nums", cell: (p) => formatBRL(p.amount_cents) },
+                    { header: "NSU", cell: (p) => p.nsu ?? "—" },
+                  ]}
+                />
               ) : null}
               {s.receivables.length > 0 ? (
-                <TableShell label="Títulos da venda">
-                  <thead><tr><Th>Parcela</Th><Th>Bruto</Th><Th>Taxa</Th><Th>Líquido</Th><Th>Previsto</Th><Th>Situação</Th></tr></thead>
-                  <tbody>{s.receivables.map((r) => (
-                    <tr key={r.id}><Td>{r.installment_no}/{r.installments}</Td><Td className="tabular-nums">{formatBRL(r.gross_cents)}</Td><Td className="tabular-nums">{formatBRL(r.fee_cents)}</Td><Td className="tabular-nums">{formatBRL(r.net_cents)}</Td>
-                      <Td>{br(r.expected_date)}</Td><Td>{RECEIVABLE_STATUS_LABEL[r.status]}</Td></tr>
-                  ))}</tbody>
-                </TableShell>
+                <FinTable
+                  label="Títulos da venda"
+                  rows={s.receivables}
+                  rowKey={(r) => r.id}
+                  columns={[
+                    { header: "Parcela", role: "title", cell: (r) => `${r.installment_no}/${r.installments}` },
+                    { header: "Situação", role: "badge", cell: (r) => RECEIVABLE_STATUS_LABEL[r.status] },
+                    { header: "Bruto", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.gross_cents) },
+                    { header: "Taxa", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.fee_cents) },
+                    { header: "Líquido", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.net_cents) },
+                    { header: "Previsto", nowrap: true, cell: (r) => br(r.expected_date) },
+                  ]}
+                />
               ) : null}
               <div className="flex flex-wrap gap-2">
                 {canPay ? <Button onClick={() => setPaying(true)}>Lançar recebimento</Button> : null}

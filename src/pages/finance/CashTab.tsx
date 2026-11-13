@@ -84,16 +84,17 @@ function CloseDialog({ register, onClose }: { register: CashSummary; onClose: ()
         for (const [k, v] of Object.entries(counted)) if (v != null) payload[k] = v;
         close.mutate({ registerId: register.id, counted: payload, justification: justification.trim() }, { onSuccess: onClose, onError: (e) => setError(financeSalesErrorMessage(e)) });
       }}>
-      <TableShell label="Conferência do caixa">
-        <thead><tr><Th>Forma</Th><Th>Esperado</Th><Th>Contado</Th><Th>Diferença</Th></tr></thead>
-        <tbody>{preview.lines.map((l) => (
-          <tr key={l.key}>
-            <Td className="font-medium">{l.label}</Td><Td className="tabular-nums">{formatBRL(l.expectedCents)}</Td>
-            <Td className="min-w-32"><CentsInput aria-label={`Contado em ${l.label}`} value={counted[l.key] ?? null} placeholder={l.key === "cash" ? "0,00" : "igual ao esperado"} onChange={(v) => setCounted((c) => ({ ...c, [l.key]: v }))} /></Td>
-            <Td className={`tabular-nums ${l.differenceCents !== 0 ? "font-semibold text-destructive" : ""}`}>{formatBRL(l.differenceCents)}</Td>
-          </tr>
-        ))}</tbody>
-      </TableShell>
+      <FinTable
+        label="Conferência do caixa"
+        rows={preview.lines}
+        rowKey={(l) => l.key}
+        columns={[
+          { header: "Forma", role: "title", cell: (l) => l.label },
+          { header: "Esperado", nowrap: true, className: "tabular-nums", cell: (l) => formatBRL(l.expectedCents) },
+          { header: "Contado", wide: true, className: "min-w-32", cell: (l) => <CentsInput aria-label={`Contado em ${l.label}`} value={counted[l.key] ?? null} placeholder={l.key === "cash" ? "0,00" : "igual ao esperado"} onChange={(v) => setCounted((c) => ({ ...c, [l.key]: v }))} /> },
+          { header: "Diferença", nowrap: true, className: "tabular-nums", cell: (l) => <span className={l.differenceCents !== 0 ? "font-semibold text-destructive" : ""}>{formatBRL(l.differenceCents)}</span> },
+        ]}
+      />
       {hasDiff ? (
         <div className="space-y-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm" role="status">
           <p className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> Diferença de {formatBRL(preview.totalAbsDifferenceCents)}. Dentro do limite da clínica o caixa fecha direto; acima dele o fechamento aguarda a aprovação do gestor.</p>
