@@ -933,6 +933,7 @@ begin
     'can_manage', v_mgr, 'is_professional', private.appt_is_pro(p_clinic),
     'my_professional_id', (select pr.id from public.professionals pr where pr.clinic_id = p_clinic and pr.profile_id = private.current_profile_id() and coalesce(pr.status, 'active') = 'active' limit 1),
     'roles', to_jsonb(sv.roles),
+    'units', coalesce((select jsonb_agg(jsonb_build_object('id', u.id, 'name', u.name, 'is_primary', u.is_primary) order by u.is_primary desc, u.name) from public.clinic_units u where u.clinic_id = p_clinic and u.is_active), '[]'::jsonb),
     'services', coalesce((select jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name, 'roles', to_jsonb(s.roles)) order by s.name) from public.fin_services s where s.clinic_id = p_clinic and s.is_active), '[]'::jsonb),
     'professionals', coalesce((select jsonb_agg(jsonb_build_object('id', pr.id, 'name', coalesce(pf.full_name, 'Profissional')) order by pf.full_name)
                                  from public.professionals pr left join public.profiles pf on pf.id = pr.profile_id where pr.clinic_id = p_clinic and coalesce(pr.status, 'active') = 'active'), '[]'::jsonb),

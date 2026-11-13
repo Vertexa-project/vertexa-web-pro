@@ -7,7 +7,7 @@ const K = ["fin", "e4"] as const;
 const on = (clinicId: string | null, extra = true) => Boolean(clinicId) && extra;
 
 export const useApptContext = (clinicId: string | null, unitId: string | null, patientId: string | null, serviceId: string | null) =>
-  useQuery({ queryKey: [...K, "context", clinicId, unitId, patientId, serviceId], queryFn: () => api.getApptContext(clinicId as string, unitId as string, patientId, serviceId), enabled: on(clinicId, Boolean(unitId)), staleTime: 0 });
+  useQuery({ queryKey: [...K, "context", clinicId, unitId, patientId, serviceId], queryFn: () => api.getApptContext(clinicId as string, unitId, patientId, serviceId), enabled: on(clinicId), staleTime: 0 });
 export const useApptPatients = (clinicId: string | null, search: string, enabled = true) =>
   useQuery({ queryKey: [...K, "patients", clinicId, search], queryFn: () => api.searchApptPatients(clinicId as string, search), enabled: on(clinicId, enabled) });
 export const useAppointments = (clinicId: string | null, f: api.ApptFilter, enabled = true) =>

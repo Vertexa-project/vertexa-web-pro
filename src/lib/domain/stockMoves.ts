@@ -212,6 +212,9 @@ const MESSAGES: Record<string, string> = {
   REVERSAL_NO_STOCK: "Essa entrada já foi consumida em parte. Estorne antes as saídas dela.",
   STOCK_MOVEMENT_IMMUTABLE: "Movimentação não se edita nem se apaga; corrija por estorno.",
   NAME_REQUIRED: "Informe o nome.",
+  APPOINTMENT_MOVEMENT_USE_CORRECT: "A baixa de um atendimento se corrige no próprio atendimento (Financeiro › Atendimentos › Corrigir kit).",
+  DELIVERY_USE_RETURN: "A entrega de item de pacote se desfaz pela devolução de paciente.",
+  RETURN_NOT_REVERSIBLE: "Devolução de paciente não se estorna.",
 };
 
 export function stockMoveErrorMessage(e: unknown): string {

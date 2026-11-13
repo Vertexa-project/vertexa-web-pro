@@ -14,14 +14,15 @@ const nn = (v: unknown): number | null => (v === null || v === undefined ? null 
 // ---------- contexto do «Novo atendimento» ----------
 export interface ApptContext {
   can_manage: boolean; is_professional: boolean; my_professional_id: string | null; roles: ApptRole[] | null;
+  units: { id: string; name: string; is_primary: boolean }[];
   services: { id: string; name: string; roles: ApptRole[] }[];
   professionals: { id: string; name: string }[];
   sale_items: { sale_item_id: string; sale_id: string; description: string; sold_on: string; remaining: number; net_cents: number | null }[];
   packages: { patient_package_item_id: string; patient_package_id: string; name: string; expires_on: string; qty_total: number; qty_used: number; remaining: number }[];
 }
-export async function getApptContext(clinicId: string, unitId: string, patientId: string | null, serviceId: string | null): Promise<ApptContext> {
+export async function getApptContext(clinicId: string, unitId: string | null, patientId: string | null, serviceId: string | null): Promise<ApptContext> {
   const r = await rpc<ApptContext>("fin_appt_context", { p_clinic: clinicId, p_unit: unitId, p_patient: patientId, p_service: serviceId });
-  return { ...r, sale_items: (r.sale_items ?? []).map((s) => ({ ...s, remaining: n(s.remaining) })), packages: (r.packages ?? []).map((p) => ({ ...p, qty_total: n(p.qty_total), qty_used: n(p.qty_used), remaining: n(p.remaining) })) };
+  return { ...r, units: r.units ?? [], services: r.services ?? [], professionals: r.professionals ?? [], sale_items: (r.sale_items ?? []).map((s) => ({ ...s, remaining: n(s.remaining) })), packages: (r.packages ?? []).map((p) => ({ ...p, qty_total: n(p.qty_total), qty_used: n(p.qty_used), remaining: n(p.remaining) })) };
 }
 export const searchApptPatients = (clinicId: string, search: string) =>
   rpc<{ patient_id: string; full_name: string }[]>("fin_appt_patients", { p_clinic: clinicId, p_search: search || null, p_limit: 20 });

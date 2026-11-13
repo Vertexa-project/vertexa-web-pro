@@ -8,7 +8,9 @@ import { ClinicalRecordTab } from "@/components/patient/ClinicalRecordTab";
 import { AnthropometryTab } from "@/components/patient/AnthropometryTab";
 import { DocumentsTab } from "@/components/patient/DocumentsTab";
 import { EvolutionTab } from "@/components/patient/EvolutionTab";
+import { NewAppointmentButton } from "@/components/fin/NewAppointmentButton";
 import { NewSaleButton } from "@/components/fin/NewSaleButton";
+import { PatientPackagesCard } from "@/components/fin/PatientPackagesCard";
 import { ExportPatientReportButton } from "@/components/patient/ExportPatientReportButton";
 import { NutritionTab } from "@/components/patient/NutritionTab";
 import { OverviewTab } from "@/components/patient/OverviewTab";
@@ -126,9 +128,12 @@ export function PatientProfilePage() {
           </Button>
         ) : null}
         <StartEncounterButton patientId={patient.id} variant="outline" />
+        <NewAppointmentButton patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
         <NewSaleButton patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
         <ExportPatientReportButton patientId={patient.id} />
       </div>
+
+      <PatientPackagesCard patientId={patient.id} />
 
       {isClinicAdmin ? (
         <PatientEditDialog

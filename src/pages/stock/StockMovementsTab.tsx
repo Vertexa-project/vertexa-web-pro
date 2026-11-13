@@ -15,10 +15,11 @@ import { MOVEMENT_TYPE_LABEL, type MovementType } from "@/lib/domain/stockMoves"
 import { NoAccess } from "@/pages/finance/NoAccess";
 import { MovementTable } from "@/pages/stock/MovementTable";
 import { movementExportColumns } from "@/pages/stock/movementFormat";
+import { PatientReturnDialog, type ReturnTarget } from "@/pages/stock/PatientReturnDialog";
 import { ReverseDialog, type ReverseTarget } from "@/pages/stock/ReverseDialog";
 import { StockShell } from "@/pages/stock/StockShell";
 
-const TYPES: MovementType[] = ["initial_balance", "purchase", "xml_purchase", "bonus", "sector", "loss", "appointment", "sale", "reversal"];
+const TYPES: MovementType[] = ["initial_balance", "purchase", "xml_purchase", "bonus", "sector", "loss", "appointment", "package_delivery", "sale", "patient_return", "reversal"];
 
 export function StockMovementsTab() {
   const { clinicId, access, isLoading } = useFinContext();
@@ -33,6 +34,7 @@ export function StockMovementsTab() {
   const [type, setType] = useState("");
   const [direction, setDirection] = useState<"" | "in" | "out">("");
   const [reversing, setReversing] = useState<ReverseTarget | null>(null);
+  const [returning, setReturning] = useState<ReturnTarget | null>(null);
   const q = useMovements(clinicId, { unitId: unitId || null, itemId: itemId || null, type, direction, from, to }, canRead);
   const rows = q.data ?? [];
   const reverse = (m: MovementRow) => setReversing({ kind: "movement", id: m.id, label: `${MOVEMENT_TYPE_LABEL[m.movement_type]} de ${m.item_name}` });
@@ -67,11 +69,13 @@ export function StockMovementsTab() {
           {q.isError ? <ErrorState onRetry={() => void q.refetch()} /> : rows.length === 0 ? (
             <EmptyState icon={History} title="Nenhuma movimentação" description="Ajuste os filtros, ou lance uma entrada ou saída para começar o histórico." />
           ) : (
-            <MovementTable rows={rows} label="Movimentações de estoque" onReverse={canWrite ? reverse : undefined} />
+            <MovementTable rows={rows} label="Movimentações de estoque" onReverse={canWrite ? reverse : undefined}
+              onReturn={canWrite ? (m) => setReturning({ movementId: m.id, itemName: m.item_name, qtyOut: Math.abs(m.qty), stockUnit: m.stock_unit, origin: m.movement_type === "sale" ? "Venda" : "Entrega de pacote" }) : undefined} />
           )}
         </div>
       )}
       <ReverseDialog target={reversing} onClose={() => setReversing(null)} />
+      {returning ? <PatientReturnDialog key={returning.movementId} target={returning} onClose={() => setReturning(null)} /> : null}
     </StockShell>
   );
 }

@@ -49,6 +49,9 @@ const StockBalanceTab = lazy(() => import("@/pages/stock/StockBalanceTab").then(
 const StockEntriesTab = lazy(() => import("@/pages/stock/StockEntriesTab").then((m) => ({ default: m.StockEntriesTab })));
 const StockExitsTab = lazy(() => import("@/pages/stock/StockExitsTab").then((m) => ({ default: m.StockExitsTab })));
 const StockMovementsTab = lazy(() => import("@/pages/stock/StockMovementsTab").then((m) => ({ default: m.StockMovementsTab })));
+const StockShortfallsTab = lazy(() => import("@/pages/stock/StockShortfallsTab").then((m) => ({ default: m.StockShortfallsTab })));
+const AppointmentsTab = lazy(() => import("@/pages/finance/AppointmentsTab").then((m) => ({ default: m.AppointmentsTab })));
+const PatientPackagesTab = lazy(() => import("@/pages/finance/PatientPackagesTab").then((m) => ({ default: m.PatientPackagesTab })));
 const UnitsPage = lazy(() => import("@/pages/UnitsPage").then((m) => ({ default: m.UnitsPage })));
 const RetentionPage = lazy(() => import("@/pages/RetentionPage").then((m) => ({ default: m.RetentionPage })));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
@@ -255,6 +258,8 @@ export const router = createBrowserRouter(
               children: [
                 { index: true, element: <FinanceMensalidades /> },
                 { path: "vendas", element: <SalesTab /> },
+                { path: "atendimentos", element: <AppointmentsTab /> },
+                { path: "pacotes", element: <PatientPackagesTab /> },
                 { path: "titulos", element: <TitlesTab /> },
                 { path: "caixa", element: <CashTab /> },
                 {
@@ -276,6 +281,7 @@ export const router = createBrowserRouter(
             { path: "estoque/entradas", element: <StockEntriesTab /> },
             { path: "estoque/saidas", element: <StockExitsTab /> },
             { path: "estoque/movimentacoes", element: <StockMovementsTab /> },
+            { path: "estoque/sem-saldo", element: <StockShortfallsTab /> },
             { path: "retencao", element: <RetentionPage /> },
             { path: "configuracoes", element: <SettingsPage /> },
             { path: "configuracoes/faturamento", element: <BillingProfilePage /> },

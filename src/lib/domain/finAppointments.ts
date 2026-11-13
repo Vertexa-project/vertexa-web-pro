@@ -32,6 +32,28 @@ export function validateParticipants(parts: ParticipantDraft[], allowedRoles: Ap
   return null;
 }
 
+/** Estado dos campos de participantes da tela: um responsável, um executor (opcional) e vários auxiliares. */
+export interface ParticipantsValue { responsavel: string; executor: string; auxiliares: string[] }
+export const EMPTY_PARTICIPANTS: ParticipantsValue = { responsavel: "", executor: "", auxiliares: [] };
+export function toDrafts(v: ParticipantsValue): ParticipantDraft[] {
+  return [
+    ...(v.responsavel ? [{ professionalId: v.responsavel, role: "responsavel" as const }] : []),
+    ...(v.executor ? [{ professionalId: v.executor, role: "executor" as const }] : []),
+    ...v.auxiliares.filter(Boolean).map((p) => ({ professionalId: p, role: "auxiliar" as const })),
+  ];
+}
+export function fromParticipants(list: { professional_id: string; role: ApptRole }[]): ParticipantsValue {
+  return {
+    responsavel: list.find((p) => p.role === "responsavel")?.professional_id ?? "",
+    executor: list.find((p) => p.role === "executor")?.professional_id ?? "",
+    auxiliares: list.filter((p) => p.role === "auxiliar").map((p) => p.professional_id),
+  };
+}
+export const apptTone = (s: ApptStatus) => (s === "done" ? "success" : s === "canceled" ? "muted" : "info") as "success" | "muted" | "info";
+/** Estado de um pacote do paciente para o selo: cancelado, vencido (saldo vira receita da clínica) ou ativo. */
+export const packageState = (p: { status: "active" | "canceled"; expired: boolean }) =>
+  p.status === "canceled" ? { label: "Cancelado", tone: "muted" as const } : p.expired ? { label: "Vencido", tone: "warning" as const } : { label: "Ativo", tone: "success" as const };
+
 // ---------- kit: unidade de CONSUMO → unidade de ESTOQUE ----------
 /** O kit é cadastrado na unidade de consumo; o estoque se move na unidade de estoque (1 estoque = `factor` consumos), 3 casas. 5 ml de frasco de 30 ml → 0,167. */
 export function kitStockQty(consumptionQty: number, factor: number): number {

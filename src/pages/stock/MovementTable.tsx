@@ -7,8 +7,10 @@ import { formatBRL } from "@/lib/domain/finance";
 import { formatQty, formatUnitCost, MOVEMENT_TYPE_LABEL } from "@/lib/domain/stockMoves";
 import { brDate, movementDetail } from "@/pages/stock/movementFormat";
 
-export function MovementTable({ rows, label, onReverse }: { rows: MovementRow[]; label: string; onReverse?: (m: MovementRow) => void }) {
-  const canReverse = (m: MovementRow) => Boolean(onReverse) && !m.reversed && m.movement_type !== "reversal" && m.movement_type !== "sale";
+export function MovementTable({ rows, label, onReverse, onReturn }: { rows: MovementRow[]; label: string; onReverse?: (m: MovementRow) => void; onReturn?: (m: MovementRow) => void }) {
+  // Venda se desfaz cancelando a venda; entrega de pacote e devolução de paciente têm o próprio caminho (devolução); baixa de atendimento se corrige no atendimento (o servidor avisa).
+  const canReverse = (m: MovementRow) => Boolean(onReverse) && !m.reversed && !["reversal", "sale", "package_delivery", "patient_return"].includes(m.movement_type);
+  const canReturn = (m: MovementRow) => Boolean(onReturn) && !m.reversed && m.qty < 0 && (m.movement_type === "sale" || m.movement_type === "package_delivery");
   return (
     <FinTable
       label={label} rows={rows} rowKey={(m) => m.id}
@@ -29,7 +31,12 @@ export function MovementTable({ rows, label, onReverse }: { rows: MovementRow[];
         { header: "Saldo depois", nowrap: true, cell: (m) => formatQty(m.balance_after) },
         { header: "Lote", cell: (m) => <>{m.lot_code}{m.expiry_date ? <span className="block text-xs text-muted-foreground">vence {brDate(m.expiry_date)}</span> : null}</> },
         { header: "Detalhes", wide: true, cell: (m) => <span className="text-xs">{movementDetail(m) || "—"}{m.user_name ? <span className="block text-muted-foreground">por {m.user_name}</span> : null}</span> },
-        { header: "Ações", role: "action", cell: (m) => (canReverse(m) ? <Button size="sm" variant="outline" onClick={() => onReverse?.(m)} aria-label={`Estornar ${m.item_name}`}>Estornar</Button> : null) },
+        { header: "Ações", role: "action", cell: (m) => (
+          <>
+            {canReverse(m) ? <Button size="sm" variant="outline" onClick={() => onReverse?.(m)} aria-label={`Estornar ${m.item_name}`}>Estornar</Button> : null}
+            {canReturn(m) ? <Button size="sm" variant="outline" onClick={() => onReturn?.(m)} aria-label={`Devolução de paciente de ${m.item_name}`}>Devolução de paciente</Button> : null}
+          </>
+        ) },
       ]}
     />
   );

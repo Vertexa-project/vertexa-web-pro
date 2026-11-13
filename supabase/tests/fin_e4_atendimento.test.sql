@@ -641,6 +641,7 @@ begin
   perform pg_temp.su();
   perform pg_temp.as_user('gestor');
   j := public.fin_appt_context(c, pg_temp.f('u1'), pg_temp.f('pat'), pg_temp.f('sv3'));
+  perform pg_temp.chk('I10b o contexto traz as unidades ativas (o profissional sem papel financeiro não lê clinic_units)', jsonb_array_length(public.fin_appt_context(c, null, null, null)->'units') = 2, null);
   perform pg_temp.chk('I10 contexto do «Novo atendimento»: papéis do serviço, profissionais e pacote do paciente com sessões restantes', jsonb_array_length(j->'professionals') >= 7 and (j->'roles') = '["responsavel"]'::jsonb
     and jsonb_array_length(j->'packages') = 1 and (j->'packages'->0->>'remaining')::numeric = 1, j::text);
   perform pg_temp.su();
