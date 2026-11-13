@@ -1,6 +1,6 @@
 // Entrada por XML da NF-e (escopo-v1 §8.2, E14): o arquivo é lido NO NAVEGADOR; a pessoa confere, vincula os itens novos do fornecedor ao cadastro
 // (o de/para fica salvo para as próximas notas), completa lote e validade e confirma. Só a confirmação grava, tudo ou nada, no servidor.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileUp } from "lucide-react";
 
 import { Field, FormDialog, NativeSelect } from "@/components/fin/FinUi";
@@ -21,7 +21,8 @@ const maskTax = (d: string) => (d.length === 14 ? d.replace(/(\d{2})(\d{3})(\d{3
 
 export function XmlImportDialog({ clinicId, onClose }: { clinicId: string; onClose: () => void }) {
   const units = (useUnits(clinicId).data ?? []).filter((u) => u.is_active);
-  const items = (useStockItems(clinicId).data ?? []).filter((i) => i.is_active);
+  const allItems = useStockItems(clinicId).data;
+  const items = useMemo(() => (allItems ?? []).filter((i) => i.is_active), [allItems]);
   const suppliers = useSuppliers(clinicId).data ?? [];
   const [unitId, setUnitId] = useState("");
   const unit = unitId || units.find((u) => u.is_primary)?.id || units[0]?.id || "";
@@ -40,14 +41,16 @@ export function XmlImportDialog({ clinicId, onClose }: { clinicId: string; onClo
   const mapsReady = !supplier || maps.isSuccess;
   const matches = useMemo(() => (doc && mapsReady ? matchNfeItems(doc.items, catalog, maps.data ?? []) : []), [doc, catalog, maps.data, mapsReady]);
 
-  // Rascunho inicial das linhas: vínculo sugerido, fator e o primeiro lote da nota (rastro).
+  // Rascunho inicial das linhas (UMA vez por nota): vínculo sugerido, fator e o primeiro lote da nota (rastro).
+  const initializedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!doc || matches.length === 0) return;
+    if (!doc || matches.length === 0 || initializedFor.current === doc.key) return;
+    initializedFor.current = doc.key;
     setDrafts(matches.map((m) => ({ itemId: m.itemId, factor: m.factor, lotCode: m.nfeItem.lots[0]?.code ?? "", expiry: m.nfeItem.lots[0]?.expiry ?? "" })));
   }, [doc, matches]);
 
   async function onFile(file: File | undefined) {
-    setFileError(null); setDoc(null); setDrafts([]); setError(null); setLineErrors({});
+    setFileError(null); setDoc(null); setDrafts([]); setError(null); setLineErrors({}); initializedFor.current = null;
     if (!file) return;
     try {
       setDoc(parseNfeXml(await file.text()));

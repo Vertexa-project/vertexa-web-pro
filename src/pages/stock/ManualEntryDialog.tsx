@@ -19,7 +19,8 @@ const NEW_SUPPLIER = "__new";
 
 export function ManualEntryDialog({ clinicId, onClose }: { clinicId: string; onClose: () => void }) {
   const units = (useUnits(clinicId).data ?? []).filter((u) => u.is_active);
-  const items = (useStockItems(clinicId).data ?? []).filter((i) => i.is_active);
+  const allItems = useStockItems(clinicId).data;
+  const items = useMemo(() => (allItems ?? []).filter((i) => i.is_active), [allItems]);
   const suppliers = (useSuppliers(clinicId).data ?? []).filter((s) => s.is_active);
   const [unitId, setUnitId] = useState("");
   const unit = unitId || units.find((u) => u.is_primary)?.id || units[0]?.id || "";
