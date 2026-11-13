@@ -10,7 +10,7 @@ create schema if not exists private;
 grant usage on schema private, auth to authenticated, anon;
 grant usage on schema public to authenticated, anon;
 
-create table public.profiles (id uuid primary key default gen_random_uuid(), auth_user_id uuid, full_name text not null);
+create table public.profiles (id uuid primary key default gen_random_uuid(), auth_user_id uuid, full_name text not null, status text);
 create table public.clinics (id uuid primary key default gen_random_uuid(), name text not null, owner_profile_id uuid references public.profiles(id));
 create table public.professionals (id uuid primary key default gen_random_uuid(), profile_id uuid references public.profiles(id), clinic_id uuid references public.clinics(id),
   status text default 'active', clinic_role text);

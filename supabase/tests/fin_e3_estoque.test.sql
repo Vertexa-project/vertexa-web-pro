@@ -491,6 +491,26 @@ begin
   perform pg_temp.su();
 end $t$;
 
+-- ---------- K. Busca de paciente para o uso individual ----------
+do $t$
+declare c uuid := pg_temp.f('c'); pid uuid;
+begin
+  perform pg_temp.as_user('estoq');
+  perform pg_temp.chk('K1 Estoquista busca paciente pelo nome (uso individual)', exists (select 1 from public.fin_stock_patients(c, 'Um') where full_name = 'Paciente Um')
+    and (select count(*) from public.fin_stock_patients(c, null)) = 2, null);
+  perform pg_temp.su();
+  update public.profiles set status = 'inactive' where full_name = 'Paciente Dois';
+  perform pg_temp.as_user('estoq');
+  perform pg_temp.chk('K2 paciente removido (perfil anonimizado/inativo) não aparece', (select count(*) from public.fin_stock_patients(c, null)) = 1, null);
+  perform pg_temp.su();
+  perform pg_temp.as_user('fin');
+  perform pg_temp.expect('K3 Financeiro (só consulta) não busca paciente por aqui', '42501', format($q$select * from public.fin_stock_patients(%L, null)$q$, c));
+  perform pg_temp.su();
+  perform pg_temp.as_user('recep');
+  perform pg_temp.expect('K4 Recepção não busca paciente por aqui', '42501', format($q$select * from public.fin_stock_patients(%L, null)$q$, c));
+  perform pg_temp.su();
+end $t$;
+
 select n, case when ok then 'OK ' else 'FALHA' end as resultado, name, case when ok then '' else detail end as detalhe from tr order by n;
 select count(*) filter (where ok) as passaram, count(*) filter (where not ok) as falharam from tr;
 rollback;

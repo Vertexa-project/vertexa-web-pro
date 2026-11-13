@@ -376,9 +376,9 @@ begin
     v_ids := v_ids || m.id; v_total := v_total + v_cost; v_left := v_left - v_take;
   end loop;
   if v_left > 0 then
-    if not v_expiry_loss and exists (select 1 from public.stock_lots x where x.item_id = p_item and x.unit_id = p_unit and x.qty_on_hand > 0 and x.expiry_date < v_today
-                                       and (v_lot is null or x.id = v_lot)) then
-      raise exception 'LOT_EXPIRED' using errcode = '22023';   -- E4: só há lote vencido para cobrir a saída
+    if not v_expiry_loss and v_left <= (select coalesce(sum(x.qty_on_hand - private.stock_lot_open_qty(x.id)), 0) from public.stock_lots x
+                                         where x.item_id = p_item and x.unit_id = p_unit and x.expiry_date < v_today and (v_lot is null or x.id = v_lot)) then
+      raise exception 'LOT_EXPIRED' using errcode = '22023';   -- E4: o que falta só existe em lote vencido
     end if;
     if v_expiry_loss and exists (select 1 from public.stock_lots x where x.item_id = p_item and x.unit_id = p_unit and x.qty_on_hand > 0
                                    and (x.expiry_date is null or x.expiry_date >= v_today) and (v_lot is null or x.id = v_lot)) then
@@ -752,6 +752,21 @@ begin
              where o.item_id = p_item and o.unit_id = p_unit and o.clinic_id = p_clinic and o.status = 'open'), '[]'::jsonb));
 end $$;
 
+-- 7.5 Busca de paciente para o uso individual (mesma regra da busca da venda: sem paciente removido). Só quem movimenta estoque.
+create or replace function public.fin_stock_patients(p_clinic uuid, p_search text default null, p_limit integer default 20)
+returns table (patient_id uuid, full_name text)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  perform private.fin_gate(p_clinic, 'stock_move', null, true);
+  return query
+    select pt.id, pr.full_name
+      from public.patients pt join public.profiles pr on pr.id = pt.profile_id
+     where pt.clinic_id = p_clinic
+       and coalesce(pr.status::text, '') <> 'inactive'
+       and (nullif(btrim(coalesce(p_search, '')), '') is null or pr.full_name ilike '%' || btrim(p_search) || '%')
+     order by pr.full_name limit least(greatest(coalesce(p_limit, 20), 1), 50);
+end $$;
+
 -- ---------- 8. Permissões de execução ----------
 revoke all on function private.stock_movements_immutable(), private.stock_lot_open_qty(uuid),
   private.stock_apply(uuid, uuid, uuid, uuid, uuid, uuid, text, numeric, bigint, boolean, jsonb),
@@ -762,12 +777,12 @@ revoke all on function public.fin_stock_save_supplier(uuid, uuid, jsonb, text), 
   public.fin_stock_exit(uuid, uuid, uuid, text, numeric, jsonb), public.fin_stock_reverse(uuid, text), public.fin_stock_reverse_entry(uuid, text),
   public.fin_stock_balances(uuid, uuid, uuid, text, boolean),
   public.fin_stock_movements(uuid, uuid, uuid, text, text, date, date, uuid, integer, integer),
-  public.fin_stock_entries(uuid, uuid, date, date, integer, integer), public.fin_stock_lots(uuid, uuid, uuid) from public, anon;
+  public.fin_stock_entries(uuid, uuid, date, date, integer, integer), public.fin_stock_lots(uuid, uuid, uuid), public.fin_stock_patients(uuid, text, integer) from public, anon;
 grant execute on function public.fin_stock_save_supplier(uuid, uuid, jsonb, text), public.fin_stock_entry(uuid, uuid, jsonb, jsonb),
   public.fin_stock_exit(uuid, uuid, uuid, text, numeric, jsonb), public.fin_stock_reverse(uuid, text), public.fin_stock_reverse_entry(uuid, text),
   public.fin_stock_balances(uuid, uuid, uuid, text, boolean),
   public.fin_stock_movements(uuid, uuid, uuid, text, text, date, date, uuid, integer, integer),
-  public.fin_stock_entries(uuid, uuid, date, date, integer, integer), public.fin_stock_lots(uuid, uuid, uuid) to authenticated;
+  public.fin_stock_entries(uuid, uuid, date, date, integer, integer), public.fin_stock_lots(uuid, uuid, uuid), public.fin_stock_patients(uuid, text, integer) to authenticated;
 
 insert into public.schema_migration_log (version, filename, description, session)
 values ('20261113230000','20261113230000_fin_e3_estoque.sql','FIN-E3: estoque básico — saldo inicial, entradas manual e XML da NF-e, saídas, lote e validade (FEFO), uso fracionado e individual, custo médio, saldo por unidade, kardex e estorno (aditiva).','FIN-E3');
