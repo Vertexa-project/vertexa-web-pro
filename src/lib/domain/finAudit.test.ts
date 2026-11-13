@@ -20,9 +20,15 @@ describe("histórico: antes → depois", () => {
   it("valores", () => {
     expect(auditValueText("x", null)).toBe("—");
     expect(auditValueText("rate_pct", 6.5)).toBe("6,5");
-    expect(auditValueText("roles", ["responsavel", "executor"])).toBe("responsavel\nexecutor");
+    expect(auditValueText("roles", ["responsavel", "executor"])).toBe("Responsável\nExecutor");
     expect(auditValueText("kit", [{ item_id: "a", quantity: 2 }], { itemName: () => "QA TESTE Creme" })).toBe("QA TESTE Creme × 2");
     expect(auditValueText("item_type", "medication")).toBe("Medicação aplicada");
     expect(AUDIT_ACTION_LABEL.view_sensitive).toBe("Leu dado sensível");
+  });
+});
+
+describe("papéis do serviço no histórico", () => {
+  it("traduz a lista de papéis", () => {
+    expect(auditValueText("roles", ["responsavel", "executor"])).toBe("Responsável\nExecutor");
   });
 });
