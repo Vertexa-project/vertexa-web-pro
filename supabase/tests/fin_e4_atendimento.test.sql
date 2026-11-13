@@ -193,6 +193,15 @@ begin
   perform pg_temp.chk('A20 fin_my_access da Recepção: lê pacotes de paciente e entrega item; não gerencia atendimento', (public.fin_my_access(c)->'can'->>'patient_pkg_read')::boolean and (public.fin_my_access(c)->'can'->>'package_deliver_write')::boolean
     and not (public.fin_my_access(c)->'can'->>'appt_read')::boolean, null);
   perform pg_temp.su();
+  perform pg_temp.as_user('pro2');
+  perform pg_temp.chk('A21 busca de paciente do atendimento: o profissional acha só os pacientes a que tem acesso (pro2: só o Paciente Um)', (select count(*) from public.fin_appt_patients(c)) = 1 and exists (select 1 from public.fin_appt_patients(c, 'Um')), null);
+  perform pg_temp.su();
+  perform pg_temp.as_user('gestor');
+  perform pg_temp.chk('A22 ... e o gestor acha todos da clínica', (select count(*) from public.fin_appt_patients(c)) = 2, null);
+  perform pg_temp.su();
+  perform pg_temp.as_user('other');
+  perform pg_temp.expect('A23 admin de outra clínica não busca paciente daqui', '42501', format($q$select * from public.fin_appt_patients(%L)$q$, c));
+  perform pg_temp.su();
 end $t$;
 
 -- ---------- B. Participantes ----------

@@ -1122,6 +1122,24 @@ begin
      order by s.created_at desc, s.id;
 end $$;
 
+-- 8.7 Busca de paciente para o «Novo atendimento»: Gestor/Admin acham qualquer paciente da clínica; o profissional só os pacientes a que tem acesso.
+create or replace function public.fin_appt_patients(p_clinic uuid, p_search text default null, p_limit integer default 20)
+returns table (patient_id uuid, full_name text)
+language plpgsql stable security definer set search_path = '' as $$
+declare v_mgr boolean;
+begin
+  if p_clinic is null or not private.is_clinic_member(p_clinic) then raise exception 'forbidden' using errcode = '42501'; end if;
+  v_mgr := private.fin_can(p_clinic, 'appt', null, true);
+  if not v_mgr and not private.appt_is_pro(p_clinic) then raise exception 'forbidden' using errcode = '42501'; end if;
+  return query
+    select pt.id, pr.full_name
+      from public.patients pt join public.profiles pr on pr.id = pt.profile_id
+     where pt.clinic_id = p_clinic and coalesce(pr.status::text, '') <> 'inactive'
+       and (v_mgr or private.can_access_patient(pt.id))
+       and (nullif(btrim(coalesce(p_search, '')), '') is null or pr.full_name ilike '%' || btrim(p_search) || '%')
+     order by pr.full_name limit least(greatest(coalesce(p_limit, 20), 1), 50);
+end $$;
+
 -- ---------- 9. Permissões de execução ----------
 revoke all on function private.fin_e4_no_delete(), private.fin_e4_immutable(), private.fin_emit(uuid, uuid, text, uuid, jsonb), private.appt_self(uuid, boolean), private.appt_can(uuid, boolean),
   private.appt_is_pro(uuid), private.appt_snapshot(uuid), private.appt_check_participants(uuid, uuid, jsonb), private.appt_check_link(uuid, uuid, uuid, uuid, uuid, uuid, date),
@@ -1133,12 +1151,14 @@ revoke all on function public.fin_appt_save(uuid, uuid, uuid, jsonb, jsonb, text
   public.fin_appt_cancel(uuid, text), public.fin_appt_set_participants(uuid, jsonb, text), public.fin_package_deliver(uuid, numeric, jsonb), public.fin_stock_patient_return(uuid, numeric, text),
   public.fin_shortfall_resolve(uuid, text, text), public.fin_appt_context(uuid, uuid, uuid, uuid),
   public.fin_appt_list(uuid, uuid, text, date, date, uuid, uuid, boolean, boolean, integer, integer), public.fin_appt_get(uuid), public.fin_appt_kit(uuid),
-  public.fin_patient_packages_list(uuid, uuid, text, text, integer, integer), public.fin_shortfalls_list(uuid, uuid, text, integer, integer) from public, anon;
+  public.fin_patient_packages_list(uuid, uuid, text, text, integer, integer), public.fin_shortfalls_list(uuid, uuid, text, integer, integer),
+  public.fin_appt_patients(uuid, text, integer) from public, anon;
 grant execute on function public.fin_appt_save(uuid, uuid, uuid, jsonb, jsonb, text), public.fin_appt_complete(uuid, jsonb, text), public.fin_appt_correct(uuid, jsonb, text),
   public.fin_appt_cancel(uuid, text), public.fin_appt_set_participants(uuid, jsonb, text), public.fin_package_deliver(uuid, numeric, jsonb), public.fin_stock_patient_return(uuid, numeric, text),
   public.fin_shortfall_resolve(uuid, text, text), public.fin_appt_context(uuid, uuid, uuid, uuid),
   public.fin_appt_list(uuid, uuid, text, date, date, uuid, uuid, boolean, boolean, integer, integer), public.fin_appt_get(uuid), public.fin_appt_kit(uuid),
-  public.fin_patient_packages_list(uuid, uuid, text, text, integer, integer), public.fin_shortfalls_list(uuid, uuid, text, integer, integer) to authenticated;
+  public.fin_patient_packages_list(uuid, uuid, text, text, integer, integer), public.fin_shortfalls_list(uuid, uuid, text, integer, integer),
+  public.fin_appt_patients(uuid, text, integer) to authenticated;
 
 insert into public.schema_migration_log (version, filename, description, session)
 values ('20261114090000','20261114090000_fin_e4_atendimento.sql','FIN-E4: atendimento com participantes, kit automático (baixa do estoque, custo do material, consumo sem saldo), pacotes (saldo de sessões, entrega de item), devolução de paciente (aditiva).','FIN-E4');
