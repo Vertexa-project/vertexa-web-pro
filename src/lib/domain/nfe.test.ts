@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildEntryLines, matchNfeItems, NfeError, parseNfeXml, suggestFactor, validateNfeLines, type CatalogItem, type NfeLineDraft } from "./nfe";
+import { buildEntryLines, matchNfeItems, NfeError, parseNfeXml, splitByLots, suggestFactor, validateNfeLines, type CatalogItem, type NfeItem, type NfeLineDraft } from "./nfe";
 
 // NF-e FICTÍCIA (empresa, CNPJ de teste, chave e produtos inventados) — só para provar a leitura.
 const KEY = "35261111222333000181550010000012341000012349";
@@ -130,5 +130,30 @@ describe("linhas da entrada a partir da nota", () => {
     expect(errs[1]).toMatch(/Escolha o item/);
     expect(errs[2]).toMatch(/unidades inteiras/);
     expect(validateNfeLines(nfe.items, [{ ...drafts[0], expiry: "2026-01-01" }, drafts[1], drafts[2]], meta, "2026-11-13")[0]).toMatch(/já passou/);
+  });
+});
+
+describe("item da nota com vários lotes (rastro)", () => {
+  const item: NfeItem = {
+    n: 1, code: "AMP-001", ean: null, name: "Ampola", unit: "CX", qty: 3, totalCents: 10000,
+    lots: [{ code: "A", expiry: "2027-03-01", qty: 1 }, { code: "B", expiry: "2027-06-01", qty: 2 }],
+  };
+  it("cada lote vira uma linha; o total do item é rateado pela quantidade de cada lote (resto na última)", () => {
+    expect(splitByLots(item)).toHaveLength(2);
+    const lines = buildEntryLines([item], [{ itemId: "i1", factor: 10, lotCode: "", expiry: "" }]);
+    expect(lines.map((l) => [l.lotCode, l.expiryDate, l.quantity, l.lineTotalCents])).toEqual([["A", "2027-03-01", 10, 3333], ["B", "2027-06-01", 20, 6667]]);
+    expect(lines.reduce((a, l) => a + l.lineTotalCents, 0)).toBe(10000);
+  });
+  it("quantidades dos lotes que não fecham com a do item: vale o lote digitado na tela", () => {
+    const bad = { ...item, lots: [{ code: "A", expiry: "2027-03-01", qty: 1 }, { code: "B", expiry: "2027-06-01", qty: 1 }] };
+    expect(splitByLots(bad)).toBeNull();
+    const lines = buildEntryLines([bad], [{ itemId: "i1", factor: 1, lotCode: "X", expiry: "2027-01-01" }]);
+    expect(lines).toEqual([expect.objectContaining({ quantity: 3, lotCode: "X", expiryDate: "2027-01-01", lineTotalCents: 10000 })]);
+  });
+  it("com lotes na nota, o lote e a validade não são exigidos na tela; validade vencida na nota é recusada", () => {
+    const meta = new Map([["i1", { lotControl: true, fractional: false, name: "Ampola" }]]);
+    expect(validateNfeLines([item], [{ itemId: "i1", factor: 10, lotCode: "", expiry: "" }], meta, "2026-11-13")).toEqual({});
+    const old = { ...item, lots: [{ code: "A", expiry: "2026-01-01", qty: 1 }, { code: "B", expiry: "2027-06-01", qty: 2 }] };
+    expect(validateNfeLines([old], [{ itemId: "i1", factor: 10, lotCode: "", expiry: "" }], meta, "2026-11-13")[0]).toMatch(/já passou/);
   });
 });

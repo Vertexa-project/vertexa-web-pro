@@ -45,6 +45,10 @@ const PaymentMethodsTab = lazy(() => import("@/pages/finance/PaymentMethodsTab")
 const TaxSettingsTab = lazy(() => import("@/pages/finance/TaxSettingsTab").then((m) => ({ default: m.TaxSettingsTab })));
 const AuditTab = lazy(() => import("@/pages/finance/AuditTab").then((m) => ({ default: m.AuditTab })));
 const StockPage = lazy(() => import("@/pages/StockPage").then((m) => ({ default: m.StockPage })));
+const StockBalanceTab = lazy(() => import("@/pages/stock/StockBalanceTab").then((m) => ({ default: m.StockBalanceTab })));
+const StockEntriesTab = lazy(() => import("@/pages/stock/StockEntriesTab").then((m) => ({ default: m.StockEntriesTab })));
+const StockExitsTab = lazy(() => import("@/pages/stock/StockExitsTab").then((m) => ({ default: m.StockExitsTab })));
+const StockMovementsTab = lazy(() => import("@/pages/stock/StockMovementsTab").then((m) => ({ default: m.StockMovementsTab })));
 const UnitsPage = lazy(() => import("@/pages/UnitsPage").then((m) => ({ default: m.UnitsPage })));
 const RetentionPage = lazy(() => import("@/pages/RetentionPage").then((m) => ({ default: m.RetentionPage })));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
@@ -268,6 +272,10 @@ export const router = createBrowserRouter(
               ],
             },
             { path: "estoque", element: <StockPage /> },
+            { path: "estoque/saldo", element: <StockBalanceTab /> },
+            { path: "estoque/entradas", element: <StockEntriesTab /> },
+            { path: "estoque/saidas", element: <StockExitsTab /> },
+            { path: "estoque/movimentacoes", element: <StockMovementsTab /> },
             { path: "retencao", element: <RetentionPage /> },
             { path: "configuracoes", element: <SettingsPage /> },
             { path: "configuracoes/faturamento", element: <BillingProfilePage /> },

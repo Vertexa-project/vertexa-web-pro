@@ -222,3 +222,20 @@ export function stockMoveErrorMessage(e: unknown): string {
   if (err?.code === "42501" || m.includes("forbidden")) return "Você não tem permissão para esta ação.";
   return "Não foi possível concluir agora. Tente novamente.";
 }
+
+/** Hoje (AAAA-MM-DD) no horário de Brasília, como o servidor (private.fin_today). */
+export function todayIsoBR(now: Date = new Date()): string {
+  return now.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+}
+
+/** Quantidade para exibir: até 3 casas, vírgula decimal, sem zeros sobrando (2,5 · 0,25 · 10). */
+export function formatQty(qty: number): string {
+  return qty.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+}
+
+/** Custo unitário em centavos com até 4 casas → "R$ 44,00" (2 casas) ou "R$ 600,4667" quando a fração importa. */
+export function formatUnitCost(cents: number): string {
+  const reais = cents / 100;
+  const frac = Math.abs(reais * 100 - Math.round(reais * 100)) > 1e-9;
+  return reais.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: frac ? 6 : 2 });
+}

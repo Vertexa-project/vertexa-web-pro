@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, PackageOpen, Plus } from "lucide-react";
 
-import { ActiveBadge, CentsInput, CheckField, DecimalInput, ExportButtons, Field, FinTable, FormDialog, NativeSelect, ReasonField, SubNav } from "@/components/fin/FinUi";
+import { ActiveBadge, CentsInput, CheckField, DecimalInput, ExportButtons, Field, FinTable, FormDialog, NativeSelect, ReasonField } from "@/components/fin/FinUi";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
-import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +19,7 @@ import {
 } from "@/lib/domain/stockItemRules";
 import type { ExportColumn } from "@/lib/domain/tableExport";
 import { NoAccess } from "@/pages/finance/NoAccess";
+import { StockShell } from "@/pages/stock/StockShell";
 
 const EMPTY: StockItemDraft = {
   name: "", category: "", itemType: "consumable", fractional: false, openedValidityDays: null, individualUse: false, lotControl: false,
@@ -145,7 +145,7 @@ function ItemDialog({ clinicId, item, canWrite, onClose }: { clinicId: string; i
   );
 }
 
-/** Estoque › Itens (Entrega 1). Saldos, entradas, saídas e inventário chegam nas entregas 3 e 8. */
+/** Estoque › Itens (Entrega 1). Saldo, entradas, saídas e movimentações são as outras abas (Entrega 3); inventário e transferências, a Entrega 8. */
 export function StockPage() {
   const { clinicId, access, isLoading } = useFinContext();
   const canRead = finCan(access, "stock_items");
@@ -181,10 +181,10 @@ export function StockPage() {
   ];
 
   return (
-    <div className="min-w-0 space-y-6">
-      <PageHeader title="Estoque" description="Itens de estoque da clínica: medicações aplicadas, manipulados, produtos de revenda e materiais de consumo."
-        actions={canWrite ? <Button onClick={() => setEditing("new")}><Plus aria-hidden /> Novo item</Button> : undefined} />
-      <SubNav items={[{ to: "/estoque", label: "Itens", end: true }]} label="Seções do estoque" />
+    <StockShell
+      description="Itens de estoque da clínica: medicações aplicadas, manipulados, produtos de revenda e materiais de consumo."
+      actions={canWrite ? <Button onClick={() => setEditing("new")}><Plus aria-hidden /> Novo item</Button> : undefined}
+    >
       {isLoading || (q.isLoading && canRead) ? <LoadingState /> : !canRead ? <NoAccess text="O estoque é do administrador, do gestor, do estoquista e do financeiro (consulta)." /> : q.isError ? <ErrorState onRetry={() => void q.refetch()} /> : (
         <div className="min-w-0 space-y-4">
           {!canWrite ? <Badge tone="muted">Consulta: você vê os itens, mas não altera</Badge> : null}
@@ -220,6 +220,6 @@ export function StockPage() {
         </div>
       )}
       {clinicId && editing ? <ItemDialog key={editing === "new" ? "new" : editing.id} clinicId={clinicId} item={editing} canWrite={canWrite} onClose={() => setEditing(null)} /> : null}
-    </div>
+    </StockShell>
   );
 }

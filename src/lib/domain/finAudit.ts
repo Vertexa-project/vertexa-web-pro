@@ -12,6 +12,10 @@ export const AUDIT_ENTITY_LABEL: Record<string, string> = {
   tax_rate: "Alíquota de imposto",
   settings: "Configurações financeiras",
   stock_item: "Item de estoque",
+  stock_movement: "Movimentação de estoque",
+  stock_entry: "Entrada de estoque",
+  stock_supplier: "Fornecedor",
+  stock_item_map: "De/para do fornecedor",
 };
 
 export const AUDIT_ACTION_LABEL: Record<string, string> = {
@@ -37,9 +41,15 @@ const FIELD_LABEL: Record<string, string> = {
   accept_days: "Prazo de aceite (dias)", patient_display: "Paciente no extrato", tier_base: "Base das faixas", kind: "Tipo", flat_fee_pct: "Taxa (%)", flat_fee_cents: "Taxa fixa",
   settle_days: "Prazo de liquidação (dias)", fees: "Taxas por bandeira", purchase_unit: "Unidade de compra", stock_unit: "Unidade de estoque", consumption_unit: "Unidade de consumo",
   purchase_to_stock_factor: "Fator compra → estoque", stock_to_consumption_factor: "Fator estoque → consumo",
+  // Entrega 3 (estoque)
+  movement_type: "Movimento", item_name: "Item", lot_code: "Lote", expiry_date: "Validade", qty: "Quantidade", unit_cost_cents: "Custo unitário", total_cost_cents: "Custo total",
+  balance_after: "Saldo depois", avg_cost_after_cents: "Custo médio depois", loss_kind: "Tipo de perda", purpose: "Setor / finalidade", entry_type: "Tipo de entrada",
+  invoice_number: "Nota", invoice_key: "Chave da NF-e", freight_cents: "Frete", items_total_cents: "Total dos itens", total_cents: "Total", lines: "Linhas", movements: "Movimentos estornados",
+  supplier_code: "Código do fornecedor", conversion_factor: "Fator de conversão", tax_id_supplier: "CNPJ",
 };
 
-const IGNORED = new Set(["id", "clinic_id", "created_at", "updated_at", "created_by", "unit_id", "professional_id", "position", "service_id", "stock_item_id", "item_id", "acquirer_id", "package_id"]);
+const IGNORED = new Set(["id", "clinic_id", "created_at", "updated_at", "created_by", "unit_id", "professional_id", "position", "service_id", "stock_item_id", "item_id", "acquirer_id", "package_id",
+  "lot_id", "open_unit_id", "entry_id", "sale_id", "patient_id", "supplier_id", "reversed_movement_id", "appointment_id", "reversed_by"]);
 
 export function auditFieldLabel(key: string): string {
   return FIELD_LABEL[key] ?? key;
@@ -62,9 +72,12 @@ const ENUM_TEXT: Record<string, Record<string, string>> = {
   rule_type: { irrf: "IRRF", pis_cofins_csll: "PIS/COFINS/CSLL", iss: "ISS", outra: "Outra" },
   role: { responsavel: "Responsável", executor: "Executor", auxiliar: "Auxiliar", gestor: "Gestor", financeiro: "Financeiro", recepcao: "Recepção", estoquista: "Estoquista" },
   patient_display: { initials: "Iniciais", full: "Nome completo", hidden: "Oculto" },
+  movement_type: { initial_balance: "Saldo inicial", purchase: "Compra", xml_purchase: "Compra por XML da NF-e", bonus: "Bonificação / doação", sector: "Consumo interno", loss: "Perda / quebra / vencimento", appointment: "Uso por paciente", sale: "Venda ao paciente", reversal: "Estorno" },
+  entry_type: { initial_balance: "Saldo inicial", purchase: "Compra", xml_purchase: "Compra por XML da NF-e", bonus: "Bonificação / doação" },
+  loss_kind: { loss: "Perda", breakage: "Quebra / avaria", expiry: "Vencimento" },
   tier_base: { organization: "Organização (todas as unidades)", unit: "Por unidade" },
 };
-const DATE_KEYS = new Set(["license_valid_until", "valid_from", "valid_to"]);
+const DATE_KEYS = new Set(["license_valid_until", "valid_from", "valid_to", "expiry_date"]);
 
 const fmtDate = (v: string): string => (/^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10).split("-").reverse().join("/") : v);
 const num = (n: number): string => String(n).replace(".", ",");

@@ -29,7 +29,9 @@ export const NO_FIN_ACCESS: FinAccess = { isAdmin: false, roles: [], can: {} };
 export type FinArea =
   | "units" | "staff" | "services" | "packages" | "payment" | "tax" | "pro_finance" | "settings" | "audit" | "stock_items"
   // Entrega 2
-  | "sales" | "sales_price" | "sale_cancel" | "cash" | "cash_all" | "cash_approve" | "receivables" | "receivables_fix" | "compliance";
+  | "sales" | "sales_price" | "sale_cancel" | "cash" | "cash_all" | "cash_approve" | "receivables" | "receivables_fix" | "compliance"
+  // Entrega 3: saldo, entradas, saídas e movimentações do estoque (escreve: Estoquista e Gestor; lê com custo: também o Financeiro)
+  | "stock_move";
 
 export function finCan(access: FinAccess, area: FinArea, mode: "read" | "write" = "read"): boolean {
   return access.can[`${area}_${mode}`] === true;
@@ -72,7 +74,25 @@ export function canSeeFinanceMenu(a: FinAccess): boolean {
 
 /** Item "Estoque" do menu: admin, gestor, estoquista e financeiro (consulta). */
 export function canSeeStockMenu(a: FinAccess): boolean {
-  return a.isAdmin || finCan(a, "stock_items");
+  return a.isAdmin || finCan(a, "stock_items") || finCan(a, "stock_move");
+}
+
+/** Abas Saldo, Entradas, Saídas e Movimentações: quem lê o estoque com custo (Admin, Gestor, Estoquista e Financeiro). */
+export function canSeeStockMoves(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "stock_move");
+}
+/** Lançar entrada, saída e estorno: Admin, Gestor e Estoquista. O Financeiro só consulta; a Recepção e o profissional não entram. */
+export function canMoveStock(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "stock_move", "write");
+}
+
+export interface StockTab { to: string; label: string; end?: boolean }
+/** Abas do Estoque pela matriz de papéis: Itens (cadastro) + as quatro da Entrega 3. */
+export function stockTabs(a: FinAccess): StockTab[] {
+  return [
+    ...(canSeeStockMoves(a) ? [{ to: "/estoque/saldo", label: "Saldo" }, { to: "/estoque/entradas", label: "Entradas" }, { to: "/estoque/saidas", label: "Saídas" }, { to: "/estoque/movimentacoes", label: "Movimentações" }] : []),
+    ...(a.isAdmin || finCan(a, "stock_items") ? [{ to: "/estoque", label: "Itens", end: true }] : []),
+  ];
 }
 
 export function rowToAccess(raw: unknown): FinAccess {

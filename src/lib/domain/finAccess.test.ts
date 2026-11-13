@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, finCan, financeTabs, NO_FIN_ACCESS, rowToAccess } from "./finAccess";
+import { canMoveStock, canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, canSeeStockMoves, finCan, financeTabs, NO_FIN_ACCESS, rowToAccess, stockTabs } from "./finAccess";
 
 const acc = (can: Record<string, boolean>, isAdmin = false) => ({ ...NO_FIN_ACCESS, isAdmin, can });
 
@@ -84,5 +84,31 @@ describe("abas do Financeiro na Entrega 2 (Vendas, Títulos, Caixa)", () => {
   });
   it("sem papel: nenhuma aba", () => {
     expect(tabsOf({})).toEqual([]);
+  });
+});
+
+describe("abas do Estoque pela matriz de papéis (Entrega 3)", () => {
+  const labels = (a: ReturnType<typeof acc>) => stockTabs(a).map((t) => t.label);
+  it("Estoquista e Gestor movimentam: Saldo, Entradas, Saídas, Movimentações e Itens", () => {
+    const a = acc({ stock_items_read: true, stock_items_write: true, stock_move_read: true, stock_move_write: true });
+    expect(labels(a)).toEqual(["Saldo", "Entradas", "Saídas", "Movimentações", "Itens"]);
+    expect(canMoveStock(a)).toBe(true);
+  });
+  it("Financeiro só consulta: vê as abas (com custo), mas não movimenta", () => {
+    const a = acc({ stock_items_read: true, stock_move_read: true, stock_move_write: false });
+    expect(labels(a)).toEqual(["Saldo", "Entradas", "Saídas", "Movimentações", "Itens"]);
+    expect(canSeeStockMoves(a)).toBe(true);
+    expect(canMoveStock(a)).toBe(false);
+  });
+  it("Recepção e profissional: nenhuma aba de estoque", () => {
+    const a = acc({ units_read: true, sales_read: true, sales_write: true });
+    expect(labels(a)).toEqual([]);
+    expect(canSeeStockMenu(a)).toBe(false);
+    expect(canSeeStockMoves(a)).toBe(false);
+    expect(canMoveStock(a)).toBe(false);
+  });
+  it("Admin vê e movimenta tudo", () => {
+    expect(labels(acc({}, true))).toHaveLength(5);
+    expect(canMoveStock(acc({}, true))).toBe(true);
   });
 });

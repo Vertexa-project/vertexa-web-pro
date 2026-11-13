@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AUDIT_ACTION_LABEL, auditValueText, diffAudit } from "./finAudit";
+import { AUDIT_ACTION_LABEL, AUDIT_ENTITY_LABEL, auditValueText, diffAudit } from "./finAudit";
 
 describe("histórico: antes → depois", () => {
   it("mostra só o que mudou, com rótulo e dinheiro formatado", () => {
@@ -30,5 +30,27 @@ describe("histórico: antes → depois", () => {
 describe("papéis do serviço no histórico", () => {
   it("traduz a lista de papéis", () => {
     expect(auditValueText("roles", ["responsavel", "executor"])).toBe("Responsável\nExecutor");
+  });
+});
+
+describe("histórico de movimentações de estoque (Entrega 3)", () => {
+  it("a movimentação aparece em português, com o nome do item e sem ids", () => {
+    const d = diffAudit(null, {
+      movement_type: "loss", item_name: "Ampola X", lot_code: "L1", expiry_date: "2027-01-31", qty: -2, unit_cost_cents: 4400, total_cost_cents: -8800, balance_after: 25,
+      loss_kind: "breakage", lot_id: "9f0c0c3e-0000-0000-0000-000000000000", item_id: "x",
+    });
+    const byLabel = Object.fromEntries(d.map((c) => [c.label, c.after]));
+    expect(byLabel["Movimento"]).toBe("Perda / quebra / vencimento");
+    expect(byLabel["Tipo de perda"]).toBe("Quebra / avaria");
+    expect(byLabel["Item"]).toBe("Ampola X");
+    expect(byLabel["Validade"]).toBe("31/01/2027");
+    expect(byLabel["Quantidade"]).toBe("-2");
+    expect(byLabel["Custo unitário"]).toMatch(/44,00/);
+    expect(d.some((c) => c.field === "lot_id" || c.field === "item_id")).toBe(false);
+  });
+  it("rótulos das entidades novas", () => {
+    expect(AUDIT_ENTITY_LABEL.stock_movement).toBe("Movimentação de estoque");
+    expect(AUDIT_ENTITY_LABEL.stock_entry).toBe("Entrada de estoque");
+    expect(AUDIT_ENTITY_LABEL.stock_item_map).toBe("De/para do fornecedor");
   });
 });

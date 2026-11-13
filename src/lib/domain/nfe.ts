@@ -1,6 +1,7 @@
 // Entrada por XML da NF-e (escopo-v1 §8.2, E14): leitura no navegador (DOMParser, nada vai ao servidor até confirmar), de/para dos itens
 // do fornecedor com os itens do cadastro e montagem das linhas da entrada. O XML nunca é executado: só lido como texto estruturado.
-import { toCents } from "./money";
+import { distribute } from "./finSales";
+import { toCents, toMilli } from "./money";
 
 export class NfeError extends Error {
   constructor(public readonly code: "NFE_EMPTY" | "NFE_NOT_XML" | "NFE_NOT_NFE" | "NFE_NO_KEY" | "NFE_NO_ITEMS" | "NFE_TOO_BIG") { super(code); }
@@ -173,21 +174,31 @@ export interface EntryLineInput {
   conversionFactor: number;
 }
 
-/** Linhas da entrada: quantidade da nota × fator = unidades de estoque; o total em centavos é o da nota (vProd − vDesc). */
+/**
+ * Quando a nota traz VÁRIOS lotes no mesmo item (rastro) e as quantidades fecham com a do item, cada lote vira uma linha da entrada
+ * (o total do item é rateado pela quantidade de cada lote). Caso contrário, devolve null e vale o lote digitado na tela.
+ */
+export function splitByLots(item: NfeItem): NfeLot[] | null {
+  const lots = item.lots;
+  if (lots.length < 2 || lots.some((l) => l.qty === null || !(l.qty > 0) || !l.expiry)) return null;
+  const sum = lots.reduce((a, l) => a + toMilli(l.qty as number), 0);
+  return sum === toMilli(item.qty) ? lots : null;
+}
+
+/** Linhas da entrada: quantidade da nota × fator = unidades de estoque; o total da linha é o da nota (vProd − vDesc). */
 export function buildEntryLines(items: NfeItem[], drafts: NfeLineDraft[]): EntryLineInput[] {
   const out: EntryLineInput[] = [];
   items.forEach((it, i) => {
     const d = drafts[i];
     if (!d || d.skip || !d.itemId) return;
-    out.push({
-      itemId: d.itemId,
-      quantity: Math.round(it.qty * d.factor * 1000) / 1000,
-      lineTotalCents: it.totalCents,
-      lotCode: d.lotCode.trim() || null,
-      expiryDate: d.expiry || null,
-      supplierCode: it.code || null,
-      conversionFactor: d.factor,
-    });
+    const base = { itemId: d.itemId, supplierCode: it.code || null, conversionFactor: d.factor };
+    const split = splitByLots(it);
+    if (split) {
+      const totals = distribute(it.totalCents, split.map((l) => toMilli(l.qty as number)));
+      split.forEach((l, k) => out.push({ ...base, quantity: Math.round((l.qty as number) * d.factor * 1000) / 1000, lineTotalCents: totals[k], lotCode: l.code, expiryDate: l.expiry }));
+      return;
+    }
+    out.push({ ...base, quantity: Math.round(it.qty * d.factor * 1000) / 1000, lineTotalCents: it.totalCents, lotCode: d.lotCode.trim() || null, expiryDate: d.expiry || null });
   });
   return out;
 }
@@ -205,8 +216,9 @@ export function validateNfeLines(items: NfeItem[], drafts: NfeLineDraft[], catal
     const stockQty = Math.round(it.qty * d.factor * 1000) / 1000;
     if (!(stockQty > 0)) { errors[i] = "Quantidade zerada."; return; }
     if (meta && !meta.fractional && !Number.isInteger(stockQty)) { errors[i] = `${meta.name} só entra em unidades inteiras: ajuste o fator.`; return; }
-    if (meta?.lotControl && (!d.lotCode.trim() || !d.expiry)) { errors[i] = "Informe o lote e a validade."; return; }
-    if (d.expiry && d.expiry < today) errors[i] = "A validade informada já passou.";
+    if (meta?.lotControl && !splitByLots(it) && (!d.lotCode.trim() || !d.expiry)) { errors[i] = "Informe o lote e a validade."; return; }
+    const expiries = splitByLots(it)?.map((l) => l.expiry as string) ?? (d.expiry ? [d.expiry] : []);
+    if (expiries.some((e) => e < today)) errors[i] = "A validade informada já passou.";
   });
   return errors;
 }
