@@ -24,6 +24,7 @@ const ExerciseLibraryPage = lazy(() =>
 );
 const DashboardPage = lazy(() => import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
 const PatientsPage = lazy(() => import("@/pages/PatientsPage").then((m) => ({ default: m.PatientsPage })));
+const EncounterPage = lazy(() => import("@/pages/EncounterPage").then((m) => ({ default: m.EncounterPage })));
 const PatientProfilePage = lazy(() =>
   import("@/pages/PatientProfilePage").then((m) => ({ default: m.PatientProfilePage })),
 );
@@ -233,6 +234,7 @@ export const router = createBrowserRouter(
             { index: true, element: <DashboardPage /> },
             { path: "pacientes", element: <PatientsPage /> },
             { path: "pacientes/:id", element: <PatientProfilePage /> },
+            { path: "pacientes/:id/atendimento/:encounterId", element: <EncounterPage /> },
             { path: "jornada", element: <JourneyBoardPage /> },
             { path: "planos", element: <PlansPage /> },
             { path: "biblioteca", element: <ExerciseLibraryPage /> },
