@@ -155,7 +155,8 @@ export function EncounterPage() {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="space-y-4 lg:col-start-1 lg:row-start-1">
+        <div className="contents lg:col-start-1 lg:row-start-1 lg:block lg:space-y-4 lg:self-start">
+          <div className="order-1 space-y-4 lg:order-none">
           {editable && !consent ? (
             <ConsentCard onConfirm={(v, t) => run(() => recordConsent(enc.id, v, t))} error={null} />
           ) : null}
@@ -164,9 +165,13 @@ export function EncounterPage() {
             <FinalizedActions encounter={enc} fields={fields} people={peopleQ.data} patientName={patientName} clinicName={clinicQ.data?.name ?? "Clínica"} />
           ) : null}
           {enc.status === "cancelado" ? <p className="text-sm text-muted-foreground">Atendimento cancelado.</p> : null}
+          </div>
+          <div className="order-3 lg:order-none">
+            <TranscriptPanel segments={segments} loading={segQ.isLoading} highlightOrd={highlight} live={live || consent} />
+          </div>
         </div>
 
-        <div className="space-y-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        <div className="order-2 space-y-4 lg:order-none lg:col-start-2 lg:row-start-1">
           {recordQ.isLoading ? (
             <PageSkeleton />
           ) : recordQ.isError ? (
@@ -207,9 +212,6 @@ export function EncounterPage() {
           ) : null}
         </div>
 
-        <div className="lg:col-start-1 lg:row-start-2">
-          <TranscriptPanel segments={segments} loading={segQ.isLoading} highlightOrd={highlight} live={live || consent} />
-        </div>
       </div>
 
       <AlertDialog open={confirmFinalize} onOpenChange={setConfirmFinalize}>
