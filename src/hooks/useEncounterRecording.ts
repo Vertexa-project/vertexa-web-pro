@@ -48,7 +48,7 @@ export function useEncounterRecording(encounter: Encounter, chunks: ChunkRow[], 
 
   const recorderRef = useRef<ChunkedRecorder | null>(null);
   const pipelineRef = useRef<ChunkPipeline | null>(null);
-  const structRef = useRef({ running: false, dirty: false });
+  const structRef = useRef<{ running: boolean; dirty: boolean; promise: Promise<void> | null }>({ running: false, dirty: false, promise: null });
   const baseMsRef = useRef(0);
   const encId = encounter.id;
   const clinicId = encounter.clinic_id;
@@ -60,28 +60,34 @@ export function useEncounterRecording(encounter: Encounter, chunks: ChunkRow[], 
     }
   }, [qc, encId]);
 
-  const runStructure = useCallback(async () => {
+  const runStructure = useCallback((): Promise<void> => {
     const st = structRef.current;
+    // Já organizando: marca para rodar de novo e devolve a MESMA espera, para quem chama
+    // (ex.: encerrar) só seguir quando o prontuário estiver de fato preenchido.
     if (st.running) {
       st.dirty = true;
-      return;
+      return st.promise ?? Promise.resolve();
     }
     st.running = true;
     setStructuring(true);
-    try {
-      do {
-        st.dirty = false;
-        try {
-          await structureEncounter(encId);
-        } catch {
-          // o aviso aparece na tela pelo ai_warning / próximo ciclo
-        }
-        refresh();
-      } while (st.dirty);
-    } finally {
-      st.running = false;
-      setStructuring(false);
-    }
+    st.promise = (async () => {
+      try {
+        do {
+          st.dirty = false;
+          try {
+            await structureEncounter(encId);
+          } catch {
+            // o aviso aparece na tela pelo ai_warning / próximo ciclo
+          }
+          refresh();
+        } while (st.dirty);
+      } finally {
+        st.running = false;
+        st.promise = null;
+        setStructuring(false);
+      }
+    })();
+    return st.promise;
   }, [encId, refresh]);
 
   const getPipeline = useCallback((): ChunkPipeline => {

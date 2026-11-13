@@ -73,6 +73,7 @@ export function FinalizedActions({ encounter, fields, people, patientName, clini
       await Promise.all([
         qc.invalidateQueries({ queryKey: clinicalKeys.sends(encounter.id) }),
         qc.invalidateQueries({ queryKey: clinicalKeys.encounter(encounter.id) }),
+        qc.invalidateQueries({ queryKey: clinicalKeys.versions(encounter.id) }),
       ]);
     } catch (e) {
       setMsg({ kind: "err", text: clinicalErrorMessage(e) });
@@ -87,7 +88,7 @@ export function FinalizedActions({ encounter, fields, people, patientName, clini
     try {
       await addAddendum(encounter.id, addendum);
       setAddendum("");
-      await qc.invalidateQueries({ queryKey: clinicalKeys.all(encounter.id) });
+      await qc.invalidateQueries({ queryKey: clinicalKeys.versions(encounter.id) });
       await qc.invalidateQueries({ queryKey: clinicalKeys.people(encounter.id) });
       setMsg({ kind: "ok", text: "Adendo registrado." });
     } catch (e) {
@@ -102,6 +103,7 @@ export function FinalizedActions({ encounter, fields, people, patientName, clini
     try {
       await purgeAudio({ encounter_id: encounter.id, now: true });
       await qc.invalidateQueries({ queryKey: clinicalKeys.encounter(encounter.id) });
+      await qc.invalidateQueries({ queryKey: clinicalKeys.versions(encounter.id) });
       setMsg({ kind: "ok", text: "Áudio apagado. A transcrição e o prontuário foram mantidos." });
     } catch {
       setMsg({ kind: "err", text: "Não foi possível apagar o áudio agora." });

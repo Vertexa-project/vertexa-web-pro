@@ -110,6 +110,8 @@ export function EncounterPage() {
   const patientName = patientQ.data?.profile?.full_name ?? "Paciente";
   const previousMs = chunks.reduce((n, c) => n + (c.duration_ms ?? 0), 0);
   const st = STATUS_LABEL[enc.status];
+  // Pedaço de áudio ainda sem transcrição: finalizar agora congelaria um prontuário incompleto.
+  const pendingChunks = chunks.some((c) => c.status === "uploaded" || c.status === "transcribing");
   const refresh = () => qc.invalidateQueries({ queryKey: ["clinical"] });
 
   async function run(fn: () => Promise<void>) {
@@ -198,7 +200,7 @@ export function EncounterPage() {
 
           {editable ? (
             <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
-              <Button onClick={() => setConfirmFinalize(true)} disabled={busy || enc.status !== "rascunho"}>
+              <Button onClick={() => setConfirmFinalize(true)} disabled={busy || enc.status !== "rascunho" || rec.structuring || !!rec.working || pendingChunks}>
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />} Finalizar atendimento
               </Button>
               <Button variant="outline" onClick={() => void rec.reprocess()} disabled={enc.status === "gravando" || !!rec.working}>
@@ -207,7 +209,7 @@ export function EncounterPage() {
               <Button variant="ghost" onClick={() => setConfirmCancel(true)} disabled={busy || enc.status === "gravando"}>
                 Cancelar atendimento
               </Button>
-              {enc.status !== "rascunho" ? <span className="text-xs text-muted-foreground">Para finalizar, encerre a gravação e aguarde o processamento.</span> : null}
+              {enc.status !== "rascunho" || rec.structuring || !!rec.working || pendingChunks ? <span className="text-xs text-muted-foreground">Para finalizar, encerre a gravação e aguarde o prontuário terminar de ser preenchido.</span> : null}
             </div>
           ) : null}
         </div>
