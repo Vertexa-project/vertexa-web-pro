@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { currentPeriod, effectiveTaxRate, isPeriod, taxRateNotice, type TaxRateRow } from "./taxRate";
+import { currentPeriod, effectiveTaxRate, isPeriod, periodName, taxRateHeadline, taxRateNotice, type TaxRateRow } from "./taxRate";
 
 const rates: TaxRateRow[] = [
   { period: "2026-08", rate_pct: 6, unit_id: null },
@@ -24,7 +24,8 @@ describe("alíquota mensal herdada (critério F21)", () => {
     expect(effectiveTaxRate(rates, "2026-01")).toEqual({ found: false, ratePct: null, inherited: false, sourcePeriod: null });
   });
   it("avisa o gestor quando herdada ou ausente; cala quando o mês tem a sua", () => {
-    expect(taxRateNotice(effectiveTaxRate(rates, "2026-11"), "2026-11")).toMatch(/11\/2026 ainda não tem alíquota.*09\/2026.*6,5%/);
+    expect(taxRateNotice(effectiveTaxRate(rates, "2026-11"), "2026-11")).toBe("novembro de 2026 não tem alíquota própria: usando a de setembro (6,50%) — cadastre a deste mês.");
+    expect(taxRateNotice(effectiveTaxRate(rates, "2027-01"), "2027-01")).toContain("usando a de setembro de 2026");
     expect(taxRateNotice(effectiveTaxRate(rates, "2026-01"), "2026-01")).toMatch(/Nenhuma alíquota/);
     expect(taxRateNotice(effectiveTaxRate(rates, "2026-09"), "2026-09")).toBeNull();
   });
@@ -33,5 +34,10 @@ describe("alíquota mensal herdada (critério F21)", () => {
     expect(isPeriod("2026-13")).toBe(false);
     expect(isPeriod("26-11")).toBe(false);
     expect(currentPeriod(new Date(2026, 10, 13))).toBe("2026-11");
+  });
+  it("destaque do mês com nome por extenso", () => {
+    expect(taxRateHeadline(effectiveTaxRate(rates, "2026-12"), "2026-12")).toBe("Alíquota de dezembro de 2026: 6,50%");
+    expect(taxRateHeadline(effectiveTaxRate(rates, "2026-01"), "2026-01")).toBe("Alíquota de janeiro de 2026: não cadastrada");
+    expect(periodName("2026-03")).toBe("março de 2026");
   });
 });

@@ -71,12 +71,12 @@ export function FinancePage() {
       />
 
       {overview.isLoading || adminLoading ? (
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>
+        <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>
       ) : overview.isError || !o ? (
         <ErrorState onRetry={() => overview.refetch()} />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
             <StatCard icon={Wallet} label="Previsto no mês" value={formatBRL(o.expected_cents)} tone="primary" />
             <StatCard icon={CheckCircle2} label="Recebido" value={formatBRL(o.received_cents)} tone="success" />
             <StatCard icon={Clock} label="A receber no prazo" value={formatBRL(o.pending_cents)} tone="warning" />

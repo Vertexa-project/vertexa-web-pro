@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Lock, Plus, Trash2, Users } from "lucide-react";
 
-import { CentsInput, CheckField, DecimalInput, ExportButtons, Field, NativeSelect, ReasonField, TableShell, Td, Th } from "@/components/fin/FinUi";
+import { CentsInput, CheckField, DecimalInput, ExportButtons, Field, FinTable, NativeSelect, ReasonField, useFocusFirstError } from "@/components/fin/FinUi";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
@@ -70,29 +70,41 @@ function ProForm({ row, units, canWrite, initial, onClose }: { row: ProFinanceLi
   const [rules, setRules] = useState<Withholding[]>(initial?.withholdings.filter((w) => w.is_active) ?? []);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fe, setFe] = useState<Record<string, string>>({});
+  const [tries, setTries] = useState(0);
+  const bodyRef = useRef<HTMLFieldSetElement>(null);
+  useFocusFirstError(bodyRef, tries > 0 ? `${tries}|${error ?? ""}` : null);
   const setRule = (i: number, patch: Partial<Withholding>) => setRules((cur) => cur.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   function submit() {
-    if (taxId.trim() && !isValidTaxId(taxId)) return setError("CPF ou CNPJ inválido. Confira os dígitos.");
-    if (!allUnits && unitIds.length === 0) return setError("Selecione ao menos uma unidade ou marque «Todas as unidades».");
-    if (rules.some((r) => !(r.rate_pct >= 0 && r.rate_pct <= 100) || !r.valid_from || (r.valid_to && r.valid_to < r.valid_from))) return setError("Confira as retenções: alíquota entre 0 e 100% e vigência válida.");
+    setTries((n) => n + 1);
+    const found: Record<string, string> = {};
+    if (taxId.trim() && !isValidTaxId(taxId)) found.tax = "CPF ou CNPJ inválido. Confira os dígitos.";
+    if (!allUnits && unitIds.length === 0) found.units = "Selecione ao menos uma unidade ou marque «Todas as unidades».";
+    rules.forEach((r, i) => {
+      if (!(r.rate_pct >= 0 && r.rate_pct <= 100)) found[`wr${i}`] = "Alíquota entre 0 e 100%.";
+      else if (!r.valid_from) found[`wf${i}`] = "Informe o início da vigência.";
+      else if (r.valid_to && r.valid_to < r.valid_from) found[`wt${i}`] = "O fim da vigência é antes do início.";
+    });
+    setFe(found);
+    if (Object.keys(found).length > 0) return setError(null);
     setError(null);
     save.mutate({
       professionalId: row.professional_id, bondType: bond, taxId: onlyDigits(taxId), simplesOptant: simples, pixKey: pix.trim(), bankName: bank.trim(), bankAgency: agency.trim(),
       bankAccount: account.trim(), requiresInvoice: invoice, allUnits, unitIds, withholdings: rules, reason: reason.trim() || undefined,
-    }, { onSuccess: onClose, onError: (e) => setError(serverMessage(e)) });
+    }, { onSuccess: onClose, onError: (e) => { const m = serverMessage(e); if (m.startsWith("CPF")) { setFe({ tax: m }); setError(null); } else setError(m); } });
   }
 
   return (
-    <form className="contents" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-      <fieldset disabled={!canWrite} className="min-w-0 space-y-5 overflow-y-auto px-6 py-4">
+    <form className="contents" noValidate onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      <fieldset ref={bodyRef} disabled={!canWrite} className="min-w-0 space-y-5 overflow-y-auto px-6 py-4">
         <div className="grid min-w-0 gap-4 sm:grid-cols-3">
           <Field label="Vínculo" htmlFor="pf-bond">
             <NativeSelect id="pf-bond" value={bond} onChange={(e) => setBond(e.target.value as BondType)}>
               {Object.entries(BOND_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </NativeSelect>
           </Field>
-          <Field label="CPF ou CNPJ" htmlFor="pf-tax" className="sm:col-span-2"><Input id="pf-tax" inputMode="numeric" value={taxId} onChange={(e) => setTaxId(e.target.value)} maxLength={18} placeholder="000.000.000-00" /></Field>
+          <Field label="CPF ou CNPJ" htmlFor="pf-tax" error={fe.tax} className="sm:col-span-2"><Input id="pf-tax" inputMode="numeric" value={taxId} onChange={(e) => setTaxId(e.target.value)} maxLength={18} placeholder="000.000.000-00" /></Field>
         </div>
         <div className="flex flex-wrap gap-x-8 gap-y-2">
           <CheckField id="pf-simples" label="Optante pelo Simples" checked={simples} onChange={setSimples} />
@@ -106,6 +118,7 @@ function ProForm({ row, units, canWrite, initial, onClose }: { row: ProFinanceLi
         </div>
         <div className="space-y-2">
           <p className="text-sm font-medium">Unidades em que atua</p>
+          {fe.units ? <p className="text-xs font-medium text-destructive" role="alert" aria-invalid="true" tabIndex={-1}>{fe.units}</p> : null}
           <CheckField id="pf-all-units" label="Todas as unidades" checked={allUnits} onChange={setAllUnits} />
           {!allUnits ? (
             <div className="ml-6 flex flex-wrap gap-x-6 gap-y-2">
@@ -123,10 +136,10 @@ function ProForm({ row, units, canWrite, initial, onClose }: { row: ProFinanceLi
                   {Object.entries(WITHHOLDING_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                 </NativeSelect>
               </Field>
-              <Field label="Alíquota (%)" htmlFor={`wh-r-${i}`}><DecimalInput id={`wh-r-${i}`} value={r.rate_pct} maxDecimals={4} onChange={(v) => setRule(i, { rate_pct: v ?? Number.NaN })} /></Field>
+              <Field label="Alíquota (%)" htmlFor={`wh-r-${i}`} error={fe[`wr${i}`]}><DecimalInput id={`wh-r-${i}`} value={r.rate_pct} maxDecimals={4} onChange={(v) => setRule(i, { rate_pct: v ?? Number.NaN })} /></Field>
               <Field label="Retém a partir de (R$)" htmlFor={`wh-m-${i}`}><CentsInput id={`wh-m-${i}`} value={r.min_base_cents} onChange={(v) => setRule(i, { min_base_cents: v ?? 0 })} /></Field>
-              <Field label="Vigência de" htmlFor={`wh-f-${i}`}><Input id={`wh-f-${i}`} type="date" value={r.valid_from} onChange={(e) => setRule(i, { valid_from: e.target.value })} /></Field>
-              <Field label="Vigência até" htmlFor={`wh-to-${i}`}><Input id={`wh-to-${i}`} type="date" value={r.valid_to ?? ""} onChange={(e) => setRule(i, { valid_to: e.target.value || null })} /></Field>
+              <Field label="Vigência de" htmlFor={`wh-f-${i}`} error={fe[`wf${i}`]}><Input id={`wh-f-${i}`} type="date" value={r.valid_from} onChange={(e) => setRule(i, { valid_from: e.target.value })} /></Field>
+              <Field label="Vigência até" htmlFor={`wh-to-${i}`} error={fe[`wt${i}`]}><Input id={`wh-to-${i}`} type="date" value={r.valid_to ?? ""} onChange={(e) => setRule(i, { valid_to: e.target.value || null })} /></Field>
               <Button type="button" variant="ghost" size="icon" aria-label={`Remover retenção ${i + 1}`} onClick={() => setRules((cur) => cur.filter((_, j) => j !== i))}><Trash2 aria-hidden /></Button>
               <div className="col-span-2 md:col-span-6"><CheckField id={`wh-w-${i}`} label="Dispensa automática se for optante pelo Simples" checked={r.waive_if_simples} onChange={(v) => setRule(i, { waive_if_simples: v })} /></div>
               {r.rule_type === "outra" ? <Field label="Nome da retenção" htmlFor={`wh-l-${i}`} className="col-span-2 md:col-span-6"><Input id={`wh-l-${i}`} value={r.label ?? ""} onChange={(e) => setRule(i, { label: e.target.value })} maxLength={60} /></Field> : null}
@@ -134,7 +147,7 @@ function ProForm({ row, units, canWrite, initial, onClose }: { row: ProFinanceLi
           ))}
           <Button type="button" variant="outline" size="sm" onClick={() => setRules((cur) => [...cur, { rule_type: "irrf", label: null, rate_pct: 0, min_base_cents: 0, waive_if_simples: true, valid_from: today(), valid_to: null, is_active: true }])}><Plus aria-hidden /> Adicionar retenção</Button>
         </div>
-        <ReasonField value={reason} onChange={setReason} required={false} />
+        {canWrite ? <ReasonField value={reason} onChange={setReason} required={false} /> : null}
         {error ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{error}</p> : null}
       </fieldset>
       <DialogFooter>
@@ -170,23 +183,19 @@ export function ProfessionalsFinanceTab() {
       {q.isLoading ? <LoadingState /> : q.isError ? <ErrorState onRetry={() => void q.refetch()} /> : rows.length === 0 ? (
         <EmptyState icon={Users} title="Nenhum profissional ativo" description="Aprove pessoas na Equipe para cadastrar os dados financeiros." />
       ) : (
-        <TableShell label="Dados financeiros dos profissionais">
-          <thead><tr><Th>Profissional</Th><Th>Vínculo</Th><Th>Simples</Th><Th>Exige NF</Th><Th>CPF/CNPJ</Th><Th>Pagamento</Th><Th>Retenções</Th><Th>Ações</Th></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.professional_id}>
-                <Td className="font-medium">{r.full_name ?? "—"}</Td>
-                <Td>{r.bond_type ? BOND_LABEL[r.bond_type] : <Badge tone="warning">A preencher</Badge>}</Td>
-                <Td>{r.bond_type ? (r.simples_optant ? "Sim" : "Não") : "—"}</Td>
-                <Td>{r.bond_type ? (r.requires_invoice ? "Sim" : "Não") : "—"}</Td>
-                <Td>{r.has_tax_id ? "Informado" : "—"}</Td>
-                <Td>{r.has_payment_data ? "Informado" : "—"}</Td>
-                <Td>{r.retentions_count}</Td>
-                <Td><Button size="sm" variant="outline" onClick={() => setOpen(r)} aria-label={`${canWrite ? "Editar" : "Ver"} dados financeiros de ${r.full_name ?? "profissional"}`}>{canWrite ? "Editar" : "Ver"}</Button></Td>
-              </tr>
-            ))}
-          </tbody>
-        </TableShell>
+        <FinTable
+          label="Dados financeiros dos profissionais" rows={rows} rowKey={(r) => r.professional_id}
+          columns={[
+            { header: "Profissional", role: "title", cell: (r) => r.full_name ?? "—" },
+            { header: "Vínculo", role: "badge", cell: (r) => (r.bond_type ? BOND_LABEL[r.bond_type] : <Badge tone="warning">A preencher</Badge>) },
+            { header: "Simples", cell: (r) => (r.bond_type ? (r.simples_optant ? "Sim" : "Não") : "—") },
+            { header: "Exige NF", cell: (r) => (r.bond_type ? (r.requires_invoice ? "Sim" : "Não") : "—") },
+            { header: "CPF/CNPJ", cell: (r) => (r.has_tax_id ? "Informado" : "—") },
+            { header: "Pagamento", cell: (r) => (r.has_payment_data ? "Informado" : "—") },
+            { header: "Retenções", cell: (r) => r.retentions_count },
+            { header: "Ações", role: "action", cell: (r) => <Button size="sm" variant="outline" onClick={() => setOpen(r)} aria-label={`${canWrite ? "Editar" : "Ver"} dados financeiros de ${r.full_name ?? "profissional"}`}>{canWrite ? "Editar" : "Ver"}</Button> },
+          ]}
+        />
       )}
       {open ? <ProDialog key={open.professional_id} clinicId={clinicId} row={open} canWrite={canWrite} onClose={() => setOpen(null)} /> : null}
     </div>
