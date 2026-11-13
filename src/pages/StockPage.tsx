@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, PackageOpen, Plus } from "lucide-react";
 
-import { ActiveBadge, CentsInput, CheckField, DecimalInput, ExportButtons, Field, FormDialog, NativeSelect, ReasonField, SubNav, TableShell, Td, Th } from "@/components/fin/FinUi";
+import { ActiveBadge, CentsInput, CheckField, DecimalInput, ExportButtons, Field, FinTable, FormDialog, NativeSelect, ReasonField, SubNav } from "@/components/fin/FinUi";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
@@ -45,6 +45,7 @@ function ItemDialog({ clinicId, item, canWrite, onClose }: { clinicId: string; i
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [showControlled, setShowControlled] = useState(false);
+  const [reasonError, setReasonError] = useState<string | null>(null);
   const [errors, setErrors] = useState<ReturnType<typeof validateStockItem>>({});
   const locks = typeLocks(d.itemType);
   const deactivating = Boolean(editing && editing.is_active && !x.active);
@@ -55,8 +56,9 @@ function ItemDialog({ clinicId, item, canWrite, onClose }: { clinicId: string; i
   function submit() {
     const found = validateStockItem(d);
     setErrors(found);
-    if (Object.keys(found).length > 0) return setError("Corrija os campos destacados.");
-    if (deactivating && reason.trim().length < 3) return setError("Informe o motivo da desativação.");
+    if (Object.keys(found).length > 0) { setReasonError(null); return setError("Corrija os campos destacados."); }
+    if (deactivating && reason.trim().length < 3) { setReasonError("Informe o motivo da desativação."); return setError(null); }
+    setReasonError(null);
     setError(null);
     save.mutate({
       id: editing?.id ?? null, name: d.name.trim(), category: d.category.trim(), manufacturer: x.manufacturer.trim(), itemType: d.itemType, purchaseUnit: x.purchaseUnit.trim() || "un",
@@ -68,7 +70,7 @@ function ItemDialog({ clinicId, item, canWrite, onClose }: { clinicId: string; i
   }
 
   return (
-    <FormDialog open={item !== null} onOpenChange={(o) => (!o ? onClose() : undefined)} title={editing ? "Editar item" : "Novo item de estoque"} onSubmit={submit} pending={save.isPending} error={error} wide>
+    <FormDialog open={item !== null} onOpenChange={(o) => (!o ? onClose() : undefined)} title={editing ? (canWrite ? "Editar item" : "Ver item") : "Novo item de estoque"} onSubmit={submit} pending={save.isPending} error={error} readOnly={!canWrite} wide>
       <fieldset disabled={!canWrite} className="min-w-0 space-y-5">
         <div className="grid min-w-0 gap-4 sm:grid-cols-2">
           <Field label="Nome" htmlFor="it-name" error={errors.name}><Input id="it-name" value={d.name} onChange={(e) => set({ name: e.target.value })} maxLength={160} autoFocus /></Field>
@@ -137,7 +139,7 @@ function ItemDialog({ clinicId, item, canWrite, onClose }: { clinicId: string; i
         </div>
 
         {editing ? <CheckField id="it-active" label="Item ativo" checked={x.active} onChange={(v) => setExtra({ active: v })} /> : null}
-        {editing ? <ReasonField value={reason} onChange={setReason} required={deactivating} /> : null}
+        {editing && canWrite ? <ReasonField value={reason} onChange={setReason} required={deactivating} error={reasonError} /> : null}
       </fieldset>
     </FormDialog>
   );
@@ -201,23 +203,19 @@ export function StockPage() {
             <EmptyState icon={PackageOpen} title={(q.data ?? []).length === 0 ? "Nenhum item cadastrado" : "Nenhum item com esse filtro"} description={(q.data ?? []).length === 0 ? "Cadastre os itens para montar kits de serviço e controlar o estoque." : "Ajuste a busca ou o tipo."}
               action={canWrite && (q.data ?? []).length === 0 ? <Button onClick={() => setEditing("new")}>Novo item</Button> : undefined} />
           ) : (
-            <TableShell label="Itens de estoque">
-              <thead><tr><Th>Item</Th><Th>Tipo</Th><Th>Unidades</Th><Th>Lote</Th><Th>Venda</Th><Th>Mínimo</Th><Th>Situação</Th><Th>Ações</Th></tr></thead>
-              <tbody>
-                {rows.map((i) => (
-                  <tr key={i.id}>
-                    <Td className="font-medium">{i.name}<span className="block text-xs font-normal text-muted-foreground">{i.category}{i.manufacturer ? ` · ${i.manufacturer}` : ""}</span></Td>
-                    <Td>{STOCK_ITEM_TYPE_LABEL[i.item_type]}</Td>
-                    <Td className="whitespace-nowrap">{i.purchase_unit} → {i.stock_unit} → {i.consumption_unit}{i.fractional ? <Badge tone="info" className="ml-1">Fracionado</Badge> : null}</Td>
-                    <Td>{i.lot_control ? "Sim" : "Não"}</Td>
-                    <Td className="whitespace-nowrap">{i.sellable ? formatBRL(i.sale_price_cents) : "—"}</Td>
-                    <Td className="whitespace-nowrap">{i.minimums.length === 0 ? "—" : i.minimums.map((m) => `${formatDecimalBR(m.min_qty, 3).replace(/,?0+$/, "")}`).join(" / ")}</Td>
-                    <Td><ActiveBadge active={i.is_active} /></Td>
-                    <Td><Button size="sm" variant="outline" onClick={() => setEditing(i)} aria-label={`${canWrite ? "Editar" : "Ver"} ${i.name}`}>{canWrite ? "Editar" : "Ver"}</Button></Td>
-                  </tr>
-                ))}
-              </tbody>
-            </TableShell>
+            <FinTable
+              label="Itens de estoque" rows={rows} rowKey={(i) => i.id}
+              columns={[
+                { header: "Item", role: "title", cell: (i) => <>{i.name}<span className="block text-xs font-normal text-muted-foreground">{i.category}{i.manufacturer ? ` · ${i.manufacturer}` : ""}</span></> },
+                { header: "Situação", role: "badge", cell: (i) => <ActiveBadge active={i.is_active} /> },
+                { header: "Tipo", cell: (i) => STOCK_ITEM_TYPE_LABEL[i.item_type] },
+                { header: "Unidades", wide: true, cell: (i) => <>{i.purchase_unit} → {i.stock_unit} → {i.consumption_unit}{i.fractional ? <Badge tone="info" className="ml-1">Fracionado</Badge> : null}</> },
+                { header: "Lote", cell: (i) => (i.lot_control ? "Sim" : "Não") },
+                { header: "Venda", nowrap: true, cell: (i) => (i.sellable ? formatBRL(i.sale_price_cents) : "—") },
+                { header: "Mínimo", nowrap: true, cell: (i) => (i.minimums.length === 0 ? "—" : i.minimums.map((m) => `${formatDecimalBR(m.min_qty, 3).replace(/,?0+$/, "")}`).join(" / ")) },
+                { header: "Ações", role: "action", cell: (i) => <Button size="sm" variant="outline" onClick={() => setEditing(i)} aria-label={`${canWrite ? "Editar" : "Ver"} ${i.name}`}>{canWrite ? "Editar" : "Ver"}</Button> },
+              ]}
+            />
           )}
         </div>
       )}

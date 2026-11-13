@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { CreditCard, Plus, Trash2 } from "lucide-react";
 
-import { ActiveBadge, CentsInput, CheckField, DecimalInput, ExportButtons, Field, FormDialog, NativeSelect, ReasonField, TableShell, Td, Th } from "@/components/fin/FinUi";
+import { ActiveBadge, CentsInput, CheckField, DecimalInput, ExportButtons, Field, FinTable, FormDialog, NativeSelect, ReasonField } from "@/components/fin/FinUi";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
@@ -40,29 +40,37 @@ function AcquirerDialog({ clinicId, acquirer, canWrite, onClose }: { clinicId: s
   const [fees, setFees] = useState<FeeDraft[]>(editing?.fees ?? []);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fe, setFe] = useState<Record<string, string>>({});
   const deactivating = Boolean(editing && editing.is_active && !active);
   const setFee = (i: number, patch: Partial<FeeDraft>) => setFees((cur) => cur.map((f, j) => (j === i ? { ...f, ...patch } : f)));
 
   function submit() {
-    if (!name.trim()) return setError("Informe o nome.");
-    if (kind === "machine" && fees.some((f) => !f.brand.trim() || f.fee_pct === null || f.fee_pct < 0 || f.fee_pct > 100)) return setError("Confira a tabela de taxas: bandeira e taxa entre 0 e 100% em cada linha.");
+    const found: Record<string, string> = {};
+    if (!name.trim()) found.name = "Informe o nome.";
     if (kind === "machine") {
+      fees.forEach((f, i) => {
+        if (!f.brand.trim()) found[`fb${i}`] = "Informe a bandeira.";
+        else if (f.fee_pct === null || f.fee_pct < 0 || f.fee_pct > 100) found[`fp${i}`] = "Taxa entre 0 e 100%.";
+      });
       const keys = fees.map((f) => `${f.brand.trim().toLowerCase()}|${f.modality}`);
-      if (new Set(keys).size !== keys.length) return setError("Há duas linhas com a mesma bandeira e modalidade.");
+      const dup = keys.findIndex((k, i) => keys.indexOf(k) !== i);
+      if (dup >= 0 && !found[`fb${dup}`]) found[`fb${dup}`] = "Já existe uma linha com esta bandeira e modalidade.";
     }
-    if (deactivating && reason.trim().length < 3) return setError("Informe o motivo da desativação.");
+    if (deactivating && reason.trim().length < 3) found.reason = "Informe o motivo da desativação.";
+    setFe(found);
+    if (Object.keys(found).length > 0) return setError(null);
     setError(null);
     save.mutate({
       id: editing?.id ?? null, name: name.trim(), unitId: unitId || null, isActive: active, flatFeePct: flatPct ?? 0, flatFeeCents: flatCents ?? 0, settleDays: settle ?? 0,
       fees: fees.map((f) => ({ ...f, brand: f.brand.trim(), fee_pct: f.fee_pct ?? 0, anticipation_fee_pct: f.anticipation ? f.anticipation_fee_pct ?? 0 : 0 })), reason: reason.trim() || undefined,
-    }, { onSuccess: onClose, onError: (e) => setError(serverMessage(e)) });
+    }, { onSuccess: onClose, onError: (e) => { const m = serverMessage(e); if (m.startsWith("Já existe")) { setFe({ name: m }); setError(null); } else setError(m); } });
   }
 
   return (
-    <FormDialog open={acquirer !== null} onOpenChange={(o) => (!o ? onClose() : undefined)} title={editing ? `Editar ${editing.name}` : "Nova maquininha"} onSubmit={submit} pending={save.isPending} error={error} wide={kind === "machine"}>
+    <FormDialog open={acquirer !== null} onOpenChange={(o) => (!o ? onClose() : undefined)} title={editing ? `${canWrite ? "Editar" : "Ver"} ${editing.name}` : "Nova maquininha"} onSubmit={submit} pending={save.isPending} error={error} readOnly={!canWrite} wide={kind === "machine"}>
       <fieldset disabled={!canWrite} className="min-w-0 space-y-4">
         <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-          <Field label="Nome" htmlFor="acq-name"><Input id="acq-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus /></Field>
+          <Field label="Nome" htmlFor="acq-name" error={fe.name}><Input id="acq-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus /></Field>
           {kind === "machine" ? (
             <Field label="Unidade" htmlFor="acq-unit">
               <NativeSelect id="acq-unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
@@ -89,14 +97,14 @@ function AcquirerDialog({ clinicId, acquirer, canWrite, onClose }: { clinicId: s
             <p className="text-sm font-medium">Tabela de taxas: bandeira × modalidade</p>
             <p className="text-xs text-muted-foreground">Taxa %, prazo de liquidação em dias e antecipação automática (sim/não e taxa).</p>
             {fees.map((f, i) => (
-              <div key={i} className="grid min-w-0 grid-cols-2 items-end gap-2 rounded-md border p-2 md:grid-cols-[7rem_10rem_5.5rem_5.5rem_auto_6rem_auto]">
-                <Field label="Bandeira" htmlFor={`fee-b-${i}`}><Input id={`fee-b-${i}`} value={f.brand} onChange={(e) => setFee(i, { brand: e.target.value })} maxLength={40} placeholder="Visa" /></Field>
+              <div key={i} className="grid min-w-0 grid-cols-1 items-end gap-2 rounded-md border p-2 min-[480px]:grid-cols-2 lg:grid-cols-[7rem_10rem_5.5rem_5.5rem_auto_6rem_auto]">
+                <Field label="Bandeira" htmlFor={`fee-b-${i}`} error={fe[`fb${i}`]}><Input id={`fee-b-${i}`} value={f.brand} onChange={(e) => setFee(i, { brand: e.target.value })} maxLength={40} placeholder="Visa" /></Field>
                 <Field label="Modalidade" htmlFor={`fee-m-${i}`}>
                   <NativeSelect id={`fee-m-${i}`} value={f.modality} onChange={(e) => setFee(i, { modality: e.target.value as FeeModality })}>
                     {Object.entries(FEE_MODALITY_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                   </NativeSelect>
                 </Field>
-                <Field label="Taxa (%)" htmlFor={`fee-p-${i}`}><DecimalInput id={`fee-p-${i}`} value={f.fee_pct} maxDecimals={4} onChange={(v) => setFee(i, { fee_pct: v })} /></Field>
+                <Field label="Taxa (%)" htmlFor={`fee-p-${i}`} error={fe[`fp${i}`]}><DecimalInput id={`fee-p-${i}`} value={f.fee_pct} maxDecimals={4} onChange={(v) => setFee(i, { fee_pct: v })} /></Field>
                 <Field label="Prazo (dias)" htmlFor={`fee-d-${i}`}><DecimalInput id={`fee-d-${i}`} value={f.settle_days} maxDecimals={0} onChange={(v) => setFee(i, { settle_days: v === null ? 0 : Math.round(v) })} /></Field>
                 <div className="pb-2"><CheckField id={`fee-a-${i}`} label="Antecipa" checked={f.anticipation} onChange={(v) => setFee(i, { anticipation: v })} /></div>
                 {f.anticipation ? <Field label="Taxa antecip. (%)" htmlFor={`fee-ap-${i}`}><DecimalInput id={`fee-ap-${i}`} value={f.anticipation_fee_pct} maxDecimals={4} onChange={(v) => setFee(i, { anticipation_fee_pct: v })} /></Field> : <span />}
@@ -107,7 +115,7 @@ function AcquirerDialog({ clinicId, acquirer, canWrite, onClose }: { clinicId: s
           </div>
         ) : null}
         {editing ? <CheckField id="acq-active" label="Ativo" checked={active} onChange={setActive} /> : null}
-        {editing ? <ReasonField value={reason} onChange={setReason} required={deactivating} /> : null}
+        {editing && canWrite ? <ReasonField value={reason} onChange={setReason} required={deactivating} error={fe.reason} /> : null}
       </fieldset>
     </FormDialog>
   );
@@ -151,31 +159,30 @@ export function PaymentMethodsTab() {
   return (
     <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-4">
-          <ExportButtons columns={columns} rows={rows} filename="meios-de-pagamento" sheetName="Meios de pagamento" />
-          {feeRows.length > 0 ? <ExportButtons columns={feeColumns} rows={feeRows} filename="taxas-por-bandeira" sheetName="Taxas" /> : null}
-        </div>
+        <ExportButtons label="Exportar maquininhas" columns={columns} rows={rows} filename="meios-de-pagamento" sheetName="Meios de pagamento" />
         {canWrite ? <Button onClick={() => setEditing("new")}><Plus aria-hidden /> Nova maquininha</Button> : null}
       </div>
       {q.isLoading ? <LoadingState /> : q.isError ? <ErrorState onRetry={() => void q.refetch()} /> : rows.length === 0 ? (
         <EmptyState icon={CreditCard} title="Nenhum meio de pagamento" description="Cadastre as maquininhas e suas taxas por bandeira e modalidade." action={canWrite ? <Button onClick={() => setEditing("new")}>Nova maquininha</Button> : undefined} />
       ) : (
-        <TableShell label="Meios de pagamento">
-          <thead><tr><Th>Meio de pagamento</Th><Th>Tipo</Th><Th>Unidade</Th><Th>Taxas e prazo</Th><Th>Situação</Th><Th>Ações</Th></tr></thead>
-          <tbody>
-            {rows.map((a) => (
-              <tr key={a.id}>
-                <Td className="font-medium">{a.name}</Td>
-                <Td>{ACQUIRER_KIND_LABEL[a.kind]}</Td>
-                <Td>{a.kind === "machine" ? unitName(a.unit_id) : "—"}</Td>
-                <Td>{summary(a)}</Td>
-                <Td><ActiveBadge active={a.is_active} /></Td>
-                <Td><Button size="sm" variant="outline" onClick={() => setEditing(a)} aria-label={`${canWrite ? "Editar" : "Ver"} ${a.name}`}>{canWrite ? "Editar" : "Ver"}</Button></Td>
-              </tr>
-            ))}
-          </tbody>
-        </TableShell>
+        <FinTable
+          label="Meios de pagamento" rows={rows} rowKey={(a) => a.id}
+          columns={[
+            { header: "Meio de pagamento", role: "title", cell: (a) => a.name },
+            { header: "Situação", role: "badge", cell: (a) => <ActiveBadge active={a.is_active} /> },
+            { header: "Tipo", cell: (a) => ACQUIRER_KIND_LABEL[a.kind] },
+            { header: "Unidade", cell: (a) => (a.kind === "machine" ? unitName(a.unit_id) : "—") },
+            { header: "Taxas e prazo", wide: true, cell: (a) => summary(a) },
+            { header: "Ações", role: "action", cell: (a) => <Button size="sm" variant="outline" onClick={() => setEditing(a)} aria-label={`${canWrite ? "Editar" : "Ver"} ${a.name}`}>{canWrite ? "Editar" : "Ver"}</Button> },
+          ]}
+        />
       )}
+      {feeRows.length > 0 ? (
+        <section className="min-w-0 space-y-2" aria-label="Taxas por bandeira">
+          <h2 className="text-sm font-semibold">Taxas por bandeira e modalidade</h2>
+          <ExportButtons label="Exportar taxas" columns={feeColumns} rows={feeRows} filename="taxas-por-bandeira" sheetName="Taxas" />
+        </section>
+      ) : null}
       {editing ? <AcquirerDialog key={editing === "new" ? "new" : editing.id} clinicId={clinicId} acquirer={editing} canWrite={canWrite} onClose={() => setEditing(null)} /> : null}
     </div>
   );

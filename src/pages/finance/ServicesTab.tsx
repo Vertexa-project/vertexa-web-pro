@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, Stethoscope, Trash2 } from "lucide-react";
 
-import { ActiveBadge, CentsInput, CheckField, DecimalInput, ExportButtons, Field, FormDialog, NativeSelect, ReasonField, TableShell, Td, Th } from "@/components/fin/FinUi";
+import { ActiveBadge, CentsInput, CheckField, DecimalInput, ExportButtons, Field, FinTable, FormDialog, NativeSelect, ReasonField } from "@/components/fin/FinUi";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
@@ -40,35 +40,40 @@ function ServiceDialog({ clinicId, service, canWrite, onClose }: { clinicId: str
   const [kit, setKit] = useState<KitRow[]>((editing?.kit ?? []).map((k) => ({ itemId: k.item_id, quantity: k.quantity })));
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fe, setFe] = useState<Record<string, string>>({});
   const deactivating = Boolean(editing && editing.is_active && !active);
   const toggleRole = (r: ServiceRole) => setRoles((cur) => (cur.includes(r) ? cur.filter((x) => x !== r) : [...cur, r]));
   const itemLabel = (id: string) => items.find((i) => i.id === id);
 
   function submit() {
-    if (!name.trim()) return setError("Informe o nome do serviço.");
-    if (price === null) return setError("Informe o preço padrão.");
-    if (deactivating && reason.trim().length < 3) return setError("Informe o motivo da desativação.");
-    if (kit.some((k) => !k.itemId || !k.quantity || k.quantity <= 0)) return setError("Cada item do kit precisa de item e quantidade maior que zero.");
-    if (new Set(kit.map((k) => k.itemId)).size !== kit.length) return setError("O mesmo item aparece duas vezes no kit.");
+    const found: Record<string, string> = {};
+    if (!name.trim()) found.name = "Informe o nome do serviço.";
+    if (price === null) found.price = "Informe o preço padrão.";
+    const badKit = kit.findIndex((k) => !k.itemId || !k.quantity || k.quantity <= 0);
+    if (badKit >= 0) found[`kit${badKit}`] = "Escolha o item e uma quantidade maior que zero.";
+    else if (new Set(kit.map((k) => k.itemId)).size !== kit.length) found.kit0 = "O mesmo item aparece duas vezes no kit.";
+    if (deactivating && reason.trim().length < 3) found.reason = "Informe o motivo da desativação.";
+    setFe(found);
+    if (Object.keys(found).length > 0 || price === null) return setError(null);
     setError(null);
     save.mutate({
       id: editing?.id ?? null, name: name.trim(), category, defaultPriceCents: price, roles: ["responsavel", ...roles.filter((r) => r !== "responsavel")], isActive: active,
       unitPrices: Object.entries(unitPrices).filter(([, v]) => v !== null).map(([unitId, v]) => ({ unitId, priceCents: v as number })),
       kit: kit.map((k) => ({ itemId: k.itemId, quantity: k.quantity as number })), reason: reason.trim() || undefined,
-    }, { onSuccess: onClose, onError: (e) => setError(serverMessage(e)) });
+    }, { onSuccess: onClose, onError: (e) => { const m = serverMessage(e); if (m.startsWith("Já existe")) { setFe({ name: m }); setError(null); } else setError(m); } });
   }
 
   return (
-    <FormDialog open={service !== null} onOpenChange={(o) => (!o ? onClose() : undefined)} title={editing ? "Editar serviço" : "Novo serviço"} onSubmit={submit} pending={save.isPending} error={error} wide>
+    <FormDialog open={service !== null} onOpenChange={(o) => (!o ? onClose() : undefined)} title={editing ? (canWrite ? "Editar serviço" : "Ver serviço") : "Novo serviço"} onSubmit={submit} pending={save.isPending} error={error} readOnly={!canWrite} wide>
       <fieldset disabled={!canWrite} className="min-w-0 space-y-4">
         <div className="grid min-w-0 gap-4 sm:grid-cols-3">
-          <Field label="Nome" htmlFor="svc-name" className="sm:col-span-2"><Input id="svc-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoFocus /></Field>
+          <Field label="Nome" htmlFor="svc-name" error={fe.name} className="sm:col-span-2"><Input id="svc-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoFocus /></Field>
           <Field label="Categoria" htmlFor="svc-cat">
             <NativeSelect id="svc-cat" value={category} onChange={(e) => setCategory(e.target.value as ServiceCategory)}>
               {Object.entries(SERVICE_CATEGORY_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </NativeSelect>
           </Field>
-          <Field label="Preço padrão (R$)" htmlFor="svc-price"><CentsInput id="svc-price" value={price} onChange={setPrice} /></Field>
+          <Field label="Preço padrão (R$)" htmlFor="svc-price" error={fe.price}><CentsInput id="svc-price" value={price} onChange={setPrice} /></Field>
         </div>
         <div>
           <p className="mb-2 text-sm font-medium">Papéis previstos no atendimento</p>
@@ -96,7 +101,7 @@ function ServiceDialog({ clinicId, service, canWrite, onClose }: { clinicId: str
           {stock.isLoading ? <p className="text-sm text-muted-foreground">Carregando itens…</p> : null}
           {kit.map((k, i) => (
             <div key={i} className="grid min-w-0 grid-cols-[minmax(0,1fr)_6rem_auto] items-end gap-2">
-              <Field label={i === 0 ? "Item" : "Item"} htmlFor={`kit-item-${i}`}>
+              <Field label="Item" htmlFor={`kit-item-${i}`} error={fe[`kit${i}`]}>
                 <NativeSelect id={`kit-item-${i}`} value={k.itemId} onChange={(e) => setKit((cur) => cur.map((r, j) => (j === i ? { ...r, itemId: e.target.value } : r)))}>
                   <option value="">Selecione…</option>
                   {items.map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
@@ -112,7 +117,7 @@ function ServiceDialog({ clinicId, service, canWrite, onClose }: { clinicId: str
           {!stock.isLoading && items.length === 0 ? <p className="text-xs text-muted-foreground">Cadastre itens em Estoque para montar o kit.</p> : null}
         </div>
         {editing ? <CheckField id="svc-active" label="Serviço ativo" checked={active} onChange={setActive} /> : null}
-        {editing ? <ReasonField value={reason} onChange={setReason} required={deactivating} /> : null}
+        {editing && canWrite ? <ReasonField value={reason} onChange={setReason} required={deactivating} error={fe.reason} /> : null}
       </fieldset>
     </FormDialog>
   );
@@ -150,22 +155,18 @@ export function ServicesTab() {
       {q.isLoading ? <LoadingState /> : q.isError ? <ErrorState onRetry={() => void q.refetch()} /> : rows.length === 0 ? (
         <EmptyState icon={Stethoscope} title="Nenhum serviço cadastrado" description="Cadastre consultas, procedimentos e sessões com preço e papéis previstos." action={canWrite ? <Button onClick={() => setEditing("new")}>Novo serviço</Button> : undefined} />
       ) : (
-        <TableShell label="Serviços">
-          <thead><tr><Th>Serviço</Th><Th>Categoria</Th><Th>Preço padrão</Th><Th>Papéis</Th><Th>Kit</Th><Th>Situação</Th><Th>Ações</Th></tr></thead>
-          <tbody>
-            {rows.map((s) => (
-              <tr key={s.id}>
-                <Td className="font-medium">{s.name}</Td>
-                <Td>{SERVICE_CATEGORY_LABEL[s.category]}</Td>
-                <Td className="whitespace-nowrap">{formatBRL(s.default_price_cents)}{s.unit_prices.length > 0 ? <span className="ml-1 text-xs text-muted-foreground">+{s.unit_prices.length} por unidade</span> : null}</Td>
-                <Td>{s.roles.map((r) => SERVICE_ROLE_LABEL[r]).join(", ")}</Td>
-                <Td>{s.kit.length === 0 ? "—" : `${s.kit.length} ${s.kit.length === 1 ? "item" : "itens"}`}</Td>
-                <Td><ActiveBadge active={s.is_active} /></Td>
-                <Td><Button size="sm" variant="outline" onClick={() => setEditing(s)} aria-label={`${canWrite ? "Editar" : "Ver"} ${s.name}`}>{canWrite ? "Editar" : "Ver"}</Button></Td>
-              </tr>
-            ))}
-          </tbody>
-        </TableShell>
+        <FinTable
+          label="Serviços" rows={rows} rowKey={(s) => s.id}
+          columns={[
+            { header: "Serviço", role: "title", cell: (s) => s.name },
+            { header: "Situação", role: "badge", cell: (s) => <ActiveBadge active={s.is_active} /> },
+            { header: "Categoria", cell: (s) => SERVICE_CATEGORY_LABEL[s.category] },
+            { header: "Preço padrão", nowrap: true, cell: (s) => <>{formatBRL(s.default_price_cents)}{s.unit_prices.length > 0 ? <span className="ml-1 text-xs text-muted-foreground">+{s.unit_prices.length} por unidade</span> : null}</> },
+            { header: "Papéis", cell: (s) => s.roles.map((r) => SERVICE_ROLE_LABEL[r]).join(", ") },
+            { header: "Kit", cell: (s) => (s.kit.length === 0 ? "—" : `${s.kit.length} ${s.kit.length === 1 ? "item" : "itens"}`) },
+            { header: "Ações", role: "action", cell: (s) => <Button size="sm" variant="outline" onClick={() => setEditing(s)} aria-label={`${canWrite ? "Editar" : "Ver"} ${s.name}`}>{canWrite ? "Editar" : "Ver"}</Button> },
+          ]}
+        />
       )}
       {editing ? <ServiceDialog key={editing === "new" ? "new" : editing.id} clinicId={clinicId} service={editing} canWrite={canWrite} onClose={() => setEditing(null)} /> : null}
     </div>

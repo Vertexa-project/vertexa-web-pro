@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Building2, Plus } from "lucide-react";
 
-import { ActiveBadge, CheckField, ExportButtons, Field, FormDialog, ReasonField, TableShell, Td, Th } from "@/components/fin/FinUi";
+import { ActiveBadge, CheckField, ExportButtons, Field, FinTable, FormDialog, ReasonField } from "@/components/fin/FinUi";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
@@ -41,11 +41,15 @@ function UnitDialog({ clinicId, unit, onClose }: { clinicId: string; unit: Clini
   const [active, setActive] = useState(editing?.is_active ?? true);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fe, setFe] = useState<Record<string, string>>({});
   const deactivating = Boolean(editing && editing.is_active && !active);
 
   function submit() {
-    if (!name.trim()) return setError("Informe o nome da unidade.");
-    if (deactivating && reason.trim().length < 3) return setError("Informe o motivo da desativação.");
+    const found: Record<string, string> = {};
+    if (!name.trim()) found.name = "Informe o nome da unidade.";
+    if (deactivating && reason.trim().length < 3) found.reason = "Informe o motivo da desativação.";
+    setFe(found);
+    if (Object.keys(found).length > 0) return setError(null);
     setError(null);
     save.mutate(
       { id: editing?.id ?? null, name: name.trim(), isActive: active, licenseNumber: license.trim(), licenseValidUntil: validUntil, reason: reason.trim() || undefined },
@@ -53,7 +57,7 @@ function UnitDialog({ clinicId, unit, onClose }: { clinicId: string; unit: Clini
         onSuccess: onClose,
         onError: (e) => {
           const m = (e as { message?: string }).message ?? "";
-          setError(m.includes("PRIMARY_UNIT") ? "A unidade principal não pode ser desativada." : m.includes("duplicate") ? "Já existe uma unidade com esse nome." : "Não foi possível salvar agora. Tente novamente.");
+          if (m.includes("duplicate")) { setFe({ name: "Já existe uma unidade com esse nome." }); setError(null); } else setError(m.includes("PRIMARY_UNIT") ? "A unidade principal não pode ser desativada." : "Não foi possível salvar agora. Tente novamente.");
         },
       },
     );
@@ -61,7 +65,7 @@ function UnitDialog({ clinicId, unit, onClose }: { clinicId: string; unit: Clini
 
   return (
     <FormDialog open={unit !== null} onOpenChange={(o) => (!o ? onClose() : undefined)} title={editing ? "Editar unidade" : "Nova unidade"} onSubmit={submit} pending={save.isPending} error={error}>
-      <Field label="Nome da unidade" htmlFor="unit-name"><Input id="unit-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus /></Field>
+      <Field label="Nome da unidade" htmlFor="unit-name" error={fe.name}><Input id="unit-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus /></Field>
       <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         <Field label="Licença sanitária (número)" htmlFor="unit-license"><Input id="unit-license" value={license} onChange={(e) => setLicense(e.target.value)} maxLength={60} /></Field>
         <Field label="Validade da licença" htmlFor="unit-valid"><Input id="unit-valid" type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} /></Field>
@@ -69,7 +73,7 @@ function UnitDialog({ clinicId, unit, onClose }: { clinicId: string; unit: Clini
       <p className="text-xs text-muted-foreground">A licença é consultada na venda de manipulado: sem licença válida, o sistema avisa e pede o aceite do administrador.</p>
       {editing && !editing.is_primary ? <CheckField id="unit-active" label="Unidade ativa" checked={active} onChange={setActive} /> : null}
       {editing?.is_primary ? <p className="text-xs text-muted-foreground">Esta é a unidade principal: pode ser renomeada, mas não desativada.</p> : null}
-      {editing ? <ReasonField value={reason} onChange={setReason} required={deactivating} /> : null}
+      {editing ? <ReasonField value={reason} onChange={setReason} required={deactivating} error={fe.reason} /> : null}
     </FormDialog>
   );
 }
@@ -100,23 +104,16 @@ export function UnitsPage() {
       ) : (
         <div className="space-y-3">
           <ExportButtons columns={columns} rows={rows} filename="unidades" sheetName="Unidades" />
-          <TableShell label="Unidades da clínica">
-            <thead><tr><Th>Unidade</Th><Th>Situação</Th><Th>Licença sanitária</Th><Th>Validade</Th><Th>{canWrite ? "Ações" : ""}</Th></tr></thead>
-            <tbody>
-              {rows.map((u) => {
-                const ls = licenseState(u);
-                return (
-                  <tr key={u.id}>
-                    <Td className="font-medium">{u.name} {u.is_primary ? <Badge tone="primary" className="ml-1">Principal</Badge> : null}</Td>
-                    <Td><ActiveBadge active={u.is_active} /></Td>
-                    <Td>{u.license_number ?? "—"} <Badge tone={LICENSE_BADGE[ls].tone} className="ml-1">{LICENSE_BADGE[ls].text}</Badge></Td>
-                    <Td>{u.license_valid_until ? formatDate(u.license_valid_until) : "—"}</Td>
-                    <Td>{canWrite ? <Button size="sm" variant="outline" onClick={() => setEditing(u)} aria-label={`Editar ${u.name}`}>Editar</Button> : null}</Td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </TableShell>
+          <FinTable
+            label="Unidades da clínica" rows={rows} rowKey={(u) => u.id}
+            columns={[
+              { header: "Unidade", role: "title", cell: (u) => <>{u.name} {u.is_primary ? <Badge tone="primary" className="ml-1">Principal</Badge> : null}</> },
+              { header: "Situação", role: "badge", cell: (u) => <ActiveBadge active={u.is_active} /> },
+              { header: "Licença sanitária", cell: (u) => <>{u.license_number ?? "—"} <Badge tone={LICENSE_BADGE[licenseState(u)].tone} className="ml-1">{LICENSE_BADGE[licenseState(u)].text}</Badge></> },
+              { header: "Validade", cell: (u) => (u.license_valid_until ? formatDate(u.license_valid_until) : "—") },
+              ...(canWrite ? [{ header: "Ações", role: "action" as const, cell: (u: ClinicUnit) => <Button size="sm" variant="outline" onClick={() => setEditing(u)} aria-label={`Editar ${u.name}`}>Editar</Button> }] : []),
+            ]}
+          />
         </div>
       )}
       {clinicId && editing ? <UnitDialog key={editing === "new" ? "new" : editing.id} clinicId={clinicId} unit={editing} onClose={() => setEditing(null)} /> : null}

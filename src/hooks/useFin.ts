@@ -43,6 +43,9 @@ export const useFinSettings = (clinicId: string | null, on = true) =>
   useQuery({ queryKey: [...K, "settings", clinicId], queryFn: () => registry.getFinSettings(clinicId as string), enabled: enabled(clinicId, on) });
 export const useTaxRates = (clinicId: string | null, on = true) =>
   useQuery({ queryKey: [...K, "taxRates", clinicId], queryFn: () => registry.listTaxRates(clinicId as string), enabled: enabled(clinicId, on) });
+/** Alíquota efetiva do mês (servidor: fin_effective_tax_rate) — com `inherited` e o mês de origem. */
+export const useEffectiveTaxRate = (clinicId: string | null, period: string, unitId: string | null, on = true) =>
+  useQuery({ queryKey: [...K, "taxEffective", clinicId, period, unitId], queryFn: () => registry.getEffectiveTaxRate(clinicId as string, period, unitId), enabled: enabled(clinicId, on) });
 export const useServices = (clinicId: string | null, on = true) =>
   useQuery({ queryKey: [...K, "services", clinicId], queryFn: () => catalog.listServices(clinicId as string), enabled: enabled(clinicId, on) });
 export const usePackages = (clinicId: string | null, on = true) =>
