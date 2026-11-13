@@ -76,8 +76,8 @@ export function AuditTab() {
                     <Td className="min-w-64">
                       {changes.length === 0 ? <span className="text-muted-foreground">—</span> : (
                         <ul className="space-y-0.5">
-                          {changes.slice(0, 6).map((c) => <li key={c.field}><span className="text-muted-foreground">{c.label}:</span> {c.before} → <strong className="font-medium">{c.after}</strong></li>)}
-                          {changes.length > 6 ? <li className="text-muted-foreground">+{changes.length - 6} campos</li> : null}
+                          {changes.slice(0, 10).map((c) => <li key={c.field}><span className="text-muted-foreground">{c.label}:</span> {c.before} → <strong className="font-medium">{c.after}</strong></li>)}
+                          {changes.length > 10 ? <li className="text-muted-foreground">+{changes.length - 10} campos</li> : null}
                         </ul>
                       )}
                     </Td>

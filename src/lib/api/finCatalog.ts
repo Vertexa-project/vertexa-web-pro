@@ -37,7 +37,8 @@ export async function listServices(clinicId: string): Promise<FinService[]> {
     fin_service_kit_items: { item_id: string; quantity: number | string }[];
   };
   return ((data ?? []) as unknown as Raw[]).map((s) => ({
-    id: s.id, name: s.name, category: s.category, default_price_cents: s.default_price_cents, roles: s.roles, is_active: s.is_active,
+    id: s.id, name: s.name, category: s.category, default_price_cents: s.default_price_cents, is_active: s.is_active,
+    roles: (Object.keys(SERVICE_ROLE_LABEL) as ServiceRole[]).filter((r) => s.roles.includes(r)), // ordem fixa: Responsável, Executor, Auxiliar
     unit_prices: s.fin_service_unit_prices ?? [],
     kit: (s.fin_service_kit_items ?? []).map((k) => ({ item_id: k.item_id, quantity: Number(k.quantity) })),
   }));

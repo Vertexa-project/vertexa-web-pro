@@ -20,7 +20,8 @@ describe("histórico: antes → depois", () => {
   it("valores", () => {
     expect(auditValueText("x", null)).toBe("—");
     expect(auditValueText("rate_pct", 6.5)).toBe("6,5");
-    expect(auditValueText("roles", ["responsavel"])).toBe('["responsavel"]');
+    expect(auditValueText("roles", ["responsavel", "executor"])).toBe("responsavel, executor");
+    expect(auditValueText("kit", [{ item_id: "a", quantity: 2 }])).toBe('[{"item_id":"a","quantity":2}]');
     expect(AUDIT_ACTION_LABEL.view_sensitive).toBe("Leu dado sensível");
   });
 });

@@ -36,7 +36,7 @@ const FIELD_LABEL: Record<string, string> = {
   purchase_to_stock_factor: "Fator compra → estoque", stock_to_consumption_factor: "Fator estoque → consumo",
 };
 
-const IGNORED = new Set(["id", "clinic_id", "created_at", "updated_at", "created_by", "unit_id"]);
+const IGNORED = new Set(["id", "clinic_id", "created_at", "updated_at", "created_by", "unit_id", "professional_id"]);
 
 export function auditFieldLabel(key: string): string {
   return FIELD_LABEL[key] ?? key;
@@ -48,6 +48,7 @@ export function auditValueText(key: string, value: unknown): string {
   if (typeof value === "number" && key.endsWith("_cents")) return formatBRL(value);
   if (typeof value === "number") return String(value).replace(".", ",");
   if (typeof value === "string") return value;
+  if (Array.isArray(value) && value.every((v) => typeof v === "string")) return value.join(", ");
   const text = JSON.stringify(value);
   return text.length > 140 ? `${text.slice(0, 137)}…` : text;
 }
