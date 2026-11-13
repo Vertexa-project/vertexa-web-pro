@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Receipt, Plus } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
-import { ExportButtons, Field, FormDialog, TableShell, Td, Th } from "@/components/fin/FinUi";
+import { ExportButtons, Field, FinTable, FormDialog, TableShell, Td, Th } from "@/components/fin/FinUi";
 import { FilterBar } from "@/components/fin/FinFilters";
 import { NewSaleDialog } from "@/components/fin/NewSaleDialog";
 import { PaymentDialog } from "@/components/fin/PaymentDialog";
@@ -142,17 +142,21 @@ export function SalesTab() {
       {q.isLoading ? <LoadingState /> : q.isError ? <ErrorState onRetry={() => void q.refetch()} /> : rows.length === 0 ? (
         <EmptyState icon={Receipt} title="Nenhuma venda no período" description="Registre a venda de um serviço, pacote ou produto; o recebimento é lançado na própria venda." action={canWrite ? <Button onClick={() => setNewOpen(true)}>Nova venda</Button> : undefined} />
       ) : (
-        <TableShell label="Vendas">
-          <thead><tr><Th>Data</Th><Th>Paciente</Th><Th>Unidade</Th><Th>Vendedor</Th><Th>Total</Th><Th>Recebido</Th><Th>Situação</Th><Th>Ações</Th></tr></thead>
-          <tbody>{rows.map((r) => (
-            <tr key={r.id}>
-              <Td>{br(r.created_at)}</Td><Td className="font-medium">{r.patient_name ?? "—"}</Td><Td>{r.unit_name}</Td><Td>{r.seller_name ?? "—"}</Td>
-              <Td className="whitespace-nowrap tabular-nums">{formatBRL(r.total_net_cents)}</Td><Td className="whitespace-nowrap tabular-nums">{formatBRL(r.paid_cents)}</Td>
-              <Td><Badge tone={tone(r.status)}>{SALE_STATUS_LABEL[r.status]}</Badge></Td>
-              <Td><Button size="sm" variant="outline" onClick={() => setOpenSale(r.id)} aria-label={`Abrir venda de ${r.patient_name ?? "paciente"}`}>Abrir</Button></Td>
-            </tr>
-          ))}</tbody>
-        </TableShell>
+        <FinTable<SaleRow>
+          label="Vendas"
+          rows={rows}
+          rowKey={(r) => r.id}
+          columns={[
+            { header: "Paciente", role: "title", cell: (r) => r.patient_name ?? "—" },
+            { header: "Situação", role: "badge", cell: (r) => <Badge tone={tone(r.status)}>{SALE_STATUS_LABEL[r.status]}</Badge> },
+            { header: "Data", nowrap: true, cell: (r) => br(r.created_at) },
+            { header: "Unidade", cell: (r) => r.unit_name },
+            { header: "Vendedor", cell: (r) => r.seller_name ?? "—" },
+            { header: "Total", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.total_net_cents) },
+            { header: "Recebido", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.paid_cents) },
+            { header: "Ações", role: "action", cell: (r) => <Button size="sm" variant="outline" onClick={() => setOpenSale(r.id)} aria-label={`Abrir venda de ${r.patient_name ?? "paciente"}`}>Abrir</Button> },
+          ]}
+        />
       )}
       {newOpen && canWrite ? <NewSaleDialog key={initialPatient?.id ?? "n"} clinicId={clinicId} isAdmin={access.isAdmin} open onOpenChange={closeNew} initialPatient={initialPatient} onSaved={(id) => setOpenSale(id)} /> : null}
       {openSale ? <SaleDetail clinicId={clinicId} saleId={openSale} onClose={() => setOpenSale(null)} /> : null}

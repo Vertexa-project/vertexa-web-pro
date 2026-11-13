@@ -186,17 +186,12 @@ export function FinalizedActions({ encounter, fields, people, patientName, clini
         {showHistory ? (
           <div className="space-y-2 border-t pt-4" data-testid="history">
             {versions.isLoading ? <p className="text-sm text-muted-foreground">Carregando…</p> : null}
-            {(versions.data ?? []).map((v) => (
-              <div key={v.id} className="rounded-md border p-2 text-xs">
+            {historyEntries(versions.data ?? [], sends.data ?? [], people?.professional ?? null).map((h) => (
+              <div key={h.id} className="rounded-md border p-2 text-xs">
                 <p className="font-medium">
-                  {v.actor_name ?? "Sistema"} · {formatDateTimeBr(v.created_at)} · {ACTION_LABEL[v.action]}
-                  {v.field_key ? ` · ${v.field_key}` : ""}
+                  {h.actor ?? "Sistema"} · {formatDateTimeBr(h.at)} · {h.label}
                 </p>
-                {v.field_key ? (
-                  <p className="break-words text-muted-foreground">
-                    Antes: {v.before_value?.value || "—"} → Depois: {v.after_value?.value || "—"}
-                  </p>
-                ) : null}
+                {h.detail ? <p className="break-words text-muted-foreground">{h.detail}</p> : null}
               </div>
             ))}
           </div>
@@ -224,6 +219,24 @@ export function FinalizedActions({ encounter, fields, people, patientName, clini
       </Dialog>
     </Card>
   );
+}
+
+type VersionRow = NonNullable<ReturnType<typeof useVersions>["data"]>[number];
+type SendRow = NonNullable<ReturnType<typeof useAgreementSends>["data"]>[number];
+
+/** Histórico do atendimento: versões do prontuário + envios de combinados, do mais antigo ao mais novo. */
+function historyEntries(versions: VersionRow[], sends: SendRow[], professional: string | null) {
+  const rows = [
+    ...versions.map((v) => ({
+      id: v.id,
+      at: v.created_at,
+      actor: v.actor_name,
+      label: `${ACTION_LABEL[v.action]}${v.field_key ? ` · ${v.field_key}` : ""}`,
+      detail: v.field_key ? `Antes: ${v.before_value?.value || "—"} → Depois: ${v.after_value?.value || "—"}` : null,
+    })),
+    ...sends.map((s) => ({ id: `send-${s.id}`, at: s.sent_at, actor: professional, label: "combinados enviados ao paciente", detail: s.text })),
+  ];
+  return rows.sort((a, b) => a.at.localeCompare(b.at));
 }
 
 const ACTION_LABEL = {

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Landmark } from "lucide-react";
 
-import { CentsInput, ExportButtons, Field, FormDialog, TableShell, Td, Th } from "@/components/fin/FinUi";
+import { CentsInput, ExportButtons, Field, FinTable, FormDialog } from "@/components/fin/FinUi";
 import { FilterBar } from "@/components/fin/FinFilters";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -91,23 +91,28 @@ export function TitlesTab() {
       {q.isLoading ? <LoadingState /> : q.isError ? <ErrorState onRetry={() => void q.refetch()} /> : rows.length === 0 ? (
         <EmptyState icon={Landmark} title="Nenhum título neste filtro" description="Os títulos nascem quando um recebimento é lançado numa venda." />
       ) : (
-        <TableShell label="Títulos">
-          <thead><tr><Th>Previsto</Th><Th>Paciente</Th><Th>Forma</Th><Th>Parcela</Th><Th>Bruto</Th><Th>Taxa</Th><Th>Líquido</Th><Th>Situação</Th><Th>Ações</Th></tr></thead>
-          <tbody>{rows.map((r) => (
-            <tr key={r.id}>
-              <Td>{br(r.expected_date)}</Td><Td className="font-medium">{r.patient_name ?? "—"}</Td><Td>{r.acquirer_name}{r.brand ? ` · ${r.brand}` : ""}</Td><Td>{r.installment_no}/{r.installments}</Td>
-              <Td className="tabular-nums">{formatBRL(r.gross_cents)}</Td><Td className="tabular-nums">{formatBRL(r.fee_cents)}</Td><Td className="tabular-nums">{formatBRL(r.net_cents)}</Td>
-              <Td><Badge tone={tone(r.status)}>{RECEIVABLE_STATUS_LABEL[r.status]}</Badge>{r.status === "settled" ? <span className="ml-1 text-xs text-muted-foreground">{br(r.settled_date)}</span> : null}</Td>
-              <Td>
-                <div className="flex flex-wrap gap-1">
-                  {canWrite && r.status === "expected" ? <Button size="sm" variant="outline" disabled={settle.isPending} onClick={() => settle.mutate({ id: r.id })} aria-label={`Liquidar parcela ${r.installment_no} de ${r.patient_name ?? "paciente"}`}>Liquidar</Button> : null}
-                  {canFix && r.status === "settled" ? <Button size="sm" variant="outline" onClick={() => setAction({ kind: "correct", row: r })} aria-label={`Corrigir liquidação da parcela ${r.installment_no} de ${r.patient_name ?? "paciente"}`}>Corrigir</Button> : null}
-                  {canWrite && r.status !== "reversed" ? <Button size="sm" variant="ghost" onClick={() => setAction({ kind: "reverse", row: r })} aria-label={`Estornar parcela ${r.installment_no} de ${r.patient_name ?? "paciente"}`}>Estornar</Button> : null}
-                </div>
-              </Td>
-            </tr>
-          ))}</tbody>
-        </TableShell>
+        <FinTable<TitleListRow>
+          label="Títulos"
+          rows={rows}
+          rowKey={(r) => r.id}
+          columns={[
+            { header: "Paciente", role: "title", cell: (r) => r.patient_name ?? "—" },
+            { header: "Situação", role: "badge", cell: (r) => <><Badge tone={tone(r.status)}>{RECEIVABLE_STATUS_LABEL[r.status]}</Badge>{r.status === "settled" ? <span className="ml-1 text-xs text-muted-foreground">{br(r.settled_date)}</span> : null}</> },
+            { header: "Previsto", nowrap: true, cell: (r) => br(r.expected_date) },
+            { header: "Forma", cell: (r) => `${r.acquirer_name}${r.brand ? ` · ${r.brand}` : ""}` },
+            { header: "Parcela", cell: (r) => `${r.installment_no}/${r.installments}` },
+            { header: "Bruto", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.gross_cents) },
+            { header: "Taxa", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.fee_cents) },
+            { header: "Líquido", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.net_cents) },
+            { header: "Ações", role: "action", cell: (r) => (
+              <div className="flex flex-wrap gap-1">
+                {canWrite && r.status === "expected" ? <Button size="sm" variant="outline" disabled={settle.isPending} onClick={() => settle.mutate({ id: r.id })} aria-label={`Liquidar parcela ${r.installment_no} de ${r.patient_name ?? "paciente"}`}>Liquidar</Button> : null}
+                {canFix && r.status === "settled" ? <Button size="sm" variant="outline" onClick={() => setAction({ kind: "correct", row: r })} aria-label={`Corrigir liquidação da parcela ${r.installment_no} de ${r.patient_name ?? "paciente"}`}>Corrigir</Button> : null}
+                {canWrite && r.status !== "reversed" ? <Button size="sm" variant="ghost" onClick={() => setAction({ kind: "reverse", row: r })} aria-label={`Estornar parcela ${r.installment_no} de ${r.patient_name ?? "paciente"}`}>Estornar</Button> : null}
+              </div>
+            ) },
+          ]}
+        />
       )}
       {action ? <ActionDialog key={action.row.id + action.kind} action={action} onClose={() => setAction(null)} /> : null}
     </div>

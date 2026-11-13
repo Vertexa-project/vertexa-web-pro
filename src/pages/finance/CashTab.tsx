@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Banknote } from "lucide-react";
 
-import { CentsInput, ExportButtons, Field, FormDialog, NativeSelect, TableShell, Td, Th } from "@/components/fin/FinUi";
+import { CentsInput, ExportButtons, Field, FinTable, FormDialog, NativeSelect, TableShell, Td, Th } from "@/components/fin/FinUi";
 import { FilterBar } from "@/components/fin/FinFilters";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
@@ -104,6 +104,33 @@ function CloseDialog({ register, onClose }: { register: CashSummary; onClose: ()
   );
 }
 
+/** Resumo do caixa aberto: troco, entradas (recebimentos + suprimentos), saídas (sangrias) e o esperado em espécie. */
+function CashTotals({ r }: { r: CashSummary }) {
+  const supr = r.movements.filter((m) => m.type === "suprimento").reduce((n, m) => n + m.amount_cents, 0);
+  const sang = r.movements.filter((m) => m.type === "sangria").reduce((n, m) => n + m.amount_cents, 0);
+  const cashLine = r.live_lines.find((l) => l.key === "cash")?.expected_cents ?? 0;
+  const cashReceipts = cashLine - r.opening_cash_cents - supr + sang;
+  const otherReceipts = r.live_lines.filter((l) => l.key !== "cash").reduce((n, l) => n + l.expected_cents, 0);
+  const items: [string, number, string?][] = [
+    ["Troco inicial", r.opening_cash_cents],
+    ["Recebimentos em dinheiro", cashReceipts],
+    ["Recebimentos em outras formas", otherReceipts],
+    ["Entradas (recebimentos + suprimentos)", cashReceipts + otherReceipts + supr],
+    ["Saídas (sangrias)", sang],
+    ["Esperado em espécie na gaveta", cashLine, "font-semibold"],
+  ];
+  return (
+    <dl className="grid min-w-0 grid-cols-1 gap-2 rounded-lg border bg-card p-3 text-sm sm:grid-cols-2 lg:grid-cols-3" aria-label="Resumo do caixa">
+      {items.map(([label, v, cls]) => (
+        <div key={label} className="min-w-0">
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd className={`tabular-nums ${cls ?? ""}`}>{formatBRL(v)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function MyCash({ clinicId }: { clinicId: string }) {
   const q = useMyOpenCash(clinicId);
   const [dialog, setDialog] = useState<"sangria" | "suprimento" | "close" | null>(null);
@@ -122,7 +149,7 @@ function MyCash({ clinicId }: { clinicId: string }) {
         </div>
       </div>
       {r.business_date < new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }) ? <p className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm" role="alert"><AlertTriangle className="h-4 w-4" aria-hidden /> Este caixa é de um dia anterior e ainda não foi fechado.</p> : null}
-      <p className="text-sm text-muted-foreground">Troco inicial: <strong className="tabular-nums text-foreground">{formatBRL(r.opening_cash_cents)}</strong></p>
+      <CashTotals r={r} />
       <TableShell label="Esperado por forma de pagamento">
         <thead><tr><Th>Forma</Th><Th>Esperado</Th></tr></thead>
         <tbody>{r.live_lines.map((l) => <tr key={l.key}><Td className="font-medium">{l.label}</Td><Td className="tabular-nums">{formatBRL(l.expected_cents)}</Td></tr>)}</tbody>
@@ -158,19 +185,22 @@ function Report({ clinicId, canApprove }: { clinicId: string; canApprove: boolea
       <FilterBar idPrefix="cash" from={from} to={to} onFrom={setFrom} onTo={setTo} units={units} unitId={unitId} onUnit={setUnitId} />
       <ExportButtons columns={columns} rows={rows} filename="caixas" sheetName="Caixas" />
       {q.isLoading ? <LoadingState /> : q.isError ? <ErrorState onRetry={() => void q.refetch()} /> : rows.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum caixa no período.</p> : (
-        <TableShell label="Caixas">
-          <thead><tr><Th>Dia</Th><Th>Unidade</Th><Th>Operador</Th><Th>Esperado (espécie)</Th><Th>Contado</Th><Th>Diferença</Th><Th>Situação</Th><Th>Justificativa</Th><Th>Ações</Th></tr></thead>
-          <tbody>{rows.map((r) => (
-            <tr key={r.id}>
-              <Td>{br(r.business_date)}</Td><Td>{r.unit_name}</Td><Td>{r.operator_name ?? "—"}</Td>
-              <Td className="tabular-nums">{r.expected_cash_cents == null ? "—" : formatBRL(r.expected_cash_cents)}</Td><Td className="tabular-nums">{r.counted_cash_cents == null ? "—" : formatBRL(r.counted_cash_cents)}</Td>
-              <Td className={`tabular-nums ${(r.difference_cents ?? 0) > 0 ? "font-semibold text-destructive" : ""}`}>{r.difference_cents == null ? "—" : formatBRL(r.cash_difference_cents)}</Td>
-              <Td><Badge tone={STATUS[r.status].tone}>{STATUS[r.status].label}</Badge>{r.stale ? <Badge tone="destructive" className="ml-1">Pendência</Badge> : null}</Td>
-              <Td className="min-w-40">{r.justification ?? "—"}{r.approved_by_name ? <span className="block text-xs text-muted-foreground">Aprovado por {r.approved_by_name}</span> : null}</Td>
-              <Td>{canApprove && r.status === "pending_approval" ? <Button size="sm" disabled={approve.isPending} onClick={() => approve.mutate({ registerId: r.id })} aria-label={`Aprovar fechamento de ${r.operator_name ?? "operador"} em ${br(r.business_date)}`}>Aprovar</Button> : null}</Td>
-            </tr>
-          ))}</tbody>
-        </TableShell>
+        <FinTable<CashReportRow>
+          label="Caixas"
+          rows={rows}
+          rowKey={(r) => r.id}
+          columns={[
+            { header: "Operador", role: "title", cell: (r) => r.operator_name ?? "—" },
+            { header: "Situação", role: "badge", cell: (r) => <><Badge tone={STATUS[r.status].tone}>{STATUS[r.status].label}</Badge>{r.stale ? <Badge tone="destructive" className="ml-1">Pendência</Badge> : null}</> },
+            { header: "Dia", nowrap: true, cell: (r) => br(r.business_date) },
+            { header: "Unidade", cell: (r) => r.unit_name },
+            { header: "Esperado (espécie)", nowrap: true, className: "tabular-nums", cell: (r) => (r.expected_cash_cents == null ? "—" : formatBRL(r.expected_cash_cents)) },
+            { header: "Contado", nowrap: true, className: "tabular-nums", cell: (r) => (r.counted_cash_cents == null ? "—" : formatBRL(r.counted_cash_cents)) },
+            { header: "Diferença", nowrap: true, className: "tabular-nums", cell: (r) => <span className={(r.difference_cents ?? 0) > 0 ? "font-semibold text-destructive" : ""}>{r.difference_cents == null ? "—" : formatBRL(r.cash_difference_cents)}</span> },
+            { header: "Justificativa", wide: true, className: "min-w-40", cell: (r) => <>{r.justification ?? "—"}{r.approved_by_name ? <span className="block text-xs text-muted-foreground">Aprovado por {r.approved_by_name}</span> : null}</> },
+            { header: "Ações", role: "action", cell: (r) => (canApprove && r.status === "pending_approval" ? <Button size="sm" disabled={approve.isPending} onClick={() => approve.mutate({ registerId: r.id })} aria-label={`Aprovar fechamento de ${r.operator_name ?? "operador"} em ${br(r.business_date)}`}>Aprovar</Button> : null) },
+          ]}
+        />
       )}
     </section>
   );
