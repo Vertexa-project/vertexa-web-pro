@@ -23,7 +23,7 @@ const ITEMS = [
 vi.mock("@/hooks/useFin", () => ({
   useFinContext: () => ({ clinicId: "c1", isLoading: false, access: { isAdmin: state.isAdmin, roles: [], can: state.can } }),
   useUnits: () => ({ data: [{ id: "u1", name: "Unidade principal", is_active: true, is_primary: true }, { id: "u2", name: "Unidade 2", is_active: true, is_primary: false }] }),
-  useStockItems: () => ({ data: ITEMS }),
+  useStockItems: () => ({ data: ITEMS, isSuccess: true }),
 }));
 vi.mock("@/hooks/useStockMoves", () => {
   const q = (data: unknown) => ({ data, isLoading: false, isError: false, isSuccess: true, refetch: vi.fn() });

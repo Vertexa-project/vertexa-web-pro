@@ -21,9 +21,11 @@ const maskTax = (d: string) => (d.length === 14 ? d.replace(/(\d{2})(\d{3})(\d{3
 
 export function XmlImportDialog({ clinicId, onClose }: { clinicId: string; onClose: () => void }) {
   const units = (useUnits(clinicId).data ?? []).filter((u) => u.is_active);
-  const allItems = useStockItems(clinicId).data;
+  const itemsQ = useStockItems(clinicId);
+  const allItems = itemsQ.data;
   const items = useMemo(() => (allItems ?? []).filter((i) => i.is_active), [allItems]);
-  const suppliers = useSuppliers(clinicId).data ?? [];
+  const suppliersQ = useSuppliers(clinicId);
+  const suppliers = suppliersQ.data ?? [];
   const [unitId, setUnitId] = useState("");
   const unit = unitId || units.find((u) => u.is_primary)?.id || units[0]?.id || "";
   const [doc, setDoc] = useState<NfeDoc | null>(null);
@@ -38,7 +40,8 @@ export function XmlImportDialog({ clinicId, onClose }: { clinicId: string; onClo
   const maps = useSupplierMaps(supplier?.id ?? null);
   const dup = useEntryByKey(clinicId, doc?.key ?? null).data;
   const catalog: CatalogItem[] = useMemo(() => items.map((i) => ({ id: i.id, name: i.name, ean: i.ean, purchaseUnit: i.purchase_unit, purchaseToStockFactor: i.purchase_to_stock_factor, isActive: i.is_active })), [items]);
-  const mapsReady = !supplier || maps.isSuccess;
+  // Só casa os itens depois de cadastro, fornecedores e de/para carregados: rascunho é feito uma vez por nota.
+  const mapsReady = itemsQ.isSuccess && suppliersQ.isSuccess && !suppliersQ.isFetching && (!supplier || (maps.isSuccess && !maps.isFetching));
   const matches = useMemo(() => (doc && mapsReady ? matchNfeItems(doc.items, catalog, maps.data ?? []) : []), [doc, catalog, maps.data, mapsReady]);
 
   // Rascunho inicial das linhas (UMA vez por nota): vínculo sugerido, fator e o primeiro lote da nota (rastro).

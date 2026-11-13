@@ -170,6 +170,8 @@ const MESSAGES: Record<string, string> = {
   SELF_APPROVAL_NOT_ALLOWED: "Outra pessoa precisa aprovar este fechamento.",
   PATIENT_NOT_FOUND: "Paciente não encontrado nesta clínica.",
   INVALID_ITEM: "Algum item da venda não está mais disponível.",
+  INSUFFICIENT_STOCK: "Saldo em estoque insuficiente para um dos produtos da venda. Confira o saldo em Estoque ou lance a entrada antes.",
+  LOT_EXPIRED: "O lote disponível deste produto está vencido. Confira em Estoque.",
 };
 
 export function financeSalesErrorMessage(e: unknown): string {
