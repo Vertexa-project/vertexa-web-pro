@@ -54,3 +54,14 @@ verify_jwt = false
 # WP-04A: não aplicar supabase/seed.sql em `db reset` local. Catálogos vêm das migrations.
 [db.seed]
 enabled = false
+
+# Consulta assistida (parte 1): chamadas pelo SPA autenticado (equipe clínica) → exigem JWT.
+# A autorização real é do banco (public.clinical_check_encounter_access). Só funções NOVAS.
+[functions.clinical-transcribe]
+verify_jwt = true
+
+[functions.clinical-structure]
+verify_jwt = true
+
+[functions.clinical-audio-purge]
+verify_jwt = true
