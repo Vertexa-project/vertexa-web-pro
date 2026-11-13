@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, finCan, NO_FIN_ACCESS, rowToAccess } from "./finAccess";
+import { canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, finCan, financeTabs, NO_FIN_ACCESS, rowToAccess } from "./finAccess";
 
 const acc = (can: Record<string, boolean>, isAdmin = false) => ({ ...NO_FIN_ACCESS, isAdmin, can });
 
@@ -60,5 +60,29 @@ describe("menu lateral pela matriz de papéis", () => {
   it("admin vê todos", () => {
     const p = paths(NO_FIN_ACCESS, true);
     expect(p).toEqual(expect.arrayContaining(["/financeiro", "/estoque", "/gestao"]));
+  });
+});
+
+describe("abas do Financeiro na Entrega 2 (Vendas, Títulos, Caixa)", () => {
+  const tabsOf = (can: Record<string, boolean>, isAdmin = false) => financeTabs(acc(can, isAdmin)).map((t) => t.label);
+  it("Recepção: Vendas e Caixa; sem Títulos (taxa) nem Cadastros; menu Financeiro aparece", () => {
+    const a = acc({ units_read: true, sales_read: true, sales_write: true, cash_read: true, cash_write: true });
+    expect(tabsOf(a.can)).toEqual(["Vendas", "Caixa"]);
+    expect(canSeeFinanceMenu(a)).toBe(true);
+    expect(canSeeStockMenu(a)).toBe(false);
+  });
+  it("Financeiro: Vendas, Títulos, Caixa e Cadastros", () => {
+    expect(tabsOf({ sales_read: true, receivables_read: true, cash_read: true, services_read: true })).toEqual(["Vendas", "Títulos", "Caixa", "Cadastros"]);
+  });
+  it("Profissional sem papel: só Vendas (a própria produção); sem Caixa nem Títulos", () => {
+    const a = acc({ own_sales_read: true });
+    expect(tabsOf(a.can)).toEqual(["Vendas"]);
+    expect(canSeeFinanceMenu(a)).toBe(true);
+  });
+  it("Admin: todas as abas, Mensalidades primeiro", () => {
+    expect(tabsOf({}, true)).toEqual(["Mensalidades", "Vendas", "Títulos", "Caixa", "Cadastros"]);
+  });
+  it("sem papel: nenhuma aba", () => {
+    expect(tabsOf({})).toEqual([]);
   });
 });

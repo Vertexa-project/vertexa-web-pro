@@ -33,6 +33,9 @@ const CampaignsPage = lazy(() => import("@/pages/CampaignsPage").then((m) => ({ 
 const ManagementPage = lazy(() => import("@/pages/ManagementPage").then((m) => ({ default: m.ManagementPage })));
 const FinanceLayout = lazy(() => import("@/pages/finance/FinanceLayout").then((m) => ({ default: m.FinanceLayout })));
 const FinanceMensalidades = lazy(() => import("@/pages/finance/FinanceLayout").then((m) => ({ default: m.FinanceMensalidades })));
+const SalesTab = lazy(() => import("@/pages/finance/SalesTab").then((m) => ({ default: m.SalesTab })));
+const TitlesTab = lazy(() => import("@/pages/finance/TitlesTab").then((m) => ({ default: m.TitlesTab })));
+const CashTab = lazy(() => import("@/pages/finance/CashTab").then((m) => ({ default: m.CashTab })));
 const CadastrosLayout = lazy(() => import("@/pages/finance/CadastrosLayout").then((m) => ({ default: m.CadastrosLayout })));
 const ServicesTab = lazy(() => import("@/pages/finance/ServicesTab").then((m) => ({ default: m.ServicesTab })));
 const PackagesTab = lazy(() => import("@/pages/finance/PackagesTab").then((m) => ({ default: m.PackagesTab })));
@@ -245,6 +248,9 @@ export const router = createBrowserRouter(
               element: <FinanceLayout />,
               children: [
                 { index: true, element: <FinanceMensalidades /> },
+                { path: "vendas", element: <SalesTab /> },
+                { path: "titulos", element: <TitlesTab /> },
+                { path: "caixa", element: <CashTab /> },
                 {
                   path: "cadastros",
                   element: <CadastrosLayout />,

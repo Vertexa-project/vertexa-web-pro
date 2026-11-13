@@ -35,6 +35,7 @@ vi.mock("@/hooks/useIsClinicAdmin", () => ({
 const stub = (id: string) => () => <div data-testid={id} />;
 vi.mock("@/components/patient/ProfileHeader", () => ({ ProfileHeader: stub("header") }));
 vi.mock("@/components/patient/ExportPatientReportButton", () => ({ ExportPatientReportButton: stub("export") }));
+vi.mock("@/components/fin/NewSaleButton", () => ({ NewSaleButton: () => null }));
 vi.mock("@/components/patient/AnthropometryTab", () => ({ AnthropometryTab: stub("t1") }));
 vi.mock("@/components/patient/DocumentsTab", () => ({ DocumentsTab: stub("t2") }));
 vi.mock("@/components/patient/EvolutionTab", () => ({ EvolutionTab: stub("t3") }));
