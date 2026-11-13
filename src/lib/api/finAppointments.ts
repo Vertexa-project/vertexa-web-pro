@@ -72,7 +72,7 @@ export interface KitLine {
 }
 export interface KitView {
   appointment_id: string; status: ApptStatus; unit_id: string; patient_id: string; can_cost: boolean; lines: KitLine[];
-  catalog: { id: string; name: string; consumption_unit: string; stock_unit: string; fractional: boolean }[];
+  catalog: { id: string; name: string; consumption_unit: string; stock_unit: string; fractional: boolean; factor: number; balance: number }[];
 }
 export async function getKit(apptId: string): Promise<KitView> {
   const r = await rpc<KitView>("fin_appt_kit", { p_appt: apptId });
@@ -82,6 +82,7 @@ export async function getKit(apptId: string): Promise<KitView> {
       ...l, factor: n(l.factor), planned_qty: n(l.planned_qty), qty: n(l.qty), short_qty: n(l.short_qty), balance: n(l.balance), avg_cost_cents: nn(l.avg_cost_cents), cost_cents: nn(l.cost_cents),
       lots: (l.lots ?? []).map((x) => ({ ...x, available: n(x.available) })),
     })),
+    catalog: (r.catalog ?? []).map((c) => ({ ...c, factor: n(c.factor) || 1, balance: n(c.balance) })),
   };
 }
 

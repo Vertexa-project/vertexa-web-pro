@@ -236,6 +236,7 @@ begin
     jsonb_array_length(k->'lines') = 2
     and (select (l->>'qty')::numeric from jsonb_array_elements(k->'lines') l where l->>'name' = 'Ampola X') = 2
     and (select l->>'suggested_lot_id' from jsonb_array_elements(k->'lines') l where l->>'name' = 'Ampola X') = v_curto, k::text);
+  perform pg_temp.chk('C2b o catálogo para «adicionar item» traz fator e saldo da unidade', (select (ce->>'balance')::numeric from jsonb_array_elements(k->'catalog') ce where ce->>'name' = 'Ampola X') = 13 and (select (ce->>'factor')::numeric from jsonb_array_elements(k->'catalog') ce where ce->>'name' = 'Soro 30 ml') = 30, null);
   perform pg_temp.chk('C2 o profissional vê o kit mas NÃO o custo', not (k->>'can_cost')::boolean and (select l->'avg_cost_cents' from jsonb_array_elements(k->'lines') l limit 1) = 'null'::jsonb, null);
   r := public.fin_appt_complete(v, null);
   perform pg_temp.su();

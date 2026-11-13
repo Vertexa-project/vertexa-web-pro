@@ -1059,7 +1059,8 @@ begin
             from public.fin_appointment_materials m
            where m.appointment_id = a.id and a.status <> 'open' and m.status = 'active'
         ) src join public.stock_items i on i.id = src.item_id), '[]'::jsonb),
-    'catalog', coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'name', i.name, 'consumption_unit', i.consumption_unit, 'stock_unit', i.stock_unit, 'fractional', i.fractional) order by i.name)
+    'catalog', coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'name', i.name, 'consumption_unit', i.consumption_unit, 'stock_unit', i.stock_unit, 'fractional', i.fractional,
+                                  'factor', i.stock_to_consumption_factor, 'balance', coalesce((select b.qty_on_hand from public.stock_balances b where b.item_id = i.id and b.unit_id = a.unit_id), 0)) order by i.name)
                            from public.stock_items i where i.clinic_id = a.clinic_id and i.is_active), '[]'::jsonb));
 end $$;
 
