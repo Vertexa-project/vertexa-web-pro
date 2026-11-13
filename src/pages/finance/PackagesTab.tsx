@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Package as PackageIcon, Plus, Trash2 } from "lucide-react";
 
-import { ActiveBadge, CentsInput, CheckField, DecimalInput, ExportButtons, Field, FormDialog, NativeSelect, ReasonField, TableShell, Td, Th } from "@/components/fin/FinUi";
+import { ActiveBadge, CentsInput, CheckField, DecimalInput, ExportButtons, Field, FinTable, FormDialog, NativeSelect, ReasonField } from "@/components/fin/FinUi";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
@@ -39,6 +39,7 @@ function PackageDialog({ clinicId, pkg, canWrite, onClose }: { clinicId: string;
   const [active, setActive] = useState(editing?.is_active ?? true);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fe, setFe] = useState<Record<string, string>>({});
   const [lines, setLines] = useState<Line[]>(
     (editing?.items ?? []).map((i) => ({ itemType: i.item_type, refId: (i.item_type === "service" ? i.service_id : i.stock_item_id) ?? "", quantity: i.quantity, referenceCents: i.reference_price_cents })),
   );
@@ -61,13 +62,18 @@ function PackageDialog({ clinicId, pkg, canWrite, onClose }: { clinicId: string;
   ];
 
   function submit() {
-    if (!name.trim()) return setError("Informe o nome do pacote.");
-    if (price === null || price <= 0) return setError("Informe o valor do pacote.");
-    if (!days || days < 1) return setError("Informe a validade em dias.");
+    const found: Record<string, string> = {};
+    if (!name.trim()) found.name = "Informe o nome do pacote.";
+    if (price === null || price <= 0) found.price = "Informe o valor do pacote.";
+    if (!days || days < 1) found.days = "Informe a validade em dias.";
+    const bad = lines.findIndex((l) => !l.refId || !l.quantity || l.quantity <= 0 || l.referenceCents === null);
+    if (bad >= 0) found[`line${bad}`] = "Cada linha precisa de item, quantidade e valor de referência.";
+    if (deactivating && reason.trim().length < 3) found.reason = "Informe o motivo da desativação.";
+    setFe(found);
+    if (Object.keys(found).length > 0) return setError(null);
+    if (price === null || !days) return;
     if (lines.length === 0) return setError("Adicione ao menos uma sessão ou produto.");
-    if (lines.some((l) => !l.refId || !l.quantity || l.quantity <= 0 || l.referenceCents === null)) return setError("Cada linha precisa de item, quantidade e valor de referência.");
     if (!allocation) return setError("Os valores de referência precisam somar mais que zero.");
-    if (deactivating && reason.trim().length < 3) return setError("Informe o motivo da desativação.");
     setError(null);
     save.mutate({
       id: editing?.id ?? null, name: name.trim(), priceCents: price, validityDays: days, isActive: active, reason: reason.trim() || undefined,
@@ -75,28 +81,28 @@ function PackageDialog({ clinicId, pkg, canWrite, onClose }: { clinicId: string;
         itemType: l.itemType, serviceId: l.itemType === "service" ? l.refId : null, stockItemId: l.itemType === "product" ? l.refId : null,
         quantity: l.quantity as number, referencePriceCents: l.referenceCents as number,
       })),
-    }, { onSuccess: onClose, onError: (e) => setError(serverMessage(e)) });
+    }, { onSuccess: onClose, onError: (e) => { const m = serverMessage(e); if (m.startsWith("Já existe")) { setFe({ name: m }); setError(null); } else setError(m); } });
   }
 
   return (
-    <FormDialog open={pkg !== null} onOpenChange={(o) => (!o ? onClose() : undefined)} title={editing ? "Editar pacote" : "Novo pacote"} onSubmit={submit} pending={save.isPending} error={error} wide>
+    <FormDialog open={pkg !== null} onOpenChange={(o) => (!o ? onClose() : undefined)} title={editing ? (canWrite ? "Editar pacote" : "Ver pacote") : "Novo pacote"} onSubmit={submit} pending={save.isPending} error={error} readOnly={!canWrite} wide>
       <fieldset disabled={!canWrite} className="min-w-0 space-y-4">
         <div className="grid min-w-0 gap-4 sm:grid-cols-3">
-          <Field label="Nome" htmlFor="pkg-name"><Input id="pkg-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoFocus /></Field>
-          <Field label="Valor do pacote (R$)" htmlFor="pkg-price"><CentsInput id="pkg-price" value={price} onChange={setPrice} /></Field>
-          <Field label="Validade (dias)" htmlFor="pkg-days"><DecimalInput id="pkg-days" value={days} onChange={(v) => setDays(v === null ? null : Math.round(v))} maxDecimals={0} /></Field>
+          <Field label="Nome" htmlFor="pkg-name" error={fe.name}><Input id="pkg-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoFocus /></Field>
+          <Field label="Valor do pacote (R$)" htmlFor="pkg-price" error={fe.price}><CentsInput id="pkg-price" value={price} onChange={setPrice} /></Field>
+          <Field label="Validade (dias)" htmlFor="pkg-days" error={fe.days}><DecimalInput id="pkg-days" value={days} onChange={(v) => setDays(v === null ? null : Math.round(v))} maxDecimals={0} /></Field>
         </div>
         <div className="space-y-2">
           <p className="text-sm font-medium">Composição</p>
           <p className="text-xs text-muted-foreground">Sessões (serviço × quantidade × valor de referência) e produtos ou manipulados. O valor rateado de cada linha é a referência × (valor do pacote ÷ soma das referências); a diferença de arredondamento fica na última linha.</p>
           {lines.map((l, i) => (
-            <div key={i} className="grid min-w-0 grid-cols-2 items-end gap-2 rounded-md border p-2 md:grid-cols-[8rem_minmax(0,1fr)_5rem_8rem_auto_auto]">
+            <div key={i} className="grid min-w-0 grid-cols-2 items-end gap-2 rounded-md border p-2 md:grid-cols-[7rem_minmax(0,1fr)_5rem_8rem_auto_auto]">
               <Field label="Tipo" htmlFor={`pkg-t-${i}`}>
                 <NativeSelect id={`pkg-t-${i}`} value={l.itemType} onChange={(e) => setLine(i, { itemType: e.target.value as Line["itemType"], refId: "" })}>
                   <option value="service">Sessão</option><option value="product">Produto</option>
                 </NativeSelect>
               </Field>
-              <Field label="Item" htmlFor={`pkg-i-${i}`}>
+              <Field label="Item" htmlFor={`pkg-i-${i}`} error={fe[`line${i}`]}>
                 <NativeSelect id={`pkg-i-${i}`} value={l.refId} onChange={(e) => setLine(i, { refId: e.target.value })}>
                   <option value="">Selecione…</option>
                   {(l.itemType === "service" ? services : products).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -124,7 +130,7 @@ function PackageDialog({ clinicId, pkg, canWrite, onClose }: { clinicId: string;
           ) : null}
         </div>
         {editing ? <CheckField id="pkg-active" label="Pacote ativo" checked={active} onChange={setActive} /> : null}
-        {editing ? <ReasonField value={reason} onChange={setReason} required={deactivating} /> : null}
+        {editing && canWrite ? <ReasonField value={reason} onChange={setReason} required={deactivating} error={fe.reason} /> : null}
       </fieldset>
     </FormDialog>
   );
@@ -156,21 +162,17 @@ export function PackagesTab() {
       {q.isLoading ? <LoadingState /> : q.isError ? <ErrorState onRetry={() => void q.refetch()} /> : rows.length === 0 ? (
         <EmptyState icon={PackageIcon} title="Nenhum pacote cadastrado" description="Monte programas com sessões e produtos; o valor é rateado entre as linhas." action={canWrite ? <Button onClick={() => setEditing("new")}>Novo pacote</Button> : undefined} />
       ) : (
-        <TableShell label="Pacotes e programas">
-          <thead><tr><Th>Pacote</Th><Th>Valor</Th><Th>Validade</Th><Th>Composição</Th><Th>Situação</Th><Th>Ações</Th></tr></thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.id}>
-                <Td className="font-medium">{p.name}</Td>
-                <Td className="whitespace-nowrap">{formatBRL(p.price_cents)}</Td>
-                <Td>{p.validity_days} dias</Td>
-                <Td>{p.items.length} {p.items.length === 1 ? "linha" : "linhas"}</Td>
-                <Td><ActiveBadge active={p.is_active} /></Td>
-                <Td><Button size="sm" variant="outline" onClick={() => setEditing(p)} aria-label={`${canWrite ? "Editar" : "Ver"} ${p.name}`}>{canWrite ? "Editar" : "Ver"}</Button></Td>
-              </tr>
-            ))}
-          </tbody>
-        </TableShell>
+        <FinTable
+          label="Pacotes e programas" rows={rows} rowKey={(p) => p.id}
+          columns={[
+            { header: "Pacote", role: "title", cell: (p) => p.name },
+            { header: "Situação", role: "badge", cell: (p) => <ActiveBadge active={p.is_active} /> },
+            { header: "Valor", nowrap: true, cell: (p) => formatBRL(p.price_cents) },
+            { header: "Validade", cell: (p) => `${p.validity_days} dias` },
+            { header: "Composição", cell: (p) => `${p.items.length} ${p.items.length === 1 ? "linha" : "linhas"}` },
+            { header: "Ações", role: "action", cell: (p) => <Button size="sm" variant="outline" onClick={() => setEditing(p)} aria-label={`${canWrite ? "Editar" : "Ver"} ${p.name}`}>{canWrite ? "Editar" : "Ver"}</Button> },
+          ]}
+        />
       )}
       {editing ? <PackageDialog key={editing === "new" ? "new" : editing.id} clinicId={clinicId} pkg={editing} canWrite={canWrite} onClose={() => setEditing(null)} /> : null}
     </div>
