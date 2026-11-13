@@ -14,7 +14,7 @@ export const FIN_ROLE_LABEL: Record<FinRole, string> = {
 export const FIN_ROLE_HINT: Record<FinRole, string> = {
   gestor: "Cadastros financeiros, histórico e estoque nas unidades autorizadas.",
   financeiro: "Cadastros financeiros e consulta de estoque. Dados bancários e fiscais dos profissionais.",
-  recepcao: "Venda e recebimento (chega nas próximas entregas). Sem acesso a cadastros financeiros.",
+  recepcao: "Registra venda e recebimento e opera o próprio caixa. Sem acesso a cadastros financeiros, taxas e títulos.",
   estoquista: "Itens, entradas, saídas e contagem do estoque. Sem acesso ao financeiro.",
 };
 
@@ -27,7 +27,9 @@ export interface FinAccess {
 export const NO_FIN_ACCESS: FinAccess = { isAdmin: false, roles: [], can: {} };
 
 export type FinArea =
-  | "units" | "staff" | "services" | "packages" | "payment" | "tax" | "pro_finance" | "settings" | "audit" | "stock_items";
+  | "units" | "staff" | "services" | "packages" | "payment" | "tax" | "pro_finance" | "settings" | "audit" | "stock_items"
+  // Entrega 2
+  | "sales" | "sales_price" | "sale_cancel" | "cash" | "cash_all" | "cash_approve" | "receivables" | "receivables_fix" | "compliance";
 
 export function finCan(access: FinAccess, area: FinArea, mode: "read" | "write" = "read"): boolean {
   return access.can[`${area}_${mode}`] === true;
@@ -38,9 +40,34 @@ export function canSeeFinanceCadastros(a: FinAccess): boolean {
   return (["services", "packages", "payment", "tax", "pro_finance", "settings", "audit"] as FinArea[]).some((area) => finCan(a, area));
 }
 
-/** Item "Financeiro" do menu: admin (Mensalidades) ou quem lê algum cadastro. */
+/** Aba «Vendas»: quem lança/consulta venda (Recepção, Financeiro, Gestor, Admin) ou o profissional com a PRÓPRIA produção. */
+export function canSeeSales(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "sales") || a.can.own_sales_read === true;
+}
+/** Aba «Caixa»: quem opera caixa (Recepção, Financeiro, Gestor, Admin). */
+export function canSeeCash(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "cash") || finCan(a, "cash_all");
+}
+/** Aba «Títulos»: Financeiro, Gestor e Admin (a Recepção não vê taxa). */
+export function canSeeReceivables(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "receivables");
+}
+
+export interface FinanceTab { to: string; label: string; end?: boolean }
+/** Abas do Financeiro pela matriz de papéis (Entrega 2 inclui Vendas, Títulos e Caixa). */
+export function financeTabs(a: FinAccess): FinanceTab[] {
+  return [
+    ...(a.isAdmin ? [{ to: "/financeiro", label: "Mensalidades", end: true }] : []),
+    ...(canSeeSales(a) ? [{ to: "/financeiro/vendas", label: "Vendas" }] : []),
+    ...(canSeeReceivables(a) ? [{ to: "/financeiro/titulos", label: "Títulos" }] : []),
+    ...(canSeeCash(a) ? [{ to: "/financeiro/caixa", label: "Caixa" }] : []),
+    ...(canSeeFinanceCadastros(a) || a.isAdmin ? [{ to: "/financeiro/cadastros", label: "Cadastros" }] : []),
+  ];
+}
+
+/** Item "Financeiro" do menu: admin (Mensalidades) ou quem lê cadastro, vende ou opera caixa. */
 export function canSeeFinanceMenu(a: FinAccess): boolean {
-  return a.isAdmin || canSeeFinanceCadastros(a);
+  return a.isAdmin || canSeeFinanceCadastros(a) || canSeeSales(a) || canSeeCash(a);
 }
 
 /** Item "Estoque" do menu: admin, gestor, estoquista e financeiro (consulta). */

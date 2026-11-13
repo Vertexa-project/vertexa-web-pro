@@ -3,20 +3,19 @@ import { Navigate, Outlet } from "react-router-dom";
 import { SubNav } from "@/components/fin/FinUi";
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { useFinContext } from "@/hooks/useFin";
-import { canSeeFinanceCadastros } from "@/lib/domain/finAccess";
+import { financeTabs } from "@/lib/domain/finAccess";
 import { FinancePage } from "@/pages/FinancePage";
 import { NoAccess } from "@/pages/finance/NoAccess";
 import { PageHeader } from "@/components/PageHeader";
 
 /**
- * Financeiro com abas: «Mensalidades» (a tela de sempre, só admin) e «Cadastros» (admin, gestor e financeiro,
- * pela matriz de papéis). Quem não é admin cai direto em Cadastros.
+ * Financeiro com abas pela matriz de papéis: Mensalidades (a tela de sempre, só admin), Vendas, Títulos, Caixa e Cadastros.
  */
 export function FinanceLayout() {
   const { access, isLoading } = useFinContext();
   if (isLoading) return <LoadingState />;
-  const cadastros = canSeeFinanceCadastros(access) || access.isAdmin;
-  if (!access.isAdmin && !cadastros) {
+  const tabs = financeTabs(access);
+  if (tabs.length === 0) {
     return (
       <div className="space-y-6">
         <PageHeader title="Financeiro" />
@@ -24,10 +23,6 @@ export function FinanceLayout() {
       </div>
     );
   }
-  const tabs = [
-    ...(access.isAdmin ? [{ to: "/financeiro", label: "Mensalidades", end: true }] : []),
-    ...(cadastros ? [{ to: "/financeiro/cadastros", label: "Cadastros" }] : []),
-  ];
   return (
     <div className="min-w-0 space-y-6">
       <SubNav items={tabs} label="Seções do financeiro" />
@@ -36,10 +31,10 @@ export function FinanceLayout() {
   );
 }
 
-/** Aba «Mensalidades»: a FinancePage atual, sem alteração. Quem não é admin é levado a Cadastros. */
+/** Aba «Mensalidades»: a FinancePage atual, sem alteração. Quem não é admin vai para a primeira aba que o papel alcança. */
 export function FinanceMensalidades() {
   const { access, isLoading } = useFinContext();
   if (isLoading) return <LoadingState />;
-  if (!access.isAdmin) return <Navigate to="/financeiro/cadastros" replace />;
+  if (!access.isAdmin) return <Navigate to={financeTabs(access)[0]?.to ?? "/financeiro/cadastros"} replace />;
   return <FinancePage />;
 }

@@ -8,6 +8,7 @@ import { ClinicalRecordTab } from "@/components/patient/ClinicalRecordTab";
 import { AnthropometryTab } from "@/components/patient/AnthropometryTab";
 import { DocumentsTab } from "@/components/patient/DocumentsTab";
 import { EvolutionTab } from "@/components/patient/EvolutionTab";
+import { NewSaleButton } from "@/components/fin/NewSaleButton";
 import { ExportPatientReportButton } from "@/components/patient/ExportPatientReportButton";
 import { NutritionTab } from "@/components/patient/NutritionTab";
 import { OverviewTab } from "@/components/patient/OverviewTab";
@@ -125,6 +126,7 @@ export function PatientProfilePage() {
           </Button>
         ) : null}
         <StartEncounterButton patientId={patient.id} variant="outline" />
+        <NewSaleButton patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
         <ExportPatientReportButton patientId={patient.id} />
       </div>
 

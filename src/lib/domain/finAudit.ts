@@ -121,7 +121,7 @@ export function auditValueText(key: string, value: unknown, ctx?: AuditCtx): str
   if (typeof value === "number") return num(value);
   if (typeof value === "string") {
     if (DATE_KEYS.has(key)) return fmtDate(value);
-    return ENUM_TEXT[key]?.[value] ?? value;
+    return ENUM_TEXT[key === "roles" ? "role" : key]?.[value] ?? value;
   }
   if (Array.isArray(value)) {
     if (value.length === 0) return "—";
