@@ -31,7 +31,9 @@ export type FinArea =
   // Entrega 2
   | "sales" | "sales_price" | "sale_cancel" | "cash" | "cash_all" | "cash_approve" | "receivables" | "receivables_fix" | "compliance"
   // Entrega 3: saldo, entradas, saídas e movimentações do estoque (escreve: Estoquista e Gestor; lê com custo: também o Financeiro)
-  | "stock_move";
+  | "stock_move"
+  // Entrega 4: atendimento (lista e custo: Gestor/Financeiro), saldo de pacote dos pacientes e entrega de item de pacote
+  | "appt" | "patient_pkg" | "package_deliver";
 
 export function finCan(access: FinAccess, area: FinArea, mode: "read" | "write" = "read"): boolean {
   return access.can[`${area}_${mode}`] === true;
@@ -55,12 +57,35 @@ export function canSeeReceivables(a: FinAccess): boolean {
   return a.isAdmin || finCan(a, "receivables");
 }
 
+/** Aba «Atendimentos»: Admin, Gestor, Financeiro (todos) ou o profissional participante (só os próprios). */
+export function canSeeAppointments(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "appt") || a.can.own_appt === true;
+}
+/** Registrar, realizar, corrigir e cancelar atendimento de qualquer um: Admin e Gestor. O profissional age no PRÓPRIO (o servidor confere a participação). */
+export function canManageAppointments(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "appt", "write");
+}
+/** Registrar o próprio atendimento: Admin/Gestor ou qualquer profissional ativo. */
+export function canStartAppointment(a: FinAccess): boolean {
+  return canManageAppointments(a) || a.can.own_appt === true;
+}
+/** Aba «Pacotes dos pacientes»: saldo de sessões e itens (Admin, Gestor, Financeiro e Recepção). */
+export function canSeePatientPackages(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "patient_pkg");
+}
+/** Entregar ao paciente o item de um pacote: Admin, Gestor, Estoquista e Recepção. */
+export function canDeliverPackageItem(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "package_deliver", "write");
+}
+
 export interface FinanceTab { to: string; label: string; end?: boolean }
 /** Abas do Financeiro pela matriz de papéis (Entrega 2 inclui Vendas, Títulos e Caixa). */
 export function financeTabs(a: FinAccess): FinanceTab[] {
   return [
     ...(a.isAdmin ? [{ to: "/financeiro", label: "Mensalidades", end: true }] : []),
     ...(canSeeSales(a) ? [{ to: "/financeiro/vendas", label: "Vendas" }] : []),
+    ...(canSeeAppointments(a) ? [{ to: "/financeiro/atendimentos", label: "Atendimentos" }] : []),
+    ...(canSeePatientPackages(a) ? [{ to: "/financeiro/pacotes", label: "Pacotes dos pacientes" }] : []),
     ...(canSeeReceivables(a) ? [{ to: "/financeiro/titulos", label: "Títulos" }] : []),
     ...(canSeeCash(a) ? [{ to: "/financeiro/caixa", label: "Caixa" }] : []),
     ...(canSeeFinanceCadastros(a) || a.isAdmin ? [{ to: "/financeiro/cadastros", label: "Cadastros" }] : []),
@@ -87,10 +112,10 @@ export function canMoveStock(a: FinAccess): boolean {
 }
 
 export interface StockTab { to: string; label: string; end?: boolean }
-/** Abas do Estoque pela matriz de papéis: Itens (cadastro) + as quatro da Entrega 3. */
+/** Abas do Estoque pela matriz de papéis: Itens (cadastro) + as quatro da Entrega 3 + Consumo sem saldo (Entrega 4). */
 export function stockTabs(a: FinAccess): StockTab[] {
   return [
-    ...(canSeeStockMoves(a) ? [{ to: "/estoque/saldo", label: "Saldo" }, { to: "/estoque/entradas", label: "Entradas" }, { to: "/estoque/saidas", label: "Saídas" }, { to: "/estoque/movimentacoes", label: "Movimentações" }] : []),
+    ...(canSeeStockMoves(a) ? [{ to: "/estoque/saldo", label: "Saldo" }, { to: "/estoque/entradas", label: "Entradas" }, { to: "/estoque/saidas", label: "Saídas" }, { to: "/estoque/movimentacoes", label: "Movimentações" }, { to: "/estoque/sem-saldo", label: "Consumo sem saldo" }] : []),
     ...(a.isAdmin || finCan(a, "stock_items") ? [{ to: "/estoque", label: "Itens", end: true }] : []),
   ];
 }

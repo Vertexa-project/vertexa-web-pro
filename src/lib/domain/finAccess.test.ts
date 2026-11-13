@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canMoveStock, canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, canSeeStockMoves, finCan, financeTabs, NO_FIN_ACCESS, rowToAccess, stockTabs } from "./finAccess";
+import { canDeliverPackageItem, canManageAppointments, canMoveStock, canSeeAppointments, canSeePatientPackages, canStartAppointment, canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, canSeeStockMoves, finCan, financeTabs, NO_FIN_ACCESS, rowToAccess, stockTabs } from "./finAccess";
 
 const acc = (can: Record<string, boolean>, isAdmin = false) => ({ ...NO_FIN_ACCESS, isAdmin, can });
 
@@ -80,7 +80,7 @@ describe("abas do Financeiro na Entrega 2 (Vendas, Títulos, Caixa)", () => {
     expect(canSeeFinanceMenu(a)).toBe(true);
   });
   it("Admin: todas as abas, Mensalidades primeiro", () => {
-    expect(tabsOf({}, true)).toEqual(["Mensalidades", "Vendas", "Títulos", "Caixa", "Cadastros"]);
+    expect(tabsOf({}, true)).toEqual(["Mensalidades", "Vendas", "Atendimentos", "Pacotes dos pacientes", "Títulos", "Caixa", "Cadastros"]);
   });
   it("sem papel: nenhuma aba", () => {
     expect(tabsOf({})).toEqual([]);
@@ -91,12 +91,12 @@ describe("abas do Estoque pela matriz de papéis (Entrega 3)", () => {
   const labels = (a: ReturnType<typeof acc>) => stockTabs(a).map((t) => t.label);
   it("Estoquista e Gestor movimentam: Saldo, Entradas, Saídas, Movimentações e Itens", () => {
     const a = acc({ stock_items_read: true, stock_items_write: true, stock_move_read: true, stock_move_write: true });
-    expect(labels(a)).toEqual(["Saldo", "Entradas", "Saídas", "Movimentações", "Itens"]);
+    expect(labels(a)).toEqual(["Saldo", "Entradas", "Saídas", "Movimentações", "Consumo sem saldo", "Itens"]);
     expect(canMoveStock(a)).toBe(true);
   });
   it("Financeiro só consulta: vê as abas (com custo), mas não movimenta", () => {
     const a = acc({ stock_items_read: true, stock_move_read: true, stock_move_write: false });
-    expect(labels(a)).toEqual(["Saldo", "Entradas", "Saídas", "Movimentações", "Itens"]);
+    expect(labels(a)).toEqual(["Saldo", "Entradas", "Saídas", "Movimentações", "Consumo sem saldo", "Itens"]);
     expect(canSeeStockMoves(a)).toBe(true);
     expect(canMoveStock(a)).toBe(false);
   });
@@ -108,7 +108,36 @@ describe("abas do Estoque pela matriz de papéis (Entrega 3)", () => {
     expect(canMoveStock(a)).toBe(false);
   });
   it("Admin vê e movimenta tudo", () => {
-    expect(labels(acc({}, true))).toHaveLength(5);
+    expect(labels(acc({}, true))).toHaveLength(6);
     expect(canMoveStock(acc({}, true))).toBe(true);
+  });
+});
+
+describe("abas e botões da Entrega 4 (atendimento, kit e pacotes)", () => {
+  const tabsOf = (can: Record<string, boolean>, isAdmin = false) => financeTabs(acc(can, isAdmin)).map((t) => t.label);
+  it("Gestor/Financeiro: Atendimentos (todos); só o Gestor gerencia", () => {
+    const g = acc({ appt_read: true, appt_write: true, patient_pkg_read: true, sales_read: true });
+    expect(tabsOf(g.can)).toEqual(["Vendas", "Atendimentos", "Pacotes dos pacientes"]);
+    expect(canManageAppointments(g)).toBe(true);
+    const f = acc({ appt_read: true, patient_pkg_read: true });
+    expect(canSeeAppointments(f)).toBe(true);
+    expect(canManageAppointments(f)).toBe(false);
+  });
+  it("Profissional participante: vê Atendimentos (os próprios) e pode registrar o próprio; não vê pacotes de todos", () => {
+    const p = acc({ own_sales_read: true, own_appt: true });
+    expect(tabsOf(p.can)).toEqual(["Vendas", "Atendimentos"]);
+    expect(canStartAppointment(p)).toBe(true);
+    expect(canManageAppointments(p)).toBe(false);
+    expect(canSeePatientPackages(p)).toBe(false);
+  });
+  it("Recepção: pacotes dos pacientes e entrega do item; sem Atendimentos", () => {
+    const r = acc({ sales_read: true, sales_write: true, patient_pkg_read: true, package_deliver_read: true, package_deliver_write: true });
+    expect(tabsOf(r.can)).toEqual(["Vendas", "Pacotes dos pacientes"]);
+    expect(canDeliverPackageItem(r)).toBe(true);
+    expect(canSeeAppointments(r)).toBe(false);
+  });
+  it("Estoquista entrega item de pacote; Financeiro não", () => {
+    expect(canDeliverPackageItem(acc({ package_deliver_write: true }))).toBe(true);
+    expect(canDeliverPackageItem(acc({ patient_pkg_read: true, appt_read: true }))).toBe(false);
   });
 });
