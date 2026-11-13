@@ -1,0 +1,1889 @@
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+Vertexa — Especificação Financeiro, Repasse
+e Estoque (v1)
+  ​Nov 13, 2026       ·   ​@Gabriel Queiroz
+
+
+
+
+1. Objetivo e como ler
+Este documento especifica dois módulos novos da Vertexa — Financeiro com repasse
+por profissional e Estoque — e os requisitos de integração para documentos clínicos
+(receita, atestado, exames). O objetivo é que a clínica não precise de planilha, ERP ou
+outro sistema para saber quanto faturou, quanto recebeu, quanto deve a cada profissional
+no fim do mês e quanto custou o material usado.
+
+O documento foi escrito para a software house estimar e construir sem adivinhar regra
+de negócio. Cada regra tem um exemplo numérico; cada tela tem critério de aceite. Onde
+algo ainda não foi decidido, está marcado como decisão pendente na seção 13.
+
+Contexto de produto (Mapa Mestre — Fase 1): a Vertexa deve ser o único app da clínica,
+não mais um. Estes módulos correspondem ao P0.9 (Financeiro Lite) ampliado e ao
+estoque, que não estava no mapa.
+
+Como ler:
+
+       Seções 2–3: decisões já tomadas e regras que valem para tudo.
+       Seções 4–7: Financeiro (recebimentos, motor de repasse, fechamento, dashboard).
+       Seções 8–9: Estoque e como ele conversa com atendimento e financeiro.
+       Seção 10: o que pedir ao provedor de prescrição que será integrado.
+       Seções 11–13: modelo de dados, testes de aceite, o que fica fora do v1.
+
+Glossário mínimo:
+
+
+  Termo                       Significado neste documento
+
+  Venda                       O que o paciente contratou ou comprou (consulta,
+                              procedimento, pacote, produto), com valor e
+                              condição de pagamento.
+
+  Atendimento                 A execução de um serviço (consulta realizada,
+                              aplicação feita, sessão do pacote cumprida).
+
+  Recebimento                 Pagamento registrado contra uma venda; gera
+                              títulos (parcelas) com data prevista de liquidação.
+
+
+
+
+                                                                                    Page 1 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Termo                       Significado neste documento
+
+  Liquidação                  O dinheiro efetivamente disponível na conta da
+                              clínica. É o gatilho dos repasses percentuais.
+
+  Repasse                     Valor que a clínica deve pagar a um profissional,
+                              calculado pelas regras da seção 5.
+
+  Fechamento                  Consolidação mensal dos repasses, com
+                              conferência, aceite, pagamento e travamento.
+
+  Kit                         Lista de itens de estoque consumidos por um
+                              serviço.
+
+
+
+
+2. Decisões de produto já tomadas
+Os módulos nascem como produto configurável para qualquer clínica cliente, não como
+solução de uma operação específica. Toda regra abaixo é configuração da clínica, com o
+padrão indicado.
+
+
+  #           Tema                                           Decisão                        Padrão de fábrica
+
+  D1          Fluxo do dinheiro                              Paciente paga a clínica;       —
+                                                             clínica repassa aos
+                                                             profissionais no fim do mês.
+
+  D2          Base de cálculo do                             Configurável: a clínica        Dedução de taxa do
+              repasse                                        escolhe quais deduções         meio de pagamento
+                                                             saem do valor recebido         ligada; imposto e
+                                                             antes de aplicar o             material desligados.
+                                                             percentual.
+
+  D3          Nível da regra                                 Por profissional + serviço +   —
+                                                             papel no atendimento, com
+                                                             regra padrão do profissional
+                                                             quando não houver
+                                                             específica.
+
+  D4          Vários participantes                           Um atendimento pode            —
+                                                             remunerar mais de um
+                                                             profissional (ex.: médico
+                                                             responsável + enfermagem
+                                                             executora), cada um com
+                                                             regra própria.
+
+
+
+
+                                                                                                                Page 2 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  #           Tema                                           Decisão                       Padrão de fábrica
+
+  D5          Tipos de remuneração                           Percentual (com faixas por    —
+                                                             meta opcionais); fixo por
+                                                             execução; fixo mensal;
+                                                             garantia mínima; comissão
+                                                             de produto; taxa de uso
+                                                             descontada. Troca de tipo
+                                                             com vigência por data.
+
+  D6          Competência do                                 Entra no repasse do mês em    —
+              percentual                                     que o dinheiro é liquidado
+                                                             (regime de caixa).
+
+  D7          Competência do fixo por                        Entra no mês da execução,     —
+              execução                                       mesmo que o paciente ainda
+                                                             deva.
+
+  D8          Pacotes multiprofissionais                     Repasse por sessão            —
+                                                             realizada, sobre o valor da
+                                                             sessão rateado do pacote,
+                                                             liberado conforme o pacote
+                                                             é pago. Pacote pode incluir
+                                                             produtos e manipulados.
+
+  D9          Estorno após pagamento                         Desconto automático no        —
+                                                             extrato do mês seguinte
+                                                             (lançamento negativo).
+
+  D10         Fechamento                                     Mensal fixo. Extrato          —
+                                                             individual, aceite do
+                                                             profissional, NF e
+                                                             comprovante, mês travado
+                                                             após o fechamento.
+
+  D11         Entrada de recebimentos                        Lançamento manual no v1,      Liquidação automática
+                                                             com taxas de cartão           na data prevista.
+                                                             configuradas e caixa diário
+                                                             da recepção; estrutura
+                                                             pronta para integrar
+                                                             maquininha/gateway depois.
+
+
+
+
+                                                                                                               Page 3 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  #           Tema                                           Decisão                         Padrão de fábrica
+
+  D12         Comissão em venda de                           Configurável por produto e      Nenhuma.
+              produto                                        profissional. Em item do tipo
+                                                             Medicação ou Manipulado é
+                                                             permitida, mas com alerta
+                                                             (Código de Ética Médica,
+                                                             art. 69) e aceite registrado
+                                                             do Owner.
+
+  D13         Tipos de item no estoque                       Medicação aplicada,             —
+                                                             Manipulado, Produto de
+                                                             revenda, Material de
+                                                             consumo. Itens
+                                                             administrativos fora.
+
+  D14         Baixa de estoque                               Kit automático por serviço,     —
+                                                             editável no atendimento.
+
+  D15         Controles de estoque                           Lote e validade, estoque        Lote/validade
+                                                             mínimo com alerta,              obrigatório para
+                                                             inventário com contagem         medicação e
+                                                             cega, entrada por XML da        manipulado.
+                                                             NF-e. Pedido de compra fora
+                                                             do v1.
+
+  D16         Estoque por unidade                            Saldo por unidade, com          —
+                                                             transferência entre
+                                                             unidades.
+
+  D17         Medicamentos                                   Fora do v1. O sistema           —
+              controlados (Portaria 344)                     impede cadastrar item como
+              em estoque                                     controlado.
+
+  D18         Receita, atestado, exames,                     Integrar provedor               —
+              assinatura digital                             homologado; a Vertexa não
+                                                             constrói motor de
+                                                             prescrição.
+
+  D19         Manipulados                                    Vendidos pela própria           —
+                                                             clínica (com alerta de
+                                                             licença sanitária e aceite do
+                                                             Owner) ou encaminhados a
+                                                             farmácia parceira (fora do
+                                                             estoque e do caixa).
+
+
+
+
+                                                                                                                 Page 4 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  #           Tema                                           Decisão                         Padrão de fábrica
+
+  D20         Medicação injetável                            Aplicada na clínica, nunca      —
+              multidose                                      entregue ao paciente.
+                                                             Unidade aberta fica
+                                                             vinculada a um único
+                                                             paciente.
+
+  D21         Convênio                                       Fora do v1; só atendimento      —
+                                                             particular.
+
+  D22         Retenções na fonte                             Calculadas no extrato por       Nenhuma até a clínica
+                                                             profissional: bruto,            configurar.
+                                                             retenções, líquido a pagar.
+
+  D23         Desconto ao paciente                           Repasse sobre o valor           —
+                                                             efetivamente pago: o
+                                                             desconto é dividido entre
+                                                             clínica e profissional.
+
+  D24         Fixo do executor                               Não reduz a base do             —
+                                                             percentual do responsável.
+
+  D25         Garantia mínima                                Profissional recebe o maior     Desligada: só existe
+                                                             entre o variável e um piso      para o profissional em
+                                                             mensal; compensação             que a clínica cadastrar;
+                                                             opcional.                       quando criada, sem
+                                                                                             compensação.
+
+  D26         Faixas por meta                                Faixas e percentuais            —
+                                                             definidos pela clínica para
+                                                             cada profissional; cálculo
+                                                             progressivo.
+
+  D27         Taxa de uso (aluguel)                          Opcional por profissional, só   Desligada.
+                                                             quando negociada: fixo
+                                                             mensal ou % da produção,
+                                                             descontado no extrato.
+
+  D28         Caixa diário                                   Abertura, sangria,              —
+                                                             suprimento, fechamento e
+                                                             conferência por operador e
+                                                             unidade.
+
+
+
+
+                                                                                                                 Page 5 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+3. Requisitos transversais
+Todo registro financeiro e de estoque carrega organização, unidade, autor e data/hora, e
+respeita o escopo de acesso do usuário (Mapa Mestre, P0.0). Nada destes módulos pode
+nascer amarrado a um único profissional.
+
+Permissões mínimas
+
+
+  Papel                           Financeiro                 Repasse e                 Estoque
+                                                             fechamento
+
+  Owner/Admin                     Tudo, todas as             Configura regras,         Tudo, todas as
+                                  unidades                   aprova, paga, trava       unidades
+
+  Gestor                          Unidades autorizadas       Confere, aprova e         Unidades autorizadas,
+                                                             paga nas unidades         aprova inventário
+                                                             autorizadas
+
+  Financeiro                      Lança e consulta           Gera extratos, registra   Consulta valorização
+                                  recebimentos; vê           pagamento, NF e           e custo
+                                  dashboard                  comprovante
+
+  Recepção                        Registra venda e           Sem acesso                Registra venda de
+                                  recebimento                                          produto
+
+  Profissional                    Vê só a própria            Vê só o próprio           Confirma/edita o kit
+                                  produção                   extrato; aceita ou        no próprio
+                                                             contesta                  atendimento
+
+  Estoquista                      Sem acesso                 Sem acesso                Entradas, saídas,
+  (opcional)                                                                           transferências,
+                                                                                       contagem
+
+
+Regras obrigatórias:
+
+       Financeiro nunca exibe nota clínica, diagnóstico ou conteúdo de prontuário. Ele
+       enxerga paciente, serviço, valor e data.
+       Um profissional nunca vê regra, produção ou extrato de outro profissional.
+       Toda criação, edição, exclusão e estorno gera log com: quem, quando, valor anterior,
+       valor novo, motivo. Exclusão física de lançamento financeiro ou movimentação de
+       estoque é proibida; correção se faz por estorno.
+       Valores monetários em reais, com 2 casas decimais, arredondamento meio-para-cima
+       em cada linha. Totais somam as linhas já arredondadas.
+       Quantidades de estoque com até 3 casas decimais (uso fracionado, ver seção 8).
+
+
+
+
+                                                                                                           Page 6 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+       Exportação em CSV e XLSX de toda tabela; PDF para extrato do profissional e
+       fechamento.
+       LGPD: os dados de pagamento do paciente e os dados bancários/fiscais do
+       profissional são dados pessoais; acesso restrito ao papel e registrado em log.
+
+
+4. Financeiro: cadastros, vendas e recebimentos
+O financeiro separa três fatos que hoje se misturam em planilha: o que foi vendido, o que
+foi executado e o que foi efetivamente recebido. O repasse depende dos três.
+
+
+4.1 Cadastros
+Catálogo de serviços (por organização, com preço opcional por unidade):
+
+       Nome, categoria (consulta, procedimento, aplicação, avaliação, sessão, outro), preço
+       padrão, ativo/inativo.
+       Papéis previstos no atendimento: Responsável (obrigatório), Executor e Auxiliar
+       (opcionais). Ex.: “Aplicação GLP-1” = Responsável médico + Executor enfermagem.
+       Kit de estoque vinculado (seção 8.5).
+
+Pacotes / programas: nome, valor, validade em dias e composição: sessões (serviço ×
+quantidade × valor de referência) e produtos ou manipulados (item × quantidade × valor
+de referência). Ex.: 3 consultas médicas de referência R$ 500 + 3 frascos de suplemento
+de referência R$ 180. O rateio está na seção 5.4; o produto do pacote baixa do estoque
+quando é entregue ao paciente.
+
+Produtos para revenda: vêm do cadastro de itens do estoque (seção 8.1) com preço de
+venda.
+
+Profissionais (dados financeiros): vínculo (PJ, autônomo, CLT, sócio), CPF/CNPJ, optante
+pelo Simples (sim/não), regras de retenção na fonte (seção 5.8), dados bancários/Pix, se
+exige NF no fechamento, unidades em que atua. A Vertexa não calcula folha nem encargos
+de CLT; ela calcula o valor acordado e as retenções configuradas.
+
+Meios de pagamento: cadastro de cada maquininha/adquirente e da tabela de taxas:
+bandeira × modalidade (débito, crédito à vista, parcelado 2–6, parcelado 7–12) → taxa % +
+prazo de liquidação em dias + antecipação automática (sim/não, taxa). Pix, dinheiro e
+transferência: taxa 0, liquidação D+0, editáveis. Boleto: taxa fixa por boleto.
+
+Parâmetros fiscais da clínica: alíquota de imposto sobre o faturamento por mês de
+competência (a alíquota efetiva do Simples muda mês a mês; o sistema repete a do mês
+anterior até ser atualizada e avisa o gestor). Usada apenas quando a dedução de imposto
+estiver ligada na base de repasse e no cálculo de margem. Licença sanitária por unidade
+(número e validade), consultada na venda de manipulado.
+
+
+
+                                                                                        Page 7 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+4.2 Venda
+Registrada pela recepção ou profissional a partir do paciente ou da agenda.
+
+       Itens: serviço avulso, pacote, produto ou manipulado; quantidade; preço (editável
+       conforme permissão); desconto por item ou total.
+       O desconto reduz o valor sobre o qual o repasse é calculado: ele é dividido entre
+       clínica e profissional (D23).
+       Profissional vendedor/indicador (para comissão de produto).
+       Venda de Manipulado: se a unidade não tem licença sanitária cadastrada, o sistema
+       exibe alerta e exige aceite do Owner (uma vez por unidade, registrado em log).
+       Status: aberta, paga parcialmente, quitada, cancelada.
+       Cancelamento exige motivo e gera estorno dos recebimentos e dos repasses afetados
+       (seção 5.6).
+
+
+4.3 Recebimento (lançamento manual no v1)
+   1. Usuário informa: forma de pagamento, maquininha e bandeira (se cartão), número de
+       parcelas, valor, data, NSU opcional. Uma venda aceita vários recebimentos (ex.: parte
+       Pix, parte cartão).
+   2. O sistema gera os títulos: uma linha por parcela com valor bruto, taxa calculada, valor
+       líquido e data prevista de liquidação.
+              Crédito parcelado sem antecipação: parcela n liquida em data da venda + (prazo ×
+              n).
+              Com antecipação automática: todas as parcelas liquidam no prazo de
+              antecipação, com a taxa de antecipação somada.
+   3. Liquidação: por padrão o título vira “liquidado” automaticamente na data prevista. A
+       clínica pode desligar isso e confirmar manualmente. O gestor pode corrigir data e
+       valor liquidado, com log.
+   4. Pagamento recusado ou chargeback: o título é marcado como “estornado” e dispara a
+       regra de estorno (seção 5.6).
+
+A estrutura de títulos deve aceitar, numa fase seguinte, que a liquidação venha de
+integração (maquininha, gateway, extrato bancário) sem mudar o motor de repasse.
+
+
+4.4 Atendimento (visão financeira)
+Quando um atendimento é marcado como realizado, ele registra: serviço, paciente, data,
+unidade, venda/pacote de origem e os participantes por papel (quem foi responsável,
+quem executou). Esses participantes são a entrada do motor de repasse. Um atendimento
+realizado sem venda vinculada aparece numa fila de pendência “atendido sem venda” no
+dashboard.
+
+
+                                                                                        Page 8 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+4.5 Caixa diário da recepção
+Cada operador trabalha com um caixa aberto por unidade e por dia; todo recebimento
+lançado por ele fica vinculado a esse caixa.
+
+   1. Abertura: operador informa o valor inicial em espécie (troco).
+   2. Durante o dia: recebimentos lançados entram no caixa; sangria (retirada de dinheiro)
+       e suprimento (reforço de troco) são lançados com motivo.
+   3. Fechamento: operador informa o valor contado em espécie e confere os totais por
+       forma de pagamento (Pix, cartão por maquininha e bandeira). O sistema mostra
+       esperado × informado e a diferença.
+   4. Diferença acima do limite configurado (padrão R$ 0,00 em espécie) exige justificativa;
+       o gestor aprova o fechamento.
+   5. Não é possível abrir novo caixa com outro do mesmo operador ainda aberto. Caixa não
+      fechado até o dia seguinte vira pendência no dashboard.
+
+Relatório: caixas por dia, operador e unidade, com diferenças e justificativas.
+
+
+5. Motor de repasse
+O motor transforma atendimentos realizados, recebimentos liquidados e regras vigentes
+em linhas de repasse por profissional e mês. Cada linha guarda a origem (atendimento,
+título, regra) para que o profissional e o gestor possam auditar qualquer valor.
+
+
+5.1 Regra de repasse
+Campos: profissional · papel (Responsável, Executor, Auxiliar, Vendedor) · alvo (serviço
+específico, categoria de serviço ou “padrão”) · tipo · valor · deduções da base (herda da
+clínica ou sobrescreve) · início e fim de vigência · unidade (todas ou específicas).
+
+
+  Tipo                                Valor                              Quando entra no extrato
+
+  Percentual sobre                    % único, ou faixas por meta        Mês da liquidação do dinheiro;
+  a base                              definidas pela clínica (ex.: 50%   faixas recalculadas no
+                                      até R$ 20 mil de base no mês,      fechamento
+                                      60% acima)
+
+  Fixo por                            R$ por atendimento realizado       Mês da execução
+  execução
+
+  Fixo mensal                         R$ por mês                         Mês de competência,
+                                                                         proporcional aos dias de vigência
+                                                                         (padrão ligado)
+
+
+
+
+                                                                                                      Page 9 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Tipo                                Valor                               Quando entra no extrato
+
+  Garantia mínima                     Piso mensal em R$ +                 Fechamento: se percentual + fixo
+                                      compensação (sim/não).              por execução ficar abaixo do piso,
+                                      Opcional: só existe se cadastrada   gera linha de complemento
+                                      para o profissional; encerrar a
+                                      vigência desliga
+
+  Comissão de                         % ou R$ por unidade vendida         Mês da liquidação
+  produto
+
+  Taxa de uso                         R$ fixo por mês ou % do valor       Fechamento, como linha negativa;
+  (aluguel)                           liquidado dos atendimentos do       só existe se cadastrada para o
+                                      profissional                        profissional
+
+  Sem repasse                         —                                   Nunca; marca explicitamente que
+                                                                          o papel não é remunerado
+
+
+Qual regra vale para um atendimento — a vigente na data do atendimento, buscada nesta
+ordem:
+
+   1. profissional + serviço + papel
+   2. profissional + categoria do serviço + papel
+   3. profissional + papel (regra padrão)
+   4. nenhuma encontrada → o atendimento entra na fila “sem regra” e bloqueia a
+       aprovação do fechamento até o gestor criar a regra ou marcar “sem repasse”.
+
+Mudar o tipo de remuneração de alguém (ex.: enfermeira de fixo mensal para fixo por
+aplicação) é encerrar a regra antiga numa data e criar a nova a partir do dia seguinte.
+Meses já fechados nunca são recalculados.
+
+Validação: se a soma dos percentuais de todos os participantes de um mesmo serviço
+passar de 100%, o sistema avisa na configuração da regra.
+
+
+5.2 Base de cálculo do percentual
+
+   \text{Base} = \text{Valor liquidado} - \text{Taxa do meio de pagamento} -
+   \text{Imposto} - \text{Material}
+
+
+       Cada dedução só entra se estiver ligada na clínica ou na regra.
+       Taxa: a taxa real do título (seção 4.3).
+       Imposto: alíquota da clínica × valor liquidado bruto.
+
+
+
+
+                                                                                                      Page 10 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+       Material: custo do kit efetivamente baixado no atendimento, a custo médio (seção
+       8.4). Em pagamento parcelado, o material é deduzido proporcionalmente a cada
+       parcela liquidada.
+       Fixos de outros participantes não reduzem a base de quem ganha percentual.
+       Venda com vários itens: cada recebimento é distribuído entre os itens
+       proporcionalmente ao valor líquido de desconto de cada item.
+
+
+5.3 Fixos
+       Fixo por execução: gerado quando o atendimento é marcado como realizado.
+       Independe de o paciente ter pago.
+       Fixo mensal: gerado no primeiro dia do mês de competência (ou ao abrir o
+       fechamento), proporcional aos dias de vigência no mês quando a regra começa ou
+       termina no meio do mês.
+
+
+5.4 Pacotes multiprofissionais
+   1. Rateio: o valor de cada sessão é o valor de referência × (valor do pacote ÷ soma das
+       referências). Diferença de arredondamento vai para a última sessão do pacote.
+   2. Liberação: uma sessão realizada só gera repasse percentual quando o valor liquidado
+       acumulado do pacote cobre o valor rateado dela. As sessões são cobertas por ordem
+       de data de realização, sempre inteiras.
+   3. Sessão realizada e ainda não coberta fica “aguardando recebimento” e entra no mês
+       em que a próxima parcela liquidar.
+   4. Taxa e imposto do pacote são aplicados à sessão pela taxa efetiva do pacote (taxa
+       total ÷ valor total).
+   5. Pacote vencido com sessões não realizadas: o saldo é receita da clínica, sem repasse.
+   6. Fixo por execução em sessão de pacote segue a regra normal: entra no mês da sessão.
+
+Produto ou manipulado dentro do pacote: recebe valor rateado como as sessões, baixa do
+estoque na entrega ao paciente, entra na cobertura pela data da entrega e gera apenas
+comissão (se houver regra), nunca repasse de atendimento.
+
+
+5.5 Comissão de produto
+Mesmo motor, papel “Vendedor”. Base padrão: valor liquidado menos taxa. A clínica pode
+escolher calcular sobre a margem (valor liquidado − taxa − custo médio do produto).
+
+Item do tipo Medicação ou Manipulado: a comissão é permitida, mas ao salvar a regra o
+sistema exibe alerta citando o art. 69 do Código de Ética Médica (veda ao médico obter
+vantagem pela comercialização de medicamentos) e exige aceite do Owner, registrado em
+
+
+
+
+                                                                                       Page 11 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+log com nome e data. Um relatório próprio lista toda comissão sobre medicamento e
+manipulado.
+
+
+5.6 Estornos e cancelamentos
+
+  Situação                                               Mês do repasse original      Mês já fechado
+                                                         ainda aberto
+
+  Pagamento estornado ou                                 Linha recalculada            Linha negativa no próximo mês
+  chargeback                                                                          aberto, com referência à
+                                                                                      origem
+
+  Reembolso parcial                                      Recalculo proporcional       Linha negativa proporcional no
+                                                                                      próximo mês
+
+  Atendimento cancelado (não                             Remove percentual e fixo     Linha negativa de ambos no
+  realizado de fato)                                     por execução                 próximo mês
+
+  Serviço realizado, mas                                 Remove só o percentual       Negativa só do percentual; fixo
+  dinheiro devolvido                                                                  por execução mantido
+
+
+Se o saldo do profissional no mês ficar negativo, o valor negativo é levado para o mês
+seguinte e o gestor é alertado.
+
+
+5.7 Exemplos de cálculo (devem virar testes automáticos)
+Parâmetros comuns: imposto da clínica 6%.
+
+Exemplo A — consulta avulsa no cartão. Consulta R$ 500, crédito à vista, taxa 3%,
+liquidação em 30 dias. Deduções ligadas: taxa e imposto. Regra: Dra. A, Responsável, 60%.
+Atendimento em 10/10.
+
+       Base = 500 − 15 − 30 = 455,00. Repasse = 455 × 60% = R$ 273,00, no extrato de
+       novembro (liquida em 09/11).
+
+Exemplo B — aplicação com dois participantes e material. Aplicação R$ 1.200 no Pix em
+15/10. Custo do kit baixado R$ 420,00. Deduções ligadas: taxa, imposto e material. Médico
+Responsável 30%; enfermeira Executora fixo R$ 30.
+
+
+  Linha                               Cálculo                                Valor      Extrato
+
+  Base                                1.200 − 0 − 72 − 420                   708,00     —
+
+  Médico (30%)                        708 × 30%                              212,40     Outubro
+
+  Enfermeira (fixo)                   por execução                           30,00      Outubro
+
+
+
+
+                                                                                                               Page 12 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Linha                               Cálculo                                Valor        Extrato
+
+  Margem da clínica                   1.200 − 72 − 420 − 212,40 − 30         465,60       —
+
+
+Exemplo C — procedimento parcelado. Procedimento R$ 2.000 em 05/10, crédito 4×, taxa
+5%, sem antecipação, liquidação 30 dias por parcela. Dedução ligada: só taxa. Regra 50%.
+
+       Cada parcela: 500 − 25 = 475 de base → R$ 237,50 por mês, nos extratos de novembro,
+       dezembro, janeiro e fevereiro.
+
+Exemplo D — pacote multiprofissional. Programa R$ 3.600, crédito 4× R$ 900, taxa 4%,
+uma parcela liquidada por mês a partir de outubro. Dedução ligada: só taxa.
+
+
+ Sessão                      Qtde        Referência Valor rateado (fator        Base (−        Regra Repasse por
+                                                    0,9)                        4%)                  sessão
+
+ Consulta                    3           500,00              450,00             432,00         50%    216,00
+ médica
+
+ Consulta nutri              5           300,00              270,00             259,20         50%    129,60
+
+ Sessão personal             10          100,00              90,00              86,40          40%    34,56
+
+
+Liberação mês a mês:
+
+
+  Mês                    Liquidado                   Sessões              Cobertas (ordem de         Repasses no
+                         acumulado                   realizadas no        data)                      extrato do mês
+                                                     mês
+
+  Outubro                900                         1 médica, 1 nutri,   médica, nutri, 2           médica 216,00 ·
+                                                     4 personal           personal (900); 2          nutri 129,60 ·
+                                                     (1.080)              personal aguardam          personal 69,12
+
+  Novembro               1.800                       1 nutri, 4           2 personal pendentes       nutri 129,60 ·
+                                                     personal (630)       + todas do mês             personal 207,36
+                                                                          (consumido 1.710)
+
+
+Exemplo E — troca de regime da enfermeira. Regra fixo mensal R$ 2.500 vigente até 15/11;
+a partir de 16/11, fixo R$ 30 por aplicação. Novembro tem 30 dias.
+
+       Fixo mensal de novembro: 2.500 × 15/30 = R$ 1.250,00.
+       Aplicações de 16/11 a 30/11: 22 × 30 = R$ 660,00.
+       Extrato de novembro da enfermeira: R$ 1.910,00.
+
+Exemplo F — garantia mínima. Dr. B: 50% sobre a base, piso de R$ 8.000/mês. O piso
+compara apenas percentual + fixo por execução.
+
+
+
+
+                                                                                                                Page 13 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Mês          Base             50%             Sem compensação       Com compensação
+
+  1            12.000           6.000           Complemento 2.000 →   Complemento 2.000 → recebe
+                                                recebe 8.000          8.000; saldo a compensar 2.000
+
+  2            20.000           10.000          Recebe 10.000         Excedente sobre o piso (2.000)
+                                                                      abate o saldo → recebe 8.000; saldo
+                                                                      a compensar 0
+
+
+Exemplo G — faixas por meta (progressiva). Faixa 1: 50% até R$ 20.000 de base no mês;
+faixa 2: 60% acima disso. Base do mês = R$ 30.000.
+
+       Repasse = 20.000 × 50% + 10.000 × 60% = R$ 16.000.
+       Durante o mês a prévia usa a faixa atingida até aquele momento. No fechamento o
+       total é recalculado de forma progressiva e a diferença aparece como linha “ajuste de
+       faixa”.
+       A base acumulada soma todas as unidades da organização (padrão) ou só a unidade
+       da regra (configurável).
+
+Exemplo H — taxa de uso. Fisioterapeuta parceira: 80% sobre a base, taxa de uso fixa de
+R$ 1.500/mês. Base do mês R$ 12.000.
+
+       12.000 × 80% = 9.600; menos taxa de uso 1.500 = R$ 8.100 antes de retenções.
+
+
+5.8 Retenções na fonte
+Cada profissional PJ pode ter uma lista de retenções configurada pela clínica: tipo (IRRF,
+PIS/COFINS/CSLL, ISS, outra), alíquota, valor mínimo a partir do qual retém e dispensa
+automática quando o profissional for optante pelo Simples (por tipo).
+
+       Aplicadas sobre o total bruto do mês (após garantia, comissões, taxa de uso e
+       ajustes).
+       Extrato e tabela do gestor mostram bruto, cada retenção com alíquota e valor, e
+       líquido a pagar.
+       Relatório mensal de retenções por tipo e profissional, para o contador emitir as guias
+       (emissão de guias fora do v1).
+       Padrão: nenhuma retenção até a clínica configurar com o contador.
+
+Exemplo (alíquotas apenas ilustrativas): total bruto R$ 10.000; IRRF 1,5% = 150;
+PIS/COFINS/CSLL 4,65% = 465; líquido R$ 9.385.
+
+
+5.9 Ordem do cálculo mensal por profissional
+   1. Linhas percentuais (com ajuste de faixa, se houver).
+
+
+
+                                                                                                   Page 14 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+   2. Fixos por execução.
+   3. Fixo mensal.
+   4. Complemento de garantia mínima (compara 1 + 2 com o piso).
+   5. Comissões de produto.
+   6. Taxa de uso (−).
+   7. Ajustes (±): estornos, saldo negativo trazido, ajustes manuais. Resultado = total bruto.
+   8. Retenções (−). Resultado = líquido a pagar. Total bruto negativo não sofre retenção e
+       é levado ao mês seguinte.
+
+
+6. Fechamento mensal
+No fim do mês o gestor abre uma única tela e vê quanto pagar a cada profissional, com o
+detalhe de cada centavo a um clique. Ninguém precisa buscar produção profissional por
+profissional.
+
+
+6.1 Etapas
+Um fechamento existe por organização e mês, filtrável por unidade.
+
+   1. Aberto — linhas de repasse se acumulam automaticamente durante o mês.
+       Profissional acompanha a própria prévia.
+   2. Em conferência — o gestor inicia o fechamento (a partir do dia 1 do mês seguinte). O
+       sistema gera o extrato de cada profissional e lista as pendências que bloqueiam:
+       atendimentos sem regra, atendimentos sem venda, títulos vencidos não liquidados
+       (aviso, não bloqueio).
+   3. Aceite do profissional — cada profissional recebe notificação e, no app, aceita o
+       extrato ou contesta linhas específicas com comentário. Prazo configurável (padrão 5
+       dias). Vencido o prazo, o gestor pode aprovar sem aceite; o sistema registra “aprovado
+       sem aceite”.
+   4. Ajustes — o gestor responde contestações: corrige a origem (regra, participante,
+       atendimento) e o extrato é regenerado; ou lança ajuste manual com motivo obrigatório
+       (bônus, desconto, adiantamento). Profissional reavalia.
+   5. Aprovado — valores congelados para pagamento.
+   6. Pago — por profissional: data, forma, comprovante anexado (PDF/imagem) e, se o
+       profissional exige NF, número, data e arquivo da NF. A NF pode ser anexada pelo
+       próprio profissional.
+   7. Travado — quando todos estão pagos (ou o gestor trava manualmente). Mês travado
+       não muda; qualquer fato posterior (estorno, liquidação atrasada, correção) vira linha
+       no próximo mês aberto, com referência ao mês de origem. Destravar só por Owner,
+
+
+
+
+                                                                                       Page 15 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+       com motivo e log.
+
+
+6.2 Tabela do gestor (tela principal do fechamento)
+Uma linha por profissional; total geral no rodapé. Clique na linha abre o extrato.
+
+
+  Coluna                              Conteúdo
+
+  Profissional                        Nome, vínculo (PJ, CLT, autônomo, sócio), unidade
+                                      principal
+
+  Atendimentos                        Quantidade de atendimentos que geraram linha no
+                                      mês
+
+  Percentual                          Soma dos repasses percentuais, incluindo ajuste
+                                      de faixa
+
+  Fixo por execução                   Soma dos fixos por atendimento
+
+  Fixo mensal                         Valor do mês (proporcional quando aplicável)
+
+  Garantia                            Complemento de garantia mínima (ou
+                                      compensação descontada)
+
+  Comissões                           Soma das comissões de produto
+
+  Taxa de uso                         Desconto de aluguel/uso da estrutura (−)
+
+  Ajustes                             Estornos, saldos negativos trazidos e ajustes
+                                      manuais (±)
+
+  Total bruto                         Soma das colunas anteriores
+
+  Retenções                           Soma das retenções na fonte (−), detalhadas no
+                                      extrato
+
+  Líquido a pagar                     Total bruto − retenções
+
+  Aceite                              Pendente · Aceito · Contestado · Aprovado sem
+                                      aceite
+
+  NF                                  Não exigida · Pendente · Recebida
+
+  Pagamento                           Pendente · Pago em dd/mm
+
+
+Ações em lote: notificar profissionais, aprovar selecionados, exportar arquivo de
+pagamento (CSV com nome, CPF/CNPJ, chave Pix/banco, valor líquido) e exportar o
+fechamento em XLSX e PDF.
+
+
+
+
+                                                                                          Page 16 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+6.3 Extrato do profissional
+Cabeçalho: mês, profissional, total, status. Corpo: uma linha por fato gerador.
+
+
+  Coluna                         Exemplo
+
+  Data                           15/10
+
+  Paciente                       Iniciais ou nome conforme configuração de
+                                 privacidade da clínica
+
+  Serviço / papel                Aplicação GLP-1 · Responsável
+
+  Tipo                           Percentual
+
+  Valor liquidado                1.200,00
+
+  Deduções                       Imposto 72,00 · Material 420,00
+
+  Base                           708,00
+
+  Regra                          30%
+
+  Repasse                        212,40
+
+  Origem                         Link para atendimento e título
+
+
+Agrupamentos opcionais: por serviço, por tipo, por unidade. O profissional baixa o extrato
+em PDF.
+
+Rodapé do extrato: total bruto, cada retenção com alíquota e valor, e líquido a pagar. Taxa
+de uso, complemento de garantia e ajuste de faixa aparecem como linhas próprias, cada
+uma com a regra que a gerou.
+
+
+
+7. Dashboard financeiro
+O dashboard responde em uma tela: quanto vendemos, quanto entrou, quanto falta
+entrar, quanto vai para profissionais e quanto sobra para a clínica. Todo número é clicável e
+abre a lista de lançamentos que o compõe.
+
+Filtros persistentes: período (mês atual padrão; personalizado), unidade, profissional,
+serviço/categoria, forma de pagamento. Profissional só vê a própria produção.
+
+
+
+
+                                                                                     Page 17 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+7.1 Indicadores do topo
+
+  Indicador                               Definição exata
+
+  Vendido                                 Soma das vendas criadas no período, líquida de
+                                          descontos e cancelamentos
+
+  Recebido                                Soma dos títulos liquidados no período (bruto)
+
+  A receber                               Títulos com liquidação prevista após hoje
+
+  Em atraso                               Títulos com data prevista vencida e não liquidados,
+                                          mais vendas sem recebimento há mais de N dias
+                                          (padrão 7)
+
+  Taxas de pagamento                      Soma das taxas dos títulos liquidados no período
+
+  Repasses do mês                         Total do fechamento do período (prévia enquanto
+                                          aberto)
+
+  Custo de material                       Custo médio dos itens baixados em atendimentos
+                                          no período
+
+  Margem da clínica                       Recebido − taxas − imposto − material − repasses
+                                          − custo dos produtos vendidos
+
+  Ticket médio                            Vendido ÷ número de vendas
+
+
+
+7.2 Blocos abaixo do topo
+       Evolução mensal (12 meses): vendido, recebido e margem em linhas.
+       Por profissional: atendimentos, receita gerada, repasse, % repassado, margem gerada
+       para a clínica.
+       Por serviço: quantidade, receita, custo médio de material, margem por unidade de
+       serviço.
+       Agenda de recebimentos: próximos 90 dias de títulos a liquidar, por semana.
+       Pendências: atendidos sem venda, atendimentos sem regra, títulos em atraso,
+       pacotes vencendo em 30 dias com sessões não realizadas, caixas não fechados ou
+       com diferença.
+       Produtos: receita de revenda, custo, margem e comissões.
+
+Regra de consistência: todo número do dashboard tem de bater com a soma das linhas
+exibidas ao clicar nele. Esse é um critério de aceite, não um ideal.
+
+
+
+
+                                                                                                Page 18 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+8. Estoque
+O estoque registra toda entrada e saída com custo, por unidade da clínica, e alimenta
+automaticamente o custo de cada atendimento. Saldo nunca é editado diretamente: ele é
+sempre a soma das movimentações.
+
+
+8.1 Cadastro de item
+
+  Campo                                                      Regra
+
+  Nome, categoria, fabricante                                Obrigatório nome e categoria
+
+  Tipo                                                       Medicação aplicada · Manipulado · Produto de
+                                                             revenda · Material de consumo
+
+  Unidades de medida                                         Unidade de compra, de estoque e de consumo,
+                                                             com fator de conversão. Ex.: compra em caixa com
+                                                             10 ampolas; estoque em ampola; consumo em
+                                                             ampola. Ex.: frasco de 30 ml; estoque em frasco;
+                                                             consumo em ml
+
+  Uso fracionado                                             Sim/não. Se sim, a saída pode ser fração da
+                                                             unidade de estoque (até 3 casas) e o item tem
+                                                             “validade após aberto” em dias
+
+  Uso individual por paciente                                Sim/não. Se sim (ex.: caneta multidose), ao abrir a
+                                                             unidade o executor escolhe o paciente; as doses
+                                                             restantes só saem para esse paciente, aparecem
+                                                             no Paciente 360 e seguem a validade após aberto.
+                                                             Padrão “sim” para Medicação aplicada multidose
+
+  Controla lote e validade                                   Obrigatório para Medicação aplicada e
+                                                             Manipulado; opcional para os demais
+
+  Venda ao paciente                                          Bloqueada para Medicação aplicada (D20).
+                                                             Permitida para Produto de revenda e Manipulado
+
+  Código de barras / EAN, registro                           Opcionais; leitura por câmera no celular desejável
+  Anvisa
+
+  Estoque mínimo                                             Por unidade da clínica
+
+  Preço de venda                                             Obrigatório para Produto de revenda e
+                                                             Manipulado vendido pela clínica
+
+  Comissão                                                   Regra de comissão de produto (seção 5.5); para
+                                                             Medicação e Manipulado, com alerta e aceite do
+                                                             Owner
+
+
+
+                                                                                                           Page 19 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Campo                                                       Regra
+
+  Códigos do fornecedor                                       Vínculo item do fornecedor × item do cadastro,
+                                                              criado na primeira importação de XML e
+                                                              reaproveitado nas seguintes
+
+  Controlado (Portaria 344)                                   Bloqueado no v1. O cadastro exibe aviso e não
+                                                              permite marcar o item como controlado
+
+
+
+8.2 Movimentações
+
+  Movimento                                   Sentido        Campos obrigatórios             Custo usado
+
+  Saldo inicial                               +              Item, unidade, lote,            Custo informado (vira
+  (implantação)                                              validade, quantidade, custo     o custo médio inicial)
+                                                             unitário. Uma vez por item
+                                                             e unidade; aceita
+                                                             importação por planilha
+
+  Entrada por compra                          +              Fornecedor, nº da NF, data,     Custo informado;
+                                                             itens, quantidade, custo        frete opcional
+                                                             unitário, lote e validade (se   rateado pelo valor
+                                                             controla)                       dos itens
+
+  Entrada por XML da                          +              Upload do XML:                  Custo da nota; frete
+  NF-e                                                       fornecedor, número, itens,      rateado
+                                                             quantidades e custos
+                                                             preenchidos
+                                                             automaticamente; usuário
+                                                             confere, vincula itens
+                                                             novos e completa lote e
+                                                             validade
+
+  Entrada por                                 +              Origem, custo atribuído         Custo informado
+  bonificação/doação                                         (pode ser zero)
+
+  Devolução de paciente                       +              Venda de origem, motivo         Custo médio da saída
+                                                                                             original
+
+  Consumo em                                  −              Atendimento, paciente,          Custo médio vigente
+  atendimento                                                profissional executor, lote
+
+  Entrega de item de                          −              Pacote, paciente, lote          Custo médio vigente
+  pacote
+
+  Venda ao paciente                           −              Venda, lote                     Custo médio vigente
+
+
+
+
+                                                                                                             Page 20 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Movimento                                   Sentido        Campos obrigatórios           Custo usado
+
+  Consumo de setor                            −              Setor ou finalidade (ex.:     Custo médio vigente
+                                                             esterilização, uso geral da
+                                                             sala), motivo
+
+  Perda, avaria,                              −              Motivo obrigatório, lote      Custo médio vigente
+  vencimento
+
+  Devolução ao                                −              Entrada de origem             Custo médio vigente
+  fornecedor
+
+  Transferência entre                         − origem /     Unidade destino, lote         Custo médio da
+  unidades                                    + destino                                    origem
+
+  Ajuste de inventário                        ±              Contagem de origem,           Custo médio vigente
+                                                             aprovação
+
+
+Toda movimentação é imutável; corrigir é lançar estorno. Saldo negativo não é permitido,
+com uma exceção: a baixa de kit em atendimento (seção 8.5).
+
+
+8.3 Lote e validade
+       Saldo controlado por item + lote + unidade.
+       Na saída, o sistema sugere o lote que vence primeiro; o usuário pode trocar.
+       Lote vencido não pode sair para consumo ou venda; só para perda por vencimento.
+       Item de uso fracionado: ao abrir uma unidade, o sistema registra a data de abertura e
+       calcula a nova validade = menor entre (validade do lote) e (abertura + validade após
+       aberto).
+       Alertas de vencimento configuráveis (padrão 90, 60 e 30 dias).
+
+
+8.4 Custo médio ponderado
+Custo calculado por item e por unidade da clínica (não por lote). Recalculado a cada
+entrada:
+
+   \text{CM}_{\text{novo}} = \frac{\text{Saldo} \times \text{CM}_{\text{atual}}
+   + \text{Qtde entrada} \times \text{Custo unitário entrada}}{\text{Saldo} +
+   \text{Qtde entrada}}
+
+
+Exemplo: saldo de 10 unidades a R$ 40,00 (R$ 400). Entram 20 a R$ 46,00 (R$ 920). Novo
+custo médio = 1.320 ÷ 30 = R$ 44,00. Uma saída de 3 unidades é valorada em R$ 132,00.
+
+Saídas não mudam o custo médio. Transferência entra no destino pelo custo médio da
+origem e recalcula o custo médio do destino.
+
+
+
+                                                                                                            Page 21 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+8.5 Kits por serviço e baixa automática
+   1. No cadastro do serviço, a clínica define o kit: itens e quantidades na unidade de
+       consumo. Ex.: “Soroterapia X” = 1 frasco de soro 250 ml + 1 equipo + 1 cateter + 2
+       ampolas do ativo.
+   2. Quando o atendimento é marcado como realizado, o sistema mostra o kit pré-
+       preenchido com o lote sugerido. O executor confirma ou edita: troca lote, muda
+       quantidade, remove ou adiciona item.
+   3. Ao confirmar, as saídas são lançadas e o custo do material fica gravado no
+       atendimento (usado no repasse e na margem).
+   4. Se não houver saldo, o atendimento é salvo mesmo assim (o registro clínico nunca é
+       bloqueado pelo estoque). A baixa fica como “consumo sem saldo”, aparece em alerta
+       para o gestor, e é resolvida com entrada retroativa ou ajuste.
+   5. Correção depois de confirmado: estorno da baixa e nova baixa, com log. Se o mês de
+       repasse já estiver travado, a diferença de material gera ajuste no próximo mês.
+
+
+8.6 Inventário
+   1. Gestor cria uma contagem por unidade: total ou filtrada por categoria/tipo.
+   2. O sistema congela o saldo teórico de cada item e lote naquele momento.
+       Movimentações continuam; a diferença é calculada contra o saldo congelado mais as
+       movimentações ocorridas durante a contagem.
+   3. Contador informa a quantidade física por item e lote, pelo celular ou leitor de código
+       de barras, sem ver o saldo esperado (contagem cega).
+   4. Tela de divergências: item, lote, teórico, contado, diferença em quantidade e em R$.
+   5. Gestor aprova; o sistema lança os ajustes com motivo “inventário”.
+
+
+8.7 Transferência entre unidades
+Envio na origem → status “em trânsito” (fora do saldo das duas unidades) → recebimento
+confirmado no destino, com quantidade recebida. Diferença entre enviado e recebido vira
+perda na origem com motivo obrigatório.
+
+
+8.8 Alertas e relatórios
+       Alertas: abaixo do mínimo, vencendo, vencido, consumo sem saldo, transferência
+       parada há mais de 3 dias.
+       Relatórios: posição de estoque valorizada por unidade; movimentação por período;
+       consumo por serviço e por profissional executor; perdas por motivo; itens sem giro há
+       90 dias; compras por fornecedor.
+
+
+
+
+                                                                                         Page 22 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+9. Como estoque, atendimento e financeiro se conectam
+
+
+
+
+fluxo entre atendimento, estoque e financeiro
+
+O atendimento realizado é o ponto de encontro: define quem participou, baixa o kit e
+grava o custo do material. A venda e seus títulos dizem quanto e quando o dinheiro entrou.
+O motor cruza os três com a regra vigente e gera as linhas que o fechamento consolida.
+
+Regras de integração:
+
+       Venda de produto baixa o estoque no momento da venda e gera comissão só quando o
+       dinheiro é liquidado.
+       Custo de material entra sempre na margem do dashboard; entra na base de repasse
+       só quando a dedução de material estiver ligada.
+       Correção de estoque ou de recebimento depois do mês travado nunca altera esse
+       mês; gera ajuste no próximo mês aberto.
+       Prescrição de medicamento aplicado na clínica (seção 10) pode sugerir o kit no
+       atendimento, mas a baixa sempre exige confirmação de quem aplicou.
+
+
+10. Documentos clínicos: requisitos de integração
+A Vertexa não constrói motor de prescrição. Ela integra um provedor de prescrição
+eletrônica já conectado ao sistema da Anvisa (SNCR) e mantém a experiência dentro do
+app: o profissional prescreve sem sair do paciente, e o documento assinado volta para a
+timeline.
+
+
+
+                                                                                        Page 23 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+10.1 Por que integrar (regulação em novembro de 2026)
+       Desde 30/09/2026, receitas de controlados e de retenção emitidas eletronicamente
+       recebem numeração do SNCR, e quem conversa com o SNCR é a plataforma de
+       prescrição, não o médico. Gerar um PDF e assinar não basta. (Afya)
+       Em 29/10/2026 a Anvisa prorrogou até 03/03/2027 a transição para Receitas de
+       Controle Especial e Receitas Sujeitas à Retenção no SNCR. (Afya)
+       Assinatura: controlados da Portaria 344 exigem certificado ICP-Brasil (assinatura
+       qualificada); receitas de retenção como antimicrobianos e agonistas de GLP-1 aceitam
+       assinatura avançada, inclusive Gov.br. (Afya)
+       Atestado em papel continua válido; a plataforma Atesta CFM segue suspensa
+       judicialmente. (Afya)
+
+Consequência para a vertical de emagrecimento: receita de GLP-1 é receita de retenção,
+com numeração SNCR quando eletrônica. O provedor escolhido precisa estar integrado
+ao SNCR para esse tipo.
+
+
+10.2 O que exigir do provedor
+
+  Requisito                                                  Obrigatório no v1
+
+  Integração ao SNCR para receita simples, receita           Sim
+  de retenção (antimicrobiano, GLP-1) e receita de
+  controle especial
+
+  Notificações de Receita A, B, B2 eletrônicas               Desejável
+
+  Assinatura com certificado ICP-Brasil em nuvem             Sim
+  (sem token físico) e assinatura avançada Gov.br
+
+  Atestado, solicitação de exames, relatório e               Sim
+  orientações com assinatura digital e QR Code de
+  validação
+
+  Uso por nutricionista e dentista (documentos que           Sim
+  cada conselho permite)
+
+  Incorporação na tela da Vertexa (iframe/SDK) com           Sim
+  login único, sem o profissional criar conta separada
+
+  Pré-preenchimento por API: paciente (nome, CPF             Sim
+  obrigatório nos novos modelos, nascimento,
+  endereço), profissional (registro, especialidade),
+  clínica
+
+
+
+
+                                                                                      Page 24 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Requisito                                                                     Obrigatório no v1
+
+  Retorno por webhook: PDF assinado, tipo, itens                                Sim
+  prescritos, data/hora da assinatura, número SNCR
+
+  Envio ao paciente por WhatsApp/e-mail/SMS e                                   Sim
+  disponibilização no app do paciente
+
+  Modelos e favoritos por profissional; base de                                 Desejável
+  medicamentos com alertas de interação
+
+  Contrato com cláusulas LGPD (operador de dados),                              Sim
+  dados hospedados no Brasil ou com base legal para
+  transferência
+
+  Preço por profissional ativo compatível com o                                 Sim
+  pricing da Vertexa
+
+
+
+10.3 O que a Vertexa constrói em volta
+   1. Botão “Novo documento” no Paciente 360 e no atendimento: Receita · Atestado ·
+       Exames · Relatório.
+   2. Abre o provedor já com paciente e profissional preenchidos.
+   3. Ao assinar, o webhook grava o documento na timeline e na aba Documentos do
+       paciente, vinculado ao atendimento.
+   4. Itens prescritos ficam disponíveis como dado (para “Preparar retorno” e para cruzar
+       com estoque quando o medicamento for aplicado na clínica).
+   5. Permissão: só profissionais com conselho cadastrado emitem; recepção pode reenviar
+       documento já assinado.
+
+Decisão pendente: escolha do provedor, após comparar ao menos três contra a tabela
+10.2.
+
+
+
+11. Modelo de dados de referência
+Referência para a modelagem, não esquema final. Toda entidade abaixo carrega também:
+organization_id, unit_id (quando aplicável), created_by, created_at, updated_at.
+
+
+  Entidade                                         Campos principais                    Relaciona com
+
+  Service                                          name, category, default_price,       Kit, ShareRule
+                                                   roles_allowed, kit_id, active
+
+  Package                                          name, price, validity_days           PackageItem
+
+
+
+                                                                                                         Page 25 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Entidade                                         Campos principais                  Relaciona com
+
+  PackageItem                                      item_type (service, product),      Package, Service, StockItem
+                                                   ref_id, quantity,
+                                                   reference_price,
+                                                   allocated_price
+
+  Sale                                             patient_id, status, total_gross,   SaleItem, Payment
+                                                   discount, total_net,
+                                                   seller_professional_id,
+                                                   cancel_reason
+
+  SaleItem                                         type (service, package,            Sale
+                                                   product, compounded), ref_id,
+                                                   qty, unit_price, discount,
+                                                   net_value
+
+  Payment                                          sale_id, cash_register_id,         Receivable, CashRegister
+                                                   method, acquirer_id, brand,
+                                                   installments, amount, nsu,
+                                                   paid_at
+
+  Receivable (título)                              payment_id, installment_no,        Payment
+                                                   gross, fee, net, expected_date,
+                                                   settled_date, status (previsto,
+                                                   liquidado, estornado)
+
+  FeeTable                                         acquirer_id, brand, modality,      Acquirer
+                                                   installments_from,
+                                                   installments_to, fee_pct,
+                                                   settle_days, anticipation,
+                                                   anticipation_fee_pct
+
+  TaxRate                                          unit_id ou organization, period    —
+                                                   (AAAA-MM), rate_pct
+
+  CashRegister (caixa)                             unit_id, operator_id,              Payment, CashMovement
+                                                   opened_at, opening_cash,
+                                                   closed_at, counted_cash,
+                                                   expected_by_method,
+                                                   difference, justification,
+                                                   approved_by
+
+  CashMovement                                     cash_register_id, type (sangria,   CashRegister
+                                                   suprimento), amount, reason
+
+
+
+
+                                                                                                            Page 26 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Entidade                                         Campos principais                 Relaciona com
+
+  Appointment                                      patient_id, service_id,           AppointmentParticipant,
+  (atendimento)                                    sale_item_id,                     StockMovement
+                                                   package_session_id, date,
+                                                   status (realizado, cancelado),
+                                                   material_cost
+
+  AppointmentParticipant                           appointment_id,                   Appointment
+                                                   professional_id, role
+
+  ProfessionalFinance                              professional_id, bond_type,       WithholdingRule, ShareRule
+                                                   tax_id, simples_optant,
+                                                   bank_or_pix, requires_invoice,
+                                                   units
+
+  ShareRule                                        professional_id, role,            Professional
+                                                   target_type (service, category,
+                                                   default), target_id, rule_type
+                                                   (pct, fixed_per_exec,
+                                                   fixed_monthly, min_guarantee,
+                                                   product_commission,
+                                                   usage_fee, none), value, tiers
+                                                   [{up_to, pct}], tier_scope
+                                                   (organization, unit),
+                                                   compensation,
+                                                   usage_fee_mode (fixed, pct),
+                                                   deductions_override,
+                                                   valid_from, valid_to, units
+
+  GuaranteeBalance                                 professional_id, rule_id,         ShareRule
+                                                   balance_to_compensate
+
+  WithholdingRule                                  professional_id, type (IRRF,      ProfessionalFinance
+                                                   PIS_COFINS_CSLL, ISS, outra),
+                                                   rate_pct, min_base,
+                                                   waive_if_simples, valid_from,
+                                                   valid_to
+
+
+
+
+                                                                                                           Page 27 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Entidade                                         Campos principais                  Relaciona com
+
+  ShareLine (linha de                              professional_id, period (AAAA-     Closing
+  repasse)                                         MM), line_type (pct,
+                                                   tier_adjust, fixed_exec,
+                                                   fixed_monthly, guarantee,
+                                                   commission, usage_fee,
+                                                   adjustment, withholding),
+                                                   source_type, source_id,
+                                                   rule_id, base, amount,
+                                                   origin_period
+
+  Closing (fechamento)                             period, unit scope, status         ClosingProfessional
+                                                   (aberto, em conferência,
+                                                   aprovado, travado), locked_at,
+                                                   locked_by
+
+  ClosingProfessional                              closing_id, professional_id,       ShareLine, Dispute
+                                                   gross_total, withholding_total,
+                                                   net_total, acceptance
+                                                   (pendente, aceito, contestado,
+                                                   aprovado sem aceite),
+                                                   invoice_file, invoice_no,
+                                                   paid_at, payment_proof
+
+  Dispute                                          closing_professional_id,           ClosingProfessional
+                                                   share_line_id, comment,
+                                                   resolution
+
+  ComplianceAcceptance                             organization_id, unit_id, type     AuditLog
+                                                   (comissão sobre medicamento,
+                                                   venda de manipulado sem
+                                                   licença), accepted_by,
+                                                   accepted_at, text_version
+
+  UnitLicense                                      unit_id, license_no, valid_until   —
+
+  StockItem                                        name, category, type               StockLot, Kit
+                                                   (medication, compounded,
+                                                   resale, consumable),
+                                                   purchase_unit, stock_unit,
+                                                   consumption_unit,
+                                                   conversion_factors, fractional,
+                                                   individual_use,
+                                                   opened_validity_days,
+                                                   lot_control, sellable, barcode,
+                                                   anvisa_reg, sale_price
+
+
+
+                                                                                                            Page 28 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Entidade                                         Campos principais                 Relaciona com
+
+  StockLot                                         item_id, unit_id, lot_code,       StockItem
+                                                   expiry_date, qty_on_hand
+
+  OpenUnit (unidade                                item_id, lot_id, unit_id,         StockLot, Patient
+  aberta)                                          patient_id (obrigatório se
+                                                   individual_use), opened_at,
+                                                   qty_remaining, expires_at
+
+  StockBalance                                     item_id, unit_id, qty_on_hand,    StockItem
+                                                   avg_cost, min_qty
+
+  StockMovement                                    item_id, lot_id, open_unit_id,    StockLot
+                                                   unit_id, type (initial_balance,
+                                                   purchase, xml_purchase,
+                                                   bonus, patient_return,
+                                                   appointment,
+                                                   package_delivery, sale, sector,
+                                                   loss, supplier_return,
+                                                   transfer_out, transfer_in,
+                                                   inventory), qty, unit_cost,
+                                                   total_cost, reason,
+                                                   appointment_id, sale_id,
+                                                   transfer_id, inventory_id,
+                                                   invoice_key,
+                                                   reversed_movement_id
+
+  SupplierItemMap                                  supplier_id, supplier_code,       StockItem
+                                                   item_id, conversion_factor
+
+  Kit / KitItem                                    service_id; item_id, qty          Service, StockItem
+                                                   (unidade de consumo)
+
+  Transfer                                         from_unit, to_unit, status (em    StockMovement
+                                                   trânsito, recebida), sent_at,
+                                                   received_at
+
+  InventoryCount                                   unit_id, scope, blind (sim),      InventoryLine
+                                                   status, frozen_at, approved_by
+
+  InventoryLine                                    count_id, item_id, lot_id,        InventoryCount
+                                                   expected_qty, counted_qty,
+                                                   diff_qty, diff_value
+
+
+
+
+                                                                                                          Page 29 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Entidade                                         Campos principais                    Relaciona com
+
+  ClinicalDocument                                 patient_id, appointment_id,          Appointment
+                                                   professional_id, type,
+                                                   provider_doc_id, sncr_number,
+                                                   signed_at, file, items_json
+
+  AuditLog                                         entity, entity_id, action, before,   todas
+                                                   after, reason, user_id, at
+
+
+Restrições importantes: ShareLine, Receivable e StockMovement nunca são apagados
+nem editados depois de um fechamento travado; correções geram novos registros que
+apontam para o original.
+
+
+12. Critérios de aceite e casos de teste
+Uma entrega só é aceita quando todos os casos abaixo passam em homologação, com os
+valores exatos. Os exemplos A a E da seção 5.7 e o exemplo de custo médio da seção 8.4
+devem existir também como testes automáticos.
+
+
+12.1 Financeiro e repasse
+
+  #           Cenário                                                      Resultado esperado
+
+  F1          Exemplos A a H (seção 5.7) e exemplo de                      Valores e mês de extrato idênticos aos do
+              retenção (seção 5.8)                                         documento
+
+  F2          Atendimento realizado de serviço sem                         Entra na fila “sem regra”; aprovação do
+              regra para o profissional                                    fechamento bloqueada até resolver
+
+  F3          Regra alterada em 16/11                                      Atendimentos até 15/11 usam a regra
+                                                                           antiga; mês travado não muda
+
+  F4          Chargeback de título cujo repasse                            Linha negativa no próximo mês aberto,
+              estava em mês travado                                        com referência ao mês e ao atendimento
+                                                                           de origem
+
+  F5          Serviço realizado e dinheiro devolvido                       Percentual estornado; fixo por execução
+                                                                           mantido
+
+  F6          Total bruto do profissional negativo após                    Sem retenção; saldo levado ao mês
+              estornos                                                     seguinte; gestor recebe alerta
+
+  F7          Profissional contesta uma linha                              Gestor vê a contestação na linha; após
+                                                                           ajuste o extrato é regenerado e volta para
+                                                                           aceite
+
+
+
+                                                                                                               Page 30 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  #           Cenário                                        Resultado esperado
+
+  F8          Prazo de aceite vence                          Gestor consegue aprovar; status registra
+                                                             “aprovado sem aceite”
+
+  F9          Tentativa de editar lançamento de mês          Bloqueado; só Owner destrava, com
+              travado                                        motivo em log
+
+  F10         Profissional acessa o financeiro               Vê apenas a própria produção e o próprio
+                                                             extrato; nenhuma nota clínica aparece
+                                                             em telas financeiras
+
+  F11         Soma dos percentuais de um serviço             Aviso na configuração da regra
+              passa de 100%
+
+  F12         Qualquer número do dashboard                   Igual à soma das linhas exibidas ao clicar
+                                                             nele
+
+  F13         Tabela do gestor × extratos                    Bruto, retenções e líquido de cada
+                                                             profissional iguais aos do extrato; total
+                                                             geral = soma das linhas
+
+  F14         Exportar arquivo de pagamento                  CSV com nome, documento, chave
+                                                             Pix/banco e valor líquido de cada
+                                                             profissional aprovado
+
+  F15         Consulta R$ 500 com desconto de 10%,           Base 450,00; repasse 270,00
+              Pix, só dedução de taxa ligada, regra 60%
+
+  F16         Profissional optante pelo Simples com          Nenhuma retenção aplicada; líquido =
+              dispensa configurada                           bruto
+
+  F17         Salvar regra de comissão sobre item            Alerta exibido; regra só é salva com
+              Medicação ou Manipulado                        aceite do Owner, registrado em log
+
+  F18         Venda de Manipulado em unidade sem             Alerta e aceite do Owner na primeira
+              licença cadastrada                             venda da unidade; vendas seguintes não
+                                                             repetem o alerta
+
+  F19         Fechamento de caixa com diferença de           Exige justificativa; fechamento aguarda
+              R$ 10 em espécie                               aprovação do gestor
+
+  F20         Operador tenta abrir segundo caixa com         Bloqueado
+              um aberto
+
+  F21         Mês novo sem alíquota de imposto               Usa a alíquota do mês anterior e alerta o
+              cadastrada                                     gestor
+
+
+
+
+                                                                                                    Page 31 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+12.2 Estoque
+
+  #           Cenário                                        Resultado esperado
+
+  E1          Entrada de 20 un a R$ 46 com saldo de 10       Custo médio R$ 44,00; saída de 3 un
+              un a R$ 40                                     valorada em R$ 132,00
+
+  E2          Atendimento realizado de serviço com           Kit pré-preenchido com lote de validade
+              kit                                            mais próxima; após confirmação, saídas
+                                                             lançadas e custo gravado no
+                                                             atendimento
+
+  E3          Kit sem saldo suficiente                       Atendimento salvo; baixa marcada
+                                                             “consumo sem saldo”; alerta ao gestor
+
+  E4          Tentativa de saída de lote vencido para        Bloqueada; permitido apenas como
+              consumo                                        perda por vencimento
+
+  E5          Item fracionado aberto em 01/11, validade      Validade passa a 29/11
+              após aberto 28 dias, lote vence 30/12
+
+  E6          Transferência de 10 un, recebidas 9            Destino +9; origem registra perda de 1
+                                                             com motivo
+
+  E7          Inventário com diferença de −2 un              Após aprovação, ajuste de −2 valorado a
+                                                             custo médio
+
+  E8          Tentativa de marcar item como                  Bloqueado com aviso
+              controlado
+
+  E9          Venda de produto                               Baixa no estoque, receita na venda e
+                                                             comissão conforme regra
+
+  E10         Item abaixo do mínimo                          Alerta no dashboard e na lista de
+                                                             estoque da unidade
+
+  E11         Correção de baixa já confirmada em mês         Estorno + nova baixa; diferença de
+              de repasse travado                             material gera ajuste no próximo mês de
+                                                             repasse
+
+  E12         Caneta de uso individual aberta para o         Bloqueado; sistema oferece abrir nova
+              paciente X; tentativa de baixar dose para      unidade
+              o paciente Y
+
+  E13         Tentativa de vender item do tipo               Bloqueado
+              Medicação aplicada
+
+
+
+
+                                                                                                 Page 32 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  #           Cenário                                                     Resultado esperado
+
+  E14         Importar XML com item novo do                               Pede vínculo ao item do cadastro; na
+              fornecedor                                                  próxima nota o mesmo código é
+                                                                          vinculado sozinho
+
+  E15         Segundo lançamento de saldo inicial no                      Bloqueado
+              mesmo item e unidade
+
+  E16         Tela de contagem do inventário                              Não exibe o saldo esperado ao contador
+
+  E17         Entrega de produto do pacote ao                             Baixa no estoque e cobertura do pacote
+              paciente                                                    pela data da entrega
+
+
+
+12.3 Definition of Done (todas as entregas)
+       Respeita escopo de organização, unidade e papel; testado com dois perfis diferentes.
+       Estados vazio, carregando, erro e sucesso definidos em todas as telas.
+       Log de auditoria gerado para criação, edição e estorno.
+       Telas de profissional e de kit funcionam no celular.
+       Exportações CSV/XLSX/PDF conferidas contra a tela.
+       Documentação curta para suporte e onboarding atualizada.
+
+
+
+13. Fora do v1, ordem de entrega e decisões pendentes
+
+13.1 Fora do v1
+
+  Item                                                       Por que fica fora                       Quando
+
+  Convênio (TISS, guias, lotes, glosa,                       Verticais-alvo são majoritariamente     Reavaliar
+  recurso)                                                   particulares; faturamento de            após v1
+                                                             convênio é um módulo do tamanho
+                                                             do financeiro inteiro
+
+  Integração com maquininha,                                 Lançamento manual valida as regras      Fase 2
+  gateway e conciliação bancária                             antes; títulos já nascem prontos para
+                                                             integrar
+
+  Contas a pagar, fluxo de caixa                             Escopo do Financeiro completo (P1       P1
+  completo, DRE, centro de custos                            do Mapa Mestre)
+
+  Emissão de NF da clínica e de guias                        Depende de integração com               P1
+  de retenção                                                prefeitura/emissor; v1 entrega o
+                                                             relatório de retenções ao contador
+
+
+
+                                                                                                              Page 33 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  Item                                                       Por que fica fora                      Quando
+
+  Folha de pagamento e encargos de                           A Vertexa calcula o valor acordado,    Não previsto
+  CLT                                                        não a folha
+
+  Pedido de compra e cotação                                 Entrada direta por NF e XML basta      Fase 2
+                                                             no v1
+
+  Medicamentos controlados                                   Exigem escrituração própria            Avaliar após
+  (Portaria 344) em estoque                                                                         v1
+
+  Motor próprio de prescrição                                Integração com provedor                Não previsto
+                                                             homologado
+
+
+
+13.2 Ordem de entrega sugerida
+   1. Cadastros e base: serviços com papéis, profissionais (dados financeiros e
+       retenções), meios de pagamento e taxas, alíquota mensal, licença por unidade, itens
+       de estoque. Depende da Fundação B2B (P0.0).
+   2. Vendas, recebimentos, títulos e caixa diário.
+   3. Estoque básico: saldo inicial, entradas (manual e XML), saídas, lote/validade, uso
+       individual por paciente, custo médio, saldo por unidade.
+   4. Atendimento com participantes e kit automático (liga estoque ao financeiro).
+   5. Motor de repasse com os testes A–H automatizados, incluindo faixas, garantia e taxa
+       de uso.
+   6. Fechamento mensal com extrato, retenções, aceite, NF, pagamento e travamento.
+   7. Dashboard financeiro.
+   8. Inventário cego, transferências, alertas e relatórios de estoque.
+   9. Integração do provedor de documentos clínicos (pode correr em paralelo a partir do
+       item 1).
+
+
+13.3 Decisões pendentes
+
+  #           Decisão                                            Quem decide      Impacto se ficar aberta
+
+  P1          Escolha do provedor de                             Gabriel +        Bloqueia a seção 10
+              prescrição (comparar ao menos 3                    sócio
+              contra a tabela 10.2)
+
+  P2          Prazo padrão de aceite do                          Produto          Baixo; configurável
+              profissional (proposta: 5 dias)
+
+
+
+
+                                                                                                             Page 34 of 35
+Vertexa — Especificação Financeiro, Repasse e Estoque (v1)
+
+
+
+
+  #           Decisão                                        Quem decide   Impacto se ficar aberta
+
+  P3          Paciente no extrato do                         Produto +     Médio
+              profissional: nome completo ou                 LGPD
+              iniciais (padrão proposto:
+              iniciais)
+
+  P4          Validação com contador e                       Gabriel       A Vertexa calcula; a forma de
+              advogado: regras de retenção,                                contratação é responsabilidade
+              base de cálculo e vínculos de                                da clínica e deve constar nos
+              remuneração (especialmente                                   termos de uso
+              fixo mensal e garantia para quem
+              não é CLT)
+
+  P5          Liquidação automática na data                  Produto       Médio: automático pode liberar
+              prevista como padrão, ou                                     repasse de dinheiro que não
+              confirmação manual                                           entrou; chargeback corrige
+                                                                           depois
+
+  P6          Volume esperado por clínica para               Gabriel +     A software house precisa disso
+              dimensionamento: profissionais,                comercial     para estimar performance e
+              unidades, atendimentos/mês,                                  custo de infraestrutura
+              itens de estoque
+
+  P7          Texto jurídico dos alertas (art. 69            Jurídico      Sem isso, o “liberar com aviso”
+              e licença sanitária) e cláusula nos                          protege pouco a Vertexa
+              termos de uso transferindo a
+              responsabilidade à clínica
+
+  P8          Padrões adotados sem consulta:                 Gabriel       Baixo; vetar se não fizer sentido
+              importação de XML da NF-e e
+              contagem cega no inventário
+
+
+
+
+Fontes
+Consultadas em 06/11/2026.
+
+       A RDC 1.000/25 está valendo! — Portal Afya
+       Atestados médicos em papel seguirão válidos em 2026, esclarece CFM — Portal Afya
+       Webinar RDC 1.000/2025 — Anvisa
+
+
+
+
+                                                                                                      Page 35 of 35
+
