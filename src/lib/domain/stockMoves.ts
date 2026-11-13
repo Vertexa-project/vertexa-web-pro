@@ -233,9 +233,9 @@ export function formatQty(qty: number): string {
   return qty.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 }
 
-/** Custo unitário em centavos com até 4 casas → "R$ 44,00" (2 casas) ou "R$ 600,4667" quando a fração importa. */
+/** Custo unitário em centavos (até 4 casas de centavo) → "R$ 44,00"; com fração de centavo, até 4 casas em reais: "R$ 6,0047". */
 export function formatUnitCost(cents: number): string {
   const reais = cents / 100;
   const frac = Math.abs(reais * 100 - Math.round(reais * 100)) > 1e-9;
-  return reais.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: frac ? 6 : 2 });
+  return reais.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: frac ? 4 : 2 });
 }

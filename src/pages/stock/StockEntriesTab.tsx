@@ -86,8 +86,13 @@ export function StockEntriesTab() {
             <FinTable
               label="Entradas de estoque" rows={rows} rowKey={(e) => e.id}
               columns={[
-                { header: "Entrada", role: "title", cell: (e) => <>{ENTRY_TYPE_LABEL[e.entry_type]}{e.invoice_number ? ` · NF ${e.invoice_number}` : ""}<span className="block text-xs font-normal text-muted-foreground">{e.unit_name} · {brDate(e.received_on)}</span></> },
-                { header: "Situação", role: "badge", cell: (e) => <Badge tone={e.status === "reversed" ? "muted" : "success"}>{e.status === "reversed" ? "Estornada" : "Ativa"}</Badge> },
+                { header: "Entrada", role: "title", cell: (e) => (
+                  <>
+                    {ENTRY_TYPE_LABEL[e.entry_type]}{e.invoice_number ? ` · NF ${e.invoice_number}` : ""}
+                    <span className="block text-xs font-normal text-muted-foreground">{e.unit_name} · {brDate(e.received_on)}</span>
+                    <span className="mt-1 flex"><Badge tone={e.status === "reversed" ? "muted" : "success"}>{e.status === "reversed" ? "Estornada" : "Ativa"}</Badge></span>
+                  </>
+                ) },
                 { header: "Fornecedor", cell: (e) => e.supplier_name ?? "—" },
                 { header: "Linhas", nowrap: true, cell: (e) => e.lines_count },
                 { header: "Itens", nowrap: true, cell: (e) => formatBRL(e.items_total_cents) },

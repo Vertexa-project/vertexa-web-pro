@@ -88,7 +88,7 @@ describe("Estoque › Saldo", () => {
 
   it("no celular a lista vira cartões (sem tabela)", () => {
     const original = window.matchMedia;
-    window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false })) as typeof window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: true, media: q, onchange: null, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false })) as unknown as typeof window.matchMedia;
     try {
       state.balances = [balance()];
       wrap(<StockBalanceTab />);

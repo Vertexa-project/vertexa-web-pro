@@ -13,12 +13,15 @@ export function MovementTable({ rows, label, onReverse }: { rows: MovementRow[];
     <FinTable
       label={label} rows={rows} rowKey={(m) => m.id}
       columns={[
-        { header: "Item", role: "title", cell: (m) => <>{m.item_name}<span className="block text-xs font-normal text-muted-foreground">{m.unit_name} · {brDate(m.occurred_on)}</span></> },
-        { header: "Situação", role: "badge", cell: (m) => (
-          <span className="flex flex-wrap justify-end gap-1">
-            <Badge tone={m.qty > 0 ? "success" : "info"}>{MOVEMENT_TYPE_LABEL[m.movement_type] ?? m.movement_type}</Badge>
-            {m.reversed ? <Badge tone="muted">Estornada</Badge> : null}
-          </span>
+        { header: "Item", role: "title", cell: (m) => (
+          <>
+            {m.item_name}
+            <span className="block text-xs font-normal text-muted-foreground">{m.unit_name} · {brDate(m.occurred_on)}</span>
+            <span className="mt-1 flex flex-wrap gap-1">
+              <Badge tone={m.qty > 0 ? "success" : "info"}>{MOVEMENT_TYPE_LABEL[m.movement_type] ?? m.movement_type}</Badge>
+              {m.reversed ? <Badge tone="muted">Estornada</Badge> : null}
+            </span>
+          </>
         ) },
         { header: "Quantidade", nowrap: true, cell: (m) => <span className={m.qty < 0 ? "text-destructive" : undefined}>{m.qty > 0 ? "+" : ""}{formatQty(m.qty)} {m.stock_unit}</span> },
         { header: "Custo unitário", nowrap: true, cell: (m) => formatUnitCost(m.unit_cost_cents) },

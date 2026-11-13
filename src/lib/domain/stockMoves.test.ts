@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   addIsoDays, allocateFreight, checkDose, checkExitQuantity, entryLineTotalCents, exitValueCents, expiryStatus, hasValidDecimals, openedUnitExpiry, pickLotsFefo,
-  StockRuleException, stockMoveErrorMessage, validateExit, weightedAverageCost, type LotView,
+  formatQty, formatUnitCost, StockRuleException, stockMoveErrorMessage, todayIsoBR, validateExit, weightedAverageCost, type LotView,
 } from "./stockMoves";
 
 const code = (fn: () => unknown): string | null => {
@@ -184,6 +184,17 @@ describe("mensagens do servidor em português", () => {
     expect(stockMoveErrorMessage({ message: "INSUFFICIENT_STOCK" })).toMatch(/Saldo insuficiente/);
     expect(stockMoveErrorMessage({ message: "forbidden", code: "42501" })).toMatch(/permissão/);
     expect(stockMoveErrorMessage({ message: "xyz" })).toMatch(/Tente novamente/);
+  });
+});
+
+describe("formatação", () => {
+  it("quantidade sem zeros sobrando; custo unitário com 2 casas ou até 4 quando há fração de centavo; data de Brasília", () => {
+    expect(formatQty(2.5)).toBe("2,5");
+    expect(formatQty(0.25)).toBe("0,25");
+    expect(formatQty(10)).toBe("10");
+    expect(formatUnitCost(4400)).toMatch(/44,00/);
+    expect(formatUnitCost(600.4667)).toMatch(/6,0047/);
+    expect(todayIsoBR(new Date("2026-11-14T01:30:00Z"))).toBe("2026-11-13"); // 22h30 em Brasília ainda é dia 13
   });
 });
 

@@ -78,12 +78,17 @@ export function StockBalanceTab() {
             <FinTable
               label="Saldo por item e unidade" rows={rows} rowKey={(r) => `${r.item_id}-${r.unit_id}`}
               columns={[
-                { header: "Item", role: "title", cell: (r) => <>{r.item_name}<span className="block text-xs font-normal text-muted-foreground">{r.category} · {r.unit_name}</span></> },
-                { header: "Situação", role: "badge", cell: (r) => (
-                  <span className="flex flex-wrap justify-end gap-1">
-                    {r.below_min ? <Badge tone="warning">Abaixo do mínimo</Badge> : null}
-                    {r.expired_qty > 0 ? <Badge tone="destructive">Tem lote vencido</Badge> : <ExpiryBadge expiry={r.next_expiry} today={today} />}
-                  </span>
+                { header: "Item", role: "title", cell: (r) => (
+                  <>
+                    {r.item_name}
+                    <span className="block text-xs font-normal text-muted-foreground">{r.category} · {r.unit_name}</span>
+                    {r.below_min || r.expired_qty > 0 || expiryStatus(r.next_expiry, today) !== "ok" ? (
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {r.below_min ? <Badge tone="warning">Abaixo do mínimo</Badge> : null}
+                        {r.expired_qty > 0 ? <Badge tone="destructive">Tem lote vencido</Badge> : <ExpiryBadge expiry={r.next_expiry} today={today} />}
+                      </span>
+                    ) : null}
+                  </>
                 ) },
                 { header: "Saldo", nowrap: true, cell: (r) => <>{formatQty(r.qty_on_hand)} {r.stock_unit}{r.open_qty > 0 ? <span className="block text-xs text-muted-foreground">{formatQty(r.open_qty)} em unidade aberta</span> : null}</> },
                 { header: "Custo médio", nowrap: true, cell: (r) => formatUnitCost(r.avg_cost_cents) },

@@ -205,7 +205,8 @@ create table if not exists public.stock_movements (
 );
 create unique index if not exists stock_movements_reversal_uq on public.stock_movements (reversed_movement_id) where reversed_movement_id is not null;
 create index if not exists stock_movements_clinic_idx on public.stock_movements (clinic_id, unit_id, occurred_on desc, created_at desc);
-create index if not exists stock_movements_item_idx on public.stock_movements (item_id, unit_id, created_at);
+create index if not exists stock_movements_item_idx on public.stock_movements (item_id, created_at desc, id);
+create index if not exists stock_movements_clinic_created_idx on public.stock_movements (clinic_id, created_at desc, id);
 create index if not exists stock_movements_sale_idx on public.stock_movements (sale_id) where sale_id is not null;
 create index if not exists stock_movements_entry_idx on public.stock_movements (entry_id) where entry_id is not null;
 
@@ -648,37 +649,50 @@ begin
 end $$;
 
 -- ---------- 7. RPCs de leitura (security definer + fin_can por unidade) ----------
--- 7.1 Saldo por item × unidade, com lotes, validade, custo médio e valor (Recepção/Profissional: forbidden)
+-- 7.1 Saldo por item × unidade, com lotes, validade, custo médio e valor (Recepção/Profissional: forbidden).
+-- Desempenho: a permissão é resolvida UMA vez por unidade (não por linha) e os lotes/unidades abertas entram agregados.
 create or replace function public.fin_stock_balances(p_clinic uuid, p_unit uuid default null, p_item uuid default null, p_search text default null, p_only_positive boolean default false)
 returns table (item_id uuid, item_name text, category text, item_type text, stock_unit text, fractional boolean, lot_control boolean, unit_id uuid, unit_name text,
                qty_on_hand numeric, avg_cost_cents numeric, value_cents bigint, min_qty numeric, below_min boolean, next_expiry date, expired_qty numeric, open_qty numeric, lots jsonb)
 language plpgsql stable security definer set search_path = '' as $$
+declare v_today date := private.fin_today();
 begin
   perform private.fin_gate(p_clinic, 'stock_move', p_unit, false);
   return query
-    select i.id, i.name, i.category, i.item_type, i.stock_unit, i.fractional, i.lot_control, b.unit_id, u.name,
-           b.qty_on_hand, b.avg_cost_cents, round(b.qty_on_hand * b.avg_cost_cents)::bigint,
-           mn.min_qty, (mn.min_qty is not null and b.qty_on_hand < mn.min_qty),
-           (select min(l.expiry_date) from public.stock_lots l where l.item_id = b.item_id and l.unit_id = b.unit_id and l.qty_on_hand > 0 and l.expiry_date is not null),
-           coalesce((select sum(l.qty_on_hand) from public.stock_lots l where l.item_id = b.item_id and l.unit_id = b.unit_id and l.expiry_date < private.fin_today()), 0),
-           coalesce((select sum(o.qty_remaining) from public.stock_open_units o where o.item_id = b.item_id and o.unit_id = b.unit_id and o.status = 'open'), 0),
-           coalesce((select jsonb_agg(jsonb_build_object('lot_id', l.id, 'lot_code', l.lot_code, 'expiry_date', l.expiry_date, 'qty', l.qty_on_hand,
-                       'open_qty', private.stock_lot_open_qty(l.id), 'expired', l.expiry_date is not null and l.expiry_date < private.fin_today())
-                     order by l.expiry_date nulls last, l.lot_code)
-                      from public.stock_lots l where l.item_id = b.item_id and l.unit_id = b.unit_id and (l.qty_on_hand > 0)), '[]'::jsonb)
-      from public.stock_balances b
-      join public.stock_items i on i.id = b.item_id
-      join public.clinic_units u on u.id = b.unit_id
-      left join public.stock_item_minimums mn on mn.item_id = b.item_id and mn.unit_id = b.unit_id
-     where b.clinic_id = p_clinic
-       and (p_unit is null or b.unit_id = p_unit) and (p_item is null or b.item_id = p_item)
-       and (not coalesce(p_only_positive, false) or b.qty_on_hand > 0)
-       and (nullif(btrim(coalesce(p_search, '')), '') is null or i.name ilike '%' || btrim(p_search) || '%' or i.category ilike '%' || btrim(p_search) || '%')
-       and private.fin_can(p_clinic, 'stock_move', b.unit_id, false)
-     order by i.name, u.name;
+    with allowed as (
+      select u.id, u.name from public.clinic_units u where u.clinic_id = p_clinic and (p_unit is null or u.id = p_unit) and private.fin_can(p_clinic, 'stock_move', u.id, false)),
+    bal as (
+      select b.item_id, b.unit_id, b.qty_on_hand, b.avg_cost_cents from public.stock_balances b
+       where b.clinic_id = p_clinic and b.unit_id in (select a.id from allowed a) and (p_item is null or b.item_id = p_item)
+         and (not coalesce(p_only_positive, false) or b.qty_on_hand > 0)),
+    openq as (
+      select o.lot_id, sum(o.qty_remaining) as q from public.stock_open_units o where o.clinic_id = p_clinic and o.status = 'open' group by o.lot_id),
+    lagg as (
+      select l.item_id, l.unit_id,
+             min(l.expiry_date) as next_expiry,
+             coalesce(sum(l.qty_on_hand) filter (where l.expiry_date < v_today), 0) as expired_qty,
+             coalesce(sum(oq.q), 0) as open_qty,
+             jsonb_agg(jsonb_build_object('lot_id', l.id, 'lot_code', l.lot_code, 'expiry_date', l.expiry_date, 'qty', l.qty_on_hand, 'open_qty', coalesce(oq.q, 0),
+                                          'expired', l.expiry_date is not null and l.expiry_date < v_today) order by l.expiry_date nulls last, l.lot_code) as lots
+        from public.stock_lots l
+        join bal on bal.item_id = l.item_id and bal.unit_id = l.unit_id
+        left join openq oq on oq.lot_id = l.id
+       where l.qty_on_hand > 0
+       group by l.item_id, l.unit_id)
+    select i.id, i.name, i.category, i.item_type, i.stock_unit, i.fractional, i.lot_control, bal.unit_id, a.name,
+           bal.qty_on_hand, bal.avg_cost_cents, round(bal.qty_on_hand * bal.avg_cost_cents)::bigint,
+           mn.min_qty, (mn.min_qty is not null and bal.qty_on_hand < mn.min_qty),
+           la.next_expiry, coalesce(la.expired_qty, 0), coalesce(la.open_qty, 0), coalesce(la.lots, '[]'::jsonb)
+      from bal
+      join public.stock_items i on i.id = bal.item_id
+      join allowed a on a.id = bal.unit_id
+      left join public.stock_item_minimums mn on mn.item_id = bal.item_id and mn.unit_id = bal.unit_id
+      left join lagg la on la.item_id = bal.item_id and la.unit_id = bal.unit_id
+     where (nullif(btrim(coalesce(p_search, '')), '') is null or i.name ilike '%' || btrim(p_search) || '%' or i.category ilike '%' || btrim(p_search) || '%')
+     order by i.name, a.name;
 end $$;
 
--- 7.2 Kardex / saídas / movimentações
+-- 7.2 Kardex / saídas / movimentações. Desempenho: permissão por unidade (não por linha) e a página é cortada ANTES dos joins.
 create or replace function public.fin_stock_movements(p_clinic uuid, p_unit uuid default null, p_item uuid default null, p_type text default null, p_direction text default null,
                                                       p_from date default null, p_to date default null, p_entry uuid default null, p_limit integer default 200, p_offset integer default 0)
 returns table (id uuid, occurred_on date, created_at timestamptz, unit_id uuid, unit_name text, item_id uuid, item_name text, stock_unit text, movement_type text, qty numeric,
@@ -688,11 +702,21 @@ language plpgsql stable security definer set search_path = '' as $$
 begin
   perform private.fin_gate(p_clinic, 'stock_move', p_unit, false);
   return query
-    select m.id, m.occurred_on, m.created_at, m.unit_id, u.name, m.item_id, i.name, i.stock_unit, m.movement_type, m.qty, m.unit_cost_cents, m.total_cost_cents, m.balance_after,
+    with allowed as (
+      select u.id, u.name from public.clinic_units u where u.clinic_id = p_clinic and (p_unit is null or u.id = p_unit) and private.fin_can(p_clinic, 'stock_move', u.id, false)),
+    page as (
+      select m.* from public.stock_movements m
+       where m.clinic_id = p_clinic and m.unit_id in (select a.id from allowed a)
+         and (p_item is null or m.item_id = p_item) and (p_type is null or m.movement_type = p_type)
+         and (p_direction is null or (p_direction = 'in' and m.qty > 0) or (p_direction = 'out' and m.qty < 0))
+         and (p_from is null or m.occurred_on >= p_from) and (p_to is null or m.occurred_on <= p_to) and (p_entry is null or m.entry_id = p_entry)
+       order by m.created_at desc, m.id
+       limit least(greatest(coalesce(p_limit, 200), 1), 500) offset greatest(coalesce(p_offset, 0), 0))
+    select m.id, m.occurred_on, m.created_at, m.unit_id, a.name, m.item_id, i.name, i.stock_unit, m.movement_type, m.qty, m.unit_cost_cents, m.total_cost_cents, m.balance_after,
            m.avg_cost_after_cents, l.lot_code, l.expiry_date, m.reason, m.purpose, m.loss_kind, ppr.full_name, upr.full_name, sp.name, en.invoice_number, m.entry_id, m.sale_id,
            exists (select 1 from public.stock_movements r where r.reversed_movement_id = m.id), m.reversed_movement_id
-      from public.stock_movements m
-      join public.clinic_units u on u.id = m.unit_id
+      from page m
+      join allowed a on a.id = m.unit_id
       join public.stock_items i on i.id = m.item_id
       join public.stock_lots l on l.id = m.lot_id
       left join public.patients pt on pt.id = m.patient_id
@@ -700,13 +724,7 @@ begin
       left join public.profiles upr on upr.id = m.created_by
       left join public.stock_entries en on en.id = m.entry_id
       left join public.stock_suppliers sp on sp.id = en.supplier_id
-     where m.clinic_id = p_clinic
-       and (p_unit is null or m.unit_id = p_unit) and (p_item is null or m.item_id = p_item) and (p_type is null or m.movement_type = p_type)
-       and (p_direction is null or (p_direction = 'in' and m.qty > 0) or (p_direction = 'out' and m.qty < 0))
-       and (p_from is null or m.occurred_on >= p_from) and (p_to is null or m.occurred_on <= p_to) and (p_entry is null or m.entry_id = p_entry)
-       and private.fin_can(p_clinic, 'stock_move', m.unit_id, false)
-     order by m.created_at desc, m.id
-     limit least(greatest(coalesce(p_limit, 200), 1), 500) offset greatest(coalesce(p_offset, 0), 0);
+     order by m.created_at desc, m.id;
 end $$;
 
 -- 7.3 Documentos de entrada
@@ -717,17 +735,20 @@ language plpgsql stable security definer set search_path = '' as $$
 begin
   perform private.fin_gate(p_clinic, 'stock_move', p_unit, false);
   return query
-    select e.id, e.created_at, e.received_on, e.unit_id, u.name, e.entry_type, sp.name, e.invoice_number, e.invoice_key,
-           (select count(*) from public.stock_movements m where m.entry_id = e.id), e.items_total_cents, e.freight_cents, e.total_cents, e.status, e.reverse_reason, upr.full_name, e.notes
-      from public.stock_entries e
-      join public.clinic_units u on u.id = e.unit_id
+    with allowed as (
+      select u.id, u.name from public.clinic_units u where u.clinic_id = p_clinic and (p_unit is null or u.id = p_unit) and private.fin_can(p_clinic, 'stock_move', u.id, false)),
+    page as (
+      select e.* from public.stock_entries e
+       where e.clinic_id = p_clinic and e.unit_id in (select a.id from allowed a) and (p_from is null or e.received_on >= p_from) and (p_to is null or e.received_on <= p_to)
+       order by e.created_at desc, e.id
+       limit least(greatest(coalesce(p_limit, 200), 1), 500) offset greatest(coalesce(p_offset, 0), 0))
+    select e.id, e.created_at, e.received_on, e.unit_id, a.name, e.entry_type, sp.name, e.invoice_number, e.invoice_key,
+           (select count(*) from public.stock_movements m where m.entry_id = e.id and m.movement_type <> 'reversal'), e.items_total_cents, e.freight_cents, e.total_cents, e.status, e.reverse_reason, upr.full_name, e.notes
+      from page e
+      join allowed a on a.id = e.unit_id
       left join public.stock_suppliers sp on sp.id = e.supplier_id
       left join public.profiles upr on upr.id = e.created_by
-     where e.clinic_id = p_clinic and (p_unit is null or e.unit_id = p_unit)
-       and (p_from is null or e.received_on >= p_from) and (p_to is null or e.received_on <= p_to)
-       and private.fin_can(p_clinic, 'stock_move', e.unit_id, false)
-     order by e.created_at desc, e.id
-     limit least(greatest(coalesce(p_limit, 200), 1), 500) offset greatest(coalesce(p_offset, 0), 0);
+     order by e.created_at desc, e.id;
 end $$;
 
 -- 7.4 Lotes e unidades abertas de um item numa unidade (para a tela de saída): FEFO na ordem, vencido marcado
