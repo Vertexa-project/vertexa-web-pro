@@ -27,6 +27,16 @@ begin
   insert into res(t,ok,detail) values ('equipe lê o atendimento', n = 1, n::text);
   select count(*) into n from public.clinical_templates;
   insert into res(t,ok,detail) values ('equipe lê o modelo', n >= 1, n::text);
+  select jsonb_array_length(template_snapshot -> 'sections') into n from public.clinical_encounters where id = enc;
+  insert into res(t,ok,detail) values ('atendimento nasce com o modelo v2 (16 seções)', n = 16, n::text);
+  begin
+    perform public.clinical_save_field(enc, 'profissional.nome', 'x');
+    insert into res(t,ok,detail) values ('seção de sistema (profissional) não é editável', false, null);
+  exception when others then
+    get stacked diagnostics v_err = message_text;
+    insert into res(t,ok,detail) values ('seção de sistema (profissional) não é editável', v_err = 'INVALID_FIELD', v_err);
+  end;
+  insert into res(t,ok,detail) select 'people traz registro do profissional', (public.clinical_encounter_people(enc) ->> 'registry') = 'CRM 123', public.clinical_encounter_people(enc)::text;
   select count(*) into n from public.clinical_list_encounters(mariana);
   insert into res(t,ok,detail) values ('equipe lista atendimentos (RPC)', n >= 1, n::text);
   reset role;
@@ -51,7 +61,7 @@ begin
       insert into res(t,ok,detail) values (denied[i][1] || ': não inicia atendimento', v_err = 'FORBIDDEN', v_err);
     end;
     begin
-      perform public.clinical_save_field(enc, 'queixa.queixa_principal', 'x');
+      perform public.clinical_save_field(enc, 'objetivo.queixa_principal', 'x');
       insert into res(t,ok,detail) values (denied[i][1] || ': não grava campo', false, 'gravou!');
     exception when others then
       get stacked diagnostics v_err = message_text;
@@ -139,18 +149,18 @@ begin
   insert into public.clinical_transcript_segments (encounter_id, clinic_id, chunk_id, ord, speaker, text, is_demo)
   values (enc, clinic, chunk, 1, 'Médica', 'teste', true);
   set local role service_role;
-  r := public.clinical_apply_ai_fields(enc, '{"queixa.queixa_principal":{"value":"IA 1","sources":[1]},"queixa.historia":{"value":"hist IA","sources":[1]},"campo.inexistente":{"value":"x"}}'::jsonb, null, true);
+  r := public.clinical_apply_ai_fields(enc, '{"objetivo.queixa_principal":{"value":"IA 1","sources":[1]},"historia.evolucao_peso_corpo":{"value":"hist IA","sources":[1]},"campo.inexistente":{"value":"x"}}'::jsonb, null, true);
   insert into res(t,ok,detail) values ('IA aplica 2 campos e ignora o inexistente', (r->>'applied')::int = 2 and (r->>'skipped')::int = 1, r::text);
   reset role;
   perform pg_temp.asuser(qa); set local role authenticated;
-  perform public.clinical_save_field(enc, 'queixa.queixa_principal', 'Editado à mão');
+  perform public.clinical_save_field(enc, 'objetivo.queixa_principal', 'Editado à mão');
   reset role; set local role service_role;
-  r := public.clinical_apply_ai_fields(enc, '{"queixa.queixa_principal":{"value":"IA 2","sources":[1]},"queixa.historia":{"value":"hist IA 2","sources":[1]}}'::jsonb, null, true);
+  r := public.clinical_apply_ai_fields(enc, '{"objetivo.queixa_principal":{"value":"IA 2","sources":[1]},"historia.evolucao_peso_corpo":{"value":"hist IA 2","sources":[1]}}'::jsonb, null, true);
   insert into res(t,ok,detail) values ('IA pula campo travado e atualiza o livre', (r->>'applied')::int = 1 and (r->>'skipped')::int = 1, r::text);
   reset role;
   insert into res(t,ok)
     select 'campo travado mantém o texto manual e o livre recebe a IA',
-           (fields->'queixa.queixa_principal'->>'value') = 'Editado à mão' and (fields->'queixa.historia'->>'value') = 'hist IA 2'
+           (fields->'objetivo.queixa_principal'->>'value') = 'Editado à mão' and (fields->'historia.evolucao_peso_corpo'->>'value') = 'hist IA 2'
       from public.clinical_records where encounter_id = enc;
   perform pg_temp.asuser(qa); set local role authenticated;
   -- equipe não chama a RPC de IA
@@ -177,7 +187,7 @@ begin
   perform public.clinical_finalize(enc);
   insert into res(t,ok) values ('finaliza', true);
   begin
-    perform public.clinical_save_field(enc, 'queixa.historia', 'depois');
+    perform public.clinical_save_field(enc, 'historia.evolucao_peso_corpo', 'depois');
     insert into res(t,ok,detail) values ('finalizado é imutável (save_field)', false, null);
   exception when others then
     get stacked diagnostics v_err = message_text;
