@@ -88,7 +88,9 @@ function KitEditor({ appt, kit, mode, onClose, onDone }: { appt: ApptDetail; kit
           const l = lineOf(r.itemId);
           const info = infoOf(r.itemId);
           const plan = plans[idx];
-          const unitLabel = l?.consumption_unit ?? kit.catalog.find((c) => c.id === r.itemId)?.consumption_unit ?? "un";
+          const cat = kit.catalog.find((c) => c.id === r.itemId);
+          const unitLabel = l?.consumption_unit ?? cat?.consumption_unit ?? "un";
+          const stockUnit = l?.stock_unit ?? cat?.stock_unit ?? "";
           return (
             <li key={r.uid} className="min-w-0 space-y-2 rounded-lg border p-3">
               <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)_auto]">
@@ -115,14 +117,14 @@ function KitEditor({ appt, kit, mode, onClose, onDone }: { appt: ApptDetail; kit
               </div>
               {info && plan ? (
                 <p className="text-xs text-muted-foreground" role="status">
-                  Saldo na unidade: <strong className="tabular-nums">{formatQty(info.balance)}</strong> {l?.stock_unit ?? ""} · sai {formatQty(plan.stockQty)} {l?.stock_unit ?? ""} do estoque
+                  Saldo na unidade: <strong className="tabular-nums">{formatQty(info.balance)}</strong> {stockUnit} · sai {formatQty(plan.stockQty)} {stockUnit} do estoque
                   {plan.estimatedCostCents !== null ? <> · custo <strong className="tabular-nums">{formatBRL(plan.estimatedCostCents)}</strong></> : null}
                 </p>
               ) : null}
               {plan && !plan.enough ? (
                 <p className="flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm" role="alert">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                  <span>Faltam {formatQty(plan.shortQty)} {l?.stock_unit ?? ""} no estoque. O atendimento é salvo mesmo assim: essa parte fica como «consumo sem saldo» e o gestor é avisado.</span>
+                  <span>Faltam {formatQty(plan.shortQty)} {stockUnit} no estoque. O atendimento é salvo mesmo assim: essa parte fica como «consumo sem saldo» e o gestor é avisado.</span>
                 </p>
               ) : null}
             </li>
