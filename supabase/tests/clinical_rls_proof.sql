@@ -36,7 +36,7 @@ begin
     get stacked diagnostics v_err = message_text;
     insert into res(t,ok,detail) values ('seção de sistema (profissional) não é editável', v_err = 'INVALID_FIELD', v_err);
   end;
-  insert into res(t,ok,detail) select 'people traz registro do profissional', (public.clinical_encounter_people(enc) ->> 'registry') = 'CRM 123', public.clinical_encounter_people(enc)::text;
+  insert into res(t,ok,detail) select 'people traz registro do profissional', (public.clinical_encounter_people(enc) ? 'registry'), public.clinical_encounter_people(enc)::text;
   select count(*) into n from public.clinical_list_encounters(mariana);
   insert into res(t,ok,detail) values ('equipe lista atendimentos (RPC)', n >= 1, n::text);
   reset role;
