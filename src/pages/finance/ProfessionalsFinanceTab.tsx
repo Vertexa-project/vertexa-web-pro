@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { Lock, Plus, Trash2, Users } from "lucide-react";
 
-import { CentsInput, CheckField, DecimalInput, ExportButtons, Field, FinTable, NativeSelect, ReasonField, useFocusFirstError } from "@/components/fin/FinUi";
+import { CentsInput, CheckField, DecimalInput, ExportButtons, Field, FinTable, NativeSelect, ReasonField } from "@/components/fin/FinUi";
+import { useFocusFirstError } from "@/components/fin/useFinUi";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";

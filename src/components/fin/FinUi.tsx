@@ -1,7 +1,7 @@
 // Peças compartilhadas das telas do módulo Financeiro/Estoque (Entrega 1): campo, select, checkbox, valor em R$,
 // decimal, casca de tabela (rolagem só dentro dela), exportação e diálogo de formulário.
 import * as React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { centsToInput, parseBRL } from "@/lib/domain/finance";
 import { parseDecimalBR } from "@/lib/domain/money";
+import { useFocusFirstError, useNarrow } from "@/components/fin/useFinUi";
 import { MONTH_NAMES } from "@/lib/domain/taxRate";
 import { CSV_MIME, downloadBlob, toCsv, toXlsx, XLSX_MIME, type ExportColumn } from "@/lib/domain/tableExport";
 import { cn } from "@/lib/utils";
@@ -116,22 +117,6 @@ export function TableShell({ children, label }: { children: React.ReactNode; lab
   );
 }
 
-/** true quando a janela é mais estreita que `max` px (celular). Sem matchMedia (testes), false. */
-export function useNarrow(max = 640): boolean {
-  const query = `(max-width: ${max - 1}px)`;
-  const get = () => (typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(query).matches : false);
-  const [narrow, setNarrow] = useState(get);
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const mq = window.matchMedia(query);
-    const on = () => setNarrow(mq.matches);
-    on();
-    mq.addEventListener?.("change", on);
-    return () => mq.removeEventListener?.("change", on);
-  }, [query]);
-  return narrow;
-}
-
 export type FinColumnRole = "title" | "badge" | "field" | "action";
 export interface FinColumn<T> { header: string; cell: (row: T) => React.ReactNode; role?: FinColumnRole; nowrap?: boolean; className?: string; /** no cartão do celular, ocupa a linha inteira */ wide?: boolean }
 
@@ -208,24 +193,6 @@ export function ExportButtons<T>({ columns, rows, filename, sheetName, label }: 
       </Button>
     </div>
   );
-}
-
-/** Rola e foca o primeiro campo com erro (aria-invalid) — ou, sem campo marcado, a mensagem de erro do diálogo. */
-export function focusFirstError(root: HTMLElement | null): void {
-  if (!root) return;
-  const target = root.querySelector<HTMLElement>('[aria-invalid="true"]') ?? root.querySelector<HTMLElement>('[role="alert"]');
-  if (!target) return;
-  target.scrollIntoView?.({ block: "center", behavior: "auto" });
-  if (target.matches("input,select,textarea,button")) target.focus({ preventScroll: true });
-}
-
-/** Chame a cada tentativa de salvar: a cada nova tentativa (ou nova mensagem) o primeiro erro vem à vista. */
-export function useFocusFirstError(rootRef: React.RefObject<HTMLElement>, signal: unknown): void {
-  useEffect(() => {
-    if (signal === null || signal === undefined || signal === false || signal === 0) return;
-    const t = window.setTimeout(() => focusFirstError(rootRef.current), 0);
-    return () => window.clearTimeout(t);
-  }, [rootRef, signal]);
 }
 
 export function FormDialog({ open, onOpenChange, title, description, onSubmit, pending, error, submitLabel = "Salvar", wide, readOnly, attempt, children }: {

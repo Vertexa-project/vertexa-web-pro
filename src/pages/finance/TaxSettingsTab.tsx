@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 
-import { CheckField, DecimalInput, ExportButtons, Field, FinTable, MonthYearPicker, NativeSelect, useFocusFirstError } from "@/components/fin/FinUi";
+import { CheckField, DecimalInput, ExportButtons, Field, FinTable, MonthYearPicker, NativeSelect,  } from "@/components/fin/FinUi";
+import { useFocusFirstError } from "@/components/fin/useFinUi";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { Badge } from "@/components/ui/badge";
