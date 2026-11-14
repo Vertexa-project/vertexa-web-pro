@@ -107,6 +107,11 @@ describe("Kardex: devolução de paciente e estorno", () => {
     expect(screen.getAllByRole("button", { name: /Estornar/ })).toHaveLength(1);   // só o consumo de setor
   });
 
+  it("transferência e ajuste de inventário NÃO oferecem «Estornar» (cancela a transferência ou reabre o inventário; achado D45)", () => {
+    wrap(<MovementTable label="Kardex" rows={[mv({ id: "t1", movement_type: "transfer_out", qty: -1, sale_id: null }), mv({ id: "t2", movement_type: "transfer_in", qty: 1, sale_id: null }), mv({ id: "t3", movement_type: "inventory", qty: -1, sale_id: null })]} onReverse={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Estornar/ })).toBeNull();
+  });
+
   it("movimentação já estornada não oferece nenhuma ação", () => {
     wrap(<MovementTable label="Kardex" rows={[mv({ reversed: true })]} onReverse={vi.fn()} onReturn={vi.fn()} />);
     expect(screen.queryByRole("button")).toBeNull();

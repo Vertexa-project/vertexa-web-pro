@@ -80,10 +80,10 @@ export function StockTransfersTab() {
                 { header: "Itens", wide: true, cell: (r) => <LinesSummary lines={r.lines} /> },
                 { header: "Recebimento / cancelamento", wide: true, cell: (r) => (r.status === "received" ? `${brDateTime(r.received_at)} · ${r.received_by_name ?? ""}${r.receive_note ? ` — ${r.receive_note}` : ""}` : r.status === "canceled" ? `${brDateTime(r.canceled_at)} — ${r.cancel_reason ?? ""}` : "—") },
                 { header: "Ações", role: "action", cell: (r) => (canWrite ? (
-                  <>
+                  <div className="flex flex-col items-stretch gap-1">
                     {r.can_receive ? <Button size="sm" onClick={() => setReceiving(r)} aria-label={`Receber transferência ${r.number}`}>Receber</Button> : null}
                     {r.can_cancel ? <Button size="sm" variant="ghost" onClick={() => { setCancelError(null); setCanceling(r); }} aria-label={`Cancelar transferência ${r.number}`}>Cancelar</Button> : null}
-                  </>
+                  </div>
                 ) : null) },
               ]}
             />

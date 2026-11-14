@@ -9,7 +9,7 @@ import { brDate, movementDetail } from "@/pages/stock/movementFormat";
 
 export function MovementTable({ rows, label, onReverse, onReturn }: { rows: MovementRow[]; label: string; onReverse?: (m: MovementRow) => void; onReturn?: (m: MovementRow) => void }) {
   // Venda se desfaz cancelando a venda; entrega de pacote e devolução de paciente têm o próprio caminho (devolução); baixa de atendimento se corrige no atendimento (o servidor avisa).
-  const canReverse = (m: MovementRow) => Boolean(onReverse) && !m.reversed && !["reversal", "sale", "package_delivery", "patient_return"].includes(m.movement_type);
+  const canReverse = (m: MovementRow) => Boolean(onReverse) && !m.reversed && !["reversal", "sale", "package_delivery", "patient_return", "transfer_out", "transfer_in", "inventory"].includes(m.movement_type);
   const canReturn = (m: MovementRow) => Boolean(onReturn) && !m.reversed && m.qty < 0 && (m.movement_type === "sale" || m.movement_type === "package_delivery");
   return (
     <FinTable
