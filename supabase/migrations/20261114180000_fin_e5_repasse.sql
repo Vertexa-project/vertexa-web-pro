@@ -374,7 +374,7 @@ begin
                         when coalesce(a.base_value_cents, 0) > 0 then least(round(a.material_cost_cents::numeric * g / a.base_value_cents)::bigint, a.material_cost_cents)
                         else a.material_cost_cents end;
             base := greatest(g - case when (v_ded->>'fee')::boolean then fee else 0 end - case when (v_ded->>'tax')::boolean then tax else 0 end - mat, 0);
-            v_key := 'pct:' || p_item || ':' || a.id || ':' || p.professional_id || ':' || p.role || ':' || rl.id || ':' || rc.rid;
+            v_key := 'pct:' || p_item || ':' || a.id || ':' || p.professional_id || ':' || p.role || ':' || rl.id || ':' || rc.rid || ':' || v_period;
             v_pct := (select l.pct from public.fin_share_lines l where l.line_key = v_key order by l.created_at, l.id limit 1);
             if v_pct is null then
               if rl.tiers is null then v_pct := rl.pct;
@@ -421,7 +421,7 @@ begin
           v_amt := case when rl.pct is not null then round(base::numeric * rl.pct / 100)::bigint
                         when it.net_cents > 0 then round(rl.amount_cents::numeric * it.quantity * g / it.net_cents)::bigint else 0 end;
           v_out := v_out || jsonb_build_array(jsonb_build_object(
-            'key', 'cm:' || p_item || ':' || v_pro || ':' || rl.id || ':' || rc.rid, 'unit_id', s.unit_id, 'professional_id', v_pro, 'role', 'vendedor', 'rule_id', rl.id,
+            'key', 'cm:' || p_item || ':' || v_pro || ':' || rl.id || ':' || rc.rid || ':' || v_period, 'unit_id', s.unit_id, 'professional_id', v_pro, 'role', 'vendedor', 'rule_id', rl.id,
             'line_type', 'commission', 'period', v_period, 'source_date', rc.settled_date, 'sale_id', s.id, 'sale_item_id', p_item, 'receivable_id', rc.rid,
             'gross', g, 'base', base, 'pct', rl.pct, 'amount', v_amt,
             'memory', jsonb_build_object('origin', 'produto', 'item', si.name, 'item_type', si.item_type, 'settled_date', rc.settled_date, 'gross_cents', g, 'fee_cents', fee,
@@ -499,7 +499,7 @@ begin
           v_ded := private.share_ded(pp.clinic_id, rl);
           mat := case when (v_ded->>'material')::boolean then a.material_cost_cents else 0 end;
           base := greatest(g - case when (v_ded->>'fee')::boolean then fee else 0 end - case when (v_ded->>'tax')::boolean then tax else 0 end - mat, 0);
-          v_key := 'pct:' || pp.id || ':' || a.id || ':' || p.professional_id || ':' || p.role || ':' || rl.id;
+          v_key := 'pct:' || pp.id || ':' || a.id || ':' || p.professional_id || ':' || p.role || ':' || rl.id || ':' || v_period;
           v_pct := (select l.pct from public.fin_share_lines l where l.line_key = v_key order by l.created_at, l.id limit 1);
           if v_pct is null then
             if rl.tiers is null then v_pct := rl.pct;
@@ -534,7 +534,7 @@ begin
           base := g - fee - case when rl.commission_base = 'margin' then v_cost else 0 end;
           v_amt := case when rl.pct is not null then round(base::numeric * rl.pct / 100)::bigint else round(rl.amount_cents::numeric * u.qty)::bigint end;
           v_out := v_out || jsonb_build_array(jsonb_build_object(
-            'key', 'cm:' || u.lid || ':' || v_pro || ':' || rl.id, 'unit_id', pp.unit_id, 'professional_id', v_pro, 'role', 'vendedor', 'rule_id', rl.id,
+            'key', 'cm:' || u.lid || ':' || v_pro || ':' || rl.id || ':' || v_period, 'unit_id', pp.unit_id, 'professional_id', v_pro, 'role', 'vendedor', 'rule_id', rl.id,
             'line_type', 'commission', 'period', v_period, 'source_date', v_rel, 'sale_id', pp.sale_id, 'sale_item_id', pp.sale_item_id,
             'gross', g, 'base', base, 'pct', rl.pct, 'amount', v_amt,
             'memory', jsonb_build_object('origin', 'pacote', 'package', pp.name, 'item', u.item_name, 'kind', u.kind, 'released_on', v_rel, 'gross_cents', g, 'fee_cents', fee,
@@ -738,7 +738,7 @@ begin
 
   -- 1b. ajuste de faixa (D26, Exemplo G): total recalculado de forma progressiva − o que as linhas já somam
   for r in
-    select l.rule_id, ru.tiers, coalesce(sum(l.base_cents), 0) as b, coalesce(sum(l.amount_cents), 0) as a
+    select l.rule_id, ru.tiers, coalesce(sum(l.base_cents), 0)::bigint as b, coalesce(sum(l.amount_cents), 0)::bigint as a
       from public.fin_share_lines l join public.fin_share_rules ru on ru.id = l.rule_id
      where l.clinic_id = p_clinic and l.professional_id = p_prof and l.period = p_period and l.line_type = 'pct' and ru.tiers is not null
      group by l.rule_id, ru.tiers, case when coalesce(ru.tier_scope, v_tb, 'organization') = 'unit' then l.unit_id end
@@ -806,7 +806,7 @@ begin
   -- 8. retenções (§5.8): sobre o total bruto positivo; dispensa para optante pelo Simples (por tipo)
   select * into fin from public.fin_professional_finance f where f.professional_id = p_prof;
   if v_gross > 0 then
-    for w in select * from public.fin_withholding_rules x where x.professional_id = p_prof and x.is_active and x.valid_from <= v_end and coalesce(x.valid_to, v_end) >= v_start order by x.created_at, x.id loop
+    for w in select * from public.fin_withholding_rules x where x.professional_id = p_prof and x.is_active and x.valid_from <= v_end and coalesce(x.valid_to, v_end) >= v_start order by x.rule_type, x.valid_from, x.id loop
       if coalesce(fin.simples_optant, false) and w.waive_if_simples then
         v_w := v_w || jsonb_build_array(jsonb_build_object('rule_type', w.rule_type, 'label', w.label, 'rate_pct', w.rate_pct, 'amount_cents', 0, 'waived', 'simples'));
       elsif v_gross < w.min_base_cents then
@@ -872,7 +872,7 @@ begin
                                  from public.professionals pr left join public.profiles pf on pf.id = pr.profile_id
                                 where pr.clinic_id = p_clinic and coalesce(pr.status, 'active') = 'active'), '[]'::jsonb),
     'services', coalesce((select jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name, 'category', s.category) order by s.name) from public.fin_services s where s.clinic_id = p_clinic and s.is_active), '[]'::jsonb),
-    'items', coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'name', i.name, 'item_type', i.item_type) order by i.name) from public.stock_items i where i.clinic_id = p_clinic and i.sellable), '[]'::jsonb),
+    'items', coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'name', i.name, 'item_type', i.item_type) order by i.name) from public.stock_items i where i.clinic_id = p_clinic and i.is_active and (i.sellable or i.item_type in ('medication','compounded'))), '[]'::jsonb),
     'units', coalesce((select jsonb_agg(jsonb_build_object('id', u.id, 'name', u.name) order by u.name) from public.clinic_units u where u.clinic_id = p_clinic and u.is_active), '[]'::jsonb),
     'settings', jsonb_build_object('deduct_fee', coalesce(v_set.deduct_fee, true), 'deduct_tax', coalesce(v_set.deduct_tax, false), 'deduct_material', coalesce(v_set.deduct_material, false), 'tier_base', coalesce(v_set.tier_base, 'organization')),
     'tax_pct', private.share_tax_pct(p_clinic, private.share_period(private.fin_today()), null));

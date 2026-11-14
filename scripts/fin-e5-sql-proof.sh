@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prova SQL da FIN-E5 (motor de repasse) num Postgres LOCAL descartável (nunca produção). Cria um cluster temporário, aplica stub + E1 + E2 + E3 + E4 + E5,
 # roda supabase/tests/fin_e5_repasse.test.sql e APAGA tudo ao sair. Uso: scripts/fin-e5-sql-proof.sh [porta]
-# Com SQL_ONLY=<arquivo.sql> só aplica as migrations e roda esse arquivo (diagnóstico).
+# Com SQL_ONLY=<arquivo.sql> só aplica as migrations e roda esse arquivo (diagnóstico). Com TEST_FILE=<arquivo> roda outra prova (ex.: as das Entregas 2 a 4) com a E5 já aplicada: regressão.
 set -euo pipefail
 PORT="${1:-55433}"
 BIN="$(dirname "$(ls /usr/lib/postgresql/*/bin/initdb | sort -V | tail -1)")"
@@ -19,6 +19,6 @@ for f in supabase/tests/fin_local_stub.sql supabase/migrations/20261113100000_fi
   "${P[@]}" -d fine5 -f "$ROOT/$f" >/dev/null 2>"$D/err" || { echo "falhou aplicar $f" >&2; cat "$D/err" >&2; exit 1; }
 done
 if [ -n "${SQL_ONLY:-}" ]; then psql -h 127.0.0.1 -p "$PORT" -U postgres -d fine5 -f "$SQL_ONLY"; exit 0; fi
-OUT="$(psql -h 127.0.0.1 -p "$PORT" -U postgres -d fine5 -q -At -F '|' -f "$ROOT/supabase/tests/fin_e5_repasse.test.sql" 2>&1)" || true
+OUT="$(psql -h 127.0.0.1 -p "$PORT" -U postgres -d fine5 -q -At -F '|' -f "$ROOT/${TEST_FILE:-supabase/tests/fin_e5_repasse.test.sql}" 2>&1)" || true
 echo "$OUT" | grep -E 'FALHA|ERROR|^[0-9]+\|[0-9]+$' || true
 echo "$OUT" | tail -1 | grep -q '|0$' && echo "PROVA SQL OK ($(echo "$OUT" | tail -1 | cut -d'|' -f1) asserções)" || { echo "PROVA SQL COM FALHAS" >&2; exit 1; }
