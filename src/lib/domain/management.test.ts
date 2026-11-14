@@ -35,7 +35,7 @@ describe("management domain", () => {
     expect(filterNav(mainNav, true).map((i) => i.path)).toContain("/gestao");
     expect(filterNav(mainNav, true).map((i) => i.path)).toContain("/financeiro");
     expect(filterNav(mainNav, false).map((i) => i.path)).not.toContain("/financeiro");
-    // Gestão, Financeiro e Estoque são só do admin (Estoque entrou na Entrega 1 do módulo Financeiro/Estoque).
-    expect(filterNav(mainNav, false).length).toBe(mainNav.length - 3);
+    // Gestão, Financeiro, Estoque e Documentos (E9) são só do admin/papéis (Estoque entrou na Entrega 1 do módulo Financeiro/Estoque).
+    expect(filterNav(mainNav, false).length).toBe(mainNav.length - 4);
   });
 });

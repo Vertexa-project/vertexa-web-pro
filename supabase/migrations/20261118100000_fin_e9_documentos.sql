@@ -320,24 +320,33 @@ begin
 end $$;
 
 -- Lista (sem conteúdo). Paciente informado, atendimento (clínico) ou agenda do financeiro; sem filtro = documentos da clínica a que o chamador tem acesso.
+-- Varre do mais novo para o mais antigo e PARA ao completar a página; o acesso ao paciente é avaliado uma vez por paciente (guardado no laço), não por documento.
 create or replace function public.doc_list(p_clinic uuid, p_patient uuid default null, p_encounter uuid default null, p_appointment uuid default null,
                                            p_limit integer default 100, p_offset integer default 0) returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
-declare v_kind text := private.doc_kind(p_clinic); v_out jsonb;
+declare v_kind text := private.doc_kind(p_clinic); v_all boolean := private.is_clinic_admin(p_clinic) or private.doc_kind(p_clinic) = 'front';
+        v_limit integer := least(greatest(coalesce(p_limit, 100), 1), 200); v_skip integer := greatest(coalesce(p_offset, 0), 0);
+        v_ok jsonb := '{}'::jsonb; v_rows jsonb := '[]'::jsonb; v_n integer := 0; v_b boolean; r public.clinical_documents;
 begin
   if v_kind = 'none' then raise exception 'forbidden' using errcode = '42501'; end if;
   if p_patient is not null and v_kind = 'clinical' and not private.doc_can_content(p_clinic, p_patient) then raise exception 'forbidden' using errcode = '42501'; end if;
-  select coalesce(jsonb_agg(r.j order by r.signed_at desc, r.id), '[]'::jsonb) into v_out from (
-    select d.signed_at, d.id, private.doc_row(d, v_kind = 'clinical') as j
-      from public.clinical_documents d
-     where d.clinic_id = p_clinic
-       and (p_patient is null or d.patient_id = p_patient)
-       and (p_encounter is null or d.encounter_id = p_encounter)
-       and (p_appointment is null or d.appointment_id = p_appointment)
-       and (v_kind = 'front' or private.can_access_patient(d.patient_id))
+  for r in
+    select * from public.clinical_documents d
+     where d.clinic_id = p_clinic and (p_patient is null or d.patient_id = p_patient)
+       and (p_encounter is null or d.encounter_id = p_encounter) and (p_appointment is null or d.appointment_id = p_appointment)
      order by d.signed_at desc, d.id
-     limit least(greatest(coalesce(p_limit, 100), 1), 200) offset greatest(coalesce(p_offset, 0), 0)) r;
-  return v_out;
+  loop
+    if not v_all then
+      v_b := (v_ok ->> r.patient_id::text)::boolean;
+      if v_b is null then v_b := private.can_access_patient(r.patient_id); v_ok := v_ok || jsonb_build_object(r.patient_id::text, v_b); end if;
+      if not v_b then continue; end if;
+    end if;
+    if v_skip > 0 then v_skip := v_skip - 1; continue; end if;
+    v_rows := v_rows || jsonb_build_array(private.doc_row(r, v_kind = 'clinical'));
+    v_n := v_n + 1;
+    exit when v_n >= v_limit;
+  end loop;
+  return v_rows;
 end $$;
 
 -- Documento completo (conteúdo, itens, dados do momento da assinatura). Só quem tem acesso clínico ao paciente; cada abertura vai ao log.
@@ -388,30 +397,35 @@ begin
 end $$;
 
 -- Itens prescritos como dado (para «Preparar retorno» e cruzamento com o estoque). A sugestão NÃO baixa estoque: só indica o item da clínica.
+-- Os nomes de estoque são normalizados UMA vez por chamada (não por item prescrito).
 create or replace function public.doc_prescribed_items(p_clinic uuid, p_patient uuid, p_encounter uuid default null, p_appointment uuid default null, p_since date default null) returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
 declare v_out jsonb;
 begin
   if not private.doc_can_content(p_clinic, p_patient) then raise exception 'forbidden' using errcode = '42501'; end if;
-  select coalesce(jsonb_agg(r.j order by r.signed_at desc, r.id, r.idx), '[]'::jsonb) into v_out from (
-    select d.signed_at, d.id, e.ord as idx, jsonb_build_object(
-        'document_id', d.id, 'signed_at', d.signed_at, 'is_demo', d.is_demo, 'encounter_id', d.encounter_id, 'appointment_id', d.appointment_id,
-        'name', e.item->>'name', 'dose', e.item->>'dose', 'posology', e.item->>'posology', 'quantity', e.item->>'quantity',
-        'stock_suggestion', (select jsonb_build_object('item_id', s.id, 'name', s.name, 'stock_unit', s.stock_unit)
-                               from public.stock_items s
-                              where s.clinic_id = p_clinic and s.is_active and s.item_type in ('medication','compounded')
-                                and char_length(private.doc_norm(s.name)) >= 4
-                                and (private.doc_norm(e.item->>'name') = private.doc_norm(s.name)
-                                     or private.doc_norm(e.item->>'name') like private.doc_norm(s.name) || ' %'
-                                     or private.doc_norm(s.name) like private.doc_norm(e.item->>'name') || ' %')
-                              order by char_length(s.name) desc, s.id limit 1)) as j
+  with st as materialized (
+    select x.* from (
+      select s.id, s.name, s.stock_unit, private.doc_norm(s.name) as norm, char_length(s.name) as len
+        from public.stock_items s
+       where s.clinic_id = p_clinic and s.is_active and s.item_type in ('medication','compounded') offset 0) x
+     where char_length(x.norm) >= 4),
+  it as (
+    select d.id as doc_id, d.signed_at, d.is_demo, d.encounter_id, d.appointment_id, e.ord, e.item, private.doc_norm(e.item->>'name') as norm
       from public.clinical_documents d
       cross join lateral jsonb_array_elements(d.items) with ordinality as e(item, ord)
      where d.clinic_id = p_clinic and d.patient_id = p_patient and d.doc_type = 'receita'
        and not exists (select 1 from public.clinical_document_marks m where m.document_id = d.id)
        and (p_encounter is null or d.encounter_id = p_encounter)
        and (p_appointment is null or d.appointment_id = p_appointment)
-       and (p_since is null or d.signed_at >= p_since::timestamptz)) r;
+       and (p_since is null or d.signed_at >= p_since::timestamptz))
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'document_id', it.doc_id, 'signed_at', it.signed_at, 'is_demo', it.is_demo, 'encounter_id', it.encounter_id, 'appointment_id', it.appointment_id,
+      'name', it.item->>'name', 'dose', it.item->>'dose', 'posology', it.item->>'posology', 'quantity', it.item->>'quantity',
+      'stock_suggestion', (select jsonb_build_object('item_id', st.id, 'name', st.name, 'stock_unit', st.stock_unit) from st
+                            where it.norm = st.norm or it.norm like st.norm || ' %' or st.norm like it.norm || ' %'
+                            order by st.len desc, st.id limit 1))
+    order by it.signed_at desc, it.doc_id, it.ord), '[]'::jsonb) into v_out
+    from it;
   return v_out;
 end $$;
 

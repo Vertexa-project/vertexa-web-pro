@@ -36,6 +36,7 @@ vi.mock("@/components/patient/PatientEditDialog", () => ({
 vi.mock("@/components/patient/ProfileHeader", () => ({ ProfileHeader: stub("header") }));
 vi.mock("@/components/patient/ExportPatientReportButton", () => ({ ExportPatientReportButton: stub("export") }));
 vi.mock("@/components/fin/NewSaleButton", () => ({ NewSaleButton: () => null }));
+vi.mock("@/components/documents/NewDocumentButton", () => ({ NewDocumentButton: () => null }));
 vi.mock("@/components/fin/NewAppointmentButton", () => ({ NewAppointmentButton: () => null }));
 vi.mock("@/components/fin/PatientPackagesCard", () => ({ PatientPackagesCard: () => null }));
 vi.mock("@/components/patient/AnthropometryTab", () => ({ AnthropometryTab: stub("t1") }));
