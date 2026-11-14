@@ -20,6 +20,7 @@ import {
 import { todayIsoBR } from "@/lib/domain/stockMoves";
 import { cn } from "@/lib/utils";
 import { NoAccess } from "@/pages/finance/NoAccess";
+import { alignHeads } from "@/pages/finance/dash/dashColumns";
 import { DashDetailDialog } from "@/pages/finance/dash/DashDetailDialog";
 import { StatementDialog } from "@/pages/finance/payout/closing/StatementDialog";
 
@@ -200,24 +201,24 @@ function DashboardBody({ s, money, open, openStatement }: {
 
       <Section title="Evolução mensal" hint="Últimos 12 meses: vendido, recebido e margem. Clique no valor de um mês para ver a lista.">
         <Card><CardContent className="min-w-0 space-y-4 p-4"><EvolutionChart evo={s.evolution} /></CardContent></Card>
-        <FinTable label="Evolução mensal" rows={[...s.evolution].reverse()} rowKey={(e) => e.period} columns={evoCols} />
+        <FinTable label="Evolução mensal" rows={[...s.evolution].reverse()} rowKey={(e) => e.period} columns={alignHeads(evoCols)} />
       </Section>
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-2">
         <Section title="Recebido por forma de pagamento">
-          {s.by_method.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum recebimento liquidado neste mês.</p> : <FinTable label="Recebido por forma de pagamento" rows={s.by_method} rowKey={(m) => m.key} columns={methodCols} />}
+          {s.by_method.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum recebimento liquidado neste mês.</p> : <FinTable label="Recebido por forma de pagamento" rows={s.by_method} rowKey={(m) => m.key} columns={alignHeads(methodCols)} />}
         </Section>
         <Section title="Agenda de recebimentos" hint="Próximos 90 dias, por semana, a partir de hoje.">
-          <FinTable label="Agenda de recebimentos" rows={s.agenda} rowKey={(b) => b.from} columns={agendaCols} />
+          <FinTable label="Agenda de recebimentos" rows={s.agenda} rowKey={(b) => b.from} columns={alignHeads(agendaCols)} />
         </Section>
       </div>
 
       <Section title="Por profissional" hint="Receita gerada = atendimentos que o profissional respondeu. Margem gerada = receita − repasse − material.">
-        {s.by_professional.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum atendimento realizado neste mês.</p> : <FinTable label="Por profissional" rows={s.by_professional} rowKey={(p) => p.professional_id} columns={proCols} />}
+        {s.by_professional.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum atendimento realizado neste mês.</p> : <FinTable label="Por profissional" rows={s.by_professional} rowKey={(p) => p.professional_id} columns={alignHeads(proCols)} />}
       </Section>
 
       <Section title="Por serviço">
-        {s.by_service.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum atendimento realizado neste mês.</p> : <FinTable label="Por serviço" rows={s.by_service} rowKey={(v) => v.service_id} columns={svcCols} />}
+        {s.by_service.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum atendimento realizado neste mês.</p> : <FinTable label="Por serviço" rows={s.by_service} rowKey={(v) => v.service_id} columns={alignHeads(svcCols)} />}
       </Section>
 
       <Section title="Produtos" hint="Receita de revenda, custo, comissões e margem do mês.">

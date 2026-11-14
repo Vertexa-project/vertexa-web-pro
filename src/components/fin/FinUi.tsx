@@ -118,7 +118,7 @@ export function TableShell({ children, label }: { children: React.ReactNode; lab
 }
 
 export type FinColumnRole = "title" | "badge" | "field" | "action";
-export interface FinColumn<T> { header: string; cell: (row: T) => React.ReactNode; role?: FinColumnRole; nowrap?: boolean; className?: string; /** no cartão do celular, ocupa a linha inteira */ wide?: boolean }
+export interface FinColumn<T> { header: string; cell: (row: T) => React.ReactNode; role?: FinColumnRole; nowrap?: boolean; className?: string; /** classe do cabeçalho (ex.: text-right sobre coluna de valores) */ headClassName?: string; /** no cartão do celular, ocupa a linha inteira */ wide?: boolean }
 
 /**
  * Lista do módulo: tabela no computador; em telas < 640 px, um cartão por linha (nome, dados principais e o botão
@@ -129,7 +129,7 @@ export function FinTable<T>({ label, rows, rowKey, columns }: { label: string; r
   if (!narrow) {
     return (
       <TableShell label={label}>
-        <thead><tr>{columns.map((c) => <Th key={c.header}>{c.header === "Ações" ? <span>Ações</span> : c.header}</Th>)}</tr></thead>
+        <thead><tr>{columns.map((c) => <Th key={c.header} className={c.headClassName}>{c.header === "Ações" ? <span>Ações</span> : c.header}</Th>)}</tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={rowKey(r)} className="align-top">

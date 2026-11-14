@@ -273,6 +273,12 @@ begin
   perform pg_temp.sale_u('s14', 'u1', 'pat2', jsonb_build_array(jsonb_build_object('item_type', 'package', 'ref_id', pg_temp.f('pk_b'), 'quantity', 1)), null);
   update public.fin_patient_packages set expires_on = d0 + 10 where sale_id = pg_temp.f('s13');
   update public.fin_patient_packages set expires_on = d0 + 45 where sale_id = pg_temp.f('s14');
+  -- pacote que vence em 5 dias mas sem sessão a realizar (esgotado): não é pendência; e atendimento ainda «aberto» sem venda: não é «atendido sem venda»
+  insert into public.fin_patient_packages (clinic_id, unit_id, patient_id, package_id, sale_id, sale_item_id, seq, name, price_cents, purchased_on, expires_on)
+    select clinic_id, unit_id, patient_id, package_id, sale_id, sale_item_id, 2, 'Pacote Esgotado', 0, purchased_on, d0 + 5 from public.fin_patient_packages where sale_id = pg_temp.f('s13') and seq = 1;
+  insert into public.fin_patient_package_items (patient_package_id, clinic_id, position, item_type, service_id, name, qty_total, qty_used)
+    select pp.id, pp.clinic_id, 1, 'service', pg_temp.f('sv_cons'), 'Consulta', 2, 2 from public.fin_patient_packages pp where pp.name = 'Pacote Esgotado';
+  insert into public.fin_appointments (clinic_id, unit_id, patient_id, service_id, service_name, performed_on, status) values (c, u1, pg_temp.f('pat'), pg_temp.f('sv_cons'), 'Consulta', d0, 'open');
 
   -- caixa: um de dia anterior ainda aberto (Recepção) e um fechado com diferença aguardando aprovação (Financeiro)
   perform pg_temp.as_user('recep'); r := public.fin_open_cash(c, u1, 10000); insert into fx values ('cash_stale', r); perform pg_temp.su();

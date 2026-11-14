@@ -21,7 +21,12 @@ const money = (header: string, f: (r: DashRow) => number, extra: Partial<FinColu
 const value = (header: string): FinColumn<DashRow> => money(header, (r) => r.value_cents, { className: "text-right font-medium" });
 const date = (header: string, key: string): FinColumn<DashRow> => ({ header, cell: (r) => dateBR(r[key]), nowrap: true });
 
-export function detailColumns(metric: DashMetric, ctx: DashColumnCtx): FinColumn<DashRow>[] {
+/** Coluna de valores: o cabeçalho acompanha o alinhamento à direita das células. */
+export const alignHeads = <T,>(cols: FinColumn<T>[]): FinColumn<T>[] => cols.map((c) => (c.className?.includes("text-right") ? { ...c, headClassName: "text-right" } : c));
+
+export const detailColumns = (metric: DashMetric, ctx: DashColumnCtx): FinColumn<DashRow>[] => alignHeads(rawColumns(metric, ctx));
+
+function rawColumns(metric: DashMetric, ctx: DashColumnCtx): FinColumn<DashRow>[] {
   switch (metric) {
     case "sold": case "ticket":
       return [
