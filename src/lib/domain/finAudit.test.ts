@@ -54,3 +54,13 @@ describe("histórico de movimentações de estoque (Entrega 3)", () => {
     expect(AUDIT_ENTITY_LABEL.stock_item_map).toBe("De/para do fornecedor");
   });
 });
+
+describe("histórico: entidades e situações das entregas 4–9", () => {
+  it("todas as entidades gravadas pelo banco têm rótulo em português", () => {
+    for (const k of ["appointment", "closing", "closing_pro", "stock_inventory", "stock_transfer", "clinical_document", "share_rule", "receivable", "patient_package"]) expect(AUDIT_ENTITY_LABEL[k]).toBeTruthy();
+  });
+  it("situação e aceite saem traduzidos", () => {
+    const d = diffAudit({ status: "open", acceptance: "pending" }, { status: "answered", acceptance: "contested" });
+    expect(d.map((c) => [c.label, c.before, c.after])).toEqual([["Aceite", "Pendente", "Contestado"], ["Situação", "Aberto", "Respondida"]]);
+  });
+});

@@ -16,6 +16,28 @@ export const AUDIT_ENTITY_LABEL: Record<string, string> = {
   stock_entry: "Entrada de estoque",
   stock_supplier: "Fornecedor",
   stock_item_map: "De/para do fornecedor",
+  appointment: "Atendimento",
+  sale: "Venda",
+  payment: "Pagamento",
+  receivable: "Título a receber",
+  patient_package: "Pacote do paciente",
+  cash_register: "Caixa",
+  cash_movement: "Movimento de caixa",
+  closing: "Fechamento do mês",
+  closing_pro: "Extrato do profissional",
+  closing_dispute: "Contestação do extrato",
+  payment_file: "Arquivo de pagamento",
+  compliance: "Aceite do responsável",
+  doc_provider: "Provedor de documentos",
+  clinical_document: "Documento clínico",
+  share_rule: "Regra de repasse",
+  share_engine: "Cálculo do repasse",
+  share_recalc: "Recálculo do repasse",
+  stock_alert_settings: "Alertas de estoque",
+  stock_inventory: "Inventário",
+  stock_transfer: "Transferência de estoque",
+  stock_transfer_loss: "Perda em transferência",
+  stock_shortfall: "Pendência de estoque",
 };
 
 export const AUDIT_ACTION_LABEL: Record<string, string> = {
@@ -45,6 +67,8 @@ const FIELD_LABEL: Record<string, string> = {
   movement_type: "Movimento", item_name: "Item", lot_code: "Lote", expiry_date: "Validade", qty: "Quantidade", unit_cost_cents: "Custo unitário", total_cost_cents: "Custo total",
   balance_after: "Saldo depois", avg_cost_after_cents: "Custo médio depois", loss_kind: "Tipo de perda", purpose: "Setor / finalidade", entry_type: "Tipo de entrada",
   invoice_number: "Nota", invoice_key: "Chave da NF-e", freight_cents: "Frete", items_total_cents: "Total dos itens", total_cents: "Total", lines: "Linhas", movements: "Movimentos estornados",
+  status: "Situação", acceptance: "Aceite", response: "Resposta", provider: "Provedor", lock_no: "Nº da trava", notified: "Notificados", changed: "Alterados", added: "Incluídos",
+  adjustment_cents: "Ajuste", invoice_date: "Data da nota", from: "De", to: "Até", lines_created: "Lançamentos criados", error: "Erro", table: "Tabela",
   supplier_code: "Código do fornecedor", conversion_factor: "Fator de conversão", tax_id_supplier: "CNPJ",
 };
 
@@ -75,6 +99,9 @@ const ENUM_TEXT: Record<string, Record<string, string>> = {
   movement_type: { initial_balance: "Saldo inicial", purchase: "Compra", xml_purchase: "Compra por XML da NF-e", bonus: "Bonificação / doação", sector: "Consumo interno", loss: "Perda / quebra / vencimento", appointment: "Uso por paciente", sale: "Venda ao paciente", reversal: "Estorno" },
   entry_type: { initial_balance: "Saldo inicial", purchase: "Compra", xml_purchase: "Compra por XML da NF-e", bonus: "Bonificação / doação" },
   loss_kind: { loss: "Perda", breakage: "Quebra / avaria", expiry: "Vencimento" },
+  status: { open: "Aberto", answered: "Respondida", approved: "Aprovado", reversed: "Estornado", canceled: "Cancelado", active: "Ativo", signed: "Assinado", invalidated: "Invalidado", counting: "Em contagem", review: "Em revisão", in_transit: "Em trânsito", aprovado: "Aprovado", travado: "Travado", conferencia: "Em conferência", paid: "Pago" },
+  acceptance: { pending: "Pendente", accepted: "Aceito", contested: "Contestado" },
+  provider: { demo: "Demonstração" },
   tier_base: { organization: "Organização (todas as unidades)", unit: "Por unidade" },
 };
 const DATE_KEYS = new Set(["license_valid_until", "valid_from", "valid_to", "expiry_date"]);
