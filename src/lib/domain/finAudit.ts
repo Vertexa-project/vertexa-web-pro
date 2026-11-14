@@ -103,6 +103,15 @@ export function auditWhen(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(", ", " ");
 }
 
+/** Texto livre gravado pelo banco (motivo): datas aaaa-mm-dd viram dd/mm/aaaa e competências aaaa-mm viram mm/aaaa. */
+export function auditReasonText(reason: string | null | undefined): string {
+  if (!reason) return "—";
+  return reason
+    .replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, "$3/$2/$1")
+    .replace(/\b(\d{4})-(\d{2})\/(\d{4})-(\d{2})\b/g, "$2/$1 e $4/$3")
+    .replace(/\b(\d{4})-(\d{2})\b/g, "$2/$1");
+}
+
 export function auditFieldLabel(key: string): string {
   return FIELD_LABEL[key] ?? key.replace(/_cents$/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }

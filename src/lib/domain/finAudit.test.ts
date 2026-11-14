@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AUDIT_ACTION_LABEL, AUDIT_ENTITY_LABEL, auditValueText, diffAudit } from "./finAudit";
+import { AUDIT_ACTION_LABEL, AUDIT_ENTITY_LABEL, auditReasonText, auditValueText, diffAudit } from "./finAudit";
 
 describe("histórico: antes → depois", () => {
   it("mostra só o que mudou, com rótulo e dinheiro formatado", () => {
@@ -94,5 +94,14 @@ describe("histórico: datas, competência e códigos de caixa e estoque (achado 
     expect(text).toContain("Movimento: Transferência (saída)");
     expect(text).toContain("Chave: Dinheiro");
     for (const raw of ["2026-11-13", "2026-09", "transfer_out", ": cash"]) expect(text).not.toContain(raw);
+  });
+});
+
+describe("motivo do histórico (achado D53)", () => {
+  it("datas e competências do texto gravado saem em pt-BR", () => {
+    expect(auditReasonText("Aprovado sem aceite (prazo vencido em 2026-11-12)")).toBe("Aprovado sem aceite (prazo vencido em 12/11/2026)");
+    expect(auditReasonText("Arquivo de pagamento do fechamento 2026-10")).toBe("Arquivo de pagamento do fechamento 10/2026");
+    expect(auditReasonText("Fechamento de 2026-09/2026-10 iniciado")).toBe("Fechamento de 09/2026 e 10/2026 iniciado");
+    expect(auditReasonText(null)).toBe("—");
   });
 });

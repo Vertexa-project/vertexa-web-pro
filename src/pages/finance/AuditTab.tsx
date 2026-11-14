@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAudit, useFinContext, useServices, useStockItems, useUnits } from "@/hooks/useFin";
 import type { AuditEntry } from "@/lib/api/finRegistry";
-import { AUDIT_ACTION_LABEL, AUDIT_ENTITY_LABEL, auditWhen, diffAudit, type AuditCtx } from "@/lib/domain/finAudit";
+import { AUDIT_ACTION_LABEL, AUDIT_ENTITY_LABEL, auditReasonText, auditWhen, diffAudit, type AuditCtx } from "@/lib/domain/finAudit";
 import { finCan } from "@/lib/domain/finAccess";
 import type { ExportColumn } from "@/lib/domain/tableExport";
 import { NoAccess } from "@/pages/finance/NoAccess";
@@ -24,7 +24,7 @@ const exportColumns = (ctx: AuditCtx): ExportColumn<AuditEntry>[] => [
   { header: "Cadastro", value: (e) => AUDIT_ENTITY_LABEL[e.entity] ?? e.entity },
   { header: "Ação", value: (e) => AUDIT_ACTION_LABEL[e.action] ?? e.action },
   { header: "Mudanças (antes → depois)", value: (e) => diffAudit(e.before, e.after, ctx).map((c) => `${c.label}: ${c.before.replace(/\n/g, "; ")} → ${c.after.replace(/\n/g, "; ")}`).join(" | ") },
-  { header: "Motivo", value: (e) => e.reason },
+  { header: "Motivo", value: (e) => auditReasonText(e.reason) },
 ];
 
 function Changes({ entry, ctx }: { entry: AuditEntry; ctx: AuditCtx }) {
@@ -96,7 +96,7 @@ export function AuditTab() {
               { header: "Quando", nowrap: true, cell: (e) => fmtWhen(e.at) },
               { header: "Quem", cell: (e) => e.user_name ?? "—" },
               { header: "Mudanças", wide: true, className: "min-w-64", cell: (e) => <Changes entry={e} ctx={ctx} /> },
-              { header: "Motivo", wide: true, cell: (e) => e.reason ?? "—" },
+              { header: "Motivo", wide: true, cell: (e) => auditReasonText(e.reason) },
             ]}
           />
           {rows.length >= limit ? <Button variant="outline" onClick={() => setLimit(limit + PAGE)}>Carregar mais</Button> : null}
