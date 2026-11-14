@@ -68,8 +68,8 @@ export function ExportPointsButton({ patient }: { patient: PatientDetail }) {
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-2">
+    <div className="flex min-w-0 max-w-full flex-col items-end gap-1">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
         <Select value={periodValue} onValueChange={setPeriodValue} disabled={generating}>
           <SelectTrigger className="h-9 w-40" aria-label="Período do relatório de pontos">
             <SelectValue />
