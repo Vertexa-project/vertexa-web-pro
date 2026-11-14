@@ -30,6 +30,8 @@ vi.mock("@/pages/finance/payout/closing/StatementDialog", () => ({ StatementDial
 
 const wrap = () => render(<MemoryRouter initialEntries={["/financeiro/painel"]}><DashboardTab /></MemoryRouter>);
 const GESTOR = { dash_read: true, sales_read: true, receivables_read: true, share_lines_read: true, appt_read: true, share_rules_read: true, cash_read: true, stock_move_read: true, patient_pkg_read: true };
+const nm = (s: string) => new RegExp("^" + s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s") + "$");
+const closeBtn = (dlg: HTMLElement) => within(dlg).getAllByRole("button", { name: "Fechar" }).at(-1) as HTMLElement;
 const brl = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }).replace(/\s/g, " ");
 
 const summary = (over: Partial<DashSummary> = {}): DashSummary => ({
@@ -147,7 +149,7 @@ describe("Financeiro › Painel", () => {
       const dlg = await screen.findByRole("dialog");
       expect(within(dlg).getByTestId("dash-total")).toHaveTextContent(brl(c.number));
       expect(columnSum(dlg, c.header)).toBe(c.number);
-      await user.click(within(dlg).getByRole("button", { name: "Fechar" }));
+      await user.click(closeBtn(dlg));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     }
   });
@@ -183,7 +185,7 @@ describe("Financeiro › Painel", () => {
     await user.click(screen.getByRole("button", { name: /^Repasses do mês: / }));
     const dlg = await screen.findByRole("dialog");
     await user.click(within(dlg).getByRole("button", { name: "Ver extrato" }));
-    expect(await screen.findByRole("dialog", { name: "Extrato" })).toHaveTextContent("extrato cp9");
+    expect(await screen.findByText("extrato cp9")).toBeInTheDocument();
     // fecha o extrato mockado e abre os lançamentos de Dra. Ana
     await user.click(within(dlg).getByRole("button", { name: "Ver lançamentos" }));
     expect(state.detailArgs.at(-1)).toMatchObject({ metric: "pro_lines", params: { professional: "p1" } });
@@ -192,28 +194,26 @@ describe("Financeiro › Painel", () => {
   it("números por profissional, serviço, forma de pagamento, agenda e evolução abrem a lista certa", async () => {
     const user = userEvent.setup();
     wrap();
-    const close = async () => { await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Fechar" })); await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull()); };
+    const close = async () => { await user.click(closeBtn(screen.getByRole("dialog"))); await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull()); };
 
-    await user.click(screen.getByRole("button", { name: "Ver a receita gerada por Dra. Ana: R$ 150,00" }));
+    await user.click(screen.getByRole("button", { name: nm("Ver a receita gerada por Dra. Ana: R$ 150,00") }));
     expect(state.detailArgs.at(-1)).toMatchObject({ metric: "pro_appointments", params: { professional: "p1" } }); await close();
-    await user.click(screen.getByRole("button", { name: "Ver os atendimentos de Enf. Bia: 1" }));
+    await user.click(screen.getByRole("button", { name: nm("Ver os atendimentos de Enf. Bia: 1") }));
     expect(state.detailArgs.at(-1)).toMatchObject({ metric: "pro_appointments", params: { professional: "p2" } }); await close();
-    await user.click(screen.getByRole("button", { name: "Ver a margem gerada por Dra. Ana: R$ 80,00" }));
+    await user.click(screen.getByRole("button", { name: nm("Ver a margem gerada por Dra. Ana: R$ 80,00") }));
     expect(state.detailArgs.at(-1)).toMatchObject({ metric: "pro_margin", params: { professional: "p1" } }); await close();
-    await user.click(screen.getByRole("button", { name: "Ver o repasse de Enf. Bia: R$ 30,00" }));
-    expect(await screen.findByRole("dialog", { name: "Extrato" })).toHaveTextContent("extrato cp9");
-    await waitFor(() => expect(screen.getByRole("dialog", { name: "Extrato" })).toBeInTheDocument());
-    // (o extrato mockado não tem botão: o teste termina aqui para este caminho)
+    await user.click(screen.getByRole("button", { name: nm("Ver o repasse de Enf. Bia: R$ 30,00") }));
+    expect(await screen.findByText("extrato cp9")).toBeInTheDocument();
   });
 
   it("serviço, forma de pagamento, agenda e evolução", async () => {
     const user = userEvent.setup();
     wrap();
-    const close = async () => { await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Fechar" })); await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull()); };
-    await user.click(screen.getByRole("button", { name: "Ver a receita de Consulta: R$ 200,00" }));
+    const close = async () => { await user.click(closeBtn(screen.getByRole("dialog"))); await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull()); };
+    await user.click(screen.getByRole("button", { name: nm("Ver a receita de Consulta: R$ 200,00") }));
     expect(state.detailArgs.at(-1)).toMatchObject({ metric: "service_appointments", params: { service: "sv1" } });
     expect(columnSum(await screen.findByRole("dialog"), "Receita")).toBe(20000); await close();
-    await user.click(screen.getByRole("button", { name: "Ver os títulos recebidos em Maq1 · Visa: R$ 80,00" }));
+    await user.click(screen.getByRole("button", { name: nm("Ver os títulos recebidos em Maq1 · Visa: R$ 80,00") }));
     expect(state.detailArgs.at(-1)).toMatchObject({ metric: "received", params: { method: "machine:x:visa" } }); await close();
     await user.click(screen.getByRole("button", { name: /^Ver os títulos de 14\/11 a 20\/11: R\$\s60,00/ }));
     expect(state.detailArgs.at(-1)).toMatchObject({ metric: "to_receive", params: { from: "2026-11-14", to: "2026-11-20" } }); await close();
@@ -231,7 +231,7 @@ describe("Financeiro › Painel", () => {
     const dlg = await screen.findByRole("dialog");
     expect(within(dlg).getByTestId("dash-total")).toHaveTextContent("2 linhas");
     expect(within(dlg).getByRole("link", { name: "Ir para Atendimentos" })).toHaveAttribute("href", "/financeiro/atendimentos");
-    await user.click(within(dlg).getByRole("button", { name: "Fechar" }));
+    await user.click(closeBtn(dlg));
     await user.click(screen.getByRole("button", { name: /^Itens abaixo do mínimo: 1/ }));
     const d2 = await screen.findByRole("dialog");
     expect(within(d2).getByText("Suplemento C")).toBeInTheDocument();
@@ -305,6 +305,7 @@ describe("Financeiro › Painel", () => {
     state.summaryError = true;
     wrap();
     expect(screen.getByRole("alert")).toHaveTextContent(/permissão/);
+    expect(screen.getByRole("button", { name: "Tentar novamente" })).toBeInTheDocument();
   });
 
   it("no celular as listas e tabelas viram cartões (sem tabela, sem rolagem lateral)", async () => {

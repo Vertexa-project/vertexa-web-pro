@@ -109,7 +109,7 @@ export function DashboardTab() {
       {q.isLoading ? (
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-3" aria-busy="true">{Array.from({ length: 9 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>
       ) : q.isError || !s ? (
-        <div><p className="mb-2 text-sm text-destructive" role="alert">{dashErrorMessage(q.error)}</p><ErrorState onRetry={() => void q.refetch()} /></div>
+        <ErrorState description={dashErrorMessage(q.error)} onRetry={() => void q.refetch()} />
       ) : (
         <DashboardBody s={s} money={money} open={open} openStatement={setStatementId} />
       )}
