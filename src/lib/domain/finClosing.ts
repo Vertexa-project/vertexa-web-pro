@@ -208,3 +208,17 @@ export function statementItems(
 }
 
 export const totalsText = (cents: number) => formatBRL(cents);
+
+/** Linha do histórico do fechamento a partir do registro de auditoria. */
+export interface ClosingHistoryRow { id: string; text: string; when: string; who: string | null }
+interface AuditLike { id: string; entity: string; entity_id: string | null; action: string; after: Record<string, unknown> | null; before?: Record<string, unknown> | null; reason: string | null; user_name: string | null; at: string }
+export function closingHistoryRows(entries: AuditLike[], closingId: string, period: string): ClosingHistoryRow[] {
+  return entries
+    .filter((e) => e.entity.startsWith("closing") && (e.entity_id === closingId || e.after?.period === period || e.before?.period === period))
+    .map((e) => {
+      const unlocked = e.entity === "closing" && e.action === "update" && e.after?.status === "conferencia" && "ledger_reversed" in (e.after ?? {});
+      const text = unlocked ? `Mês destravado. Motivo: ${e.reason ?? "—"}` : e.reason ?? "Alteração";
+      const when = new Date(e.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      return { id: e.id, text, when, who: e.user_name };
+    });
+}

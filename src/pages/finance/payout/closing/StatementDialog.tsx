@@ -190,10 +190,8 @@ function StatementBody({ v, clinicId, onClose }: { v: StatementView; clinicId: s
             <FinTable<StatementLine>
               label="Lançamentos do extrato" rows={v.lines} rowKey={(l) => l.id}
               columns={[
-                { header: "Serviço", role: "title", cell: (l) => l.service_name ?? PAYOUT_LINE_LABEL[l.line_type] },
-                { header: "Tipo", role: "badge", cell: (l) => <Badge tone={l.amount_cents < 0 ? "warning" : l.kind === "correction" ? "info" : "muted"}>{l.kind === "correction" ? (l.line_type === "adjustment" ? "Estorno / ajuste" : "Correção") : PAYOUT_LINE_LABEL[l.line_type]}</Badge> },
-                { header: "Data", nowrap: true, cell: (l) => brDate(l.source_date) },
-                { header: "Paciente", cell: (l) => l.patient ?? "—" },
+                { header: "Serviço", role: "title", cell: (l) => <span className="flex min-w-0 flex-col items-start gap-1"><span className="break-words">{l.service_name ?? PAYOUT_LINE_LABEL[l.line_type]}</span><Badge tone={l.amount_cents < 0 ? "warning" : l.kind === "correction" ? "info" : "muted"}>{l.kind === "correction" ? (l.line_type === "adjustment" ? "Estorno / ajuste" : "Correção") : PAYOUT_LINE_LABEL[l.line_type]}</Badge></span> },
+                { header: "Data e paciente", cell: (l) => <span className="flex flex-col"><span className="whitespace-nowrap">{brDate(l.source_date)}</span><span className="text-xs text-muted-foreground">{l.patient ?? "—"}</span></span> },
                 { header: "Valor liquidado", nowrap: true, className: "tabular-nums", cell: (l) => (l.gross_cents === null ? "—" : formatBRL(l.gross_cents)) },
                 { header: "Base", nowrap: true, className: "tabular-nums", cell: (l) => (l.base_cents === null ? "—" : formatBRL(l.base_cents)) },
                 { header: "Regra", nowrap: true, className: "tabular-nums", cell: (l) => (l.pct === null ? "—" : pctTxt(l.pct)) },

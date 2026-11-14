@@ -135,3 +135,17 @@ describe("achados D38", () => {
     expect(m.notifiedText("2026-11-14T01:30:00Z")).toBe("Enviado ao profissional em 13/11/2026, 22:30");
   });
 });
+
+describe("histórico do fechamento (D39)", () => {
+  it("mostra só o mês e explica a destrava com o motivo", async () => {
+    const { closingHistoryRows } = await import("@/lib/domain/finClosing");
+    const rows = closingHistoryRows([
+      { id: "1", entity: "closing", entity_id: "c1", action: "update", after: { period: "2026-10", status: "conferencia", ledger_reversed: 0 }, reason: "reabrir para conferir", user_name: "Ana", at: "2026-11-14T02:34:02Z" },
+      { id: "2", entity: "closing_pro", entity_id: "x", action: "update", after: { period: "2026-10" }, reason: "Extrato aprovado", user_name: null, at: "2026-11-14T02:30:00Z" },
+      { id: "3", entity: "closing", entity_id: "c2", action: "create", after: { period: "2026-09" }, reason: "Fechamento de 2026-09 iniciado", user_name: null, at: "2026-11-14T02:36:00Z" },
+      { id: "4", entity: "sale", entity_id: "c1", action: "create", after: { period: "2026-10" }, reason: "Venda", user_name: null, at: "2026-11-14T02:36:00Z" },
+    ], "c1", "2026-10");
+    expect(rows.map((r) => r.text)).toEqual(["Mês destravado. Motivo: reabrir para conferir", "Extrato aprovado"]);
+    expect(rows[0].when).toBe("13/11/2026, 23:34");
+  });
+});

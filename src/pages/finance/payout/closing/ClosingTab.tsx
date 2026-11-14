@@ -12,14 +12,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useFinContext } from "@/hooks/useFin";
+import { useAudit, useFinContext } from "@/hooks/useFin";
 import { useApproveClosing, useClosing, useLockClosing, useNotifyClosing, useRefreshClosing, useStartClosing, useUnlockClosing } from "@/hooks/useFinClosing";
 import { usePayoutContext } from "@/hooks/useFinPayout";
 import { getPaymentFile } from "@/lib/api/finClosing";
-import { canDecideClosing, canPayClosing, canPrepareClosing, canSeeClosing, canSeePayoutRules, canUnlockClosing } from "@/lib/domain/finAccess";
+import { canDecideClosing, canPayClosing, canPrepareClosing, canSeeClosing, canSeePayoutRules, canUnlockClosing, finCan } from "@/lib/domain/finAccess";
 import {
   BOND_LABEL, CLOSING_STATUS_LABEL, NF_LABEL, SKIP_REASON_TEXT, acceptanceText, acceptanceTone, canSelectForApproval, closingErrorMessage, closingTableColumns, closingTone, nfTone, paymentFileColumns,
-  paymentText, periodLabel, previousPeriod, notifiedText, withholdingColumns, withholdingRows, type ClosingRow,
+  paymentText, periodLabel, previousPeriod, notifiedText, closingHistoryRows, withholdingColumns, withholdingRows, type ClosingRow,
 } from "@/lib/domain/finClosing";
 import { formatBRL } from "@/lib/domain/finance";
 import { CSV_MIME, downloadBlob, toCsv } from "@/lib/domain/tableExport";
@@ -146,8 +146,8 @@ export function ClosingTab() {
                         ),
                       },
                       { header: "Aceite", role: "badge", cell: (r) => <Badge tone={acceptanceTone(r.acceptance)} className="whitespace-normal text-center">{acceptanceText(r)}{r.open_disputes > 0 ? ` · ${r.open_disputes} contest.` : ""}</Badge> },
-                      { header: "NF", role: "badge", cell: (r) => <Badge tone={nfTone(r.nf_status)}>NF {NF_LABEL[r.nf_status].toLowerCase()}</Badge> },
-                      { header: "Atendimentos", nowrap: true, className: "tabular-nums", cell: (r) => r.appointments },
+                      { header: "NF e pagamento", cell: (r) => <span className="flex min-w-0 flex-col items-start gap-1"><Badge tone={nfTone(r.nf_status)}>NF {NF_LABEL[r.nf_status].toLowerCase()}</Badge><span className="text-xs text-muted-foreground">{paymentText(r)}</span></span> },
+                      ...(rows.some((x) => x.appointments !== 0) ? [{ header: "Atendimentos", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => r.appointments }] : []),
                       { header: "Percentual", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.pct_cents) },
                       ...(rows.some((x) => x.fixed_exec_cents !== 0) ? [{ header: "Fixo por execução", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => formatBRL(r.fixed_exec_cents) }] : []),
                       ...(rows.some((x) => x.fixed_monthly_cents !== 0) ? [{ header: "Fixo mensal", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => formatBRL(r.fixed_monthly_cents) }] : []),
@@ -156,10 +156,9 @@ export function ClosingTab() {
                       ...(rows.some((x) => x.usage_fee_cents !== 0) ? [{ header: "Taxa de uso", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => formatBRL(r.usage_fee_cents) }] : []),
                       ...(rows.some((x) => x.adjustment_cents !== 0) ? [{ header: "Ajustes", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => formatBRL(r.adjustment_cents) }] : []),
                       { header: "Total bruto", nowrap: true, className: "tabular-nums font-medium", cell: (r) => formatBRL(r.gross_cents) },
-                      { header: "Retenções", nowrap: true, className: "tabular-nums", cell: (r) => (r.withholding_cents === 0 ? formatBRL(0) : `−${formatBRL(r.withholding_cents)}`) },
+                      ...(rows.some((x) => x.withholding_cents !== 0) ? [{ header: "Retenções", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => `−${formatBRL(r.withholding_cents)}` }] : []),
                       { header: "Líquido a pagar", nowrap: true, className: "tabular-nums font-semibold", cell: (r) => formatBRL(r.net_cents) },
-                      { header: "Pagamento", wide: true, cell: (r) => paymentText(r) },
-                      { header: "Ações", role: "action", cell: (r) => <Button size="sm" variant="outline" onClick={() => setOpenStatement(r.id)} aria-label={`Ver extrato de ${r.name}`}>Ver extrato</Button> },
+                                            { header: "Ações", role: "action", cell: (r) => <Button size="sm" variant="outline" onClick={() => setOpenStatement(r.id)} aria-label={`Ver extrato de ${r.name}`}>Ver extrato</Button> },
                     ]}
                   />
                   <Card>
@@ -184,6 +183,7 @@ export function ClosingTab() {
         </>
       )}
 
+      {c && finCan(access, "audit") ? <ClosingHistory clinicId={clinicId} closingId={c.id} period={period} /> : null}
       {openStatement ? <StatementDialog statementId={openStatement} onClose={() => setOpenStatement(null)} /> : null}
       {dlg === "lock" && c ? (
         <ReasonDialog title="Travar o mês" description={`Depois de travado, ${periodLabel(period)} não muda: estorno ou correção posterior vira linha no próximo mês aberto. Só o responsável pela clínica destrava, com motivo.`} label="Observação (opcional)" required={false} submitLabel="Travar o mês" pending={lock.isPending}
@@ -206,5 +206,26 @@ function ReasonDialog({ title, description, label, required, submitLabel, pendin
       onSubmit={() => { if (required && reason.trim().length < 3) { setError("Informe o motivo (mínimo de 3 letras)."); return; } setError(null); onSubmit(reason.trim() || undefined, setError); }}>
       <Field label={label} htmlFor="cl-reason"><Input id="cl-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} /></Field>
     </FormDialog>
+  );
+}
+
+/** Histórico do mês (início, avisos, aprovações, pagamentos, travas e destravas com motivo), do registro de auditoria. */
+function ClosingHistory({ clinicId, closingId, period }: { clinicId: string | null; closingId: string; period: string }) {
+  const q = useAudit(clinicId, { entity: null, limit: 300 });
+  const rows = closingHistoryRows(q.data ?? [], closingId, period);
+  return (
+    <details className="rounded-md border p-3">
+      <summary className="cursor-pointer text-sm font-medium">Histórico do mês ({rows.length})</summary>
+      {q.isLoading ? <LoadingState /> : q.isError ? <ErrorState onRetry={() => void q.refetch()} /> : rows.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">Nada registrado ainda.</p> : (
+        <ol className="mt-2 min-w-0 space-y-2">
+          {rows.map((h) => (
+            <li key={h.id} className="min-w-0 border-l-2 pl-3 text-sm">
+              <p className="break-words font-medium">{h.text}</p>
+              <p className="text-xs text-muted-foreground">{h.when}{h.who ? ` · ${h.who}` : ""}</p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </details>
   );
 }
