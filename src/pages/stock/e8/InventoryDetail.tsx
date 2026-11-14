@@ -39,7 +39,7 @@ export function InventoryDetail({ inv, access, clinicId, onBack }: { inv: Invent
   const [note, setNote] = useState("");
   const [noteErr, setNoteErr] = useState<string | null>(null);
 
-  const lines = q.data ?? [];
+  const lines = useMemo(() => q.data ?? [], [q.data]);
   const counting = inv.status === "counting";
   const showExpected = linesShowExpected(lines);
   const manage = canManageInventory(access);
@@ -114,7 +114,7 @@ export function InventoryDetail({ inv, access, clinicId, onBack }: { inv: Invent
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {canCount ? (
               <>
-                <Button onClick={() => saveDrafts()} disabled={count.isPending || dirty.length === 0}><Save aria-hidden /> Salvar contagem{dirty.length ? ` (${dirty.length})` : ""}</Button>
+                <Button onClick={() => saveDrafts()} disabled={count.isPending || Object.keys(drafts).length === 0}><Save aria-hidden /> Salvar contagem{Object.keys(drafts).length ? ` (${Object.keys(drafts).length})` : ""}</Button>
                 <Button variant="outline" onClick={() => setDialog("extra")}><Plus aria-hidden /> Contar item fora da lista</Button>
                 <Button variant="outline" onClick={() => saveDrafts(() => { setNoteErr(null); setDialog("finish"); })} disabled={count.isPending}>Encerrar contagem</Button>
               </>

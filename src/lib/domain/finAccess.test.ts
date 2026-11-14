@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canDeliverPackageItem, canManageAppointments, canManagePayoutRules, canRecalcPayout, canSeeAllPayouts, canSeePayout, canSeePayoutRules, canMoveStock, canSeeAppointments, canSeePatientPackages, canStartAppointment, canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, canSeeStockMoves, finCan, financeTabs, NO_FIN_ACCESS, rowToAccess, stockTabs, canPayClosing, canPrepareClosing, canDecideClosing, canSeeClosing, canSeeMyStatement, canUnlockClosing } from "./finAccess";
+import { canConfigureStockAlerts, canCountStock, canManageInventory, canReviewInventory, canSeeStockE8, canDeliverPackageItem, canManageAppointments, canManagePayoutRules, canRecalcPayout, canSeeAllPayouts, canSeePayout, canSeePayoutRules, canMoveStock, canSeeAppointments, canSeePatientPackages, canStartAppointment, canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, canSeeStockMoves, finCan, financeTabs, NO_FIN_ACCESS, rowToAccess, stockTabs, canPayClosing, canPrepareClosing, canDecideClosing, canSeeClosing, canSeeMyStatement, canUnlockClosing } from "./finAccess";
 
 const acc = (can: Record<string, boolean>, isAdmin = false) => ({ ...NO_FIN_ACCESS, isAdmin, can });
 
@@ -95,12 +95,12 @@ describe("abas do Estoque pela matriz de papéis (Entrega 3)", () => {
   const labels = (a: ReturnType<typeof acc>) => stockTabs(a).map((t) => t.label);
   it("Estoquista e Gestor movimentam: Saldo, Entradas, Saídas, Movimentações e Itens", () => {
     const a = acc({ stock_items_read: true, stock_items_write: true, stock_move_read: true, stock_move_write: true });
-    expect(labels(a)).toEqual(["Saldo", "Entradas", "Saídas", "Movimentações", "Consumo sem saldo", "Itens"]);
+    expect(labels(a)).toEqual(["Saldo", "Entradas", "Saídas", "Movimentações", "Consumo sem saldo", "Inventário", "Transferências", "Alertas", "Relatórios", "Itens"]);
     expect(canMoveStock(a)).toBe(true);
   });
   it("Financeiro só consulta: vê as abas (com custo), mas não movimenta", () => {
     const a = acc({ stock_items_read: true, stock_move_read: true, stock_move_write: false });
-    expect(labels(a)).toEqual(["Saldo", "Entradas", "Saídas", "Movimentações", "Consumo sem saldo", "Itens"]);
+    expect(labels(a)).toEqual(["Saldo", "Entradas", "Saídas", "Movimentações", "Consumo sem saldo", "Inventário", "Transferências", "Alertas", "Relatórios", "Itens"]);
     expect(canSeeStockMoves(a)).toBe(true);
     expect(canMoveStock(a)).toBe(false);
   });
@@ -112,7 +112,7 @@ describe("abas do Estoque pela matriz de papéis (Entrega 3)", () => {
     expect(canMoveStock(a)).toBe(false);
   });
   it("Admin vê e movimenta tudo", () => {
-    expect(labels(acc({}, true))).toHaveLength(6);
+    expect(labels(acc({}, true))).toHaveLength(10);
     expect(canMoveStock(acc({}, true))).toBe(true);
   });
 });
@@ -203,5 +203,36 @@ describe("fechamento mensal (Entrega 6): quem vê, prepara, decide, paga e destr
   it("Admin vê e faz tudo", () => {
     const a = acc({}, true);
     expect(canSeeClosing(a) && canPrepareClosing(a) && canDecideClosing(a) && canPayClosing(a)).toBe(true);
+  });
+});
+
+describe("Estoque · Entrega 8 (inventário, transferências, alertas e relatórios)", () => {
+  const estoquista = acc({ stock_items_read: true, stock_items_write: true, stock_move_read: true, stock_move_write: true, inv_manage_read: false, inv_manage_write: false });
+  const gestor = acc({ stock_items_read: true, stock_move_read: true, stock_move_write: true, inv_manage_read: true, inv_manage_write: true, settings_read: true, settings_write: true });
+  const financeiro = acc({ stock_items_read: true, stock_move_read: true, stock_move_write: false, inv_manage_read: true, inv_manage_write: false });
+  const recepcao = acc({ units_read: true, sales_read: true, sales_write: true });
+  it("Estoquista conta, transfere e recebe, mas não aprova nem revisa valores", () => {
+    expect(canSeeStockE8(estoquista)).toBe(true);
+    expect(canCountStock(estoquista)).toBe(true);
+    expect(canManageInventory(estoquista)).toBe(false);
+    expect(canReviewInventory(estoquista)).toBe(false);
+    expect(canConfigureStockAlerts(estoquista)).toBe(false);
+  });
+  it("Gestor aprova inventário e configura as janelas dos alertas", () => {
+    expect(canManageInventory(gestor)).toBe(true);
+    expect(canReviewInventory(gestor)).toBe(true);
+    expect(canConfigureStockAlerts(gestor)).toBe(true);
+  });
+  it("Financeiro consulta (revisão e relatórios) mas não conta, não transfere e não aprova", () => {
+    expect(canSeeStockE8(financeiro)).toBe(true);
+    expect(canReviewInventory(financeiro)).toBe(true);
+    expect(canCountStock(financeiro)).toBe(false);
+    expect(canManageInventory(financeiro)).toBe(false);
+  });
+  it("Recepção não acessa nada do estoque; Admin acessa tudo", () => {
+    expect(canSeeStockE8(recepcao)).toBe(false);
+    expect(canCountStock(recepcao)).toBe(false);
+    expect(canManageInventory(recepcao)).toBe(false);
+    expect([canSeeStockE8, canCountStock, canManageInventory, canReviewInventory, canConfigureStockAlerts].every((f) => f(acc({}, true)))).toBe(true);
   });
 });
