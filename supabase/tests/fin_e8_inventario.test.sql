@@ -718,6 +718,16 @@ begin
     and (r->'totals'->>'value_cents')::bigint = (select sum((e->>'value_cents')::bigint) from jsonb_array_elements(r->'rows') e)
     and (r->'totals'->>'count')::int = (select count(*) from public.stock_movements where occurred_on between d - 30 and d), (r->'totals')::text);
   r := public.fin_stock_report(c, 'movements', u1, d + 1, d + 2);
+  -- bordas do período: movimentação com data exatamente no primeiro e no último dia entra (between inclusivo)
+  perform pg_temp.su();
+  perform private.stock_apply(c, u1, pg_temp.f('it_c'), (select id from public.stock_lots where item_id = pg_temp.f('it_c') and unit_id = u1), null, null, 'sector', -1, -8000, false, jsonb_build_object('occurred_on', (d - 30)::text, 'reason', 'Saída na borda do período', 'purpose', 'Sala'));
+  perform pg_temp.as_user('estoq');
+  r := public.fin_stock_report(c, 'movements', u1, d - 30, d - 30);
+  perform pg_temp.chk('R10b o primeiro dia do período entra no relatório (borda inclusiva)', (r->>'count')::int = 1 and (r->'totals'->>'out_cents')::bigint = 8000, (r->'totals')::text);
+  r := public.fin_stock_report(c, 'movements', null, d - 30, d);
+  perform pg_temp.chk('R10c o total do período com a borda continua fechando (Σ das linhas = Σ do custo das movimentações)', (r->'totals'->>'value_cents')::bigint = (select sum(total_cost_cents) from public.stock_movements where occurred_on between d - 30 and d)
+    and (r->'totals'->>'value_cents')::bigint = (select sum((e->>'value_cents')::bigint) from jsonb_array_elements(r->'rows') e), (r->'totals')::text);
+  r := public.fin_stock_report(c, 'movements', u1, d + 1, d + 2);
   perform pg_temp.chk('R11 período sem movimento: vazio e total zero', jsonb_array_length(r->'rows') = 0 and coalesce((r->'totals'->>'value_cents')::bigint, 0) = 0, r::text);
   perform pg_temp.expect('R12 período invertido é recusado', '22023', format($q$select public.fin_stock_report(%L, 'movements', null, %L, %L)$q$, c, d, d - 1), 'INVALID_PERIOD');
   perform pg_temp.expect('R13 relatório inexistente é recusado', '22023', format($q$select public.fin_stock_report(%L, 'banana')$q$, c), 'INVALID_REPORT');
