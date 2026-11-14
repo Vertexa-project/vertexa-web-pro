@@ -122,6 +122,8 @@ alter table public.fin_closing_pros enable row level security;
 alter table public.fin_closing_disputes enable row level security;
 revoke all on public.fin_closings, public.fin_closing_pros, public.fin_closing_disputes from anon, authenticated;
 grant select on public.fin_closings, public.fin_closing_pros, public.fin_closing_disputes to authenticated;
+-- as políticas abaixo (e as do bucket) chamam private.appt_is_pro com o papel do chamador: precisa de EXECUTE (o schema private não é exposto pela API)
+grant execute on function private.appt_is_pro(uuid) to authenticated;
 drop policy if exists fin_closings_select on public.fin_closings;
 create policy fin_closings_select on public.fin_closings for select to authenticated using (private.fin_can(clinic_id, 'share_lines', null, false));
 drop policy if exists fin_closing_pros_select on public.fin_closing_pros;
