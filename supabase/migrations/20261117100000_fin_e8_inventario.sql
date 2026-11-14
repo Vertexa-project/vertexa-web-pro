@@ -541,7 +541,7 @@ begin
     v_n := v_n + 1;
   end loop;
   update public.stock_transfers set status = 'canceled', canceled_at = now(), canceled_by = private.current_profile_id(), cancel_reason = btrim(p_reason) where id = t.id;
-  perform private.fin_log(t.clinic_id, t.from_unit_id, 'stock_transfer', t.id, 'cancel', jsonb_build_object('status', 'in_transit'),
+  perform private.fin_log(t.clinic_id, t.from_unit_id, 'stock_transfer', t.id, 'reverse', jsonb_build_object('status', 'in_transit'),
     jsonb_build_object('status', 'canceled', 'number', t.number, 'lines', v_n), p_reason);
 end $$;
 
@@ -690,7 +690,7 @@ begin
   update public.stock_inventories set status = 'review', finished_at = v_fin, finished_by = v_me where id = inv.id;
   select count(*) into v_diffs from public.stock_inventory_lines where inventory_id = inv.id and diff_qty <> 0;
   perform private.fin_log(inv.clinic_id, inv.unit_id, 'stock_inventory', inv.id, 'update', jsonb_build_object('status', 'counting'),
-    jsonb_build_object('status', 'review', 'number', inv.number, 'lines_with_difference', v_diffs, 'zeroed_uncounted', v_un), null);
+    jsonb_build_object('status', 'review', 'number', inv.number, 'lines_with_difference', v_diffs, 'zeroed_lines', v_un), null);
   return v_diffs;
 end $$;
 
@@ -719,7 +719,7 @@ begin
   if inv.status not in ('counting','review') then raise exception 'INVENTORY_CLOSED' using errcode = '22023'; end if;
   if char_length(btrim(coalesce(p_reason, ''))) < 3 then raise exception 'REASON_REQUIRED' using errcode = '22023'; end if;
   update public.stock_inventories set status = 'canceled', canceled_at = now(), canceled_by = private.current_profile_id(), cancel_reason = btrim(p_reason) where id = inv.id;
-  perform private.fin_log(inv.clinic_id, inv.unit_id, 'stock_inventory', inv.id, 'cancel', jsonb_build_object('status', inv.status), jsonb_build_object('status', 'canceled', 'number', inv.number), p_reason);
+  perform private.fin_log(inv.clinic_id, inv.unit_id, 'stock_inventory', inv.id, 'deactivate', jsonb_build_object('status', inv.status), jsonb_build_object('status', 'canceled', 'number', inv.number), p_reason);
 end $$;
 
 -- Aprovar (Gestor/Admin): lança o ajuste de cada diferença (movimentação «inventory», ± a custo médio vigente, motivo «inventário»). Tudo ou nada.
@@ -753,8 +753,8 @@ begin
       end if;
     end if;
     select * into l from public.stock_lots where id = v_lot for update;
-    if l.qty_on_hand + ln.diff_qty < private.stock_lot_open_qty(l.id) then raise exception 'INVENTORY_BELOW_OPEN_UNITS' using errcode = '22023'; end if;
     if l.qty_on_hand + ln.diff_qty < 0 then raise exception 'INVENTORY_LINE_STALE' using errcode = '22023'; end if;
+    if l.qty_on_hand + ln.diff_qty < private.stock_lot_open_qty(l.id) then raise exception 'INVENTORY_BELOW_OPEN_UNITS' using errcode = '22023'; end if;
     v_total := round(ln.diff_qty * v_avg)::bigint;
     m := private.stock_apply(inv.clinic_id, inv.unit_id, ln.item_id, v_lot, null, null, 'inventory', ln.diff_qty, v_total, false,
            jsonb_build_object('inventory_id', inv.id, 'reason', left('Inventário nº ' || inv.number || coalesce(': ' || v_note, ''), 300)));
