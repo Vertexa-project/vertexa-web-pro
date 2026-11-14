@@ -48,7 +48,7 @@ export function StockBalanceTab() {
     { header: "Unidade de estoque", value: (r) => r.stock_unit },
     { header: "Saldo", value: (r) => r.qty_on_hand, kind: "qty" },
     { header: "Estoque mínimo", value: (r) => r.min_qty, kind: "qty" },
-    { header: "Custo médio (R$)", value: (r) => r.avg_cost_cents / 100, kind: "qty" },
+    { header: "Custo médio (R$)", value: (r) => r.avg_cost_cents / 100, kind: "unitcost" },
     { header: "Valor total (R$)", value: (r) => r.value_cents, kind: "money" },
     { header: "Próxima validade", value: (r) => br(r.next_expiry) },
     { header: "Vencido (qtde)", value: (r) => r.expired_qty, kind: "qty" },

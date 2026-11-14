@@ -4,7 +4,7 @@ import { strToU8, zipSync } from "fflate";
 
 import { formatDecimalBR } from "./money";
 
-export type ExportKind = "text" | "money" | "qty" | "pct";
+export type ExportKind = "text" | "money" | "qty" | "pct" | "unitcost";
 
 export interface ExportColumn<T> {
   header: string;
@@ -20,6 +20,7 @@ function cellOf(raw: string | number | boolean | null | undefined, kind: ExportK
   if (typeof raw === "boolean") return raw ? "Sim" : "Não";
   if (kind === "money") return Math.round(Number(raw)) / 100;
   if (kind === "qty" || kind === "pct") return Number(raw);
+  if (kind === "unitcost") return Math.round(Number(raw) * 10000) / 10000; // R$ por unidade, 4 casas fixas, sem ruído de ponto flutuante
   return String(raw);
 }
 
@@ -33,6 +34,7 @@ export function toCsv<T>(columns: ExportColumn<T>[], rows: T[]): string {
     if (c === null) return "";
     if (typeof c === "number") {
       if (kind === "money") return formatDecimalBR(c, 2).replace(/\./g, "");
+      if (kind === "unitcost") return c.toFixed(4).replace(".", ",");
       return String(c).replace(".", ",");
     }
     return csvEscape(c);
@@ -58,7 +60,7 @@ function colName(i: number): string {
 }
 
 /** Estilos: 0 padrão · 1 cabeçalho em negrito · 2 dinheiro 0,00 · 3 quantidade 0,000 (até 3 casas). */
-const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0.00"/><numFmt numFmtId="165" formatCode="#,##0.###"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>`;
+const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="3"><numFmt numFmtId="164" formatCode="#,##0.00"/><numFmt numFmtId="165" formatCode="#,##0.###"/><numFmt numFmtId="166" formatCode="#,##0.0000"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>`;
 
 export function toXlsx<T>(columns: ExportColumn<T>[], rows: T[], sheetName = "Dados"): Uint8Array {
   const sheetRows: string[] = [];
@@ -72,7 +74,7 @@ export function toXlsx<T>(columns: ExportColumn<T>[], rows: T[], sheetName = "Da
         const v = cellOf(c.value(row), kind);
         if (v === null) return "";
         const ref = `${colName(ci)}${r}`;
-        if (typeof v === "number") return `<c r="${ref}" s="${kind === "money" ? 2 : kind === "qty" ? 3 : 0}"><v>${v}</v></c>`;
+        if (typeof v === "number") return `<c r="${ref}" s="${kind === "money" ? 2 : kind === "qty" ? 3 : kind === "unitcost" ? 4 : 0}"><v>${v}</v></c>`;
         return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(v)}</t></is></c>`;
       })
       .join("");

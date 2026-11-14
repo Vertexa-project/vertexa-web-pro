@@ -40,3 +40,12 @@ describe("exportação CSV/XLSX", () => {
     expect(strFromU8(files["xl/styles.xml"])).toContain('formatCode="#,##0.00"');
   });
 });
+
+describe("custo unitário (D27a)", () => {
+  it("CSV com 4 casas fixas e sem ruído de ponto flutuante", () => {
+    const c: ExportColumn<{ v: number }>[] = [{ header: "Custo", value: (r) => r.v, kind: "unitcost" }];
+    const lines = toCsv(c, [{ v: 446430.1 / 10000 }, { v: 44.643010000000004 }, { v: 12 }]).slice(1).trimEnd().split("\r\n");
+    expect(lines.slice(1)).toEqual(["44,6430", "44,6430", "12,0000"]);
+    expect(toXlsx(c, [{ v: 1 }], "x").length).toBeGreaterThan(0);
+  });
+});
