@@ -19,7 +19,7 @@ import { getPaymentFile } from "@/lib/api/finClosing";
 import { canDecideClosing, canPayClosing, canPrepareClosing, canSeeClosing, canSeePayoutRules, canUnlockClosing } from "@/lib/domain/finAccess";
 import {
   BOND_LABEL, CLOSING_STATUS_LABEL, NF_LABEL, SKIP_REASON_TEXT, acceptanceText, acceptanceTone, canSelectForApproval, closingErrorMessage, closingTableColumns, closingTone, nfTone, paymentFileColumns,
-  paymentText, periodLabel, previousPeriod, withholdingColumns, withholdingRows, type ClosingRow,
+  paymentText, periodLabel, previousPeriod, notifiedText, withholdingColumns, withholdingRows, type ClosingRow,
 } from "@/lib/domain/finClosing";
 import { formatBRL } from "@/lib/domain/finance";
 import { CSV_MIME, downloadBlob, toCsv } from "@/lib/domain/tableExport";
@@ -141,7 +141,7 @@ export function ClosingTab() {
                         cell: (r) => (
                           <label className="flex min-w-0 items-start gap-2">
                             {decide && !locked ? <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-[hsl(24_95%_53%)]" checked={picked.has(r.professional_id)} onChange={() => toggle(r.professional_id)} aria-label={`Selecionar ${r.name}`} /> : null}
-                            <span className="min-w-0 break-words">{r.name}{r.bond_type ? <span className="block text-xs font-normal text-muted-foreground">{BOND_LABEL[r.bond_type] ?? r.bond_type}</span> : null}</span>
+                            <span className="min-w-0 break-words">{r.name}{r.bond_type ? <span className="block text-xs font-normal text-muted-foreground">{BOND_LABEL[r.bond_type] ?? r.bond_type}</span> : null}<span className="block text-xs font-normal text-muted-foreground">{notifiedText(r.notified_at)}</span></span>
                           </label>
                         ),
                       },
@@ -149,12 +149,12 @@ export function ClosingTab() {
                       { header: "NF", role: "badge", cell: (r) => <Badge tone={nfTone(r.nf_status)}>NF {NF_LABEL[r.nf_status].toLowerCase()}</Badge> },
                       { header: "Atendimentos", nowrap: true, className: "tabular-nums", cell: (r) => r.appointments },
                       { header: "Percentual", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.pct_cents) },
-                      { header: "Fixo por execução", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.fixed_exec_cents) },
-                      { header: "Fixo mensal", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.fixed_monthly_cents) },
-                      { header: "Garantia", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.guarantee_cents) },
-                      { header: "Comissões", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.commission_cents) },
-                      { header: "Taxa de uso", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.usage_fee_cents) },
-                      { header: "Ajustes", nowrap: true, className: "tabular-nums", cell: (r) => formatBRL(r.adjustment_cents) },
+                      ...(rows.some((x) => x.fixed_exec_cents !== 0) ? [{ header: "Fixo por execução", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => formatBRL(r.fixed_exec_cents) }] : []),
+                      ...(rows.some((x) => x.fixed_monthly_cents !== 0) ? [{ header: "Fixo mensal", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => formatBRL(r.fixed_monthly_cents) }] : []),
+                      ...(rows.some((x) => x.guarantee_cents !== 0) ? [{ header: "Garantia", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => formatBRL(r.guarantee_cents) }] : []),
+                      ...(rows.some((x) => x.commission_cents !== 0) ? [{ header: "Comissões", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => formatBRL(r.commission_cents) }] : []),
+                      ...(rows.some((x) => x.usage_fee_cents !== 0) ? [{ header: "Taxa de uso", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => formatBRL(r.usage_fee_cents) }] : []),
+                      ...(rows.some((x) => x.adjustment_cents !== 0) ? [{ header: "Ajustes", nowrap: true, className: "tabular-nums", cell: (r: ClosingRow) => formatBRL(r.adjustment_cents) }] : []),
                       { header: "Total bruto", nowrap: true, className: "tabular-nums font-medium", cell: (r) => formatBRL(r.gross_cents) },
                       { header: "Retenções", nowrap: true, className: "tabular-nums", cell: (r) => (r.withholding_cents === 0 ? formatBRL(0) : `−${formatBRL(r.withholding_cents)}`) },
                       { header: "Líquido a pagar", nowrap: true, className: "tabular-nums font-semibold", cell: (r) => formatBRL(r.net_cents) },
@@ -171,7 +171,7 @@ export function ClosingTab() {
                         <div><dt className="text-xs text-muted-foreground">Garantia e comissões</dt><dd className="tabular-nums">{formatBRL(v.totals.guarantee_cents + v.totals.commission_cents)}</dd></div>
                         <div><dt className="text-xs text-muted-foreground">Taxa de uso e ajustes</dt><dd className="tabular-nums">{formatBRL(v.totals.usage_fee_cents + v.totals.adjustment_cents)}</dd></div>
                         <div><dt className="text-xs text-muted-foreground">Total bruto</dt><dd className="font-semibold tabular-nums">{formatBRL(v.totals.gross_cents)}</dd></div>
-                        <div><dt className="text-xs text-muted-foreground">Retenções</dt><dd className="tabular-nums">−{formatBRL(v.totals.withholding_cents)}</dd></div>
+                        <div><dt className="text-xs text-muted-foreground">Retenções</dt><dd className="tabular-nums">{v.totals.withholding_cents === 0 ? formatBRL(0) : `−${formatBRL(v.totals.withholding_cents)}`}</dd></div>
                         <div><dt className="text-xs text-muted-foreground">Líquido a pagar</dt><dd className="font-semibold tabular-nums">{formatBRL(v.totals.net_cents)}</dd></div>
                       </dl>
                     </CardContent>

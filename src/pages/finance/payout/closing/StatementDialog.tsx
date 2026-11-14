@@ -17,7 +17,7 @@ import { closingFileUrl, type DisputeRow, type StatementView } from "@/lib/api/f
 import type { PayoutLineRow } from "@/lib/api/finPayout";
 import {
   ADJUST_KIND_LABEL, NF_LABEL, PAY_METHOD_LABEL, STATEMENT_STATUS_LABEL, SKIP_REASON_TEXT, acceptanceText, acceptanceTone, brDate, brDateTime, closingErrorMessage,
-  nfTone, paymentText, periodLabel, statementColumns, statementItems, withholdingName, type AdjustKind, type PayMethod,
+  nfTone, notifiedText, paymentText, periodLabel, statementColumns, statementItems, withholdingName, type AdjustKind, type PayMethod,
 } from "@/lib/domain/finClosing";
 import { formatBRL } from "@/lib/domain/finance";
 import { PAYOUT_LINE_LABEL, PAYOUT_ROLE_LABEL } from "@/lib/domain/finPayout";
@@ -83,6 +83,7 @@ function StatementBody({ v, clinicId, onClose }: { v: StatementView; clinicId: s
       <DialogBody className="min-w-0 space-y-4">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge tone={acceptanceTone(r.acceptance)}>{acceptanceText(r)}</Badge>
+          <span className="text-xs text-muted-foreground">{notifiedText(r.notified_at)}</span>
           {r.requires_invoice ? <Badge tone={nfTone(r.nf_status)}>NF {NF_LABEL[r.nf_status].toLowerCase()}</Badge> : null}
           <Badge tone={r.payment_status === "paid" ? "success" : "muted"}>{paymentText(r)}</Badge>
           {r.negative ? <Badge tone="warning">Saldo negativo levado ao mês seguinte</Badge> : null}
@@ -255,7 +256,7 @@ function AnswerDialog({ dispute, onClose, onDone }: { dispute: DisputeRow; onClo
       onSubmit={() => {
         if (text.trim().length < 3) { setError(closingErrorMessage({ message: "RESPONSE_REQUIRED" })); return; }
         setError(null);
-        m.mutate({ disputeId: dispute.id, response: text.trim() }, { onSuccess: () => onDone("Resposta enviada. Corrija a origem, se for o caso, e use «Atualizar extrato»."), onError: (e) => setError(closingErrorMessage(e)) });
+        m.mutate({ disputeId: dispute.id, response: text.trim() }, { onSuccess: () => onDone("Resposta enviada. O extrato foi atualizado e voltou para o aceite do profissional."), onError: (e) => setError(closingErrorMessage(e)) });
       }}>
       <Field label="Resposta" htmlFor="an-text"><Textarea id="an-text" value={text} onChange={(e) => setText(e.target.value)} maxLength={500} rows={4} /></Field>
     </FormDialog>

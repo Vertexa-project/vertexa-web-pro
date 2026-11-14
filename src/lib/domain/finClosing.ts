@@ -133,6 +133,11 @@ export function closingFilePath(clinicId: string, statementId: string, kind: "nf
 
 // ---------- exportação (CSV/XLSX) ----------
 const tableMoney = (f: (r: ClosingRow) => number): Pick<ExportColumn<ClosingRow>, "value" | "kind"> => ({ value: f, kind: "money" });
+/** Valor de retenção mostrado como desconto, sem «-0,00» quando é zero. */
+export const negCents = (c: number): number => (c ? -c : 0);
+/** Data e hora do aviso ao profissional, ou que ainda não foi enviado. */
+export const notifiedText = (iso: string | null): string => (iso ? `Enviado ao profissional em ${new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}` : "Ainda não enviado ao profissional");
+
 export function closingTableColumns(period: string): ExportColumn<ClosingRow>[] {
   return [
     { header: "Competência", value: () => periodLabel(period) },
@@ -147,7 +152,7 @@ export function closingTableColumns(period: string): ExportColumn<ClosingRow>[] 
     { header: "Taxa de uso (R$)", ...tableMoney((r) => r.usage_fee_cents) },
     { header: "Ajustes (R$)", ...tableMoney((r) => r.adjustment_cents) },
     { header: "Total bruto (R$)", ...tableMoney((r) => r.gross_cents) },
-    { header: "Retenções (R$)", ...tableMoney((r) => -r.withholding_cents) },
+    { header: "Retenções (R$)", ...tableMoney((r) => negCents(r.withholding_cents)) },
     { header: "Líquido a pagar (R$)", ...tableMoney((r) => r.net_cents) },
     { header: "Aceite", value: (r) => ACCEPTANCE_LABEL[r.acceptance] },
     { header: "NF", value: (r) => NF_LABEL[r.nf_status] },

@@ -125,3 +125,13 @@ describe("exportações (F14, tabela do gestor, retenções, extrato)", () => {
     expect(toCsv(statementColumns, items)).toContain("05/06/2026;P. U.;Consulta · Responsável;Percentual;10000,00;10000,00;60;6000,00");
   });
 });
+
+describe("achados D38", () => {
+  it("retenção zero não vira -0,00 e aviso mostra data de Brasília", async () => {
+    const m = await import("@/lib/domain/finClosing");
+    expect(Object.is(m.negCents(0), -0)).toBe(false);
+    expect(m.negCents(1500)).toBe(-1500);
+    expect(m.notifiedText(null)).toBe("Ainda não enviado ao profissional");
+    expect(m.notifiedText("2026-11-14T01:30:00Z")).toBe("Enviado ao profissional em 13/11/2026, 22:30");
+  });
+});
