@@ -567,6 +567,33 @@ begin
   perform pg_temp.chk('X5 material deduzido proporcionalmente a cada parcela: 2 parcelas de 500,00 − taxa 25,00 − material 100,00 = base 375,00 → 187,50 cada', (select count(*) = 2 and bool_and(base_cents = 37500 and amount_cents = 18750) from public.fin_share_lines where appointment_id = pg_temp.f('xa3')), null);
 end $t$;
 
+-- ---------- Y. Pacote: sessão só libera quando o liquidado cobre o valor inteiro (1 centavo faltando = aguardando) ----------
+do $t$
+declare c uuid := pg_temp.f('c'); pk uuid; s uuid; pp uuid; v_item uuid; a uuid; i integer;
+begin
+  perform pg_temp.rule('pro_f11b', jsonb_build_object('role', 'responsavel', 'rule_type', 'pct', 'pct', 50, 'valid_from', '2026-01-01'));
+  perform pg_temp.as_user('owner');
+  pk := public.fin_save_package(c, null, jsonb_build_object('name', 'Mini 2 consultas', 'price_cents', 90000, 'validity_days', 120),
+    jsonb_build_array(jsonb_build_object('item_type', 'service', 'service_id', pg_temp.f('sv_med'), 'quantity', 2, 'reference_price_cents', 50000)));
+  perform pg_temp.su();
+  perform pg_temp.as_user('gestor');
+  s := public.fin_save_sale(c, pg_temp.f('u1'), pg_temp.f('pat'), jsonb_build_array(jsonb_build_object('item_type', 'package', 'ref_id', pk, 'quantity', 1)));
+  perform public.fin_add_payment(s, jsonb_build_object('acquirer_id', pg_temp.f('pix'), 'amount_cents', 44999));
+  select pi.id into v_item from public.fin_patient_package_items pi join public.fin_patient_packages p on p.id = pi.patient_package_id where p.sale_id = s;
+  for i in 1..2 loop
+    a := public.fin_appt_save(c, pg_temp.f('u1'), null, jsonb_build_object('patient_id', pg_temp.f('pat'), 'service_id', pg_temp.f('sv_med'), 'patient_package_item_id', v_item, 'performed_on', ('2026-09-01'::date + i)), pg_temp.parts('pro_f11b'));
+    perform public.fin_appt_complete(a);
+  end loop;
+  perform pg_temp.su();
+  update public.fin_receivables set status = 'settled', settled_date = '2026-09-01', settled_net_cents = net_cents where sale_id = s;
+  perform pg_temp.chk('Y1 liquidado 449,99 não cobre a sessão de 450,00 (falta 1 centavo): continua aguardando recebimento', pg_temp.lcount('pro_f11b') = 0, pg_temp.lcount('pro_f11b')::text);
+  perform pg_temp.as_user('gestor');
+  perform public.fin_add_payment(s, jsonb_build_object('acquirer_id', pg_temp.f('pix'), 'amount_cents', 45001));
+  perform pg_temp.su();
+  update public.fin_receivables set status = 'settled', settled_date = '2026-09-15', settled_net_cents = net_cents where sale_id = s and status <> 'settled';
+  perform pg_temp.chk('Y2 completado o dinheiro (900,00) as duas sessões liberam juntas na liquidação de 15/09: 2 × 225,00 em setembro', pg_temp.lcount('pro_f11b', '2026-09', 'pct') = 2 and pg_temp.lsum('pro_f11b', '2026-09', 'pct') = 45000, pg_temp.lsum('pro_f11b', null)::text);
+end $t$;
+
 -- ---------- V. Permissões, RLS, log e imutabilidade ----------
 do $t$
 declare c uuid := pg_temp.f('c'); n integer; j jsonb; v_rule uuid; v_cnt integer; v_before integer;
