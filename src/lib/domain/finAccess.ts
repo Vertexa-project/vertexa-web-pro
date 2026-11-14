@@ -33,7 +33,9 @@ export type FinArea =
   // Entrega 3: saldo, entradas, saídas e movimentações do estoque (escreve: Estoquista e Gestor; lê com custo: também o Financeiro)
   | "stock_move"
   // Entrega 4: atendimento (lista e custo: Gestor/Financeiro), saldo de pacote dos pacientes e entrega de item de pacote
-  | "appt" | "patient_pkg" | "package_deliver";
+  | "appt" | "patient_pkg" | "package_deliver"
+  // Entrega 5: motor de repasse (regras: Gestor configura, Financeiro consulta; lançamentos: Gestor/Financeiro; recalcular: Gestor/Financeiro)
+  | "share_rules" | "share_lines" | "share_recalc";
 
 export function finCan(access: FinAccess, area: FinArea, mode: "read" | "write" = "read"): boolean {
   return access.can[`${area}_${mode}`] === true;
@@ -78,6 +80,26 @@ export function canDeliverPackageItem(a: FinAccess): boolean {
   return a.isAdmin || finCan(a, "package_deliver", "write");
 }
 
+/** Aba «Repasse»: Admin, Gestor, Financeiro (todos os profissionais) ou o profissional com os PRÓPRIOS lançamentos. Recepção e Estoquista não veem. */
+export function canSeePayout(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "share_lines") || a.can.own_share === true;
+}
+/** Todos os profissionais (Admin, Gestor, Financeiro) em vez de só os próprios. */
+export function canSeeAllPayouts(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "share_lines");
+}
+/** Regras de repasse: ver (Admin, Gestor, Financeiro) e configurar (Admin, Gestor). */
+export function canSeePayoutRules(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "share_rules");
+}
+export function canManagePayoutRules(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "share_rules", "write");
+}
+/** Recalcular o repasse: Admin, Gestor e Financeiro. */
+export function canRecalcPayout(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "share_recalc", "write");
+}
+
 export interface FinanceTab { to: string; label: string; end?: boolean }
 /** Abas do Financeiro pela matriz de papéis (Entrega 2 inclui Vendas, Títulos e Caixa). */
 export function financeTabs(a: FinAccess): FinanceTab[] {
@@ -86,6 +108,7 @@ export function financeTabs(a: FinAccess): FinanceTab[] {
     ...(canSeeSales(a) ? [{ to: "/financeiro/vendas", label: "Vendas" }] : []),
     ...(canSeeAppointments(a) ? [{ to: "/financeiro/atendimentos", label: "Atendimentos" }] : []),
     ...(canSeePatientPackages(a) ? [{ to: "/financeiro/pacotes", label: "Pacotes dos pacientes" }] : []),
+    ...(canSeePayout(a) ? [{ to: "/financeiro/repasse", label: "Repasse" }] : []),
     ...(canSeeReceivables(a) ? [{ to: "/financeiro/titulos", label: "Títulos" }] : []),
     ...(canSeeCash(a) ? [{ to: "/financeiro/caixa", label: "Caixa" }] : []),
     ...(canSeeFinanceCadastros(a) || a.isAdmin ? [{ to: "/financeiro/cadastros", label: "Cadastros" }] : []),
@@ -94,7 +117,7 @@ export function financeTabs(a: FinAccess): FinanceTab[] {
 
 /** Item "Financeiro" do menu: admin (Mensalidades) ou quem lê cadastro, vende ou opera caixa. */
 export function canSeeFinanceMenu(a: FinAccess): boolean {
-  return a.isAdmin || canSeeFinanceCadastros(a) || canSeeSales(a) || canSeeCash(a);
+  return a.isAdmin || canSeeFinanceCadastros(a) || canSeeSales(a) || canSeeCash(a) || canSeePayout(a);
 }
 
 /** Item "Estoque" do menu: admin, gestor, estoquista e financeiro (consulta). */

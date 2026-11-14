@@ -51,6 +51,10 @@ const StockExitsTab = lazy(() => import("@/pages/stock/StockExitsTab").then((m) 
 const StockMovementsTab = lazy(() => import("@/pages/stock/StockMovementsTab").then((m) => ({ default: m.StockMovementsTab })));
 const StockShortfallsTab = lazy(() => import("@/pages/stock/StockShortfallsTab").then((m) => ({ default: m.StockShortfallsTab })));
 const AppointmentsTab = lazy(() => import("@/pages/finance/AppointmentsTab").then((m) => ({ default: m.AppointmentsTab })));
+const PayoutLayout = lazy(() => import("@/pages/finance/payout/PayoutLayout").then((m) => ({ default: m.PayoutLayout })));
+const PayoutLinesTab = lazy(() => import("@/pages/finance/payout/PayoutLinesTab").then((m) => ({ default: m.PayoutLinesTab })));
+const PayoutRulesTab = lazy(() => import("@/pages/finance/payout/PayoutRulesTab").then((m) => ({ default: m.PayoutRulesTab })));
+const PayoutSimulatorTab = lazy(() => import("@/pages/finance/payout/PayoutSimulatorTab").then((m) => ({ default: m.PayoutSimulatorTab })));
 const PatientPackagesTab = lazy(() => import("@/pages/finance/PatientPackagesTab").then((m) => ({ default: m.PatientPackagesTab })));
 const UnitsPage = lazy(() => import("@/pages/UnitsPage").then((m) => ({ default: m.UnitsPage })));
 const RetentionPage = lazy(() => import("@/pages/RetentionPage").then((m) => ({ default: m.RetentionPage })));
@@ -260,6 +264,15 @@ export const router = createBrowserRouter(
                 { path: "vendas", element: <SalesTab /> },
                 { path: "atendimentos", element: <AppointmentsTab /> },
                 { path: "pacotes", element: <PatientPackagesTab /> },
+                {
+                  path: "repasse",
+                  element: <PayoutLayout />,
+                  children: [
+                    { index: true, element: <PayoutLinesTab /> },
+                    { path: "regras", element: <PayoutRulesTab /> },
+                    { path: "simulador", element: <PayoutSimulatorTab /> },
+                  ],
+                },
                 { path: "titulos", element: <TitlesTab /> },
                 { path: "caixa", element: <CashTab /> },
                 {

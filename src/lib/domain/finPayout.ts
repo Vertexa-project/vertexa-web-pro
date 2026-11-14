@@ -244,3 +244,34 @@ export function payoutErrorMessage(e: unknown): string {
   if (code === "42501") return "Você não tem permissão para esta ação.";
   return "Não foi possível concluir agora. Tente novamente.";
 }
+
+// ---------- memória de cálculo (auditoria da linha) ----------
+const brl = (cents: unknown): string => (Number(cents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const dateBr = (iso: unknown): string => (typeof iso === "string" && iso.length >= 10 ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+const periodBr = (p: unknown): string => (typeof p === "string" && /^\d{4}-\d{2}$/.test(p) ? `${p.slice(5)}/${p.slice(0, 4)}` : "—");
+export interface MemoryView { formula: string | null; rows: [string, string][]; correction: string | null }
+/** Traduz a memória gravada na linha (regra aplicada, base, percentual, deduções) para o diálogo «Como foi calculado». */
+export function describeMemory(memory: Record<string, unknown>, lineType: PayoutLineType): MemoryView {
+  const m = memory ?? {};
+  const rows: [string, string][] = [];
+  const rule = (m.rule ?? null) as { type?: PayoutRuleType; pct?: number | null; tiers?: Tier[] | null; amount_cents?: number | null; valid_from?: string } | null;
+  if (m.origin) rows.push(["Origem", m.origin === "pacote" ? `Pacote ${String(m.package ?? "")}`.trim() : m.origin === "produto" ? "Venda de produto" : m.origin === "execucao" ? "Execução do atendimento" : "Atendimento avulso"]);
+  if (m.service) rows.push(["Serviço", String(m.service)]);
+  if (m.item) rows.push(["Item", String(m.item)]);
+  if (m.performed_on) rows.push(["Atendimento em", dateBr(m.performed_on)]);
+  if (m.settled_date) rows.push(["Dinheiro liquidado em", dateBr(m.settled_date)]);
+  if (m.released_on) rows.push(["Liberado em", dateBr(m.released_on)]);
+  if (m.gross_cents !== undefined) rows.push(["Valor liquidado (bruto)", brl(m.gross_cents)]);
+  const ded = (m.deductions ?? null) as Deductions | null;
+  if (m.fee_cents !== undefined) rows.push([`Taxa do meio de pagamento${ded && !ded.fee ? " (não deduzida)" : ""}`, brl(m.fee_cents)]);
+  if (m.tax_cents !== undefined) rows.push([`Imposto${m.tax_pct !== undefined ? ` (${String(m.tax_pct).replace(".", ",")}%)` : ""}${ded && !ded.tax ? " (não deduzido)" : ""}`, brl(m.tax_cents)]);
+  if (m.material_cents !== undefined) rows.push([`Material${ded && !ded.material ? " (não deduzido)" : ""}`, brl(m.material_cents)]);
+  if (rule) {
+    const what = rule.type ? PAYOUT_RULE_TYPE_LABEL[rule.type] : "Regra";
+    const val = rule.tiers ? `faixas ${rule.tiers.map((t) => `${t.pct}%${t.up_to_cents === null ? " acima" : ` até ${brl(t.up_to_cents)}`}`).join(" · ")}` : rule.pct !== null && rule.pct !== undefined ? `${rule.pct}%` : rule.amount_cents !== null && rule.amount_cents !== undefined ? brl(rule.amount_cents) : "";
+    rows.push(["Regra aplicada", `${what}${val ? ` — ${val}` : ""}${rule.valid_from ? ` (desde ${dateBr(rule.valid_from)})` : ""}`]);
+  }
+  const c = (m.correction ?? null) as { reason?: string; previous_amount?: number; new_amount?: number; origin_period?: string } | null;
+  const correction = c ? `${lineType === "adjustment" ? "Estorno/ajuste" : "Correção"} de lançamento de ${periodBr(c.origin_period)}: de ${brl(c.previous_amount)} para ${brl(c.new_amount)}${c.reason ? ` — ${c.reason}` : ""}.` : null;
+  return { formula: typeof m.formula === "string" ? m.formula : null, rows, correction };
+}

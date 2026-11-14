@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canDeliverPackageItem, canManageAppointments, canMoveStock, canSeeAppointments, canSeePatientPackages, canStartAppointment, canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, canSeeStockMoves, finCan, financeTabs, NO_FIN_ACCESS, rowToAccess, stockTabs } from "./finAccess";
+import { canDeliverPackageItem, canManageAppointments, canManagePayoutRules, canRecalcPayout, canSeeAllPayouts, canSeePayout, canSeePayoutRules, canMoveStock, canSeeAppointments, canSeePatientPackages, canStartAppointment, canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, canSeeStockMoves, finCan, financeTabs, NO_FIN_ACCESS, rowToAccess, stockTabs } from "./finAccess";
 
 const acc = (can: Record<string, boolean>, isAdmin = false) => ({ ...NO_FIN_ACCESS, isAdmin, can });
 
@@ -80,7 +80,7 @@ describe("abas do Financeiro na Entrega 2 (Vendas, Títulos, Caixa)", () => {
     expect(canSeeFinanceMenu(a)).toBe(true);
   });
   it("Admin: todas as abas, Mensalidades primeiro", () => {
-    expect(tabsOf({}, true)).toEqual(["Mensalidades", "Vendas", "Atendimentos", "Pacotes dos pacientes", "Títulos", "Caixa", "Cadastros"]);
+    expect(tabsOf({}, true)).toEqual(["Mensalidades", "Vendas", "Atendimentos", "Pacotes dos pacientes", "Repasse", "Títulos", "Caixa", "Cadastros"]);
   });
   it("sem papel: nenhuma aba", () => {
     expect(tabsOf({})).toEqual([]);
@@ -139,5 +139,37 @@ describe("abas e botões da Entrega 4 (atendimento, kit e pacotes)", () => {
   it("Estoquista entrega item de pacote; Financeiro não", () => {
     expect(canDeliverPackageItem(acc({ package_deliver_write: true }))).toBe(true);
     expect(canDeliverPackageItem(acc({ patient_pkg_read: true, appt_read: true }))).toBe(false);
+  });
+});
+
+describe("aba e botões da Entrega 5 (repasse)", () => {
+  const tabsOf = (can: Record<string, boolean>, isAdmin = false) => financeTabs(acc(can, isAdmin)).map((t) => t.label);
+  it("Gestor: vê todos os lançamentos, configura as regras e recalcula", () => {
+    const g = acc({ share_rules_read: true, share_rules_write: true, share_lines_read: true, share_recalc_read: true, share_recalc_write: true });
+    expect(tabsOf(g.can)).toEqual(["Repasse"]);
+    expect(canSeePayout(g) && canSeeAllPayouts(g) && canSeePayoutRules(g) && canManagePayoutRules(g) && canRecalcPayout(g)).toBe(true);
+  });
+  it("Financeiro: consulta regras e lançamentos e recalcula; não configura", () => {
+    const f = acc({ share_rules_read: true, share_lines_read: true, share_recalc_read: true, share_recalc_write: true });
+    expect(canSeePayoutRules(f)).toBe(true);
+    expect(canManagePayoutRules(f)).toBe(false);
+    expect(canRecalcPayout(f)).toBe(true);
+  });
+  it("Profissional: vê a aba só com os próprios lançamentos; sem regras, sem recálculo, sem os dos outros", () => {
+    const p = acc({ own_sales_read: true, own_appt: true, own_share: true });
+    expect(tabsOf(p.can)).toEqual(["Vendas", "Atendimentos", "Repasse"]);
+    expect(canSeePayout(p)).toBe(true);
+    expect(canSeeAllPayouts(p)).toBe(false);
+    expect(canSeePayoutRules(p)).toBe(false);
+    expect(canRecalcPayout(p)).toBe(false);
+  });
+  it("Recepção e Estoquista: sem aba de repasse", () => {
+    const r = acc({ sales_read: true, sales_write: true, patient_pkg_read: true });
+    expect(tabsOf(r.can)).not.toContain("Repasse");
+    expect(canSeePayout(acc({ stock_move_read: true, stock_move_write: true }))).toBe(false);
+  });
+  it("Admin vê tudo", () => {
+    const a = acc({}, true);
+    expect(canSeePayout(a) && canSeeAllPayouts(a) && canManagePayoutRules(a) && canRecalcPayout(a)).toBe(true);
   });
 });

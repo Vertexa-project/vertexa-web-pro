@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  clinicMargin, fixedMonthlyAmount, guaranteeSeries, matchRules, materialShare, monthGross, packageFee, packageSessionValues, payoutBase, pctAmount, pctSum, pctSumWarning,
+  clinicMargin, describeMemory, fixedMonthlyAmount, guaranteeSeries, matchRules, materialShare, monthGross, packageFee, packageSessionValues, payoutBase, pctAmount, pctSum, pctSumWarning,
   releasePackageUnits, releasePeriod, resolveDeductions, simulateAppointment, taxOf, tierAdjust, tierPct, tierProgressive, usageFeeAmount, validateTiers, withholdings,
   type Deductions, type PayoutRule, type Tier,
 } from "./finPayout";
@@ -239,5 +239,25 @@ describe("Regras: prioridade, vigência e avisos (F2, F11, F15)", () => {
     const l = simulateAppointment([rule({ pct: null, tiers })], CLINIC_FEE_ONLY, { serviceId: "s1", category: "consulta", on: "2026-10-10", unitId: null }, [{ professionalId: "p", role: "responsavel" }],
       { grossCents: 1500000, feeCents: 0, taxPct: 0, materialCents: 0, cumulativeBaseCents: 1500000 });
     expect(l[0]).toMatchObject({ pct: 60, amountCents: 900000 });
+  });
+});
+
+describe("memória de cálculo para auditoria", () => {
+  it("traduz a memória da linha do Exemplo A (taxa, imposto, regra e fórmula)", () => {
+    const v = describeMemory({ origin: "avulso", service: "Consulta", performed_on: "2026-10-10", settled_date: "2026-11-09", gross_cents: 50000, fee_cents: 1500, tax_cents: 3000, tax_pct: 6, material_cents: 0,
+      deductions: { fee: true, tax: true, material: false }, rule: { type: "pct", pct: 60, valid_from: "2026-01-01" }, formula: "base = 50000 − …" }, "pct");
+    const get = (k: string) => v.rows.find(([l]) => l.startsWith(k))?.[1];
+    expect(get("Valor liquidado")).toMatch(/500,00/);
+    expect(get("Taxa")).toMatch(/15,00/);
+    expect(get("Imposto")).toMatch(/30,00/);
+    expect(v.rows.find(([l]) => l.startsWith("Material"))?.[0]).toMatch(/não deduzido/);
+    expect(get("Regra aplicada")).toMatch(/Percentual sobre a base — 60% \(desde 01\/01\/2026\)/);
+    expect(get("Liquidado") ?? get("Dinheiro")).toBe("09/11/2026");
+    expect(v.formula).toContain("base");
+    expect(v.correction).toBeNull();
+  });
+  it("mostra o estorno com o mês e os valores de origem", () => {
+    const v = describeMemory({ correction: { reason: "chargeback", previous_amount: 30000, new_amount: 0, origin_period: "2026-06" } }, "adjustment");
+    expect(v.correction).toMatch(/Estorno\/ajuste de lançamento de 06\/2026: de R\$\s300,00 para R\$\s0,00 — chargeback/);
   });
 });
