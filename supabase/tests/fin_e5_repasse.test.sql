@@ -544,6 +544,29 @@ begin
   perform pg_temp.chk('U3 o motor não regrava o que não mudou', private.share_reconcile_sale(pg_temp.f('sale_a'), 'conferência') = 0, null);
 end $t$;
 
+-- ---------- X. Dinheiro antes do atendimento, base nunca negativa, material por parcela ----------
+do $t$
+declare s uuid;
+begin
+  -- pago antes: o repasse só nasce quando o atendimento é realizado e entra no mês da execução (D6/D7)
+  perform pg_temp.rule('pro_f11a', jsonb_build_object('role', 'responsavel', 'rule_type', 'pct', 'pct', 50, 'valid_from', '2026-01-01', 'valid_to', '2026-12-31', 'deductions_override', jsonb_build_object('material', true)));
+  s := pg_temp.sale_pay('xs1', 'pat', pg_temp.svc_item('sv_cons', 100000), jsonb_build_object('acquirer_id', pg_temp.f('pix'), 'amount_cents', 100000));
+  perform pg_temp.settle('xs1', array['2026-08-28'::date]);
+  perform pg_temp.chk('X1 dinheiro liquidado e atendimento ainda não realizado: nada de repasse', pg_temp.lcount('pro_f11a') = 0, null);
+  perform pg_temp.mk_appt('xa1', 'pat', 'sv_cons', '2026-09-02', pg_temp.parts('pro_f11a'), 'xs1', 20000);
+  perform pg_temp.chk('X2 ao realizar (02/09) o repasse nasce no mês da execução (setembro), não no da liquidação (agosto)', pg_temp.lcount('pro_f11a', '2026-09') = 1 and pg_temp.lcount('pro_f11a', '2026-08') = 0, null);
+  perform pg_temp.chk('X3 material de R$ 200,00 deduzido (regra liga o material): base 1.000 − 200 = 800,00 → repasse 400,00', pg_temp.lsum('pro_f11a', '2026-09') = 40000, pg_temp.lsum('pro_f11a', '2026-09')::text);
+  s := pg_temp.sale_pay('xs2', 'pat', pg_temp.svc_item('sv_cons', 10000), jsonb_build_object('acquirer_id', pg_temp.f('pix'), 'amount_cents', 10000));
+  perform pg_temp.settle('xs2', array['2026-09-10'::date]);
+  perform pg_temp.mk_appt('xa2', 'pat', 'sv_cons', '2026-09-10', pg_temp.parts('pro_f11a'), 'xs2', 20000);
+  perform pg_temp.chk('X4 material maior que o recebido: base 0,00 e repasse 0,00 (nunca negativo)', (select base_cents = 0 and amount_cents = 0 from public.fin_share_lines where appointment_id = pg_temp.f('xa2')), null);
+  -- material em duas parcelas: cada parcela liquidada leva sua parte (R$ 100,00 + R$ 100,00 de R$ 200,00)
+  s := pg_temp.sale_pay('xs3', 'pat', pg_temp.svc_item('sv_proc', 100000), jsonb_build_object('acquirer_id', pg_temp.f('maq'), 'brand', 'Visa', 'modality', 'credit_2_6', 'installments', 2, 'amount_cents', 100000));
+  perform pg_temp.mk_appt('xa3', 'pat', 'sv_proc', '2026-09-05', pg_temp.parts('pro_f11a'), 'xs3', 20000);
+  perform pg_temp.settle('xs3', array['2026-10-05'::date, '2026-11-04']);
+  perform pg_temp.chk('X5 material deduzido proporcionalmente a cada parcela: 2 parcelas de 500,00 − taxa 25,00 − material 100,00 = base 375,00 → 187,50 cada', (select count(*) = 2 and bool_and(base_cents = 37500 and amount_cents = 18750) from public.fin_share_lines where appointment_id = pg_temp.f('xa3')), null);
+end $t$;
+
 -- ---------- V. Permissões, RLS, log e imutabilidade ----------
 do $t$
 declare c uuid := pg_temp.f('c'); n integer; j jsonb; v_rule uuid; v_cnt integer; v_before integer;
