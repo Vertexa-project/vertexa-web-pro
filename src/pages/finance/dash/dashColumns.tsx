@@ -5,7 +5,7 @@ import type { FinColumn } from "@/components/fin/FinUi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  CASH_STATUS_LABEL, LINE_LABEL, MOVEMENT_LABEL, ROLE_LABEL, SALE_STATUS_LABEL, dateBR, dateTimeBR, moneyText, num, str, type DashMetric, type DashRow,
+  CASH_STATUS_LABEL, LINE_LABEL, MOVEMENT_LABEL, ROLE_LABEL, SALE_STATUS_LABEL, dateBR, dateTimeBR, marginNote, marginSign, moneyText, signedMoneyText, num, str, type DashMetric, type DashRow,
 } from "@/lib/domain/finDash";
 import { formatQty } from "@/lib/domain/stockMoves";
 
@@ -119,9 +119,9 @@ function rawColumns(metric: DashMetric, ctx: DashColumnCtx): FinColumn<DashRow>[
       ];
     case "margin": case "pro_margin":
       return [
-        { header: "Componente", role: "title", cell: (r) => dash(r.label) },
-        { header: "Sinal", cell: (r) => dash(r.sign), className: "text-center", nowrap: true },
-        value("Valor"),
+        { header: "Componente", role: "title", cell: (r) => <><span>{dash(r.label)}</span>{marginNote(r.sign, r.value_cents) ? <span className="block text-xs font-normal text-muted-foreground">{marginNote(r.sign, r.value_cents)}</span> : null}</> },
+        { header: "Sinal", cell: (r) => marginSign(r.value_cents), className: "text-center", nowrap: true },
+        money("Valor", (r) => r.value_cents, { cell: (r) => signedMoneyText(r.value_cents), className: "text-right font-medium" }),
         { header: "Ações", role: "action", cell: (r) => <Button type="button" size="sm" variant="outline" onClick={() => ctx.onDrill(r)} aria-label={`Ver a lista de ${str(r.label)}`}>Ver lista</Button> },
       ];
     case "pro_appointments": case "service_appointments":

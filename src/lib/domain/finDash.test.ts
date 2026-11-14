@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { NO_FIN_ACCESS, canSeeDashboard, financeTabs, type FinAccess } from "@/lib/domain/finAccess";
 import {
-  METRIC_INFO, PENDENCIES, agendaLabel, closingNote, countText, currentPeriod, dashErrorMessage, dashUnits, detailExportColumns, evolutionLines, moneyText, pctText, periodLabel, signedMoneyText,
+  METRIC_INFO, PENDENCIES, marginNote, marginSign, agendaLabel, closingNote, countText, currentPeriod, dashErrorMessage, dashUnits, detailExportColumns, evolutionLines, moneyText, pctText, periodLabel, signedMoneyText,
   type DashEvolution, type DashMetric, type DashRow,
 } from "@/lib/domain/finDash";
 import { toCsv } from "@/lib/domain/tableExport";
@@ -123,5 +123,15 @@ describe("atalho do painel leva o filtro (D42)", () => {
     expect(monthBounds("2026-02")).toEqual({ from: "2026-02-01", to: "2026-02-28" });
     expect(withFilter("/financeiro/vendas", { de: "2026-11-01", ate: "2026-11-30", unidade: null, situacao: "ativas" })).toBe("/financeiro/vendas?de=2026-11-01&ate=2026-11-30&situacao=ativas");
     expect(withFilter("/x", {})).toBe("/x");
+  });
+});
+
+describe("margem: sinal real do componente (D42)", () => {
+  it("o sinal vem do valor; custo líquido negativo entra somando e ganha aviso", () => {
+    expect(marginSign(-4464)).toBe("−");
+    expect(marginSign(4464)).toBe("+");
+    expect(marginNote("−", 4464)).toMatch(/Entra somando/);
+    expect(marginNote("−", -4464)).toBeNull();
+    expect(marginNote("+", 100)).toBeNull();
   });
 });

@@ -42,6 +42,11 @@ export interface DashDetail { metric: DashMetric; period: string; count: number;
 export const moneyText = (cents: number | null | undefined): string => formatBRL(cents ? cents : 0);
 /** Valor de ajuste mostrado com sinal explícito (+/−), para composições. */
 export const signedMoneyText = (cents: number): string => (cents > 0 ? `+ ${moneyText(cents)}` : cents < 0 ? `− ${moneyText(-cents)}` : moneyText(0));
+/** Sinal que o componente tem de fato na margem: vem do valor (um custo líquido negativo por estorno/devolução entra somando). */
+export const marginSign = (valueCents: number): "+" | "−" | "—" => (valueCents > 0 ? "+" : valueCents < 0 ? "−" : "—");
+/** Aviso quando o componente tem sinal contrário ao esperado (ex.: custo dos produtos com devoluções maiores que as saídas). */
+export const marginNote = (declared: unknown, valueCents: number): string | null =>
+  (declared === "−" && valueCents > 0 ? "Entra somando: estornos e devoluções superaram as saídas do período." : declared === "+" && valueCents < 0 ? "Entra subtraindo neste período." : null);
 export const pctText = (v: number | null | undefined): string => (v === null || v === undefined ? "—" : `${v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 })}%`);
 export const countText = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 export const dateTimeBR = (iso: unknown): string =>
@@ -171,7 +176,7 @@ export function detailExportColumns(metric: DashMetric): ExportColumn<DashRow>[]
     case "products_commission":
       return [date("date", "Data"), txt("professional_name", "Profissional"), txt("item_name", "Item"), valueCol("Comissão")];
     case "margin": case "pro_margin":
-      return [txt("label", "Componente"), txt("sign", "Sinal"), valueCol("Valor")];
+      return [txt("label", "Componente"), { header: "Sinal", value: (r) => marginSign(r.value_cents) }, valueCol("Valor")];
     case "pro_appointments": case "service_appointments":
       return [date("date", "Data"), txt("unit_name", "Unidade"), txt("patient_name", "Paciente"), txt("service_name", "Serviço"), money("material_cents", "Material"), valueCol("Receita")];
     case "appt_no_sale":
