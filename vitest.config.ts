@@ -52,6 +52,6 @@ export default defineConfig({
     // em runtime) e usam fetch/AbortController/setTimeout, todos disponíveis no Node deste
     // runner — por isso rodam sob Vitest sem precisar de Docker/Deno CLI (indisponíveis neste
     // ambiente). setupFiles/jsdom acima não afetam esses testes (não usam DOM).
-    include: ["src/**/*.{test,spec}.{ts,tsx}", "supabase/functions/_shared/asaas/**/*.{test,spec}.ts", "supabase/functions/_shared/clinical/**/*.{test,spec}.ts"],
+    include: ["src/**/*.{test,spec}.{ts,tsx}", "supabase/functions/_shared/asaas/**/*.{test,spec}.ts", "supabase/functions/_shared/clinical/**/*.{test,spec}.ts", "supabase/functions/_shared/prescription/**/*.{test,spec}.ts"],
   },
 });

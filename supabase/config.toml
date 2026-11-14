@@ -65,3 +65,8 @@ verify_jwt = true
 
 [functions.clinical-audio-purge]
 verify_jwt = true
+
+# FIN-E9: caller = provedor de prescrição (POST sem JWT de usuário). Auth = assinatura HMAC (x-vertexa-signature). Sem segredo configurado responde 503.
+# Ainda não publicada: só entra no ar quando o provedor for escolhido (pendência P1).
+[functions.prescription-webhook]
+verify_jwt = false
