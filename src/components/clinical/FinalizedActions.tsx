@@ -186,7 +186,7 @@ export function FinalizedActions({ encounter, fields, people, patientName, clini
         {showHistory ? (
           <div className="space-y-2 border-t pt-4" data-testid="history">
             {versions.isLoading ? <p className="text-sm text-muted-foreground">Carregando…</p> : null}
-            {historyEntries(versions.data ?? [], sends.data ?? [], people?.professional ?? null).map((h) => (
+            {historyEntries(versions.data ?? [], sends.data ?? [], people?.professional ?? null, addenda).map((h) => (
               <div key={h.id} className="rounded-md border p-2 text-xs">
                 <p className="font-medium">
                   {h.actor ?? "Sistema"} · {formatDateTimeBr(h.at)} · {h.label}
@@ -225,14 +225,19 @@ type VersionRow = NonNullable<ReturnType<typeof useVersions>["data"]>[number];
 type SendRow = NonNullable<ReturnType<typeof useAgreementSends>["data"]>[number];
 
 /** Histórico do atendimento: versões do prontuário + envios de combinados, do mais antigo ao mais novo. */
-function historyEntries(versions: VersionRow[], sends: SendRow[], professional: string | null) {
+function historyEntries(versions: VersionRow[], sends: SendRow[], professional: string | null, addenda: { id: string; text: string }[] = []) {
+  const addendumText = new Map(addenda.map((a) => [a.id, a.text]));
   const rows = [
     ...versions.map((v) => ({
       id: v.id,
       at: v.created_at,
       actor: v.actor_name,
       label: `${ACTION_LABEL[v.action]}${v.field_key ? ` · ${v.field_key}` : ""}`,
-      detail: v.field_key ? `Antes: ${v.before_value?.value || "—"} → Depois: ${v.after_value?.value || "—"}` : null,
+      detail: v.field_key
+        ? `Antes: ${v.before_value?.value || "—"} → Depois: ${v.after_value?.value || "—"}`
+        : v.action === "addendum"
+          ? addendumText.get(String((v.after_value as { addendum_id?: string } | null)?.addendum_id ?? "")) ?? null
+          : null,
     })),
     ...sends.map((s) => ({ id: `send-${s.id}`, at: s.sent_at, actor: professional, label: "combinados enviados ao paciente", detail: s.text })),
   ];

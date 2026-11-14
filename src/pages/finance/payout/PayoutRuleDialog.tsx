@@ -1,6 +1,7 @@
 // Cadastro de regra de repasse (escopo-v1 §5.1): profissional · papel · alvo · tipo · valor · deduções · vigência · unidades.
 // Regra que já gerou repasse só tem o fim da vigência alterado: para mudar tipo ou valor, encerre e crie outra no dia seguinte.
 import { useState } from "react";
+import { todayIsoBR } from "@/lib/domain/stockMoves";
 import { Plus, Trash2 } from "lucide-react";
 
 import { CentsInput, CheckField, DecimalInput, Field, FormDialog, NativeSelect } from "@/components/fin/FinUi";
@@ -15,7 +16,7 @@ export interface RulePrefill { professionalId?: string; role?: PayoutRole; servi
 type Tri = "" | "yes" | "no";
 const tri = (v: boolean | undefined): Tri => (v === undefined ? "" : v ? "yes" : "no");
 const unTri = (t: Tri): boolean | undefined => (t === "" ? undefined : t === "yes");
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIsoBR();
 const PARTICIPANT_TYPES: PayoutRuleType[] = ["pct", "fixed_per_exec", "none"];
 const TYPE_HINT: Record<PayoutRuleType, string> = {
   pct: "Percentual sobre a base do atendimento; entra no mês em que o dinheiro liquida. Pode ter faixas por meta.",

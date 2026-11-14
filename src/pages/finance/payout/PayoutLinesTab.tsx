@@ -1,6 +1,7 @@
 // Financeiro › Repasse › Lançamentos: prévia do mês e linhas de repasse por profissional/competência, com a memória de cálculo.
 // Gestor/Financeiro/Admin escolhem o profissional; o profissional vê só os próprios. Recepção e Estoquista não chegam aqui.
 import { useState } from "react";
+import { todayIsoBR } from "@/lib/domain/stockMoves";
 import { Calculator, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -23,7 +24,7 @@ import { NoAccess } from "@/pages/finance/NoAccess";
 import { PayoutMemoryDialog } from "@/pages/finance/payout/PayoutMemoryDialog";
 
 const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
-const thisMonth = () => new Date().toISOString().slice(0, 7);
+const thisMonth = () => todayIsoBR().slice(0, 7);
 const lineTitle = (l: PayoutLineRow) => (l.kind === "correction" ? (l.line_type === "adjustment" ? "Estorno / ajuste" : "Correção") : PAYOUT_LINE_LABEL[l.line_type]);
 
 export function PayoutLinesTab() {

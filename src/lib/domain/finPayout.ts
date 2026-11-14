@@ -249,13 +249,19 @@ export function payoutErrorMessage(e: unknown): string {
 const brl = (cents: unknown): string => (Number(cents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dateBr = (iso: unknown): string => (typeof iso === "string" && iso.length >= 10 ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
 const periodBr = (p: unknown): string => (typeof p === "string" && /^\d{4}-\d{2}$/.test(p) ? `${p.slice(5)}/${p.slice(0, 4)}` : "—");
+/** A conta gravada vem em centavos («base = 30000 − taxa 0 …»): mostra em reais («base = R$ 300,00 − taxa R$ 0,00 …»), sem mexer no percentual. */
+export function formulaInReais(formula: string): string {
+  return formula
+    .replace(/(base|taxa|imposto|material|=)\s+(-?\d+)(?=\s*(?:−|-|;|=|$))/g, (_m, label: string, cents: string) => `${label} ${(Number(cents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`)
+    .replace(/fixo por execução R\$ (\d+(?:\.\d+)?)/, (_m, v: string) => `fixo por execução ${Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`);
+}
 export interface MemoryView { formula: string | null; rows: [string, string][]; correction: string | null }
 /** Traduz a memória gravada na linha (regra aplicada, base, percentual, deduções) para o diálogo «Como foi calculado». */
 export function describeMemory(memory: Record<string, unknown>, lineType: PayoutLineType): MemoryView {
   const m = memory ?? {};
   const rows: [string, string][] = [];
   const rule = (m.rule ?? null) as { type?: PayoutRuleType; pct?: number | null; tiers?: Tier[] | null; amount_cents?: number | null; valid_from?: string } | null;
-  if (m.origin) rows.push(["Origem", m.origin === "pacote" ? `Pacote ${String(m.package ?? "")}`.trim() : m.origin === "produto" ? "Venda de produto" : m.origin === "execucao" ? "Execução do atendimento" : "Atendimento avulso"]);
+  if (m.origin) rows.push(["Origem", m.origin === "pacote" ? `Pacote ${String(m.package ?? "")}`.trim() : m.origin === "produto" ? "Venda de produto" : m.origin === "execucao" ? "Execução do atendimento" : "Venda avulsa"]);
   if (m.service) rows.push(["Serviço", String(m.service)]);
   if (m.item) rows.push(["Item", String(m.item)]);
   if (m.performed_on) rows.push(["Atendimento em", dateBr(m.performed_on)]);
@@ -273,5 +279,5 @@ export function describeMemory(memory: Record<string, unknown>, lineType: Payout
   }
   const c = (m.correction ?? null) as { reason?: string; previous_amount?: number; new_amount?: number; origin_period?: string } | null;
   const correction = c ? `${lineType === "adjustment" ? "Estorno/ajuste" : "Correção"} de lançamento de ${periodBr(c.origin_period)}: de ${brl(c.previous_amount)} para ${brl(c.new_amount)}${c.reason ? ` — ${c.reason}` : ""}.` : null;
-  return { formula: typeof m.formula === "string" ? m.formula : null, rows, correction };
+  return { formula: typeof m.formula === "string" ? formulaInReais(m.formula) : null, rows, correction };
 }

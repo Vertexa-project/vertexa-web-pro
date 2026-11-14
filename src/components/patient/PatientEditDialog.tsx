@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { todayIsoBR } from "@/lib/domain/stockMoves";
 import { Loader2 } from "lucide-react";
 
 import { PatientDeleteSection } from "@/components/patient/PatientDeleteSection";
@@ -67,7 +68,7 @@ function initialForm(patient: PatientDetail): FormState {
   };
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const todayIso = () => todayIsoBR();
 
 interface Props {
   patient: PatientDetail;

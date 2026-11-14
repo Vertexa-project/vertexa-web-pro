@@ -1,6 +1,7 @@
 // Financeiro › Repasse › Regras: cadastro de regras por profissional, serviço e papel; fila «sem regra»; comissão sobre medicamento/manipulado.
 // Admin/Gestor configuram; Financeiro consulta. Regra com repasse calculado só é encerrada (nunca apagada nem reescrita).
 import { useState } from "react";
+import { todayIsoBR } from "@/lib/domain/stockMoves";
 import { Plus, Scale } from "lucide-react";
 
 import { ActiveBadge, CheckField, ExportButtons, Field, FinTable, NativeSelect } from "@/components/fin/FinUi";
@@ -113,7 +114,7 @@ export function PayoutRulesTab() {
           label="Regras de repasse" rows={rules} rowKey={(r) => r.id}
           columns={[
             { header: "Profissional", role: "title", cell: (r) => r.professional_name },
-            { header: "Situação", role: "badge", cell: (r) => (r.valid_to && r.valid_to < new Date().toISOString().slice(0, 10) ? <Badge tone="muted">Encerrada</Badge> : <ActiveBadge active={r.is_active} />) },
+            { header: "Situação", role: "badge", cell: (r) => (r.valid_to && r.valid_to < todayIsoBR() ? <Badge tone="muted">Encerrada</Badge> : <ActiveBadge active={r.is_active} />) },
             { header: "Tipo", cell: (r) => PAYOUT_RULE_TYPE_LABEL[r.rule_type] },
             { header: "Papel", cell: (r) => (r.role ? PAYOUT_ROLE_LABEL[r.role] : "—") },
             { header: "Vale para", cell: targetText },
@@ -123,7 +124,7 @@ export function PayoutRulesTab() {
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" onClick={() => setDialog({ rule: r })} aria-label={`${canWrite ? "Editar" : "Ver"} regra de ${r.professional_name}`}>{canWrite ? "Editar" : "Ver"}</Button>
                 {canWrite && r.is_active && !r.valid_to ? <Button size="sm" variant="outline" onClick={() => { setEnding(r); setEndTo(""); setEndError(null); }} aria-label={`Encerrar regra de ${r.professional_name}`}>Encerrar</Button> : null}
-                {canWrite && r.is_active && !r.in_use ? <Button size="sm" variant="ghost" onClick={() => setActive.mutate({ ruleId: r.id, active: false, reason: "Regra desativada antes de ser usada" })} disabled={setActive.isPending} aria-label={`Desativar regra de ${r.professional_name}`}>Desativar</Button> : null}
+                {canWrite && r.is_active && !r.in_use ? <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(`Desativar a regra de ${r.professional_name}? Ela ainda não foi usada e fica em «Mostrar regras desativadas».`)) setActive.mutate({ ruleId: r.id, active: false, reason: "Regra desativada antes de ser usada" }); }} disabled={setActive.isPending} aria-label={`Desativar regra de ${r.professional_name}`}>Desativar</Button> : null}
               </div>
             ) },
           ]}

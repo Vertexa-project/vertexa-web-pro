@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { todayIsoBR } from "@/lib/domain/stockMoves";
 import { Lock, Plus, Trash2, Users } from "lucide-react";
 
 import { CentsInput, CheckField, DecimalInput, ExportButtons, Field, FinTable, NativeSelect, ReasonField } from "@/components/fin/FinUi";
@@ -26,7 +27,7 @@ const serverMessage = (e: unknown): string => {
   return "Não foi possível salvar agora. Tente novamente.";
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIsoBR();
 
 function ProDialog({ clinicId, row, canWrite, onClose }: { clinicId: string; row: ProFinanceListRow; canWrite: boolean; onClose: () => void }) {
   // A leitura do detalhe (CPF/CNPJ, Pix, banco) é sensível: o servidor registra cada leitura no Histórico.

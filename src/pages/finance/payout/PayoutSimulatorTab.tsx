@@ -1,5 +1,6 @@
 // Financeiro › Repasse › Simulador: quanto cada participante receberia de um atendimento, com as regras vigentes e a mesma conta do servidor.
 import { useMemo, useState } from "react";
+import { todayIsoBR } from "@/lib/domain/stockMoves";
 import { Calculator } from "lucide-react";
 
 import { CentsInput, DecimalInput, Field, FinTable, NativeSelect } from "@/components/fin/FinUi";
@@ -12,7 +13,7 @@ import { usePayoutContext, usePayoutRules } from "@/hooks/useFinPayout";
 import { canSeePayoutRules } from "@/lib/domain/finAccess";
 import { EMPTY_PARTICIPANTS, toDrafts, type ParticipantsValue } from "@/lib/domain/finAppointments";
 import { formatBRL } from "@/lib/domain/finance";
-import { clinicMargin, matchRules, PAYOUT_ROLE_LABEL, simulateAppointment, taxOf, type PayoutLine } from "@/lib/domain/finPayout";
+import { clinicMargin, formulaInReais, matchRules, PAYOUT_ROLE_LABEL, simulateAppointment, taxOf, type PayoutLine } from "@/lib/domain/finPayout";
 import { NoAccess } from "@/pages/finance/NoAccess";
 
 export function PayoutSimulatorTab() {
@@ -22,7 +23,7 @@ export function PayoutSimulatorTab() {
   const rulesQ = usePayoutRules(clinicId, null, false, canRead);
   const [serviceId, setServiceId] = useState("");
   const [unitId, setUnitId] = useState("");
-  const [on, setOn] = useState(new Date().toISOString().slice(0, 10));
+  const [on, setOn] = useState(todayIsoBR());
   const [gross, setGross] = useState<number | null>(null);
   const [fee, setFee] = useState<number | null>(null);
   const [material, setMaterial] = useState<number | null>(null);
@@ -84,7 +85,7 @@ export function PayoutSimulatorTab() {
                 { header: "Base", nowrap: true, className: "tabular-nums", cell: (l) => (l.baseCents === null ? "—" : formatBRL(l.baseCents)) },
                 { header: "%", nowrap: true, className: "tabular-nums", cell: (l) => (l.pct === null ? "fixo" : `${String(l.pct).replace(".", ",")}%`) },
                 { header: "Repasse", nowrap: true, className: "tabular-nums font-medium", cell: (l) => formatBRL(l.amountCents) },
-                { header: "Conta", wide: true, cell: (l) => l.formula },
+                { header: "Conta", wide: true, cell: (l) => formulaInReais(l.formula) },
               ]}
             />
           ) : null}

@@ -71,7 +71,7 @@ describe("Financeiro › Repasse › Lançamentos", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: /Ver como foi calculado/ }));
     const dlg = screen.getByRole("dialog");
     expect(within(dlg).getByText(/Percentual sobre a base — 60%/)).toBeInTheDocument();
-    expect(within(dlg).getByText(/base = 50000 − taxa 1500/)).toBeInTheDocument();
+    expect(within(dlg).getByText(/base = R\$\s500,00 − taxa R\$\s15,00/)).toBeInTheDocument();
     expect(within(dlg).getByText("Imposto (6%)")).toBeInTheDocument();
   });
 
@@ -280,7 +280,8 @@ describe("Financeiro › Repasse › Simulador", () => {
     await user.selectOptions(screen.getByLabelText("Responsável"), "p1");
     const table = screen.getByRole("table", { name: "Resultado da simulação" });
     expect(within(table).getByText("Dra. A")).toBeInTheDocument();
-    expect(within(table).getByText(/R\$\s*455,00/)).toBeInTheDocument();
+    expect(within(table).getAllByText(/R\$\s*455,00/).length).toBeGreaterThanOrEqual(1);
+    expect(within(table).getByText(/base = R\$\s500,00 − taxa R\$\s15,00 − imposto R\$\s30,00/)).toBeInTheDocument();
     expect(within(table).getAllByText(/R\$\s*273,00/).length).toBeGreaterThan(0);
     expect(screen.getByText("Margem da clínica").nextSibling).toHaveTextContent(/R\$\s*182,00/);   // 500 − 15 − 30 − 273
   });
