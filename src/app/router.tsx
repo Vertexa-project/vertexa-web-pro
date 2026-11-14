@@ -51,6 +51,7 @@ const StockExitsTab = lazy(() => import("@/pages/stock/StockExitsTab").then((m) 
 const StockMovementsTab = lazy(() => import("@/pages/stock/StockMovementsTab").then((m) => ({ default: m.StockMovementsTab })));
 const StockShortfallsTab = lazy(() => import("@/pages/stock/StockShortfallsTab").then((m) => ({ default: m.StockShortfallsTab })));
 const AppointmentsTab = lazy(() => import("@/pages/finance/AppointmentsTab").then((m) => ({ default: m.AppointmentsTab })));
+const DashboardTab = lazy(() => import("@/pages/finance/dash/DashboardTab").then((m) => ({ default: m.DashboardTab })));
 const PayoutLayout = lazy(() => import("@/pages/finance/payout/PayoutLayout").then((m) => ({ default: m.PayoutLayout })));
 const PayoutLinesTab = lazy(() => import("@/pages/finance/payout/PayoutLinesTab").then((m) => ({ default: m.PayoutLinesTab })));
 const ClosingTab = lazy(() => import("@/pages/finance/payout/closing/ClosingTab").then((m) => ({ default: m.ClosingTab })));
@@ -263,6 +264,7 @@ export const router = createBrowserRouter(
               element: <FinanceLayout />,
               children: [
                 { index: true, element: <FinanceMensalidades /> },
+                { path: "painel", element: <DashboardTab /> },
                 { path: "vendas", element: <SalesTab /> },
                 { path: "atendimentos", element: <AppointmentsTab /> },
                 { path: "pacotes", element: <PatientPackagesTab /> },

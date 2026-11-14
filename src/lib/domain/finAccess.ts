@@ -37,7 +37,9 @@ export type FinArea =
   // Entrega 5: motor de repasse (regras: Gestor configura, Financeiro consulta; lançamentos: Gestor/Financeiro; recalcular: Gestor/Financeiro)
   | "share_rules" | "share_lines" | "share_recalc"
   // Entrega 6: fechamento mensal (preparar: Gestor/Financeiro; decidir: Gestor; NF e pagamento: Gestor/Financeiro; destravar: só Admin/Owner)
-  | "close_prepare" | "close_decide" | "close_pay";
+  | "close_prepare" | "close_decide" | "close_pay"
+  // Entrega 7: painel financeiro da clínica (Gestor nas unidades autorizadas e Financeiro; Admin sempre; Recepção, Estoquista e profissional não)
+  | "dash";
 
 export function finCan(access: FinAccess, area: FinArea, mode: "read" | "write" = "read"): boolean {
   return access.can[`${area}_${mode}`] === true;
@@ -127,11 +129,17 @@ export function canSeeMyStatement(a: FinAccess): boolean {
   return a.can.own_share === true;
 }
 
+/** Painel financeiro (Entrega 7): Admin, Gestor e Financeiro. Recepção, Estoquista e profissional clínico não veem o painel da clínica. */
+export function canSeeDashboard(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "dash");
+}
+
 export interface FinanceTab { to: string; label: string; end?: boolean }
 /** Abas do Financeiro pela matriz de papéis (Entrega 2 inclui Vendas, Títulos e Caixa). */
 export function financeTabs(a: FinAccess): FinanceTab[] {
   return [
     ...(a.isAdmin ? [{ to: "/financeiro", label: "Mensalidades", end: true }] : []),
+    ...(canSeeDashboard(a) ? [{ to: "/financeiro/painel", label: "Painel" }] : []),
     ...(canSeeSales(a) ? [{ to: "/financeiro/vendas", label: "Vendas" }] : []),
     ...(canSeeAppointments(a) ? [{ to: "/financeiro/atendimentos", label: "Atendimentos" }] : []),
     ...(canSeePatientPackages(a) ? [{ to: "/financeiro/pacotes", label: "Pacotes dos pacientes" }] : []),
@@ -144,7 +152,7 @@ export function financeTabs(a: FinAccess): FinanceTab[] {
 
 /** Item "Financeiro" do menu: admin (Mensalidades) ou quem lê cadastro, vende ou opera caixa. */
 export function canSeeFinanceMenu(a: FinAccess): boolean {
-  return a.isAdmin || canSeeFinanceCadastros(a) || canSeeSales(a) || canSeeCash(a) || canSeePayout(a);
+  return a.isAdmin || canSeeFinanceCadastros(a) || canSeeSales(a) || canSeeCash(a) || canSeePayout(a) || canSeeDashboard(a);
 }
 
 /** Item "Estoque" do menu: admin, gestor, estoquista e financeiro (consulta). */
