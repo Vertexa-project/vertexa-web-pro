@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { NewDocumentButton } from "@/components/documents/NewDocumentButton";
 import { StartEncounterButton } from "@/components/clinical/StartEncounterButton";
 import { ClinicalRecordTab } from "@/components/patient/ClinicalRecordTab";
 import { AnthropometryTab } from "@/components/patient/AnthropometryTab";
@@ -129,6 +130,7 @@ export function PatientProfilePage() {
         ) : null}
         <StartEncounterButton patientId={patient.id} variant="outline" />
         <NewAppointmentButton patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
+        <NewDocumentButton patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
         <NewSaleButton patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
         <ExportPatientReportButton patientId={patient.id} />
       </div>
@@ -172,7 +174,7 @@ export function PatientProfilePage() {
           <EvolutionTab patient={patient} />
         </TabsContent>
         <TabsContent value="documents">
-          <DocumentsTab patientId={patient.id} />
+          <DocumentsTab patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
         </TabsContent>
         <TabsContent value="prontuario">
           <ClinicalRecordTab patientId={patient.id} />

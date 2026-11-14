@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
+import { ClinicalDocumentsPanel } from "@/components/documents/ClinicalDocumentsPanel";
 import { ConsentCard } from "@/components/clinical/ConsentCard";
 import { FinalizedActions } from "@/components/clinical/FinalizedActions";
 import { RecordEditor } from "@/components/clinical/RecordEditor";
@@ -167,6 +168,7 @@ export function EncounterPage() {
             <FinalizedActions encounter={enc} fields={fields} people={peopleQ.data} patientName={patientName} clinicName={clinicQ.data?.name ?? "Clínica"} />
           ) : null}
           {enc.status === "cancelado" ? <p className="text-sm text-muted-foreground">Atendimento cancelado.</p> : null}
+          {enc.status !== "cancelado" ? <ClinicalDocumentsPanel patientId={patientId} patientName={patientName} encounterId={enc.id} heading="Documentos deste atendimento" /> : null}
           </div>
           <div className="order-3 lg:order-none">
             <TranscriptPanel segments={segments} loading={segQ.isLoading} highlightOrd={highlight} live={live || consent} />

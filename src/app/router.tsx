@@ -44,6 +44,7 @@ const ProfessionalsFinanceTab = lazy(() => import("@/pages/finance/Professionals
 const PaymentMethodsTab = lazy(() => import("@/pages/finance/PaymentMethodsTab").then((m) => ({ default: m.PaymentMethodsTab })));
 const TaxSettingsTab = lazy(() => import("@/pages/finance/TaxSettingsTab").then((m) => ({ default: m.TaxSettingsTab })));
 const AuditTab = lazy(() => import("@/pages/finance/AuditTab").then((m) => ({ default: m.AuditTab })));
+const DocumentsPage = lazy(() => import("@/pages/DocumentsPage").then((m) => ({ default: m.DocumentsPage })));
 const StockPage = lazy(() => import("@/pages/StockPage").then((m) => ({ default: m.StockPage })));
 const StockBalanceTab = lazy(() => import("@/pages/stock/StockBalanceTab").then((m) => ({ default: m.StockBalanceTab })));
 const StockEntriesTab = lazy(() => import("@/pages/stock/StockEntriesTab").then((m) => ({ default: m.StockEntriesTab })));
@@ -299,6 +300,7 @@ export const router = createBrowserRouter(
                 },
               ],
             },
+            { path: "documentos", element: <DocumentsPage /> },
             { path: "estoque", element: <StockPage /> },
             { path: "estoque/saldo", element: <StockBalanceTab /> },
             { path: "estoque/entradas", element: <StockEntriesTab /> },

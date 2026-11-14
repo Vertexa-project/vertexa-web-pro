@@ -2,7 +2,7 @@ import { mainNav, type NavItem } from "@/app/routes";
 import { useFinContext } from "@/hooks/useFin";
 import { useCurrentProfessional } from "@/hooks/useCurrentProfessional";
 import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
-import { canSeeFinanceMenu, canSeeStockMenu, NO_FIN_ACCESS, type FinAccess } from "@/lib/domain/finAccess";
+import { canSeeDocsMenu, canSeeFinanceMenu, canSeeStockMenu, NO_FIN_ACCESS, type FinAccess } from "@/lib/domain/finAccess";
 
 /**
  * Itens do menu principal visíveis para quem está logado: adminOnly some para quem não é admin da clínica,
@@ -13,6 +13,7 @@ export function filterNav(items: NavItem[], isClinicAdmin: boolean, access: FinA
     if (!i.adminOnly || isClinicAdmin) return true;
     if (i.finMenu === "finance") return canSeeFinanceMenu(access);
     if (i.finMenu === "stock") return canSeeStockMenu(access);
+    if (i.finMenu === "docs") return canSeeDocsMenu(access);
     return false;
   });
 }

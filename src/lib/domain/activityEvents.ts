@@ -3,6 +3,8 @@ import {
   Activity,
   Camera,
   Droplet,
+  FileText,
+  FileX,
   Gauge,
   Dumbbell,
   Moon,
@@ -11,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { DOC_TYPE_LABEL, type DocType } from "@/lib/domain/clinicalDocs";
 import type { BadgeTone } from "@/lib/domain/vri";
 
 export interface ActivityMeta {
@@ -35,6 +38,10 @@ export function activityEventMeta(type: string): ActivityMeta {
       return { label: "Esforço do treino", icon: Gauge, tone: "info" };
     case "meal_plan_viewed":
       return { label: "Plano alimentar visto", icon: Utensils, tone: "muted" };
+    case "document_signed":
+      return { label: "Documento assinado", icon: FileText, tone: "primary" };
+    case "document_invalidated":
+      return { label: "Documento invalidado", icon: FileX, tone: "destructive" };
     default:
       return { label: type.replace(/_/g, " "), icon: Activity, tone: "muted" };
   }
@@ -58,6 +65,12 @@ export function activityEventDescription(
       // Chave canônica = `liters`; tolera o alias legado `amount` (ver CONTRATO_INTEGRACAO).
       const liters = payload.liters ?? payload.amount;
       return liters != null ? `${liters} L` : null;
+    }
+    case "document_signed":
+    case "document_invalidated": {
+      const t = DOC_TYPE_LABEL[payload.doc_type as DocType];
+      if (!t) return null;
+      return payload.is_demo === true ? `${t} (demonstração, sem validade legal)` : t;
     }
     default:
       return null;

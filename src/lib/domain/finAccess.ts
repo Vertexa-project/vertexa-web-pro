@@ -157,6 +157,11 @@ export function canSeeFinanceMenu(a: FinAccess): boolean {
   return a.isAdmin || canSeeFinanceCadastros(a) || canSeeSales(a) || canSeeCash(a) || canSeePayout(a) || canSeeDashboard(a);
 }
 
+/** Item "Documentos" do menu (Entrega 9): quem lista documentos clínicos — profissional, Admin e Recepção (que só reenvia). Financeiro e Estoquista não veem. */
+export function canSeeDocsMenu(a: FinAccess): boolean {
+  return a.isAdmin || a.can.doc_list === true;
+}
+
 /** Item "Estoque" do menu: admin, gestor, estoquista e financeiro (consulta). */
 export function canSeeStockMenu(a: FinAccess): boolean {
   return a.isAdmin || finCan(a, "stock_items") || finCan(a, "stock_move");

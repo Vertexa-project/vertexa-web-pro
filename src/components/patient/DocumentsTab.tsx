@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { ExternalLink, FileText, Loader2, Upload } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
+import { ClinicalDocumentsPanel } from "@/components/documents/ClinicalDocumentsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,7 +60,7 @@ function uploaderLabel(doc: PatientDocumentView): string {
  *  2) LAUDOS DAS AVALIAÇÕES (body_assessments.document_url): legado, SOMENTE LEITURA — nada some.
  *     URL crua sob allowlist de esquema (isSafeDocumentUrl, dívida #18 até tudo virar signed URL).
  */
-export function DocumentsTab({ patientId }: { patientId: string }) {
+export function DocumentsTab({ patientId, patientName }: { patientId: string; patientName?: string }) {
   const exams = usePatientExams(patientId);
   const legacy = usePatientDocuments(patientId);
   const upload = useUploadPatientDocument(patientId);
@@ -132,6 +133,9 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
 
   return (
     <div className="space-y-8">
+      {/* ── Seção 0 (Entrega 9): documentos clínicos assinados pelo provedor (modo demonstração até a escolha do provedor) ── */}
+      <ClinicalDocumentsPanel patientId={patientId} patientName={patientName} />
+
       {/* ── Seção 1: exames/documentos reais (upload + bucket privado + signed URL) ── */}
       <section className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">

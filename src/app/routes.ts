@@ -1,5 +1,6 @@
 import {
   Dumbbell,
+  FileText,
   KanbanSquare,
   LayoutDashboard,
   LayoutTemplate,
@@ -25,7 +26,7 @@ export interface NavItem {
    * Financeiro/Estoque (Entrega 1): além do admin, também aparece para quem tem papel adicional que alcança a área
    * (matriz de papéis, escopo-v1 §3). Só decide o que MOSTRAR — o servidor recusa o resto.
    */
-  finMenu?: "finance" | "stock";
+  finMenu?: "finance" | "stock" | "docs";
 }
 
 // Fonte única do sidebar (núcleo enxuto: tudo gira em torno do paciente).
@@ -44,6 +45,7 @@ export const mainNav: NavItem[] = [
   { path: "/gestao", label: "Gestão", icon: BarChart3, adminOnly: true },
   { path: "/financeiro", label: "Financeiro", icon: Wallet, adminOnly: true, finMenu: "finance" },
   { path: "/estoque", label: "Estoque", icon: Package, adminOnly: true, finMenu: "stock" },
+  { path: "/documentos", label: "Documentos", icon: FileText, adminOnly: true, finMenu: "docs" },
   // Roadmap (não implementado): modelos de plano/treino/mensagem reutilizáveis.
   // Aparece com cadeado para sinalizar o que vem, sem virar módulo solto.
   { path: "/modelos", label: "Modelos", icon: LayoutTemplate, locked: true },

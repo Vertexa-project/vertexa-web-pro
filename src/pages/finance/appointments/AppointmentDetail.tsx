@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 
+import { ClinicalDocumentsPanel } from "@/components/documents/ClinicalDocumentsPanel";
 import { Field, FinTable, FormDialog } from "@/components/fin/FinUi";
 import { ParticipantsFields } from "@/components/fin/ParticipantsFields";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -98,6 +99,8 @@ export function AppointmentDetail({ clinicId, apptId, onClose }: { clinicId: str
                   ]}
                 />
               ) : a.status === "done" ? <p className="text-sm text-muted-foreground">Nenhum material baixado neste atendimento.</p> : null}
+
+              <ClinicalDocumentsPanel patientId={a.patient_id} patientName={a.patient_name ?? undefined} appointmentId={a.id} encounterId={a.encounter_id} heading="Documentos deste atendimento" />
 
               {a.can_manage && a.status !== "canceled" ? (
                 <div className="flex flex-wrap gap-2">
