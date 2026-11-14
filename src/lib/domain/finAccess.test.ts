@@ -80,7 +80,11 @@ describe("abas do Financeiro na Entrega 2 (Vendas, Títulos, Caixa)", () => {
     expect(canSeeFinanceMenu(a)).toBe(true);
   });
   it("Admin: todas as abas, Mensalidades primeiro", () => {
-    expect(tabsOf({}, true)).toEqual(["Mensalidades", "Vendas", "Atendimentos", "Pacotes dos pacientes", "Repasse", "Títulos", "Caixa", "Cadastros"]);
+    expect(tabsOf({}, true)).toEqual(["Mensalidades", "Painel", "Vendas", "Atendimentos", "Pacotes dos pacientes", "Repasse", "Títulos", "Caixa", "Cadastros"]);
+  });
+  it("Financeiro com painel (E7): «Painel» é a primeira aba; Recepção continua sem ele", () => {
+    expect(tabsOf({ dash_read: true, sales_read: true, receivables_read: true })[0]).toBe("Painel");
+    expect(tabsOf({ sales_read: true, cash_read: true })).toEqual(["Vendas", "Caixa"]);
   });
   it("sem papel: nenhuma aba", () => {
     expect(tabsOf({})).toEqual([]);
