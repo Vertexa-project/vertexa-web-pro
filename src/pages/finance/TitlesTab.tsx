@@ -66,10 +66,11 @@ export function TitlesTab() {
   const [to, setTo] = useState(params.get("ate") ?? "");
   const [unitId, setUnitId] = useState(params.get("unidade") ?? "");
   const [status, setStatus] = useState(params.get("situacao") ?? "");
+  const [dateBy, setDateBy] = useState<"expected" | "settled">(params.get("dataPor") === "liquidacao" ? "settled" : "expected");
   const [action, setAction] = useState<Action>(null);
   const canRead = canSeeReceivables(access);
   const units = useUnits(clinicId, canRead).data ?? [];
-  const q = useTitles(clinicId, { unitId, status: status as ReceivableStatus | "", from, to }, canRead);
+  const q = useTitles(clinicId, { unitId, status: status as ReceivableStatus | "", from, to, dateBy }, canRead);
   const settle = useSettleTitle();
   if (!clinicId) return <LoadingState />;
   if (!canRead) return <NoAccess text="Os títulos (taxas e valores líquidos) são do Financeiro, do Gestor e do administrador." />;
@@ -86,6 +87,13 @@ export function TitlesTab() {
   return (
     <div className="min-w-0 space-y-4">
       <FilterBar idPrefix="titles" from={from} to={to} onFrom={setFrom} onTo={setTo} units={units} unitId={unitId} onUnit={setUnitId} statuses={statuses} status={status} onStatus={setStatus} />
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <label htmlFor="titles-dateby" className="text-muted-foreground">Período pela data de</label>
+        <select id="titles-dateby" className="h-9 rounded-md border bg-background px-2" value={dateBy} onChange={(e) => setDateBy(e.target.value as "expected" | "settled")}>
+          <option value="expected">previsão</option>
+          <option value="settled">liquidação</option>
+        </select>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ExportButtons columns={columns} rows={rows} filename="titulos" sheetName="Títulos" />
         {rows.length > 0 ? <p className="text-sm text-muted-foreground">Sem estornados: bruto <strong className="tabular-nums text-foreground">{formatBRL(total("gross_cents"))}</strong> · taxa <strong className="tabular-nums text-foreground">{formatBRL(total("fee_cents"))}</strong> · líquido <strong className="tabular-nums text-foreground">{formatBRL(total("net_cents"))}</strong></p> : null}

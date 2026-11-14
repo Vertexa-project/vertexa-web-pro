@@ -29,7 +29,7 @@ function contextLink(t: DashTarget, a: FinAccess): { to: string; label: string }
   switch (metric) {
     case "sold": case "ticket": return pick(canSeeSales(a), withFilter("/financeiro/vendas", f({ situacao: "ativas" })), "Ir para Vendas");
     case "overdue": return pick(canSeeSales(a), withFilter("/financeiro/vendas", f({ situacao: "ativas" })), "Ir para Vendas");
-    case "received": case "fees": return pick(canSeeReceivables(a), withFilter("/financeiro/titulos", f({ situacao: "settled" })), "Ir para Títulos");
+    case "received": case "fees": return pick(canSeeReceivables(a), withFilter("/financeiro/titulos", f({ situacao: "settled", dataPor: "liquidacao" })), "Ir para Títulos");
     case "to_receive": case "overdue_titles": return pick(canSeeReceivables(a), withFilter("/financeiro/titulos", f({ situacao: "expected" })), "Ir para Títulos");
     case "repasse": return pick(canSeePayout(a), withFilter("/financeiro/repasse/fechamento", { mes: t.period, unidade: t.unitId }), "Ir para o Fechamento");
     case "appt_no_sale": return pick(canSeeAppointments(a), withFilter("/financeiro/atendimentos", f({ semVenda: "1" })), "Ir para Atendimentos");

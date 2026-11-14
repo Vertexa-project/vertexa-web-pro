@@ -83,9 +83,9 @@ export interface TitleListRow {
   installment_no: number; installments: number; gross_cents: number; fee_cents: number; net_cents: number; expected_date: string; settled_date: string | null;
   settled_net_cents: number | null; status: ReceivableStatus; reverse_reason: string | null; nsu: string | null;
 }
-export interface TitleFilter { unitId?: string | null; status?: ReceivableStatus | ""; from?: string; to?: string }
+export interface TitleFilter { unitId?: string | null; status?: ReceivableStatus | ""; from?: string; to?: string; dateBy?: "expected" | "settled" }
 export const listTitles = (clinicId: string, f: TitleFilter) =>
-  rpc<TitleListRow[]>("fin_receivables_list", { p_clinic: clinicId, p_unit: f.unitId || null, p_status: f.status || null, p_from: f.from || null, p_to: f.to || null });
+  rpc<TitleListRow[]>("fin_receivables_list", { p_clinic: clinicId, p_unit: f.unitId || null, p_status: f.status || null, p_from: f.from || null, p_to: f.to || null, p_date_by: f.dateBy ?? "expected" });
 export const settleTitle = (id: string, date?: string) => rpc<void>("fin_settle_receivable", { p_id: id, p_settled_date: date || null });
 export const correctTitle = (id: string, date: string, netCents: number, reason: string) => rpc<void>("fin_correct_receivable", { p_id: id, p_settled_date: date, p_settled_net_cents: netCents, p_reason: reason });
 export const reverseTitle = (id: string, reason: string) => rpc<void>("fin_reverse_receivable", { p_id: id, p_reason: reason });
