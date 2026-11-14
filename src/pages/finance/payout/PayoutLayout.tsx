@@ -1,10 +1,10 @@
-// Financeiro › Repasse (Entrega 5): lançamentos por profissional/competência, regras e simulador. O fechamento mensal (extrato, aceite, pagamento) é da Entrega 6.
+// Financeiro › Repasse (Entregas 5 e 6): lançamentos por profissional/competência, fechamento mensal, meu extrato, regras e simulador.
 import { Outlet } from "react-router-dom";
 
 import { SubNav } from "@/components/fin/FinUi";
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { useFinContext } from "@/hooks/useFin";
-import { canSeePayout, canSeePayoutRules } from "@/lib/domain/finAccess";
+import { canSeeClosing, canSeeMyStatement, canSeePayout, canSeePayoutRules } from "@/lib/domain/finAccess";
 import { NoAccess } from "@/pages/finance/NoAccess";
 
 export function PayoutLayout() {
@@ -13,6 +13,8 @@ export function PayoutLayout() {
   if (!canSeePayout(access)) return <NoAccess />;
   const tabs = [
     { to: "/financeiro/repasse", label: "Lançamentos", end: true },
+    ...(canSeeClosing(access) ? [{ to: "/financeiro/repasse/fechamento", label: "Fechamento" }] : []),
+    ...(canSeeMyStatement(access) ? [{ to: "/financeiro/repasse/meu-extrato", label: "Meu extrato" }] : []),
     ...(canSeePayoutRules(access) ? [{ to: "/financeiro/repasse/regras", label: "Regras" }, { to: "/financeiro/repasse/simulador", label: "Simulador" }] : []),
   ];
   return (

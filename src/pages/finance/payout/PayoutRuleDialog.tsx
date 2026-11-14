@@ -191,7 +191,7 @@ export function PayoutRuleDialog({ clinicId, ctx, rule, prefill, canWrite, onClo
                 {tiers.map((t, i) => (
                   <div key={i} className="grid min-w-0 grid-cols-[minmax(0,1fr)_6rem_auto] items-end gap-2">
                     {i === tiers.length - 1 ? (
-                      <Field label={`Faixa ${i + 1}`} htmlFor={`rule-tier-${i}`}><Input id={`rule-tier-${i}`} value="Acima da faixa anterior" disabled readOnly /></Field>
+                      <Field label={`Faixa ${i + 1}`} htmlFor={`rule-tier-${i}`}><div id={`rule-tier-${i}`} className="flex min-h-10 min-w-0 items-center break-words rounded-md border border-input bg-muted/50 px-3 py-2 text-sm leading-snug text-muted-foreground">Acima da faixa anterior</div></Field>
                     ) : (
                       <Field label={`Faixa ${i + 1}: base do mês até (R$)`} htmlFor={`rule-tier-${i}`}><CentsInput id={`rule-tier-${i}`} value={t.up_to_cents} onChange={(v) => setTier(i, { up_to_cents: v })} disabled={lockedFields} /></Field>
                     )}

@@ -35,7 +35,9 @@ export type FinArea =
   // Entrega 4: atendimento (lista e custo: Gestor/Financeiro), saldo de pacote dos pacientes e entrega de item de pacote
   | "appt" | "patient_pkg" | "package_deliver"
   // Entrega 5: motor de repasse (regras: Gestor configura, Financeiro consulta; lançamentos: Gestor/Financeiro; recalcular: Gestor/Financeiro)
-  | "share_rules" | "share_lines" | "share_recalc";
+  | "share_rules" | "share_lines" | "share_recalc"
+  // Entrega 6: fechamento mensal (preparar: Gestor/Financeiro; decidir: Gestor; NF e pagamento: Gestor/Financeiro; destravar: só Admin/Owner)
+  | "close_prepare" | "close_decide" | "close_pay";
 
 export function finCan(access: FinAccess, area: FinArea, mode: "read" | "write" = "read"): boolean {
   return access.can[`${area}_${mode}`] === true;
@@ -98,6 +100,31 @@ export function canManagePayoutRules(a: FinAccess): boolean {
 /** Recalcular o repasse: Admin, Gestor e Financeiro. */
 export function canRecalcPayout(a: FinAccess): boolean {
   return a.isAdmin || finCan(a, "share_recalc", "write");
+}
+
+/** Fechamento mensal (tabela do gestor): Admin, Gestor e Financeiro. */
+export function canSeeClosing(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "share_lines");
+}
+/** Iniciar o fechamento, atualizar os extratos e notificar: Admin, Gestor e Financeiro. */
+export function canPrepareClosing(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "close_prepare", "write");
+}
+/** Aprovar, travar, responder contestação e lançar ajuste manual: Admin e Gestor. */
+export function canDecideClosing(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "close_decide", "write");
+}
+/** Registrar NF e pagamento e baixar o arquivo de pagamento: Admin, Gestor e Financeiro. */
+export function canPayClosing(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "close_pay", "write");
+}
+/** Destravar mês: só o Owner/Admin (com motivo). */
+export function canUnlockClosing(a: FinAccess): boolean {
+  return a.isAdmin;
+}
+/** «Meu extrato»: o profissional (clínico) com extrato próprio. */
+export function canSeeMyStatement(a: FinAccess): boolean {
+  return a.can.own_share === true;
 }
 
 export interface FinanceTab { to: string; label: string; end?: boolean }
