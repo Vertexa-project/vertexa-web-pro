@@ -1136,5 +1136,51 @@ grant execute on function public.fin_stock_transfer_send(uuid, uuid, uuid, jsonb
   public.fin_stock_alerts(uuid, uuid), public.fin_stock_alert_counts(uuid, uuid), public.fin_stock_alert_settings_save(uuid, jsonb, text),
   public.fin_stock_report(uuid, text, uuid, date, date, jsonb, integer, integer) to authenticated;
 
+-- ---------- Desempenho: saldo por item × unidade (E3) ----------
+-- Causa medida (auto_explain, 6.000 lotes, ~72 mil movimentações): a partir da 6ª chamada na mesma conexão o PostgreSQL passa a usar o plano GENÉRICO da consulta
+-- interna da função (p_unit/p_item/p_search viram parâmetros desconhecidos) e ela fica ~500× mais lenta (50 ms → 23 s). Conexões reaproveitadas do pooler caem nisso em produção.
+-- Correção: mesma função da E3 (resultado idêntico; grants preservados), com plano sempre específico por chamada (plan_cache_mode = force_custom_plan).
+
+create or replace function public.fin_stock_balances(p_clinic uuid, p_unit uuid default null, p_item uuid default null, p_search text default null, p_only_positive boolean default false)
+returns table (item_id uuid, item_name text, category text, item_type text, stock_unit text, fractional boolean, lot_control boolean, unit_id uuid, unit_name text,
+               qty_on_hand numeric, avg_cost_cents numeric, value_cents bigint, min_qty numeric, below_min boolean, next_expiry date, expired_qty numeric, open_qty numeric, lots jsonb)
+language plpgsql stable security definer set search_path = '' set plan_cache_mode = force_custom_plan as $$
+declare v_today date := private.fin_today();
+begin
+  perform private.fin_gate(p_clinic, 'stock_move', p_unit, false);
+  return query
+    with allowed as (
+      select u.id, u.name from public.clinic_units u where u.clinic_id = p_clinic and (p_unit is null or u.id = p_unit) and private.fin_can(p_clinic, 'stock_move', u.id, false)),
+    bal as (
+      select b.item_id, b.unit_id, b.qty_on_hand, b.avg_cost_cents from public.stock_balances b
+       where b.clinic_id = p_clinic and b.unit_id in (select a.id from allowed a) and (p_item is null or b.item_id = p_item)
+         and (not coalesce(p_only_positive, false) or b.qty_on_hand > 0)),
+    openq as (
+      select o.lot_id, sum(o.qty_remaining) as q from public.stock_open_units o where o.clinic_id = p_clinic and o.status = 'open' group by o.lot_id),
+    lagg as (
+      select l.item_id, l.unit_id,
+             min(l.expiry_date) as next_expiry,
+             coalesce(sum(l.qty_on_hand) filter (where l.expiry_date < v_today), 0) as expired_qty,
+             coalesce(sum(oq.q), 0) as open_qty,
+             jsonb_agg(jsonb_build_object('lot_id', l.id, 'lot_code', l.lot_code, 'expiry_date', l.expiry_date, 'qty', l.qty_on_hand, 'open_qty', coalesce(oq.q, 0),
+                                          'expired', l.expiry_date is not null and l.expiry_date < v_today) order by l.expiry_date nulls last, l.lot_code) as lots
+        from public.stock_lots l
+        join bal on bal.item_id = l.item_id and bal.unit_id = l.unit_id
+        left join openq oq on oq.lot_id = l.id
+       where l.qty_on_hand > 0
+       group by l.item_id, l.unit_id)
+    select i.id, i.name, i.category, i.item_type, i.stock_unit, i.fractional, i.lot_control, bal.unit_id, a.name,
+           bal.qty_on_hand, bal.avg_cost_cents, round(bal.qty_on_hand * bal.avg_cost_cents)::bigint,
+           mn.min_qty, (mn.min_qty is not null and bal.qty_on_hand < mn.min_qty),
+           la.next_expiry, coalesce(la.expired_qty, 0), coalesce(la.open_qty, 0), coalesce(la.lots, '[]'::jsonb)
+      from bal
+      join public.stock_items i on i.id = bal.item_id
+      join allowed a on a.id = bal.unit_id
+      left join public.stock_item_minimums mn on mn.item_id = bal.item_id and mn.unit_id = bal.unit_id
+      left join lagg la on la.item_id = bal.item_id and la.unit_id = bal.unit_id
+     where (nullif(btrim(coalesce(p_search, '')), '') is null or i.name ilike '%' || btrim(p_search) || '%' or i.category ilike '%' || btrim(p_search) || '%')
+     order by i.name, a.name;
+end $$;
+
 insert into public.schema_migration_log (version, filename, description, session)
 values ('20261117100000','20261117100000_fin_e8_inventario.sql','FIN-E8: inventário cego, transferências entre unidades, alertas e relatórios de estoque (aditiva).','FIN-E8');
