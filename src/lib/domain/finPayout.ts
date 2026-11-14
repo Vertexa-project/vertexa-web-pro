@@ -261,7 +261,7 @@ export function describeMemory(memory: Record<string, unknown>, lineType: Payout
   const m = memory ?? {};
   const rows: [string, string][] = [];
   const rule = (m.rule ?? null) as { type?: PayoutRuleType; pct?: number | null; tiers?: Tier[] | null; amount_cents?: number | null; valid_from?: string } | null;
-  if (m.origin) rows.push(["Origem", m.origin === "pacote" ? `Pacote ${String(m.package ?? "")}`.trim() : m.origin === "produto" ? "Venda de produto" : m.origin === "execucao" ? "Execução do atendimento" : "Venda avulsa"]);
+  if (m.origin) rows.push(["Origem", m.origin === "pacote" ? `Pacote ${String(m.package ?? "")}`.trim() : m.origin === "produto" ? "Venda de produto" : m.origin === "execucao" ? "Execução do atendimento" : "Venda do serviço (fora de pacote)"]);
   if (m.service) rows.push(["Serviço", String(m.service)]);
   if (m.item) rows.push(["Item", String(m.item)]);
   if (m.performed_on) rows.push(["Atendimento em", dateBr(m.performed_on)]);

@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  clinicMargin, describeMemory, fixedMonthlyAmount, guaranteeSeries, matchRules, materialShare, monthGross, packageFee, packageSessionValues, payoutBase, pctAmount, pctSum, pctSumWarning,
+  clinicMargin, describeMemory, formulaInReais, fixedMonthlyAmount, guaranteeSeries, matchRules, materialShare, monthGross, packageFee, packageSessionValues, payoutBase, pctAmount, pctSum, pctSumWarning,
   releasePackageUnits, releasePeriod, resolveDeductions, simulateAppointment, taxOf, tierAdjust, tierPct, tierProgressive, usageFeeAmount, validateTiers, withholdings,
   type Deductions, type PayoutRule, type Tier,
 } from "./finPayout";
@@ -254,10 +254,19 @@ describe("memória de cálculo para auditoria", () => {
     expect(get("Regra aplicada")).toMatch(/Percentual sobre a base — 60% \(desde 01\/01\/2026\)/);
     expect(get("Liquidado") ?? get("Dinheiro")).toBe("09/11/2026");
     expect(v.formula).toContain("base");
+    expect(get("Origem")).toBe("Venda do serviço (fora de pacote)");
     expect(v.correction).toBeNull();
   });
   it("mostra o estorno com o mês e os valores de origem", () => {
     const v = describeMemory({ correction: { reason: "chargeback", previous_amount: 30000, new_amount: 0, origin_period: "2026-06" } }, "adjustment");
     expect(v.correction).toMatch(/Estorno\/ajuste de lançamento de 06\/2026: de R\$\s300,00 para R\$\s0,00 — chargeback/);
+  });
+});
+
+describe("conta do repasse em reais (D34c)", () => {
+  it("troca os centavos por reais e mantém o percentual", () => {
+    const f = formulaInReais("base = 30000 − taxa 0 − imposto 1800 − material 0 = 28200; repasse = base × 60%");
+    expect(f).not.toMatch(/\b30000\b|\b1800\b/);
+    expect(f).toMatch(/base = R\$\s300,00 − taxa R\$\s0,00 − imposto R\$\s18,00 − material R\$\s0,00 = R\$\s282,00; repasse = base × 60%/);
   });
 });
