@@ -301,7 +301,7 @@ describe("Financeiro › Pacotes dos pacientes", () => {
     state.can = RECEP; state.packages = [pkg()];
     wrap(<PatientPackagesTab />);
     const table = screen.getByRole("table", { name: "Pacotes dos pacientes" });
-    expect(within(table).getByText(/Consulta médica: 1\/3 · Suplemento C: 0\/3/)).toBeInTheDocument();
+    expect(within(table).getByText(/Consulta médica: restam 2 de 3 · Suplemento C: restam 3 de 3/)).toBeInTheDocument();
     await user.click(within(table).getByRole("button", { name: /Abrir pacote Programa Emagrecer/ }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText(/R\$\s*1\.323,54/)).toBeInTheDocument();

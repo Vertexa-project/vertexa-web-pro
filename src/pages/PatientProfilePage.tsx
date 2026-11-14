@@ -115,7 +115,7 @@ export function PatientProfilePage() {
     <div className="space-y-6">
       <ProfileHeader patient={patient} snapshot={snapshot} />
 
-      <div className="flex items-center justify-end gap-3">
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
         {savedNotice ? (
           <p role="status" className="text-sm text-muted-foreground">
             Cadastro atualizado.

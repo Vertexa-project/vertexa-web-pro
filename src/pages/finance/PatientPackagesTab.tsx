@@ -22,7 +22,7 @@ import { formatQty } from "@/lib/domain/stockMoves";
 import { NoAccess } from "@/pages/finance/NoAccess";
 
 const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
-const balanceText = (p: PatientPackageRow) => p.items.map((i) => `${i.name}: ${formatQty(i.qty_used)}/${formatQty(i.qty_total)}`).join(" · ");
+const balanceText = (p: PatientPackageRow) => p.items.map((i) => `${i.name}: restam ${formatQty(Number(i.qty_total) - Number(i.qty_used))} de ${formatQty(i.qty_total)}`).join(" · ");
 
 function DeliverDialog({ clinicId, item, defaultUnitId, onClose }: { clinicId: string; item: PatientPackageItem; defaultUnitId: string; onClose: () => void }) {
   const units = (useUnits(clinicId).data ?? []).filter((u) => u.is_active);
@@ -62,7 +62,7 @@ function PackageDialog({ clinicId, pkg, canDeliver, onClose }: { clinicId: strin
         <DialogBody className="min-w-0 space-y-4">
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <Badge tone={st.tone}>{st.label}</Badge>
-            {pkg.price_cents !== null ? <span>Valor pago <strong className="tabular-nums">{formatBRL(pkg.price_cents)}</strong></span> : null}
+            {pkg.price_cents !== null ? <span>Valor do pacote <strong className="tabular-nums">{formatBRL(pkg.price_cents)}</strong></span> : null}
             {pkg.expired && pkg.status === "active" ? <span className="text-muted-foreground">Pacote vencido: o saldo não usado vira receita da clínica, sem repasse.</span> : null}
           </div>
           <FinTable<PatientPackageItem>
@@ -97,7 +97,7 @@ export function PatientPackagesTab() {
   const columns: ExportColumn<PatientPackageRow>[] = [
     { header: "Paciente", value: (r) => r.patient_name }, { header: "Pacote", value: (r) => r.name }, { header: "Unidade", value: (r) => r.unit_name },
     { header: "Comprado em", value: (r) => br(r.purchased_on) }, { header: "Vence em", value: (r) => br(r.expires_on) }, { header: "Situação", value: (r) => packageState(r).label },
-    { header: "Saldo", value: balanceText }, { header: "Valor pago (R$)", value: (r) => r.price_cents, kind: "money" },
+    { header: "Saldo", value: balanceText }, { header: "Valor do pacote (R$)", value: (r) => r.price_cents, kind: "money" },
   ];
   return (
     <div className="min-w-0 space-y-4">

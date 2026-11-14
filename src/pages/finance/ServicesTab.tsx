@@ -97,7 +97,7 @@ function ServiceDialog({ clinicId, service, canWrite, onClose }: { clinicId: str
         ) : null}
         <div className="space-y-2">
           <p className="text-sm font-medium">Kit de estoque do serviço</p>
-          <p className="text-xs text-muted-foreground">Itens e quantidades (na unidade de consumo) que saem do estoque quando o atendimento é realizado. A baixa automática chega na Entrega 4.</p>
+          <p className="text-xs text-muted-foreground">Itens e quantidades (na unidade de consumo) que saem do estoque quando o atendimento é realizado. Saem sozinhos do estoque ao realizar o atendimento; dá para ajustar a quantidade real antes de confirmar.</p>
           {stock.isLoading ? <p className="text-sm text-muted-foreground">Carregando itens…</p> : null}
           {kit.map((k, i) => (
             <div key={i} className="grid min-w-0 grid-cols-[minmax(0,1fr)_6rem_auto] items-end gap-2">
