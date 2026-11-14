@@ -39,7 +39,9 @@ export type FinArea =
   // Entrega 6: fechamento mensal (preparar: Gestor/Financeiro; decidir: Gestor; NF e pagamento: Gestor/Financeiro; destravar: só Admin/Owner)
   | "close_prepare" | "close_decide" | "close_pay"
   // Entrega 7: painel financeiro da clínica (Gestor nas unidades autorizadas e Financeiro; Admin sempre; Recepção, Estoquista e profissional não)
-  | "dash";
+  | "dash"
+  // Entrega 8: inventário (abrir, reabrir, cancelar e APROVAR: só Gestor/Admin; o Financeiro consulta esperado × contado × valor)
+  | "inv_manage";
 
 export function finCan(access: FinAccess, area: FinArea, mode: "read" | "write" = "read"): boolean {
   return access.can[`${area}_${mode}`] === true;
@@ -169,11 +171,32 @@ export function canMoveStock(a: FinAccess): boolean {
   return a.isAdmin || finCan(a, "stock_move", "write");
 }
 
+/** Inventário cego, transferências, alertas e relatórios (Entrega 8): quem lê o estoque (Admin, Gestor, Estoquista, Financeiro). */
+export function canSeeStockE8(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "stock_move");
+}
+/** Contar inventário, enviar e receber transferência: Admin, Gestor e Estoquista (nas suas unidades; o servidor confere). */
+export function canCountStock(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "stock_move", "write");
+}
+/** Abrir, reabrir, cancelar e aprovar inventário: só Admin e Gestor. */
+export function canManageInventory(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "inv_manage", "write");
+}
+/** Ver esperado × contado × valor na revisão: Admin, Gestor e Financeiro. */
+export function canReviewInventory(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "inv_manage");
+}
+/** Janelas dos alertas (vencimento, sem giro, transferência parada): Admin e Gestor (área settings). */
+export function canConfigureStockAlerts(a: FinAccess): boolean {
+  return a.isAdmin || finCan(a, "settings", "write");
+}
+
 export interface StockTab { to: string; label: string; end?: boolean }
-/** Abas do Estoque pela matriz de papéis: Itens (cadastro) + as quatro da Entrega 3 + Consumo sem saldo (Entrega 4). */
+/** Abas do Estoque pela matriz de papéis: Itens (cadastro) + as quatro da Entrega 3 + Consumo sem saldo (Entrega 4) + Inventário, Transferências, Alertas e Relatórios (Entrega 8). */
 export function stockTabs(a: FinAccess): StockTab[] {
   return [
-    ...(canSeeStockMoves(a) ? [{ to: "/estoque/saldo", label: "Saldo" }, { to: "/estoque/entradas", label: "Entradas" }, { to: "/estoque/saidas", label: "Saídas" }, { to: "/estoque/movimentacoes", label: "Movimentações" }, { to: "/estoque/sem-saldo", label: "Consumo sem saldo" }] : []),
+    ...(canSeeStockMoves(a) ? [{ to: "/estoque/saldo", label: "Saldo" }, { to: "/estoque/entradas", label: "Entradas" }, { to: "/estoque/saidas", label: "Saídas" }, { to: "/estoque/movimentacoes", label: "Movimentações" }, { to: "/estoque/sem-saldo", label: "Consumo sem saldo" }, { to: "/estoque/inventario", label: "Inventário" }, { to: "/estoque/transferencias", label: "Transferências" }, { to: "/estoque/alertas", label: "Alertas" }, { to: "/estoque/relatorios", label: "Relatórios" }] : []),
     ...(a.isAdmin || finCan(a, "stock_items") ? [{ to: "/estoque", label: "Itens", end: true }] : []),
   ];
 }

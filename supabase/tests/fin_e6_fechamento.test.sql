@@ -325,6 +325,11 @@ begin
   perform pg_temp.as_user('gestor');
   perform pg_temp.expect('C7 resposta curta', '22023', format($q$select public.fin_closing_answer(%L, 'ok')$q$, v_d), 'RESPONSE_REQUIRED');
   perform public.fin_closing_answer(v_d, 'Conferi o atendimento; faltou um bônus de produtividade.');
+  perform pg_temp.su();
+  -- 20261115120000_fin_e6_answer_refresh: responder a contestação já regenera o extrato (versão 2) e o devolve ao aceite do profissional
+  perform pg_temp.chk('C7b responder a contestação já devolve o extrato ao aceite (versão 2, pendente), sem precisar «Atualizar extrato»', pg_temp.cpv('pa', '2026-06', 'acceptance') = 'pending' and pg_temp.cpv('pa', '2026-06', 'stmt_version') = '2'
+     and (select status from public.fin_closing_disputes where id = v_d) = 'answered', concat_ws('/', pg_temp.cpv('pa', '2026-06', 'acceptance'), pg_temp.cpv('pa', '2026-06', 'stmt_version')));
+  perform pg_temp.as_user('gestor');
   perform pg_temp.expect('C8 não responde duas vezes', '22023', format($q$select public.fin_closing_answer(%L, 'de novo')$q$, v_d), 'ALREADY_ANSWERED');
   -- corrige a origem: ajuste manual de bônus com motivo
   perform pg_temp.expect('C9 ajuste manual sem motivo', '22023', format($q$select public.fin_closing_adjust(%L, 'bonus', 5000, '')$q$, pg_temp.cp('pa', '2026-06')), 'REASON_REQUIRED');
@@ -334,7 +339,7 @@ begin
   perform pg_temp.as_user('fin');
   perform pg_temp.expect('C9c Financeiro não lança ajuste', '42501', format($q$select public.fin_closing_adjust(%L, 'bonus', 100, 'motivo teste')$q$, pg_temp.cp('pa', '2026-06')));
   perform pg_temp.su();
-  perform pg_temp.chk('C10 F7: após o ajuste o extrato é regenerado (versão 2), volta para aceite e soma o bônus (bruto 7.650,00)', pg_temp.cpv('pa', '2026-06', 'acceptance') = 'pending' and pg_temp.cpv('pa', '2026-06', 'stmt_version') = '2'
+  perform pg_temp.chk('C10 F7: após o ajuste o extrato é regenerado de novo (versão 3, depois da versão 2 da resposta), volta para aceite e soma o bônus (bruto 7.650,00)', pg_temp.cpv('pa', '2026-06', 'acceptance') = 'pending' and pg_temp.cpv('pa', '2026-06', 'stmt_version') = '3'
      and pg_temp.cpv('pa', '2026-06', 'gross_cents') = '765000' and pg_temp.cpv('pa', '2026-06', 'adjustment_cents') = '5000', null);
   perform pg_temp.chk('C11 a retenção acompanha o novo bruto (IRRF 114,75 + PIS/COFINS/CSLL 355,73)', pg_temp.cpv('pa', '2026-06', 'withholding_cents') = '47048', pg_temp.cpv('pa', '2026-06', 'withholding_cents'));
   perform pg_temp.as_user('gestor');
@@ -368,8 +373,8 @@ begin
   perform pg_temp.as_user('fin');
   j := public.fin_closing_refresh(cl);
   perform pg_temp.su();
-  perform pg_temp.chk('F8b «Atualizar extratos» regenera só o que mudou (pb: 1 extrato; versão 2; bruto 1.100,00)', (j->>'changed')::int = 1 and pg_temp.cpv('pb', '2026-06', 'stmt_version') = '2' and pg_temp.cpv('pb', '2026-06', 'gross_cents') = '110000'
-     and pg_temp.cpv('pa', '2026-06', 'stmt_version') = '2' and pg_temp.cpv('px', '2026-06', 'stmt_version') = '1', j::text);
+  perform pg_temp.chk('F8b «Atualizar extratos» regenera só o que mudou (pb: 1 extrato; versão 2; bruto 1.100,00; pa segue na versão 3 da resposta + ajuste)', (j->>'changed')::int = 1 and pg_temp.cpv('pb', '2026-06', 'stmt_version') = '2' and pg_temp.cpv('pb', '2026-06', 'gross_cents') = '110000'
+     and pg_temp.cpv('pa', '2026-06', 'stmt_version') = '3' and pg_temp.cpv('px', '2026-06', 'stmt_version') = '1', j::text);
   perform pg_temp.as_user('gestor');
   j := public.fin_closing_approve(cl);
   perform pg_temp.su();
