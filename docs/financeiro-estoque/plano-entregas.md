@@ -16,7 +16,7 @@ Entregas:
 6. Fechamento mensal: tabela do gestor, extrato do profissional, retenções, aceite e contestação, NF, pagamento, travamento e exportações
 7. Painel financeiro (dashboard) com números clicáveis
 8. Inventário cego, transferências entre unidades, alertas e relatórios de estoque
-9. Documentos clínicos: botão Novo documento no paciente e no atendimento, ligado ao provedor escolhido (modo demonstração até a escolha)
+9. Documentos clínicos: botão Novo documento no paciente e no atendimento, ligado ao provedor escolhido (modo demonstração até a escolha). Nota: `entrega-9.md`.
 
 Pendências da seção 13.3 (padrão adotado até a cliente decidir):
 - P1 provedor de prescrição: adaptador em modo demonstração (entrega 9).
