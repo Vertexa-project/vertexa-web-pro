@@ -566,6 +566,12 @@ begin
   perform pg_temp.as_user('owner'); perform public.fin_closing_unlock(v_cl, 'Faltou lançar um adiantamento'); perform pg_temp.su();
   perform pg_temp.chk('J8 destravar julho reabre os 4 extratos aprovados (nenhum pago) para aceite, com nova versão', (select count(*) from public.fin_closing_pros where closing_id = v_cl and status = 'open' and acceptance = 'pending' and stmt_version = 2) = 4
      and (select status = 'conferencia' from public.fin_closings where id = v_cl), null);
+  -- depois de destravar, o razão gravado ao travar (e o seu estorno) NÃO entra de novo na conta viva do mês
+  r := pg_temp.row('pd', '2026-07');
+  perform pg_temp.chk('J9 julho destravado: pd segue com saldo trazido −500,00 (o razão estornado não conta duas vezes)', (r->>'adjustment_cents')::bigint = -50000 and (r->>'gross_cents')::bigint = -50000 and (r->>'gross_cents') = pg_temp.cpv('pd', '2026-07', 'gross_cents'), r::text);
+  r := pg_temp.row('pa', '2026-07');
+  perform pg_temp.chk('J10 julho destravado: pa segue com 400,00 (fixo mensal 1.000,00 − estorno 600,00)', (r->>'gross_cents')::bigint = 40000 and (r->>'fixed_monthly_cents')::bigint = 100000 and (r->>'adjustment_cents')::bigint = -60000
+     and (private.share_month(c, pg_temp.f('pro_pa'), '2026-07')->>'gross_total_cents')::bigint = 40000, r::text);
 end $t$;
 
 -- ---------- 10. Permissões, RLS, acesso do chamador, arquivos e imutabilidade ----------

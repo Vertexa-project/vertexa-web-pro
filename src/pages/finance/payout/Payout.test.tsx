@@ -197,6 +197,20 @@ describe("Financeiro › Repasse › Regras", () => {
     expect(state.saveMutate).not.toHaveBeenCalled();
   });
 
+  it("faixas por meta no celular: a última faixa mostra «Acima da faixa anterior» inteira (texto que quebra, não um campo que corta)", async () => {
+    const user = userEvent.setup();
+    wrap(<PayoutRulesTab />);
+    await user.click(screen.getAllByRole("button", { name: "Nova regra" })[0]);
+    const dlg = screen.getByRole("dialog");
+    await user.click(within(dlg).getByLabelText(/Usar faixas por meta/));
+    const tail = within(dlg).getByText("Acima da faixa anterior");
+    expect(tail.tagName).toBe("DIV");
+    expect(tail).not.toHaveAttribute("readonly");
+    expect(tail.className).toMatch(/break-words/);
+    expect(tail.className).not.toMatch(/truncate|overflow-hidden|whitespace-nowrap/);
+    expect(within(dlg).queryByDisplayValue("Acima da faixa anterior")).toBeNull();
+  });
+
   it("F17: comissão sobre manipulado mostra o alerta do art. 69 e só salva com o aceite do Owner", async () => {
     state.ctx = ctx({ is_owner: true });
     const user = userEvent.setup();
