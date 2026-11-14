@@ -27,7 +27,7 @@ const tone = (s: SaleStatus) => (s === "paid" ? "success" : s === "partial" ? "w
 /** Data AAAA-MM-DD ou data-hora (created_at em UTC): sempre no dia de Brasília. */
 const br = (iso: string | null) =>
   !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
-const statuses = (Object.keys(SALE_STATUS_LABEL) as SaleStatus[]).map((value) => ({ value, label: SALE_STATUS_LABEL[value] }));
+const statuses = [{ value: "ativas", label: "Sem as canceladas" }, ...(Object.keys(SALE_STATUS_LABEL) as SaleStatus[]).map((value) => ({ value, label: SALE_STATUS_LABEL[value] }))];
 
 function SaleDetail({ clinicId, saleId, onClose }: { clinicId: string; saleId: string; onClose: () => void }) {
   const { access } = useFinContext();
@@ -128,20 +128,20 @@ function SaleDetail({ clinicId, saleId, onClose }: { clinicId: string; saleId: s
 export function SalesTab() {
   const { clinicId, access } = useFinContext();
   const [params, setParams] = useSearchParams();
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [unitId, setUnitId] = useState("");
-  const [status, setStatus] = useState("");
+  const [from, setFrom] = useState(params.get("de") ?? "");
+  const [to, setTo] = useState(params.get("ate") ?? "");
+  const [unitId, setUnitId] = useState(params.get("unidade") ?? "");
+  const [status, setStatus] = useState(params.get("situacao") ?? "");
   const [newOpen, setNewOpen] = useState(params.get("novo") === "1");
   const [openSale, setOpenSale] = useState<string | null>(null);
   const canRead = canSeeSales(access);
   const canWrite = finCan(access, "sales", "write");
   const units = useUnits(clinicId, canRead && canWrite).data ?? [];
-  const q = useSales(clinicId, { unitId, status: status as SaleStatus | "", from, to }, canRead);
+  const q = useSales(clinicId, { unitId, status: status === "ativas" ? "" : (status as SaleStatus | ""), from, to }, canRead);
   const initialPatient = params.get("paciente") ? { id: params.get("paciente") as string, name: params.get("nome") ?? "Paciente" } : null;
   if (!clinicId) return <LoadingState />;
   if (!canRead) return <NoAccess />;
-  const rows = q.data ?? [];
+  const rows = (q.data ?? []).filter((r) => status !== "ativas" || r.status !== "canceled");
   const own = !canWrite && !finCan(access, "sales");
   const columns: ExportColumn<SaleRow>[] = [
     { header: "Data", value: (r) => br(r.created_at) }, { header: "Unidade", value: (r) => r.unit_name }, { header: "Paciente", value: (r) => r.patient_name },

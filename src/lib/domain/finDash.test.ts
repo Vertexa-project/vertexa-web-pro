@@ -115,3 +115,13 @@ describe("exportação da lista aberta", () => {
     expect(csv).toContain("500,00"); expect(csv).toContain("26,00"); expect(csv).toContain("474,00"); expect(csv).toContain("02/11/2026");
   });
 });
+
+describe("atalho do painel leva o filtro (D42)", () => {
+  it("monta mês e unidade no endereço", async () => {
+    const { monthBounds, withFilter } = await import("@/lib/domain/finDash");
+    expect(monthBounds("2026-11")).toEqual({ from: "2026-11-01", to: "2026-11-30" });
+    expect(monthBounds("2026-02")).toEqual({ from: "2026-02-01", to: "2026-02-28" });
+    expect(withFilter("/financeiro/vendas", { de: "2026-11-01", ate: "2026-11-30", unidade: null, situacao: "ativas" })).toBe("/financeiro/vendas?de=2026-11-01&ate=2026-11-30&situacao=ativas");
+    expect(withFilter("/x", {})).toBe("/x");
+  });
+});

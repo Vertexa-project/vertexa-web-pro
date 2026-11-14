@@ -12,7 +12,7 @@ import { useDashDetail } from "@/hooks/useFinDash";
 import { useFinContext } from "@/hooks/useFin";
 import { getDashboardDetail } from "@/lib/api/finDash";
 import { canSeeAppointments, canSeeCash, canSeePatientPackages, canSeePayout, canSeePayoutRules, canSeeReceivables, canSeeSales, canSeeStockMoves, type FinAccess } from "@/lib/domain/finAccess";
-import { METRIC_INFO, countText, dashErrorMessage, detailExportColumns, moneyText, periodLabel, str, type DashMetric, type DashRow, type DashTarget } from "@/lib/domain/finDash";
+import { METRIC_INFO, countText, monthBounds, withFilter, dashErrorMessage, detailExportColumns, moneyText, periodLabel, str, type DashMetric, type DashRow, type DashTarget } from "@/lib/domain/finDash";
 import { METRIC_HAS_VALUE, detailColumns } from "@/pages/finance/dash/dashColumns";
 import { StatementDialog } from "@/pages/finance/payout/closing/StatementDialog";
 
@@ -20,13 +20,20 @@ import { StatementDialog } from "@/pages/finance/payout/closing/StatementDialog"
 const NOT_BY_MONTH: DashMetric[] = ["to_receive", "overdue", "overdue_titles", "appt_no_sale", "unruled", "packages", "cash", "stock"];
 
 /** Tela existente onde o mesmo assunto é trabalhado (só aparece se o papel alcança a tela). */
-function contextLink(metric: DashMetric, a: FinAccess): { to: string; label: string } | null {
+function contextLink(t: DashTarget, a: FinAccess): { to: string; label: string } | null {
+  const metric = t.metric;
+  const byMonth = !NOT_BY_MONTH.includes(metric);
+  const { from, to: until } = monthBounds(t.period);
+  const f = (extra: Record<string, string | null | undefined> = {}) => ({ de: byMonth ? from : null, ate: byMonth ? until : null, unidade: t.unitId, ...extra });
   const pick = (ok: boolean, to: string, label: string) => (ok ? { to, label } : null);
   switch (metric) {
-    case "sold": case "ticket": case "overdue": return pick(canSeeSales(a), "/financeiro/vendas", "Ir para Vendas");
-    case "received": case "fees": case "to_receive": case "overdue_titles": return pick(canSeeReceivables(a), "/financeiro/titulos", "Ir para Títulos");
-    case "repasse": return pick(canSeePayout(a), "/financeiro/repasse/fechamento", "Ir para o Fechamento");
-    case "material": case "appt_no_sale": case "pro_appointments": case "service_appointments": return pick(canSeeAppointments(a), "/financeiro/atendimentos", "Ir para Atendimentos");
+    case "sold": case "ticket": return pick(canSeeSales(a), withFilter("/financeiro/vendas", f({ situacao: "ativas" })), "Ir para Vendas");
+    case "overdue": return pick(canSeeSales(a), withFilter("/financeiro/vendas", f({ situacao: "ativas" })), "Ir para Vendas");
+    case "received": case "fees": return pick(canSeeReceivables(a), withFilter("/financeiro/titulos", f({ situacao: "settled" })), "Ir para Títulos");
+    case "to_receive": case "overdue_titles": return pick(canSeeReceivables(a), withFilter("/financeiro/titulos", f({ situacao: "expected" })), "Ir para Títulos");
+    case "repasse": return pick(canSeePayout(a), withFilter("/financeiro/repasse/fechamento", { mes: t.period, unidade: t.unitId }), "Ir para o Fechamento");
+    case "appt_no_sale": return pick(canSeeAppointments(a), withFilter("/financeiro/atendimentos", f({ semVenda: "1" })), "Ir para Atendimentos");
+    case "material": case "pro_appointments": case "service_appointments": return pick(canSeeAppointments(a), withFilter("/financeiro/atendimentos", f()), "Ir para Atendimentos");
     case "unruled": return pick(canSeePayoutRules(a), "/financeiro/repasse/regras", "Criar a regra ou marcar «sem repasse»");
     case "packages": return pick(canSeePatientPackages(a), "/financeiro/pacotes", "Ir para Pacotes dos pacientes");
     case "cash": return pick(canSeeCash(a), "/financeiro/caixa", "Ir para o Caixa");
@@ -53,7 +60,7 @@ export function DashDetailDialog({ target, onClose }: { target: DashTarget; onCl
   const truncated = more ? more.truncated : first?.truncated ?? false;
   const hasValue = METRIC_HAS_VALUE[current.metric];
   const info = METRIC_INFO[current.metric];
-  const link = contextLink(current.metric, access);
+  const link = contextLink(current, access);
 
   const drill = (row: DashRow) => {
     const push = (t: DashTarget) => setStack((s) => [...s, t]);

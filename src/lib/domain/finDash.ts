@@ -186,3 +186,17 @@ export function detailExportColumns(metric: DashMetric): ExportColumn<DashRow>[]
       return [txt("item_name", "Item"), txt("unit_name", "Unidade"), { header: "Saldo", value: (r) => num(r.qty_on_hand), kind: "qty" }, { header: "Mínimo", value: (r) => num(r.min_qty), kind: "qty" }];
   }
 }
+
+/** Primeiro e último dia do mês (AAAA-MM) para levar o filtro do painel às telas de origem. */
+export function monthBounds(period: string): { from: string; to: string } {
+  const [y, m] = period.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { from: `${period}-01`, to: `${period}-${String(last).padStart(2, "0")}` };
+}
+/** Endereço com o filtro do painel (mês, unidade e situação) já aplicado. */
+export function withFilter(path: string, f: Record<string, string | null | undefined>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(f)) if (v) q.set(k, v);
+  const qs = q.toString();
+  return qs ? `${path}?${qs}` : path;
+}

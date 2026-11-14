@@ -1,5 +1,6 @@
 // Financeiro › Títulos (Entrega 2): previstos, liquidados e estornados, com filtros; liquidar, corrigir (gestor) e estornar (chargeback/recusa).
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Landmark } from "lucide-react";
 
 import { CentsInput, ExportButtons, Field, FinTable, FormDialog } from "@/components/fin/FinUi";
@@ -60,10 +61,11 @@ function ActionDialog({ action, onClose }: { action: NonNullable<Action>; onClos
 
 export function TitlesTab() {
   const { clinicId, access } = useFinContext();
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [unitId, setUnitId] = useState("");
-  const [status, setStatus] = useState("");
+  const [params] = useSearchParams();
+  const [from, setFrom] = useState(params.get("de") ?? "");
+  const [to, setTo] = useState(params.get("ate") ?? "");
+  const [unitId, setUnitId] = useState(params.get("unidade") ?? "");
+  const [status, setStatus] = useState(params.get("situacao") ?? "");
   const [action, setAction] = useState<Action>(null);
   const canRead = canSeeReceivables(access);
   const units = useUnits(clinicId, canRead).data ?? [];

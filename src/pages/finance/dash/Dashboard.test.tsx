@@ -230,7 +230,7 @@ describe("Financeiro › Painel", () => {
     await user.click(screen.getByRole("button", { name: /^Atendidos sem venda: 2/ }));
     const dlg = await screen.findByRole("dialog");
     expect(within(dlg).getByTestId("dash-total")).toHaveTextContent("2 linhas");
-    expect(within(dlg).getByRole("link", { name: "Ir para Atendimentos" })).toHaveAttribute("href", "/financeiro/atendimentos");
+    expect(within(dlg).getByRole("link", { name: "Ir para Atendimentos" })).toHaveAttribute("href", "/financeiro/atendimentos?semVenda=1");
     await user.click(closeBtn(dlg));
     await user.click(screen.getByRole("button", { name: /^Itens abaixo do mínimo: 1/ }));
     const d2 = await screen.findByRole("dialog");

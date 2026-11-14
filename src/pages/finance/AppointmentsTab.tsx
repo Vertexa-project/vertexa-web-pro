@@ -31,11 +31,11 @@ const origin = (r: ApptRow) => (r.package_name ? `Pacote ${r.package_name}` : r.
 export function AppointmentsTab() {
   const { clinicId, access } = useFinContext();
   const [params, setParams] = useSearchParams();
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [unitId, setUnitId] = useState("");
-  const [status, setStatus] = useState("");
-  const [onlyWithoutSale, setOnlyWithoutSale] = useState(false);
+  const [from, setFrom] = useState(params.get("de") ?? "");
+  const [to, setTo] = useState(params.get("ate") ?? "");
+  const [unitId, setUnitId] = useState(params.get("unidade") ?? "");
+  const [status, setStatus] = useState(params.get("situacao") ?? "");
+  const [onlyWithoutSale, setOnlyWithoutSale] = useState(params.get("semVenda") === "1");
   const [onlyShortfall, setOnlyShortfall] = useState(false);
   const [newOpen, setNewOpen] = useState(params.get("novo") === "1");
   const [openId, setOpenId] = useState<string | null>(null);

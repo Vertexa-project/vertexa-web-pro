@@ -2,7 +2,7 @@
 // Fluxo: iniciar (a partir do dia 1 do mês seguinte) → conferir/atualizar extratos → aceite do profissional → aprovar → pagar (NF + comprovante) → travar.
 import { useState } from "react";
 import { FileDown, Lock, LockOpen, RefreshCw, Send } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { ExportButtons, Field, FinTable, FormDialog, MonthYearPicker, NativeSelect } from "@/components/fin/FinUi";
 import { EmptyState } from "@/components/feedback/EmptyState";
@@ -32,8 +32,9 @@ const msgClass = { ok: "border-emerald-300 bg-emerald-50 text-emerald-900", warn
 
 export function ClosingTab() {
   const { clinicId, access } = useFinContext();
-  const [period, setPeriod] = useState(() => previousPeriod(todayIsoBR()));
-  const [unitId, setUnitId] = useState("");
+  const [params] = useSearchParams();
+  const [period, setPeriod] = useState(() => (/^\d{4}-\d{2}$/.test(params.get("mes") ?? "") ? (params.get("mes") as string) : previousPeriod(todayIsoBR())));
+  const [unitId, setUnitId] = useState(params.get("unidade") ?? "");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [openStatement, setOpenStatement] = useState<string | null>(null);
   const [dlg, setDlg] = useState<null | "lock" | "unlock">(null);
