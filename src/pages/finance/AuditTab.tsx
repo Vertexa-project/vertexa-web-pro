@@ -10,13 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAudit, useFinContext, useServices, useStockItems, useUnits } from "@/hooks/useFin";
 import type { AuditEntry } from "@/lib/api/finRegistry";
-import { AUDIT_ACTION_LABEL, AUDIT_ENTITY_LABEL, diffAudit, type AuditCtx } from "@/lib/domain/finAudit";
+import { AUDIT_ACTION_LABEL, AUDIT_ENTITY_LABEL, auditWhen, diffAudit, type AuditCtx } from "@/lib/domain/finAudit";
 import { finCan } from "@/lib/domain/finAccess";
 import type { ExportColumn } from "@/lib/domain/tableExport";
 import { NoAccess } from "@/pages/finance/NoAccess";
 
 const PAGE = 50;
-const fmtWhen = (iso: string) => new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+const fmtWhen = (iso: string) => auditWhen(iso);
 
 const exportColumns = (ctx: AuditCtx): ExportColumn<AuditEntry>[] => [
   { header: "Quando", value: (e) => fmtWhen(e.at) },

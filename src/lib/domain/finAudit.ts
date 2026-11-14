@@ -98,6 +98,11 @@ const IGNORED = new Set(["id", "clinic_id", "created_at", "updated_at", "created
 /** Ids, autores (uuid) e caminhos de arquivo não aparecem no histórico: quem fez já está na coluna Quem. */
 const isHiddenKey = (k: string): boolean => IGNORED.has(k) || k.endsWith("_id") || k.endsWith("_by") || k.endsWith("_path") || k === "path";
 
+/** Data e hora em Brasília no formato dd/mm/aaaa hh:mm (sem vírgula). */
+export function auditWhen(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(", ", " ");
+}
+
 export function auditFieldLabel(key: string): string {
   return FIELD_LABEL[key] ?? key.replace(/_cents$/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }
@@ -116,10 +121,10 @@ const ENUM_TEXT: Record<string, Record<string, string>> = {
   bond_type: { pj: "PJ", autonomo: "Autônomo", clt: "CLT", socio: "Sócio" },
   kind: { machine: "Maquininha", pix: "Pix", cash: "Dinheiro", transfer: "Transferência", boleto: "Boleto" },
   modality: { debit: "Débito", credit_1: "Crédito à vista", credit_2_6: "Parcelado 2–6", credit_7_12: "Parcelado 7–12" },
-  rule_type: { irrf: "IRRF", pis_cofins_csll: "PIS/COFINS/CSLL", iss: "ISS", outra: "Outra" },
+  rule_type: { irrf: "IRRF", pis_cofins_csll: "PIS/COFINS/CSLL", iss: "ISS", outra: "Outra", pct: "Percentual" },
   role: { responsavel: "Responsável", executor: "Executor", auxiliar: "Auxiliar", gestor: "Gestor", financeiro: "Financeiro", recepcao: "Recepção", estoquista: "Estoquista" },
   patient_display: { initials: "Iniciais", full: "Nome completo", hidden: "Oculto" },
-  movement_type: { initial_balance: "Saldo inicial", purchase: "Compra", xml_purchase: "Compra por XML da NF-e", bonus: "Bonificação / doação", sector: "Consumo interno", loss: "Perda / quebra / vencimento", appointment: "Uso por paciente", sale: "Venda ao paciente", reversal: "Estorno" },
+  movement_type: { initial_balance: "Saldo inicial", purchase: "Compra", xml_purchase: "Compra por XML da NF-e", bonus: "Bonificação / doação", sector: "Consumo interno", loss: "Perda / quebra / vencimento", appointment: "Uso por paciente", sale: "Venda ao paciente", reversal: "Estorno", patient_return: "Devolução de paciente", package_delivery: "Entrega de item de pacote", supplier_return: "Devolução ao fornecedor", transfer_out: "Transferência (saída)", transfer_in: "Transferência (entrada)", inventory: "Ajuste de inventário" },
   entry_type: { initial_balance: "Saldo inicial", purchase: "Compra", xml_purchase: "Compra por XML da NF-e", bonus: "Bonificação / doação" },
   loss_kind: { loss: "Perda", breakage: "Quebra / avaria", expiry: "Vencimento" },
   status: { open: "Aberto", answered: "Respondida", approved: "Aprovado", reversed: "Estornado", canceled: "Cancelado", active: "Ativo", signed: "Assinado", invalidated: "Invalidado", counting: "Em contagem", review: "Em revisão", in_transit: "Em trânsito", aprovado: "Aprovado", travado: "Travado", conferencia: "Em conferência", paid: "Pago", closed: "Fechado", done: "Realizado", expected: "Previsto", pending_approval: "Aguarda aprovação", received: "Recebida", settled: "Liquidado" },
@@ -130,6 +135,11 @@ const ENUM_TEXT: Record<string, Record<string, string>> = {
   channel: { download: "Baixar PDF" },
   scope: { all: "Todos os itens", category: "Por categoria", items: "Itens escolhidos" },
   type: { sangria: "Sangria", suprimento: "Suprimento" },
+  method: { cash: "Dinheiro", pix: "Pix", credit: "Crédito", debit: "Débito", machine: "Maquininha", transfer: "Transferência", boleto: "Boleto" },
+  key: { cash: "Dinheiro", pix: "Pix", credit: "Crédito", debit: "Débito", machine: "Maquininha", transfer: "Transferência", boleto: "Boleto" },
+  cash_key: { cash: "Dinheiro", pix: "Pix", credit: "Crédito", debit: "Débito", machine: "Maquininha", transfer: "Transferência", boleto: "Boleto" },
+  commission_base: { net_fee: "Líquido de taxa", gross: "Bruto", net: "Líquido" },
+  target_type: { service: "Serviço", item: "Item", package: "Pacote" },
   tier_base: { organization: "Organização (todas as unidades)", unit: "Por unidade" },
 };
 const DATE_KEYS = new Set(["license_valid_until", "valid_from", "valid_to", "expiry_date"]);
@@ -188,9 +198,10 @@ export function auditValueText(key: string, value: unknown, ctx?: AuditCtx): str
   if (typeof value === "number" && key.endsWith("_cents")) return formatBRL(value);
   if (typeof value === "number") return num(value);
   if (typeof value === "string") {
-    if (DATE_KEYS.has(key)) return fmtDate(value);
+    if (DATE_KEYS.has(key) || /^\d{4}-\d{2}-\d{2}$/.test(value)) return fmtDate(value);
+    if (/^\d{4}-\d{2}$/.test(value)) return `${value.slice(5, 7)}/${value.slice(0, 4)}`;
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return "—";
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return new Date(value).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return auditWhen(value);
     return ENUM_TEXT[key === "roles" ? "role" : key]?.[value] ?? value;
   }
   if (Array.isArray(value)) {

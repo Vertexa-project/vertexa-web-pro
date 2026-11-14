@@ -79,6 +79,20 @@ describe("histórico das Entregas 2 a 9 sem código cru (achado D51)", () => {
     expect(text).toContain("Tipo de documento: Receita");
     expect(text).toContain("Evento: Reenvio");
     expect(text).toContain("Contagem cega: Sim");
-    expect(text).toContain("Cancelado em: 14/11/2026, 02:43");
+    expect(text).toContain("Cancelado em: 14/11/2026 02:43");
+  });
+});
+
+describe("histórico: datas, competência e códigos de caixa e estoque (achado D52)", () => {
+  it("sem formato ISO e sem código cru", () => {
+    const ch = diffAudit(null, { performed_on: "2026-11-13", business_date: "2026-11-13", period: "2026-09", movement_type: "transfer_out",
+      expected_lines: [{ key: "cash", expected_cents: 1000 }] });
+    const text = ch.map((c) => `${c.label}: ${c.after}`).join("\n");
+    expect(text).toContain("Realizado em: 13/11/2026");
+    expect(text).toContain("Data do caixa: 13/11/2026");
+    expect(text).toContain("Competência: 09/2026");
+    expect(text).toContain("Movimento: Transferência (saída)");
+    expect(text).toContain("Chave: Dinheiro");
+    for (const raw of ["2026-11-13", "2026-09", "transfer_out", ": cash"]) expect(text).not.toContain(raw);
   });
 });
