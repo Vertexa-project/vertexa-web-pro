@@ -50,6 +50,10 @@ const StockEntriesTab = lazy(() => import("@/pages/stock/StockEntriesTab").then(
 const StockExitsTab = lazy(() => import("@/pages/stock/StockExitsTab").then((m) => ({ default: m.StockExitsTab })));
 const StockMovementsTab = lazy(() => import("@/pages/stock/StockMovementsTab").then((m) => ({ default: m.StockMovementsTab })));
 const StockShortfallsTab = lazy(() => import("@/pages/stock/StockShortfallsTab").then((m) => ({ default: m.StockShortfallsTab })));
+const StockInventoryTab = lazy(() => import("@/pages/stock/StockInventoryTab").then((m) => ({ default: m.StockInventoryTab })));
+const StockTransfersTab = lazy(() => import("@/pages/stock/StockTransfersTab").then((m) => ({ default: m.StockTransfersTab })));
+const StockAlertsTab = lazy(() => import("@/pages/stock/StockAlertsTab").then((m) => ({ default: m.StockAlertsTab })));
+const StockReportsTab = lazy(() => import("@/pages/stock/StockReportsTab").then((m) => ({ default: m.StockReportsTab })));
 const AppointmentsTab = lazy(() => import("@/pages/finance/AppointmentsTab").then((m) => ({ default: m.AppointmentsTab })));
 const DashboardTab = lazy(() => import("@/pages/finance/dash/DashboardTab").then((m) => ({ default: m.DashboardTab })));
 const PayoutLayout = lazy(() => import("@/pages/finance/payout/PayoutLayout").then((m) => ({ default: m.PayoutLayout })));
@@ -301,6 +305,10 @@ export const router = createBrowserRouter(
             { path: "estoque/saidas", element: <StockExitsTab /> },
             { path: "estoque/movimentacoes", element: <StockMovementsTab /> },
             { path: "estoque/sem-saldo", element: <StockShortfallsTab /> },
+            { path: "estoque/inventario", element: <StockInventoryTab /> },
+            { path: "estoque/transferencias", element: <StockTransfersTab /> },
+            { path: "estoque/alertas", element: <StockAlertsTab /> },
+            { path: "estoque/relatorios", element: <StockReportsTab /> },
             { path: "retencao", element: <RetentionPage /> },
             { path: "configuracoes", element: <SettingsPage /> },
             { path: "configuracoes/faturamento", element: <BillingProfilePage /> },
