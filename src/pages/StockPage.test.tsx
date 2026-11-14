@@ -94,4 +94,16 @@ describe("Estoque › Itens", () => {
     expect(mutate).not.toHaveBeenCalled();
     expect(screen.getByText("Uso fracionado precisa da validade após aberto, em dias.")).toBeInTheDocument();
   });
+  it("D15c: conta só de consulta — «Ver» abre o item sem Salvar (somente leitura)", async () => {
+    state.canWrite = false;
+    state.items = [{ id: "i1", name: "Creme X", category: "Revenda", manufacturer: null, item_type: "resale", purchase_unit: "cx", stock_unit: "un", consumption_unit: "un", purchase_to_stock_factor: 1, stock_to_consumption_factor: 1,
+      fractional: false, opened_validity_days: null, individual_use: false, lot_control: false, sellable: true, ean: null, anvisa_reg: null, sale_price_cents: 5000, controlled: false, is_active: true, minimums: [] }];
+    const user = userEvent.setup();
+    render(<MemoryRouter><StockPage /></MemoryRouter>);
+    await user.click(screen.getByRole("button", { name: "Ver Creme X" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Ver item")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Salvar" })).toBeNull();
+    expect(within(dialog).getAllByRole("button", { name: "Fechar" }).length).toBeGreaterThan(0);
+  });
 });
