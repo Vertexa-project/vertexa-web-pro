@@ -15,7 +15,8 @@ import { apptErrorMessage, planKitLine, validateKit, type KitLineDraft, type Kit
 import { formatBRL } from "@/lib/domain/finance";
 import { formatQty } from "@/lib/domain/stockMoves";
 
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "sem validade");
+const br = (iso: string | null) =>
+  !iso ? "sem validade" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 interface Row extends KitLineDraft { uid: number }
 
 export function KitDialog({ appt, mode, onClose, onDone }: { appt: ApptDetail; mode: "complete" | "correct"; onClose: () => void; onDone?: (r: { hasShortfall: boolean }) => void }) {

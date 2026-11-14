@@ -23,7 +23,8 @@ import { ReasonDialog } from "@/pages/finance/appointments/ReasonDialog";
 import { PayoutRuleDialog, type RulePrefill } from "@/pages/finance/payout/PayoutRuleDialog";
 import { targetText, valueText } from "@/pages/finance/payout/payoutText";
 
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+const br = (iso: string | null) =>
+  !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 export function PayoutRulesTab() {
   const { clinicId, access } = useFinContext();
   const canRead = canSeePayoutRules(access);

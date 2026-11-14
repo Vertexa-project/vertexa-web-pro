@@ -15,7 +15,8 @@ import {
   type ExitType, type LossKind,
 } from "@/lib/domain/stockMoves";
 
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "sem validade");
+const br = (iso: string | null) =>
+  !iso ? "sem validade" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 
 export function ExitDialog({ clinicId, onClose }: { clinicId: string; onClose: () => void }) {
   const units = (useUnits(clinicId).data ?? []).filter((u) => u.is_active);

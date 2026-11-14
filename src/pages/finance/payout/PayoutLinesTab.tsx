@@ -23,7 +23,8 @@ import type { ExportColumn } from "@/lib/domain/tableExport";
 import { NoAccess } from "@/pages/finance/NoAccess";
 import { PayoutMemoryDialog } from "@/pages/finance/payout/PayoutMemoryDialog";
 
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+const br = (iso: string | null) =>
+  !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 const thisMonth = () => todayIsoBR().slice(0, 7);
 const lineTitle = (l: PayoutLineRow) => (l.kind === "correction" ? (l.line_type === "adjustment" ? "Estorno / ajuste" : "Correção") : PAYOUT_LINE_LABEL[l.line_type]);
 

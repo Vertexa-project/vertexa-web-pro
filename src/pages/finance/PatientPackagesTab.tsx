@@ -21,7 +21,8 @@ import type { ExportColumn } from "@/lib/domain/tableExport";
 import { formatQty } from "@/lib/domain/stockMoves";
 import { NoAccess } from "@/pages/finance/NoAccess";
 
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+const br = (iso: string | null) =>
+  !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 const balanceText = (p: PatientPackageRow) => p.items.map((i) => `${i.name}: restam ${formatQty(Number(i.qty_total) - Number(i.qty_used))} de ${formatQty(i.qty_total)}`).join(" · ");
 
 function DeliverDialog({ clinicId, item, defaultUnitId, onClose }: { clinicId: string; item: PatientPackageItem; defaultUnitId: string; onClose: () => void }) {

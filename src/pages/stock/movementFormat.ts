@@ -3,7 +3,8 @@ import type { MovementRow } from "@/lib/api/stockMoves";
 import { LOSS_KIND_LABEL, MOVEMENT_TYPE_LABEL } from "@/lib/domain/stockMoves";
 import type { ExportColumn } from "@/lib/domain/tableExport";
 
-export const brDate = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+export const brDate = (iso: string | null) =>
+  !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 
 export function movementDetail(m: MovementRow): string {
   return [m.loss_kind ? LOSS_KIND_LABEL[m.loss_kind] : null, m.purpose, m.patient_name ? `Paciente: ${m.patient_name}` : null, m.supplier_name, m.invoice_number ? `NF ${m.invoice_number}` : null, m.reason]

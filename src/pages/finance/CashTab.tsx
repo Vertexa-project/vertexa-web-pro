@@ -19,7 +19,8 @@ import { financeSalesErrorMessage, previewCashClose } from "@/lib/domain/finSale
 import type { ExportColumn } from "@/lib/domain/tableExport";
 import { NoAccess } from "@/pages/finance/NoAccess";
 
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+const br = (iso: string | null) =>
+  !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 const STATUS: Record<string, { label: string; tone: "info" | "warning" | "success" }> = {
   open: { label: "Aberto", tone: "info" }, pending_approval: { label: "Aguarda aprovação", tone: "warning" }, closed: { label: "Fechado", tone: "success" },
 };

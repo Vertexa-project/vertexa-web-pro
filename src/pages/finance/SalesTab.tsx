@@ -24,7 +24,9 @@ import type { ExportColumn } from "@/lib/domain/tableExport";
 import { NoAccess } from "@/pages/finance/NoAccess";
 
 const tone = (s: SaleStatus) => (s === "paid" ? "success" : s === "partial" ? "warning" : s === "canceled" ? "muted" : "info");
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+/** Data AAAA-MM-DD ou data-hora (created_at em UTC): sempre no dia de Brasília. */
+const br = (iso: string | null) =>
+  !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 const statuses = (Object.keys(SALE_STATUS_LABEL) as SaleStatus[]).map((value) => ({ value, label: SALE_STATUS_LABEL[value] }));
 
 function SaleDetail({ clinicId, saleId, onClose }: { clinicId: string; saleId: string; onClose: () => void }) {

@@ -16,7 +16,8 @@ import {
 import { allocateFreight, formatQty, stockMoveErrorMessage, todayIsoBR } from "@/lib/domain/stockMoves";
 
 const SOURCE_TEXT: Record<MatchSource, string> = { map: "vínculo salvo", ean: "código de barras", name: "mesmo nome", none: "sem vínculo" };
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+const br = (iso: string | null) =>
+  !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 const maskTax = (d: string) => (d.length === 14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : d);
 
 export function XmlImportDialog({ clinicId, onClose }: { clinicId: string; onClose: () => void }) {

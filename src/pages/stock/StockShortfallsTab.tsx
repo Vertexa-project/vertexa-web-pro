@@ -21,7 +21,8 @@ import { NoAccess } from "@/pages/finance/NoAccess";
 import { ReasonDialog } from "@/pages/finance/appointments/ReasonDialog";
 import { StockShell } from "@/pages/stock/StockShell";
 
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+const br = (iso: string | null) =>
+  !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 const STATUS_LABEL: Record<ShortfallRow["status"], string> = { open: "Em aberto", resolved: "Resolvido", reversed: "Estornado" };
 const RESOLUTION_LABEL = { retro_entry: "Baixa retroativa", adjustment: "Ajuste", reversed: "Atendimento cancelado/corrigido" } as const;
 

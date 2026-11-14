@@ -22,7 +22,8 @@ import { NoAccess } from "@/pages/finance/NoAccess";
 import { AppointmentDetail } from "@/pages/finance/appointments/AppointmentDetail";
 import { AppointmentFormDialog } from "@/pages/finance/appointments/AppointmentFormDialog";
 
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+const br = (iso: string | null) =>
+  !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 const statuses = (Object.keys(APPT_STATUS_LABEL) as ApptStatus[]).map((value) => ({ value, label: APPT_STATUS_LABEL[value] }));
 const partsText = (r: ApptRow) => r.participants.map((p) => `${p.name} (${APPT_ROLE_LABEL[p.role].toLowerCase()})`).join(", ");
 const origin = (r: ApptRow) => (r.package_name ? `Pacote ${r.package_name}` : r.sale_id ? "Venda" : r.without_sale ? "Sem venda" : "—");

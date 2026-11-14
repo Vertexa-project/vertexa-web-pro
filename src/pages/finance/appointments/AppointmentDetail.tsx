@@ -20,7 +20,8 @@ import { AppointmentFormDialog } from "@/pages/finance/appointments/AppointmentF
 import { KitDialog } from "@/pages/finance/appointments/KitDialog";
 import { ReasonDialog } from "@/pages/finance/appointments/ReasonDialog";
 
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+const br = (iso: string | null) =>
+  !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 
 function ParticipantsDialog({ apptId, clinicId, unitId, patientId, serviceId, initial, needReason, onClose }: {
   apptId: string; clinicId: string; unitId: string; patientId: string; serviceId: string; initial: ParticipantsValue; needReason: boolean; onClose: () => void;

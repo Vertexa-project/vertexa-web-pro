@@ -18,7 +18,8 @@ import type { ExportColumn } from "@/lib/domain/tableExport";
 import { NoAccess } from "@/pages/finance/NoAccess";
 import { StockShell } from "@/pages/stock/StockShell";
 
-const br = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+const br = (iso: string | null) =>
+  !iso ? "—" : iso.length > 10 ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : iso.split("-").reverse().join("/");
 const expiryTone = (s: ExpiryStatus) => (s === "expired" ? "destructive" : s === "d30" ? "destructive" : s === "d60" ? "warning" : s === "d90" ? "info" : "muted");
 
 export function ExpiryBadge({ expiry, today }: { expiry: string | null; today: string }) {
