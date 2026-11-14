@@ -570,8 +570,8 @@ begin
   select * into v_units, v_all from private.dash_scope(p_clinic, p_unit);
   with r as materialized (select * from private.dash_detail_rows(p_clinic, p_metric, v_period, v_units, v_all, coalesce(p_params, '{}'::jsonb), v_days))
   select (select count(*) from r), (select coalesce(sum(r.out_value), 0) from r),
-         (select coalesce(jsonb_agg(t.out_item order by t.out_ord desc, t.out_item->>'id'), '[]'::jsonb)
-            from (select r.out_item, r.out_ord from r order by r.out_ord desc, r.out_item->>'id' offset v_off limit v_limit) t)
+         (select coalesce(jsonb_agg(t.out_item || jsonb_build_object('value_cents', t.out_value) order by t.out_ord desc, t.out_item->>'id'), '[]'::jsonb)
+            from (select r.out_item, r.out_ord, r.out_value from r order by r.out_ord desc, r.out_item->>'id' offset v_off limit v_limit) t)
     into v_n, v_sum, v_rows;
   return jsonb_build_object('metric', p_metric, 'period', v_period, 'count', v_n, 'total_cents', v_sum, 'offset', v_off, 'limit', v_limit, 'truncated', v_n > v_off + v_limit, 'rows', v_rows);
 end $$;
