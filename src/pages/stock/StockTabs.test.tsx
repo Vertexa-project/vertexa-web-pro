@@ -277,6 +277,7 @@ describe("Estoque › Saídas", () => {
     await user.click(within(dialog).getByRole("button", { name: "Registrar saída" }));
     expect(within(dialog).getByText("Escolha perda, quebra ou vencimento.")).toBeInTheDocument();
     expect(within(dialog).getByText("Informe o motivo.")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Tipo de perda (obrigatório)")).toHaveAttribute("aria-invalid", "true");
     expect(state.exitMutate).not.toHaveBeenCalled();
   });
 
@@ -305,7 +306,7 @@ describe("Estoque › Saídas", () => {
     await user.type(within(dialog).getByLabelText(/Quantidade/), "1");
     expect(within(dialog).getByText(/Lote vencido não sai para consumo/)).toBeInTheDocument();
     await user.selectOptions(within(dialog).getByLabelText("Tipo de saída"), "loss");
-    await user.selectOptions(within(dialog).getByLabelText("O que aconteceu"), "expiry");
+    await user.selectOptions(within(dialog).getByLabelText("Tipo de perda (obrigatório)"), "expiry");
     expect(within(dialog).getByText(/Sai de: VELHO \(1\)/)).toBeInTheDocument();
     await user.type(within(dialog).getByLabelText("Motivo"), "Lote venceu");
     await user.click(within(dialog).getByRole("button", { name: "Registrar saída" }));

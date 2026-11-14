@@ -104,7 +104,7 @@ export function ExitDialog({ clinicId, onClose }: { clinicId: string; onClose: (
       </div>
 
       {type === "loss" ? (
-        <Field label="O que aconteceu" htmlFor="ex-kind" error={errors.lossKind}>
+        <Field label="Tipo de perda (obrigatório)" htmlFor="ex-kind" error={errors.lossKind}>
           <NativeSelect id="ex-kind" value={lossKind} onChange={(e) => { setLossKind(e.target.value as LossKind | ""); setLotId(""); }}>
             <option value="">Selecione…</option>
             {(Object.keys(LOSS_KIND_LABEL) as LossKind[]).map((k) => <option key={k} value={k}>{LOSS_KIND_LABEL[k]}</option>)}
