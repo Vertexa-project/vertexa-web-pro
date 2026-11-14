@@ -242,7 +242,7 @@ function ContestDialog({ v, line, onClose, onDone }: { v: StatementView; line: S
           {v.lines.map((l) => <option key={l.id} value={l.id}>{lineLabel(l)}</option>)}
         </NativeSelect>
       </Field>
-      <Field label="O que está errado" htmlFor="ct-comment" error={error && comment.trim().length < 3 ? error : null}><Textarea id="ct-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} rows={4} /></Field>
+      <Field label="O que está errado" htmlFor="ct-comment"><Textarea id="ct-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} rows={4} /></Field>
     </FormDialog>
   );
 }
@@ -257,7 +257,7 @@ function AnswerDialog({ dispute, onClose, onDone }: { dispute: DisputeRow; onClo
         setError(null);
         m.mutate({ disputeId: dispute.id, response: text.trim() }, { onSuccess: () => onDone("Resposta enviada. Corrija a origem, se for o caso, e use «Atualizar extrato»."), onError: (e) => setError(closingErrorMessage(e)) });
       }}>
-      <Field label="Resposta" htmlFor="an-text" error={error && text.trim().length < 3 ? error : null}><Textarea id="an-text" value={text} onChange={(e) => setText(e.target.value)} maxLength={500} rows={4} /></Field>
+      <Field label="Resposta" htmlFor="an-text"><Textarea id="an-text" value={text} onChange={(e) => setText(e.target.value)} maxLength={500} rows={4} /></Field>
     </FormDialog>
   );
 }
@@ -277,7 +277,7 @@ function AdjustDialog({ statementId, onClose, onDone }: { statementId: string; o
         <Field label="Tipo" htmlFor="aj-kind"><NativeSelect id="aj-kind" value={kind} onChange={(e) => setKind(e.target.value as AdjustKind)}>{(Object.keys(ADJUST_KIND_LABEL) as AdjustKind[]).map((k) => <option key={k} value={k}>{ADJUST_KIND_LABEL[k]}</option>)}</NativeSelect></Field>
         <Field label="Valor (R$)" htmlFor="aj-val"><CentsInput id="aj-val" value={cents} onChange={setCents} /></Field>
       </div>
-      <Field label="Motivo" htmlFor="aj-reason" error={error && reason.trim().length < 3 ? error : null}><Input id="aj-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} /></Field>
+      <Field label="Motivo" htmlFor="aj-reason"><Input id="aj-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} /></Field>
     </FormDialog>
   );
 }

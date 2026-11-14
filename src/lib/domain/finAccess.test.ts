@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canDeliverPackageItem, canManageAppointments, canManagePayoutRules, canRecalcPayout, canSeeAllPayouts, canSeePayout, canSeePayoutRules, canMoveStock, canSeeAppointments, canSeePatientPackages, canStartAppointment, canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, canSeeStockMoves, finCan, financeTabs, NO_FIN_ACCESS, rowToAccess, stockTabs } from "./finAccess";
+import { canDeliverPackageItem, canManageAppointments, canManagePayoutRules, canRecalcPayout, canSeeAllPayouts, canSeePayout, canSeePayoutRules, canMoveStock, canSeeAppointments, canSeePatientPackages, canStartAppointment, canSeeFinanceCadastros, canSeeFinanceMenu, canSeeStockMenu, canSeeStockMoves, finCan, financeTabs, NO_FIN_ACCESS, rowToAccess, stockTabs, canPayClosing, canPrepareClosing, canDecideClosing, canSeeClosing, canSeeMyStatement, canUnlockClosing } from "./finAccess";
 
 const acc = (can: Record<string, boolean>, isAdmin = false) => ({ ...NO_FIN_ACCESS, isAdmin, can });
 
@@ -171,5 +171,33 @@ describe("aba e botões da Entrega 5 (repasse)", () => {
   it("Admin vê tudo", () => {
     const a = acc({}, true);
     expect(canSeePayout(a) && canSeeAllPayouts(a) && canManagePayoutRules(a) && canRecalcPayout(a)).toBe(true);
+  });
+});
+
+describe("fechamento mensal (Entrega 6): quem vê, prepara, decide, paga e destrava", () => {
+  const gestor = acc({ share_lines_read: true, close_prepare_write: true, close_decide_write: true, close_pay_write: true });
+  const financeiro = acc({ share_lines_read: true, close_prepare_write: true, close_pay_write: true });
+  const pro = acc({ own_share: true });
+  const recepcao = acc({ sales_read: true });
+  it("Gestor: vê a tabela, prepara, aprova/trava e paga; destravar é só do Owner/Admin", () => {
+    expect(canSeeClosing(gestor) && canPrepareClosing(gestor) && canDecideClosing(gestor) && canPayClosing(gestor)).toBe(true);
+    expect(canUnlockClosing(gestor)).toBe(false);
+    expect(canUnlockClosing(acc({}, true))).toBe(true);
+  });
+  it("Financeiro prepara e registra NF/pagamento, mas não aprova nem trava", () => {
+    expect(canSeeClosing(financeiro) && canPrepareClosing(financeiro) && canPayClosing(financeiro)).toBe(true);
+    expect(canDecideClosing(financeiro)).toBe(false);
+    expect(canUnlockClosing(financeiro)).toBe(false);
+  });
+  it("profissional: só «Meu extrato»", () => {
+    expect(canSeeMyStatement(pro)).toBe(true);
+    expect(canSeeClosing(pro) || canPrepareClosing(pro) || canDecideClosing(pro) || canPayClosing(pro)).toBe(false);
+  });
+  it("Recepção e sem papel: nada do fechamento", () => {
+    for (const a of [recepcao, NO_FIN_ACCESS]) expect(canSeeClosing(a) || canSeeMyStatement(a) || canPayClosing(a) || canDecideClosing(a) || canPrepareClosing(a)).toBe(false);
+  });
+  it("Admin vê e faz tudo", () => {
+    const a = acc({}, true);
+    expect(canSeeClosing(a) && canPrepareClosing(a) && canDecideClosing(a) && canPayClosing(a)).toBe(true);
   });
 });

@@ -89,7 +89,7 @@ export function ClosingTab() {
       {q.isLoading ? <LoadingState /> : q.isError || !v ? <ErrorState onRetry={() => void q.refetch()} /> : (
         <>
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium">Fechamento de {periodLabel(period)} {status ? <Badge tone={closingTone(status)} className="ml-1 align-middle">{CLOSING_STATUS_LABEL[status]}</Badge> : <Badge tone="muted" className="ml-1 align-middle">Não iniciado</Badge>}</p>
+            <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium"><span>Fechamento de {periodLabel(period)}</span>{status ? <Badge tone={closingTone(status)}>{CLOSING_STATUS_LABEL[status]}</Badge> : <Badge tone="muted">Não iniciado</Badge>}</div>
             {c?.lock_no ? <p className="text-xs text-muted-foreground">{locked ? "Mês travado: nada muda; correções vão para o próximo mês aberto." : c.unlock_reason ? `Destravado: ${c.unlock_reason}` : null}</p> : null}
           </div>
           {msg ? <p className={`rounded-md border px-3 py-2 text-sm ${msgClass[msg.tone]}`} role={msg.tone === "error" ? "alert" : "status"}>{msg.text}</p> : null}
@@ -204,7 +204,7 @@ function ReasonDialog({ title, description, label, required, submitLabel, pendin
   return (
     <FormDialog open onOpenChange={(o) => (!o ? onClose() : undefined)} title={title} description={description} submitLabel={submitLabel} pending={pending} error={error}
       onSubmit={() => { if (required && reason.trim().length < 3) { setError("Informe o motivo (mínimo de 3 letras)."); return; } setError(null); onSubmit(reason.trim() || undefined, setError); }}>
-      <Field label={label} htmlFor="cl-reason" error={required && error && reason.trim().length < 3 ? error : null}><Input id="cl-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} /></Field>
+      <Field label={label} htmlFor="cl-reason"><Input id="cl-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} /></Field>
     </FormDialog>
   );
 }
