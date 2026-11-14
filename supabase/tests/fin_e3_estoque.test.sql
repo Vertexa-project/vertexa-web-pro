@@ -424,7 +424,14 @@ begin
   select id into m from public.stock_movements limit 1;
   perform pg_temp.expect('I1 nem o dono do banco edita uma movimentação (trigger)', '42501', format($q$update public.stock_movements set qty = qty + 1 where id = %L$q$, m), 'STOCK_MOVEMENT_IMMUTABLE');
   perform pg_temp.expect('I2 nem o dono do banco apaga uma movimentação (trigger)', '42501', format($q$delete from public.stock_movements where id = %L$q$, m), 'STOCK_MOVEMENT_IMMUTABLE');
-  perform pg_temp.expect('I3 TRUNCATE também é bloqueado', '42501', 'truncate public.stock_movements', 'STOCK_MOVEMENT_IMMUTABLE');
+  -- Com a E8 aplicada, as FKs de transfer_id/inventory_id fazem o próprio PostgreSQL barrar o TRUNCATE antes do gatilho (0A000): continua bloqueado.
+  begin
+    execute 'truncate public.stock_movements';
+    insert into tr(name, ok, detail) values ('I3 TRUNCATE também é bloqueado', false, 'passou sem erro');
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_msg = message_text;
+    insert into tr(name, ok, detail) values ('I3 TRUNCATE também é bloqueado', (v_state = '42501' and v_msg like '%STOCK_MOVEMENT_IMMUTABLE%') or v_state = '0A000', v_state || ' ' || v_msg);
+  end;
   perform pg_temp.as_user('gestor');
   perform pg_temp.expect('I4 Gestor não apaga movimentação (sem privilégio)', '42501', 'delete from public.stock_movements');
   perform pg_temp.expect('I5 Gestor não edita saldo direto', '42501', 'update public.stock_balances set qty_on_hand = 999');
