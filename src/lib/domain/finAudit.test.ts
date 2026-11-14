@@ -64,3 +64,21 @@ describe("histórico: entidades e situações das entregas 4–9", () => {
     expect(d.map((c) => [c.label, c.before, c.after])).toEqual([["Aceite", "Pendente", "Contestado"], ["Situação", "Aberto", "Respondida"]]);
   });
 });
+
+describe("histórico das Entregas 2 a 9 sem código cru (achado D51)", () => {
+  it("rótulos e valores em português; ids, autores e caminhos escondidos", () => {
+    const ch = diffAudit(null, {
+      cancel_reason: "teste", canceled_by: "8bed7723-e1b3-4188-b3a4-575911fea3fa", material_cost_cents: 12637, ledger_lines: 2, blind: true, scope: "all",
+      from_unit: "Unidade principal", doc_type: "receita", is_demo: true, channel: "download", event: "resend", proof_path: "x/y.pdf", canceled_at: "2026-11-14T05:43:00Z",
+      materials: [{ item_id: "8bed7723-e1b3-4188-b3a4-575911fea3fa", batch: 1, short_qty: 0, cost_cents: 4464 }],
+    });
+    const text = ch.map((c) => `${c.label}: ${c.after}`).join("\n");
+    for (const raw of ["cancel_reason", "canceled_by", "material_cost_cents", "ledger_lines", "short_qty", "cost_cents", "8bed7723", "proof_path", "receita", "resend", "download"]) expect(text).not.toContain(raw);
+    expect(text).toContain("Motivo do cancelamento: teste");
+    expect(text).toContain("Custo de material: R$\u00a0126,37");
+    expect(text).toContain("Tipo de documento: Receita");
+    expect(text).toContain("Evento: Reenvio");
+    expect(text).toContain("Contagem cega: Sim");
+    expect(text).toContain("Cancelado em: 14/11/2026, 02:43");
+  });
+});

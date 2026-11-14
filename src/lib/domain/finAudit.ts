@@ -70,13 +70,36 @@ const FIELD_LABEL: Record<string, string> = {
   status: "Situação", acceptance: "Aceite", response: "Resposta", provider: "Provedor", lock_no: "Nº da trava", notified: "Notificados", changed: "Alterados", added: "Incluídos",
   adjustment_cents: "Ajuste", invoice_date: "Data da nota", from: "De", to: "Até", lines_created: "Lançamentos criados", error: "Erro", table: "Tabela",
   supplier_code: "Código do fornecedor", conversion_factor: "Fator de conversão", tax_id_supplier: "CNPJ",
+  // Entregas 2 a 9 (vendas, caixa, atendimento, repasse, fechamento, inventário, transferência, documentos)
+  adjustments: "Ajustes", allocated_total_cents: "Total rateado", allocated_unit_cents: "Rateado por unidade", amount_cents: "Valor", applied_qty: "Quantidade aplicada",
+  approved_at: "Aprovado em", auto: "Automático", base_value_cents: "Base", batch: "Lote de uso", blind: "Contagem cega", business_date: "Data do caixa", by_professional: "Por profissional",
+  cancel_reason: "Motivo do cancelamento", canceled_at: "Cancelado em", cash_difference_cents: "Diferença do caixa", cash_key: "Caixa", cash_label: "Caixa", channel: "Canal",
+  closed_at: "Fechado em", comment: "Comentário", commission_base: "Base da comissão", compensation: "Compensação", cost_cents: "Custo", counted_cash_cents: "Dinheiro contado",
+  counted_cents: "Contado", date: "Data", decrease_cents: "Redução", deductions_override: "Deduções do serviço", delivered: "Entregue", demo: "Demonstração", description: "Descrição",
+  difference_cents: "Diferença", discount_cents: "Desconto", discount_item_cents: "Desconto do item", discount_share_cents: "Desconto rateado", doc_type: "Tipo de documento",
+  done_at: "Realizado em", est_cost_cents: "Custo estimado", estimated_cents: "Estimado", event: "Evento", events_processed: "Eventos processados", expected: "Esperado",
+  expected_cash_cents: "Dinheiro esperado", expected_cents: "Esperado", expected_date: "Data prevista", expected_lines: "Linhas esperadas", expires_on: "Vence em", expiry_days: "Dias para vencer",
+  fee: "Taxa", fee_cents: "Taxa", fee_pct: "Taxa (%)", from_unit: "Unidade de origem", gross: "Bruto", gross_cents: "Bruto", has_shortfall: "Faltou estoque", idle_days: "Dias sem giro",
+  increase_cents: "Aumento", installment_no: "Parcela", installments: "Parcelas", is_demo: "Demonstração", item: "Item", justification: "Justificativa", key: "Chave",
+  kit_confirmed_at: "Kit confirmado em", kit_items_removed: "Itens retirados do kit", ledger_lines: "Linhas do razão", ledger_reversed: "Razão desfeito", lines_with_difference: "Linhas com diferença",
+  loss_cents: "Perda", loss_qty: "Quantidade perdida", material: "Material", material_cost_cents: "Custo de material", material_estimated_cents: "Material estimado", materials: "Materiais",
+  method: "Forma de pagamento", n: "Quantidade", net: "Líquido", net_cents: "Líquido", net_total_cents: "Líquido total", notes: "Observações", nsu: "NSU", number: "Número",
+  occurred_on: "Data", opened_at: "Aberto em", opening_cash_cents: "Troco inicial", paid_cents: "Pago", paid_on: "Pago em", participants: "Participantes", pct: "Percentual",
+  performed_on: "Realizado em", professionals: "Profissionais", qty_consumption: "Quantidade consumida", qty_received: "Quantidade recebida", qty_sent: "Quantidade enviada",
+  qty_total: "Quantidade total", qty_used: "Quantidade usada", reason: "Motivo", received_cents: "Recebido", reverse_reason: "Motivo do estorno", reversed_at: "Estornado em", rows: "Linhas",
+  scope: "Alcance", scope_value: "Valor do alcance", service_name: "Serviço", settled_date: "Liquidado em", settled_net_cents: "Líquido liquidado", short_qty: "Quantidade em falta",
+  stmt_version: "Versão do extrato", target_type: "Destino", tier_scope: "Alcance das faixas", tiers: "Faixas", titles: "Títulos", to_unit: "Unidade de destino", total_gross_cents: "Bruto total",
+  total_net_cents: "Líquido total", transfer_days: "Dias em trânsito", type: "Tipo", unit: "Unidade", unit_price_cents: "Preço unitário", usage_fee_mode: "Taxa de uso", value_cents: "Valor",
+  zeroed_lines: "Linhas zeradas", payment_id: "Pagamento", line_id: "Linha",
 };
 
 const IGNORED = new Set(["id", "clinic_id", "created_at", "updated_at", "created_by", "unit_id", "professional_id", "position", "service_id", "stock_item_id", "item_id", "acquirer_id", "package_id",
   "lot_id", "open_unit_id", "entry_id", "sale_id", "patient_id", "supplier_id", "reversed_movement_id", "appointment_id", "reversed_by"]);
+/** Ids, autores (uuid) e caminhos de arquivo não aparecem no histórico: quem fez já está na coluna Quem. */
+const isHiddenKey = (k: string): boolean => IGNORED.has(k) || k.endsWith("_id") || k.endsWith("_by") || k.endsWith("_path") || k === "path";
 
 export function auditFieldLabel(key: string): string {
-  return FIELD_LABEL[key] ?? key;
+  return FIELD_LABEL[key] ?? key.replace(/_cents$/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }
 
 /** Nomes para trocar os ids do registro (item, serviço, unidade) por texto. Sem o nome, o id nunca aparece: vira «item removido». */
@@ -99,9 +122,14 @@ const ENUM_TEXT: Record<string, Record<string, string>> = {
   movement_type: { initial_balance: "Saldo inicial", purchase: "Compra", xml_purchase: "Compra por XML da NF-e", bonus: "Bonificação / doação", sector: "Consumo interno", loss: "Perda / quebra / vencimento", appointment: "Uso por paciente", sale: "Venda ao paciente", reversal: "Estorno" },
   entry_type: { initial_balance: "Saldo inicial", purchase: "Compra", xml_purchase: "Compra por XML da NF-e", bonus: "Bonificação / doação" },
   loss_kind: { loss: "Perda", breakage: "Quebra / avaria", expiry: "Vencimento" },
-  status: { open: "Aberto", answered: "Respondida", approved: "Aprovado", reversed: "Estornado", canceled: "Cancelado", active: "Ativo", signed: "Assinado", invalidated: "Invalidado", counting: "Em contagem", review: "Em revisão", in_transit: "Em trânsito", aprovado: "Aprovado", travado: "Travado", conferencia: "Em conferência", paid: "Pago" },
-  acceptance: { pending: "Pendente", accepted: "Aceito", contested: "Contestado" },
+  status: { open: "Aberto", answered: "Respondida", approved: "Aprovado", reversed: "Estornado", canceled: "Cancelado", active: "Ativo", signed: "Assinado", invalidated: "Invalidado", counting: "Em contagem", review: "Em revisão", in_transit: "Em trânsito", aprovado: "Aprovado", travado: "Travado", conferencia: "Em conferência", paid: "Pago", closed: "Fechado", done: "Realizado", expected: "Previsto", pending_approval: "Aguarda aprovação", received: "Recebida", settled: "Liquidado" },
+  acceptance: { pending: "Pendente", accepted: "Aceito", contested: "Contestado", approved_without: "Aprovado sem aceite" },
   provider: { demo: "Demonstração" },
+  doc_type: { receita: "Receita", atestado: "Atestado", exames: "Exames", relatorio: "Relatório" },
+  event: { resend: "Reenvio", view: "Consulta do documento" },
+  channel: { download: "Baixar PDF" },
+  scope: { all: "Todos os itens", category: "Por categoria", items: "Itens escolhidos" },
+  type: { sangria: "Sangria", suprimento: "Suprimento" },
   tier_base: { organization: "Organização (todas as unidades)", unit: "Por unidade" },
 };
 const DATE_KEYS = new Set(["license_valid_until", "valid_from", "valid_to", "expiry_date"]);
@@ -150,7 +178,7 @@ function lineText(key: string, row: Obj, ctx?: AuditCtx): string {
     return row.all_units === false ? `${role} (${unitsText(row.unit_ids, ctx) || "unidades escolhidas"})` : `${role} (todas as unidades)`;
   }
   // Qualquer outra estrutura: «Rótulo: valor» por campo, nunca JSON cru.
-  return Object.entries(row).filter(([k]) => !IGNORED.has(k)).map(([k, v]) => `${auditFieldLabel(k)}: ${auditValueText(k, v, ctx)}`).join(" · ");
+  return Object.entries(row).filter(([k]) => !isHiddenKey(k)).map(([k, v]) => `${auditFieldLabel(k)}: ${auditValueText(k, v, ctx)}`).join(" · ");
 }
 
 /** Valor legível; listas viram uma linha por item (separadas por quebra de linha). */
@@ -161,6 +189,8 @@ export function auditValueText(key: string, value: unknown, ctx?: AuditCtx): str
   if (typeof value === "number") return num(value);
   if (typeof value === "string") {
     if (DATE_KEYS.has(key)) return fmtDate(value);
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return "—";
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return new Date(value).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
     return ENUM_TEXT[key === "roles" ? "role" : key]?.[value] ?? value;
   }
   if (Array.isArray(value)) {
@@ -179,7 +209,7 @@ export function diffAudit(before: Record<string, unknown> | null, after: Record<
   const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
   const out: AuditChange[] = [];
   for (const key of [...keys].sort()) {
-    if (IGNORED.has(key)) continue;
+    if (isHiddenKey(key)) continue;
     const b = before?.[key];
     const a = after?.[key];
     if (JSON.stringify(b) === JSON.stringify(a)) continue;
