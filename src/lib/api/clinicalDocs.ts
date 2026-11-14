@@ -26,9 +26,13 @@ export interface DocFull extends DocRow {
   patient: { name: string; birth_date: string | null; cpf: string | null; address: string | null };
   professional: { name: string; registry_number: string | null; specialty: string | null };
 }
-export interface DocListFilter { patientId?: string | null; encounterId?: string | null; appointmentId?: string | null }
+export interface DocListFilter {
+  patientId?: string | null; encounterId?: string | null; appointmentId?: string | null;
+  docType?: string | null; from?: string | null; to?: string | null; status?: "active" | "invalidated" | null; search?: string | null;
+}
 export const listDocuments = (clinicId: string, f: DocListFilter = {}) =>
-  rpc<DocRow[]>("doc_list", { p_clinic: clinicId, p_patient: f.patientId ?? null, p_encounter: f.encounterId ?? null, p_appointment: f.appointmentId ?? null, p_limit: 200, p_offset: 0 });
+  rpc<DocRow[]>("doc_list", { p_clinic: clinicId, p_patient: f.patientId ?? null, p_encounter: f.encounterId ?? null, p_appointment: f.appointmentId ?? null, p_limit: 200, p_offset: 0,
+    p_type: f.docType || null, p_from: f.from || null, p_to: f.to || null, p_status: f.status || null, p_search: f.search?.trim() || null });
 export const getDocument = (id: string) => rpc<DocFull>("doc_get", { p_doc: id });
 /** Reenviar (modo demonstração): devolve o documento para baixar/abrir o PDF e registra o reenvio. Nada é enviado a ninguém. */
 export const resendDocument = (id: string) => rpc<DocFull>("doc_resend", { p_doc: id, p_channel: "download" });

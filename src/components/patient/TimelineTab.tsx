@@ -4,6 +4,7 @@ import { AsyncSection } from "./AsyncSection";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePatientTimeline } from "@/hooks/usePatientTimeline";
 import { activityEventDescription, activityEventMeta } from "@/lib/domain/activityEvents";
+import { dateTimeBR } from "@/lib/domain/clinicalDocs";
 import { formatRelative } from "@/lib/domain/format";
 import type { BadgeTone } from "@/lib/domain/vri";
 import { cn } from "@/lib/utils";
@@ -46,7 +47,7 @@ export function TimelineTab({ patientId }: { patientId: string }) {
                     <p className="font-medium text-foreground">{meta.label}</p>
                     {desc ? <p className="text-sm text-muted-foreground">{desc}</p> : null}
                     <time dateTime={ev.created_at} className="mt-0.5 block text-xs text-muted-foreground">
-                      {formatRelative(ev.created_at)}
+                      {formatRelative(ev.created_at)} · {dateTimeBR(ev.created_at)}
                     </time>
                   </div>
                 </li>

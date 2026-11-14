@@ -14,7 +14,7 @@ import { useDocContext, useDocMutations, useDocuments } from "@/hooks/useClinica
 import type { DocListFilter, DocRow } from "@/lib/api/clinicalDocs";
 import { DEMO_BADGE, DOC_TYPE_LABEL, dateTimeBR, docErrorMessage } from "@/lib/domain/clinicalDocs";
 
-export function DocumentsList({ filter, showPatient = false, emptyText = "Nenhum documento emitido ainda." }: { filter: DocListFilter; showPatient?: boolean; emptyText?: string }) {
+export function DocumentsList({ filter, showPatient = false, emptyText = "Nenhum documento emitido ainda.", hideBanner = false }: { filter: DocListFilter; showPatient?: boolean; emptyText?: string; hideBanner?: boolean }) {
   const { clinicId, access } = useDocContext();
   const q = useDocuments(clinicId, filter, access.can_list);
   const { resend } = useDocMutations();
@@ -42,7 +42,7 @@ export function DocumentsList({ filter, showPatient = false, emptyText = "Nenhum
   const anyDemo = rows.some((r) => r.is_demo);
   return (
     <div className="min-w-0 space-y-3">
-      {anyDemo ? <DemoBanner /> : null}
+      {anyDemo && !hideBanner ? <DemoBanner /> : null}
       {notice ? <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm" role="status">{notice}</p> : null}
       {error ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{error}</p> : null}
       <FinTable<DocRow>

@@ -19,6 +19,7 @@ vi.mock("@/lib/pdf/generateClinicalDocumentPdf", () => ({ downloadClinicalDocume
 import { ClinicalDocumentsPanel } from "@/components/documents/ClinicalDocumentsPanel";
 import { DocumentsList } from "@/components/documents/DocumentsList";
 import { NewDocumentButton } from "@/components/documents/NewDocumentButton";
+import { DocumentsPage } from "@/pages/DocumentsPage";
 
 const A = (o: Partial<DocAccess>): DocAccess => ({ kind: "none", can_emit: false, can_list: false, can_content: false, can_resend: false, registry_missing: false, provider: "demo", provider_ready: true, is_demo: true, ...o });
 const CLINICAL = A({ kind: "clinical", can_emit: true, can_list: true, can_content: true, can_resend: true });
@@ -182,5 +183,19 @@ describe("itens prescritos como dado", () => {
     expect(screen.getByText("sem item correspondente")).toBeInTheDocument();
     expect(screen.getByText(/nenhum estoque é baixado automaticamente/)).toBeInTheDocument();
     expect(h.api.listPrescribedItems).toHaveBeenCalledWith("c1", "p1", { encounterId: undefined, appointmentId: undefined });
+  });
+});
+
+describe("página Documentos (achado D49)", () => {
+  it("mostra uma única faixa de demonstração e os filtros mudam a consulta (tipo, situação, período, busca)", async () => {
+    h.api.getDocAccess.mockResolvedValue(CLINICAL);
+    wrap(<DocumentsPage />);
+    expect(await screen.findByText("Receita — teste")).toBeInTheDocument();
+    expect(screen.getAllByTestId("doc-demo-banner")).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText("Tipo"), { target: { value: "exames" } });
+    fireEvent.change(screen.getByLabelText("Situação"), { target: { value: "invalidated" } });
+    fireEvent.change(screen.getByLabelText("De"), { target: { value: "2026-11-01" } });
+    fireEvent.change(screen.getByLabelText("Paciente ou título"), { target: { value: "Fict" } });
+    await waitFor(() => expect(h.api.listDocuments).toHaveBeenLastCalledWith("c1", { docType: "exames", from: "2026-11-01", to: null, status: "invalidated", search: "Fict" }));
   });
 });
