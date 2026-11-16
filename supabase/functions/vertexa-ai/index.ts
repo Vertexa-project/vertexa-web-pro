@@ -5,7 +5,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { jsonResponse, preflight } from "../_shared/cors.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
-import { aiKey, requireUser, UUID_RE } from "../_shared/clinical/caller.ts";
+import { aiKey, UUID_RE } from "../_shared/clinical/caller.ts";
+import { supabaseUser } from "../_shared/supabaseUser.ts";
 import { cleanMessage, hasClinicalAccess } from "../_shared/vertexa/access.ts";
 import {
   buildHojeFacts, buildPatientFacts, dayBoundsBR, findPatientByName, sanitizeScreen,
@@ -62,16 +63,19 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
 
-  const auth = await requireUser(req);
-  if (auth instanceof Response) return auth;
-  const user = auth.user;
-  const body = (await req.json().catch(() => null)) as Row | null;
+  // Desempenho: uma validação de sessão só (antes eram duas) e consultas independentes em paralelo.
+  const token = (req.headers.get("Authorization") ?? "").replace(/^bearer\s+/i, "").trim();
+  if (!token) return jsonResponse({ error: "unauthenticated" }, 401);
+  const user = supabaseUser(req);
+  const [{ data: u }, body] = await Promise.all([
+    user.auth.getUser(token),
+    req.json().catch(() => null) as Promise<Row | null>,
+  ]);
+  const uid = u.user?.id;
+  if (!uid) return jsonResponse({ error: "unauthenticated" }, 401);
   if (!body) return jsonResponse({ error: "invalid_body" }, 400);
 
   // ---- identidade e clínica do chamador (RLS: só enxerga o que é dele)
-  const { data: u } = await user.auth.getUser();
-  const uid = u.user?.id;
-  if (!uid) return jsonResponse({ error: "unauthenticated" }, 401);
   const { data: prof } = await user.from("profiles").select("id").eq("auth_user_id", uid).maybeSingle();
   if (!prof) return jsonResponse({ error: "forbidden" }, 403);
   const { data: pros } = await user.from("professionals").select("id, clinic_id, type").eq("profile_id", prof.id);
@@ -102,21 +106,22 @@ Deno.serve(async (req: Request) => {
   const screen = sanitizeScreen(body.screen);
   const now = Date.now();
 
-  const { data: acc } = await user.rpc("fin_my_access", { p_clinic: clinicId });
+  // Consultas independentes em paralelo; a lista de pacientes só é usada se o papel tiver acesso clínico.
+  const { from, to } = dayBoundsBR(new Date(now));
+  const [{ data: acc }, { data: apptRows }, { data: patientRows }] = await Promise.all([
+    user.rpc("fin_my_access", { p_clinic: clinicId }),
+    user.from("appointments")
+      .select("id, title, starts_at, patient_id, type, patient:patients ( profile:profiles ( full_name ) )")
+      .eq("clinic_id", clinicId).gte("starts_at", from).lt("starts_at", to).order("starts_at", { ascending: true }).limit(40),
+    user.from("patients").select(PATIENT_SELECT).order("start_date", { ascending: false }).limit(500),
+  ]);
   const staffRoles: string[] = ((acc?.roles ?? []) as Row[]).map((r) => String(r.role));
   const clinical = hasClinicalAccess(Boolean(acc?.is_admin), staffRoles);
-
-  const { from, to } = dayBoundsBR(new Date(now));
-  const { data: apptRows } = await user.from("appointments")
-    .select("id, title, starts_at, patient_id, type, patient:patients ( profile:profiles ( full_name ) )")
-    .eq("clinic_id", clinicId).gte("starts_at", from).lt("starts_at", to).order("starts_at", { ascending: true }).limit(40);
   const appts = ((apptRows ?? []) as Row[]).map(toAppt);
 
-  let patients: RawPatient[] = [];
-  if (clinical) {
-    const { data: rows } = await user.from("patients").select(PATIENT_SELECT).order("start_date", { ascending: false }).limit(500);
-    patients = ((rows ?? []) as Row[]).map(toRawPatient).filter((p): p is RawPatient => p !== null);
-  }
+  const patients: RawPatient[] = clinical
+    ? ((patientRows ?? []) as Row[]).map(toRawPatient).filter((p): p is RawPatient => p !== null)
+    : [];
 
   const intent = detectIntent(message);
   let facts: Fact[] = buildHojeFacts(patients, appts, now, clinical);
@@ -128,15 +133,19 @@ Deno.serve(async (req: Request) => {
   let patientDenied = false;
   if (focusId) {
     let allowed = false;
+    let next: Row[] | null = null;
     if (clinical) {
-      const { data: ok, error } = await user.rpc("vertexa_ai_can_access_patient", { p_patient: focusId });
-      allowed = !error && ok === true;
+      const [chk, nx] = await Promise.all([
+        user.rpc("vertexa_ai_can_access_patient", { p_patient: focusId }),
+        user.from("appointments").select("id, title, starts_at, patient_id, type")
+          .eq("patient_id", focusId).gte("starts_at", new Date(now).toISOString()).order("starts_at", { ascending: true }).limit(1),
+      ]);
+      allowed = !chk.error && chk.data === true;
+      next = (nx.data ?? null) as Row[] | null;
     }
     const raw = allowed ? patients.find((p) => p.id === focusId) : undefined;
     if (!raw) patientDenied = true;
     else {
-      const { data: next } = await user.from("appointments").select("id, title, starts_at, patient_id, type")
-        .eq("patient_id", focusId).gte("starts_at", new Date(now).toISOString()).order("starts_at", { ascending: true }).limit(1);
       patientFacts = buildPatientFacts(raw, next?.[0] ? toAppt(next[0] as Row) : null, now);
       facts = [...facts, ...patientFacts];
     }
