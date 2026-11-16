@@ -84,7 +84,7 @@ begin
   return jsonb_build_object('already_published', false, 'published_at', v_pub, 'workouts', v_w, 'exercises', v_ex);
 end $$;
 
--- Salvar com estado de publicação: rascunho até a 1ª publicação; plano que o paciente já vê continua visível
+-- Salvar com estado de publicação (e com instrução/intervalo do exercício): rascunho até a 1ª publicação; plano que o paciente já vê continua visível
 -- (editar um plano publicado vale na hora, como era antes); p_publish = true publica junto.
 create or replace function public.save_workout_plan_v2(
   p_patient_id uuid, p_title text, p_goal text default null, p_workouts jsonb default '[]'::jsonb, p_publish boolean default false)
@@ -97,6 +97,16 @@ begin
   select true, wp.is_draft, wp.published_at, wp.published_by into v_has, v_prev_draft, v_prev_at, v_prev_by
     from public.workout_plans wp where wp.patient_id = p_patient_id order by wp.created_at desc limit 1;
   v_plan := public.save_workout_plan(p_patient_id, p_title, p_goal, p_workouts);
+  -- A save_workout_plan não grava a instrução (notes) nem o intervalo (rest_seconds) do exercício: acerta aqui, pela posição
+  -- (treino = day_index, exercício = order_index), na mesma transação.
+  update public.workout_exercises e
+     set notes = nullif(left(btrim(coalesce(x.notes, '')), 500), ''),
+         rest_seconds = case when x.rest between 0 and 1800 then x.rest end
+    from (select wo.ord::int as wi, ex.ord::int as ei, ex.value->>'notes' as notes, nullif(ex.value->>'rest_seconds', '')::int as rest
+            from jsonb_array_elements(coalesce(p_workouts, '[]'::jsonb)) with ordinality as wo(value, ord)
+           cross join lateral jsonb_array_elements(coalesce(wo.value->'exercises', '[]'::jsonb)) with ordinality as ex(value, ord)) x
+    join public.workouts w on w.workout_plan_id = v_plan and w.day_index = x.wi
+   where e.workout_id = w.id and e.order_index = x.ei;
   select pr.id into v_prof from public.professionals pr
    where pr.profile_id = private.current_profile_id() and pr.clinic_id = private.patient_clinic(p_patient_id) limit 1;
   if p_publish then

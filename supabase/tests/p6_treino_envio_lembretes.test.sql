@@ -103,6 +103,14 @@ begin
     (select count(*) from public.workouts) = 2, null);
   perform pg_temp.su();
 
+  perform pg_temp.as_user('edu');
+  pl := public.save_workout_plan_v2(paulo, 'Com instrução', null,
+    '[{"letter":"A","name":"A","exercises":[{"name":"Supino","sets":3,"reps":10,"notes":"  Desça devagar, 3 s  ","rest_seconds":90},{"name":"Crucifixo","sets":3,"reps":12,"rest_seconds":99999}]},{"letter":"B","name":"B","exercises":[{"name":"Remada","sets":3,"reps":10,"notes":"Costas retas"}]}]'::jsonb);
+  perform pg_temp.su();
+  perform pg_temp.chk('W18b instrução e intervalo gravados por posição (aparada, intervalo absurdo vira vazio)',
+    (select e.notes = 'Desça devagar, 3 s' and e.rest_seconds = 90 from public.workout_exercises e join public.workouts w on w.id = e.workout_id where w.workout_plan_id = pl and w.day_index = 1 and e.order_index = 1)
+    and (select e.notes is null and e.rest_seconds is null from public.workout_exercises e join public.workouts w on w.id = e.workout_id where w.workout_plan_id = pl and w.day_index = 1 and e.order_index = 2)
+    and (select e.notes = 'Costas retas' from public.workout_exercises e join public.workouts w on w.id = e.workout_id where w.workout_plan_id = pl and w.day_index = 2 and e.order_index = 1), null);
   -- plano vazio não publica; salvar já publicando
   perform pg_temp.as_user('edu');
   pl := public.save_workout_plan_v2(paulo, 'Vazio', null, '[]'::jsonb);
