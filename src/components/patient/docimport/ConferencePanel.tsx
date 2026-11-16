@@ -42,8 +42,56 @@ interface FieldBoxProps {
   compact?: boolean;
 }
 
+/** Detalhes de um campo: motivo, alternativas, "Conferido" e fonte (página/trecho). */
+function FieldExtras({ kind, result, state, field, today, label, disabled, onChange, showSource = true }: Omit<FieldBoxProps, "compact"> & { showSource?: boolean }) {
+  const pending = field.uncertain && !state.checked[field.key];
+  const err = fieldError(kind, field, state, today);
+  const value = state.values[field.key] ?? "";
+  const id = `conf-${field.key}`;
+  return (
+    <div id={`${id}-info`} className="mt-1.5 space-y-1">
+      {pending && field.reason ? <p className="text-xs text-primary-ink">{label ? `${label}: ` : ""}{field.reason}</p> : null}
+      {err && value.trim() !== "" ? (
+        <p className="text-xs text-destructive" role="alert">
+          {err}
+        </p>
+      ) : null}
+      {field.options && pending ? (
+        <div className="flex flex-wrap gap-1.5" aria-label={`Valores lidos para ${label}`}>
+          {field.options.map((o) => (
+            <button
+              key={o}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(pickOption(kind, result, state, field.key, o, today))}
+              className="rounded-full border border-primary/50 px-2.5 py-0.5 text-xs font-medium text-primary-ink hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {pending ? (
+        <Button type="button" size="sm" variant="outline" aria-label={`Conferido, está certo: ${label}`} disabled={disabled || Boolean(err) || value.trim() === ""} onClick={() => onChange(markChecked(kind, result, state, field.key, today))}>
+          Conferido, está certo
+        </Button>
+      ) : null}
+      {showSource ? (
+        field.source ? (
+          <p className="break-words text-xs text-muted-foreground">
+            Fonte: {field.page ? `página ${field.page} · ` : ""}«{field.source}»
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">{field.value == null ? "Não encontrado no documento." : "Sem trecho de origem."}</p>
+        )
+      ) : null}
+    </div>
+  );
+}
+
 /** Um campo: valor editável, fonte (página/trecho) e, se incerto, laranja + "conferir" até o profissional confirmar. */
-function FieldBox({ kind, result, state, field, today, label, disabled, onChange, compact }: FieldBoxProps) {
+function FieldBox(props: FieldBoxProps) {
+  const { kind, result, state, field, today, label, disabled, onChange, compact } = props;
   const pending = field.uncertain && !state.checked[field.key];
   const done = field.uncertain && state.checked[field.key];
   const err = fieldError(kind, field, state, today);
@@ -53,10 +101,10 @@ function FieldBox({ kind, result, state, field, today, label, disabled, onChange
     <div
       data-testid={`field-${field.key}`}
       data-uncertain={pending ? "true" : "false"}
-      className={cn("min-w-0 rounded-md border p-3", pending ? "border-primary bg-primary/5" : "border-border")}
+      className={cn("min-w-0 rounded-md border p-3", compact && "p-2", pending ? "border-primary bg-primary/5" : "border-border")}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <label htmlFor={id} className={cn("text-sm font-medium", pending ? "text-primary-ink" : "text-foreground")}>
+        <label htmlFor={id} className={cn("text-sm font-medium", compact && "text-xs", pending ? "text-primary-ink" : "text-foreground")}>
           {label}
           {field.unit && !compact ? <span className="font-normal text-muted-foreground"> ({field.unit})</span> : null}
         </label>
@@ -70,44 +118,10 @@ function FieldBox({ kind, result, state, field, today, label, disabled, onChange
         inputMode={field.options || /(time|data)$/.test(field.key) ? "text" : "decimal"}
         aria-invalid={err ? true : undefined}
         aria-describedby={`${id}-info`}
-        className={cn("mt-1.5 h-9", pending && "border-primary")}
+        className={cn("mt-1.5 h-9", compact && "px-2", pending && "border-primary")}
         onChange={(e) => onChange(setFieldValue(result, state, field.key, e.target.value))}
       />
-      <div id={`${id}-info`} className="mt-1.5 space-y-1">
-        {pending && field.reason ? <p className="text-xs text-primary-ink">{field.reason}</p> : null}
-        {err && value.trim() !== "" ? (
-          <p className="text-xs text-destructive" role="alert">
-            {err}
-          </p>
-        ) : null}
-        {field.options && pending ? (
-          <div className="flex flex-wrap gap-1.5" aria-label={`Valores lidos para ${label}`}>
-            {field.options.map((o) => (
-              <button
-                key={o}
-                type="button"
-                disabled={disabled}
-                onClick={() => onChange(pickOption(kind, result, state, field.key, o, today))}
-                className="rounded-full border border-primary/50 px-2.5 py-0.5 text-xs font-medium text-primary-ink hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {o}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {pending ? (
-          <Button type="button" size="sm" variant="outline" disabled={disabled || Boolean(err) || value.trim() === ""} onClick={() => onChange(markChecked(kind, result, state, field.key, today))}>
-            Conferido, está certo
-          </Button>
-        ) : null}
-        {field.source ? (
-          <p className="break-words text-xs text-muted-foreground">
-            Fonte: {field.page ? `página ${field.page} · ` : ""}«{field.source}»
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">{field.value == null ? "Não encontrado no documento." : "Sem trecho de origem."}</p>
-        )}
-      </div>
+      {compact ? null : <FieldExtras {...props} />}
     </div>
   );
 }
@@ -151,11 +165,19 @@ export function ConferencePanel(p: Props) {
                     return (
                       <div key={ek} className="rounded-md border p-2" role="group" aria-label={name}>
                         <p className="mb-2 break-words text-sm font-medium text-foreground">{name}</p>
-                        <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-3">
+                        <div className="grid grid-cols-3 gap-2">
                           {subs.map((f) => (
                             <FieldBox key={f.key} {...common} field={f} compact label={SUB_LABEL[f.key.split(".")[2]] ?? f.label} />
                           ))}
                         </div>
+                        {subs.filter((f) => f.uncertain && !p.state.checked[f.key]).map((f) => (
+                          <FieldExtras key={f.key} {...common} field={f} label={SUB_LABEL[f.key.split(".")[2]] ?? f.label} showSource={false} />
+                        ))}
+                        {subs[0]?.source ? (
+                          <p className="mt-1.5 break-words text-xs text-muted-foreground">
+                            Fonte: {subs[0].page ? `página ${subs[0].page} · ` : ""}«{subs[0].source}»
+                          </p>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -179,8 +201,8 @@ export function ConferencePanel(p: Props) {
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          {DOC_KIND_LABEL[p.kind]} lida do arquivo <span className="break-all font-medium text-foreground">{p.fileName}</span>. Confira cada valor com o documento ao lado
-          {" "}antes de confirmar. A Vertexa IA não diagnostica nem prescreve.
+          Leitura de {DOC_KIND_LABEL[p.kind].toLowerCase()} a partir do arquivo <span className="break-all font-medium text-foreground">{p.fileName}</span>. Confira cada valor com o
+          {" "}documento ao lado antes de confirmar. A Vertexa IA não diagnostica nem prescreve.
         </p>
         {p.result.mode === "demo" ? <p className="text-xs text-muted-foreground">{DEMO_BADGE}</p> : null}
       </CardHeader>

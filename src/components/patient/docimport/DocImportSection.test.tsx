@@ -213,8 +213,8 @@ describe("DocImportSection — Conferência de ponta a ponta (modo demonstraçã
     expect(screen.getByText("Treino A")).toBeInTheDocument();
     const reps = screen.getByTestId("field-d0.e1.reps");
     expect(reps).toHaveAttribute("data-uncertain", "true");
-    expect(within(reps).getByText(/traz 8–12 repetições/)).toBeInTheDocument();
-    fireEvent.click(within(reps).getByRole("button", { name: "10" }));
+    expect(screen.getByText(/traz 8–12 repetições/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "10" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar e salvar treino" }));
     await waitFor(() => expect(h.saveWorkoutPlan).toHaveBeenCalledTimes(1));
     expect(h.saveWorkoutPlan.mock.calls[0][0].workouts[0].exercises[1].reps).toBe(10);
