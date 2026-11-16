@@ -9,6 +9,7 @@ vi.mock("@/hooks/useFin", () => ({ useFinContext: () => ({ clinicId: "c1", acces
 vi.mock("@/hooks/usePatients", () => ({ useListPatients: () => ({ data: patients.list, isLoading: false, isError: false, refetch: vi.fn() }) }));
 vi.mock("@/hooks/useCurrentProfessional", () => ({ useCurrentProfessional: () => ({ data: null }), useCurrentProfessionalName: () => ({ data: "Dra. Ana" }) }));
 vi.mock("@/components/dashboard/TodayAgenda", () => ({ TodayAgenda: () => null }));
+vi.mock("@/hooks/usePatientReminders", () => ({ useOpenReminders: () => ({ data: [], isLoading: false, isError: false }) }));
 vi.mock("@/components/dashboard/AdherenceChart", () => ({ AdherenceChart: () => null }));
 
 import { DashboardPage } from "./DashboardPage";

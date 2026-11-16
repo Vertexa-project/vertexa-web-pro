@@ -22,6 +22,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreatePatient } from "@/hooks/usePatients";
+import { upsertPatientReminder } from "@/lib/api/patientReminders";
+import { DEFAULT_TEMPLATES, validateReminderInput } from "@/lib/domain/patientReminders";
+import { EMPTY_RETURN_REMINDER, ReturnReminderFields, type ReturnReminderForm } from "./ReturnReminderFields";
 import { useCurrentProfessional } from "@/hooks/useCurrentProfessional";
 import type { CreatePatientInput } from "@/lib/api/patients";
 
@@ -94,6 +97,7 @@ interface Props {
 export function PatientCreateDialog({ open, onOpenChange, onCreated }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const [ret, setRet] = useState<ReturnReminderForm>(EMPTY_RETURN_REMINDER);
   const nameRef = useRef<HTMLInputElement>(null);
   const create = useCreatePatient();
   // Profissional atuante → isolamento por clínica + vínculo.
@@ -102,6 +106,7 @@ export function PatientCreateDialog({ open, onOpenChange, onCreated }: Props) {
   useEffect(() => {
     if (open) {
       setForm(EMPTY);
+      setRet(EMPTY_RETURN_REMINDER);
       setError(null);
       create.reset();
     }
@@ -146,9 +151,23 @@ export function PatientCreateDialog({ open, onOpenChange, onCreated }: Props) {
         : null,
     };
 
+    if (ret.dueOn) {
+      const invalid = validateReminderInput({ kind: "return", title: "", dueOn: ret.dueOn, noticeDays: ret.days, proNoticeDays: ret.days, message: ret.message });
+      if (invalid) {
+        setError(invalid);
+        return;
+      }
+    }
     setError(null);
     create.mutate(input, {
       onSuccess: (patientId) => {
+        // O retorno é opcional e não pode atrapalhar o cadastro: se falhar, o paciente já existe e dá para cadastrar na ficha.
+        if (ret.dueOn) {
+          void upsertPatientReminder({
+            patientId, kind: "return", title: "", dueOn: ret.dueOn, noticeDays: ret.days, proNoticeDays: ret.days,
+            message: ret.message.trim() === DEFAULT_TEMPLATES.return ? "" : ret.message, notifyPatient: ret.notify,
+          }).catch(() => undefined);
+        }
         onOpenChange(false);
         onCreated(patientId);
       },
@@ -332,6 +351,8 @@ export function PatientCreateDialog({ open, onOpenChange, onCreated }: Props) {
               </div>
             </div>
           </section>
+
+          <ReturnReminderFields value={ret} onChange={setRet} patientName={form.fullName} />
 
           {error || create.isError ? (
             <p id="np-form-error" className="text-sm text-destructive" role="alert">

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
-const hoisted = vi.hoisted(() => ({ list: [] as unknown[], openWith: vi.fn() }));
+const hoisted = vi.hoisted(() => ({ list: [] as unknown[], reminders: [] as unknown[], openWith: vi.fn() }));
 vi.mock("@/hooks/useFin", () => ({ useFinContext: () => ({ clinicId: "c1", access: { isAdmin: true, roles: [], can: {} }, isLoading: false }) }));
 vi.mock("@/hooks/usePatients", () => ({ useListPatients: () => ({ data: hoisted.list, isLoading: false, isError: false, refetch: vi.fn() }) }));
 vi.mock("@/hooks/useCurrentProfessional", () => ({
@@ -19,6 +19,7 @@ vi.mock("@/hooks/useAppointments", () => ({
     ],
   }),
 }));
+vi.mock("@/hooks/usePatientReminders", () => ({ useOpenReminders: () => ({ data: hoisted.reminders, isLoading: false, isError: false }) }));
 vi.mock("@/components/dashboard/AdherenceChart", () => ({ AdherenceChart: () => null }));
 
 import { VertexaAiContext, type VertexaAiContextValue } from "@/components/vertexa-ai/vertexa-ai-context";
@@ -109,5 +110,31 @@ describe("Hoje no formato do protótipo", () => {
     renderHoje(false);
     expect(screen.queryByText("Vertexa IA sugere")).toBeNull();
     expect(screen.getByText("Foco do dia")).toBeTruthy();
+  });
+  it("Exames e retornos (A2): só o que entrou na janela da equipe, atrasado primeiro, com a data pt-BR; clique abre a ficha", () => {
+    hoisted.list = [];
+    const day = (n: number) => {
+      const d = new Date(`${new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })}T12:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    const base = { notify_patient: true, notify_days_before: 7, pro_notify_days_before: 7, message_template: null, done_at: null };
+    hoisted.reminders = [
+      { ...base, id: "r1", patient_id: "p-longe", kind: "return", title: null, due_on: day(40), patientName: "Longe Demais" },
+      { ...base, id: "r2", patient_id: "p-ana", kind: "return", title: null, due_on: day(3), patientName: "Ana Teste" },
+      { ...base, id: "r3", patient_id: "p-bia", kind: "exam", title: "Hemograma", due_on: day(-2), patientName: "Bia Teste" },
+    ];
+    renderHoje();
+    const card = screen.getByText("Exames e retornos").closest("div[class*='rounded']") as HTMLElement;
+    const rows = within(card).getAllByRole("button");
+    expect(rows.map((r) => r.textContent)).toEqual([expect.stringContaining("Bia Teste"), expect.stringContaining("Ana Teste")]);
+    expect(within(card).queryByText("Longe Demais")).toBeNull();
+    expect(rows[0].textContent).toContain("Exame: Hemograma");
+    expect(rows[0].textContent).toContain("há 2 dias");
+    expect(rows[1].textContent).toContain("em 3 dias");
+    expect(rows[1].textContent).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+    fireEvent.click(rows[1]);
+    expect(screen.getByTestId("where").textContent).toBe("/pacientes/p-ana");
+    hoisted.reminders = [];
   });
 });
