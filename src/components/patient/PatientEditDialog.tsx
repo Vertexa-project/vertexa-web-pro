@@ -52,7 +52,7 @@ const SEX_OPTIONS = [
   { value: "outro", label: "Outro" },
 ];
 
-const numToStr = (n: number | null | undefined) => (n == null ? "" : String(n));
+const numToStr = (n: number | null | undefined) => (n == null ? "" : String(n).replace(".", ","));
 
 function initialForm(patient: PatientDetail): FormState {
   return {

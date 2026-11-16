@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useNutritionPlan } from "@/hooks/usePlans";
 import { useDisciplinePermissions } from "@/hooks/useDisciplines";
 import { DISCIPLINE_REASON } from "@/lib/domain/disciplines";
+import { formatNumber } from "@/lib/domain/format";
 import type { PatientDetail } from "@/types/db";
 
 export function NutritionTab({ patient }: { patient: PatientDetail }) {
@@ -46,7 +47,7 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">{data.title}</h2>
-                <span className="text-sm text-muted-foreground">{totalKcal} kcal/dia</span>
+                <span className="text-sm text-muted-foreground">{formatNumber(totalKcal, 1)} kcal/dia</span>
               </div>
               <GatedAction
                 canEdit={canEdit}
@@ -88,7 +89,7 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
                     ) : null}
                   </div>
                   {meal.calories != null ? (
-                    <span className="shrink-0 text-sm font-medium text-foreground">{meal.calories} kcal</span>
+                    <span className="shrink-0 text-sm font-medium text-foreground">{formatNumber(Number(meal.calories), 1)} kcal</span>
                   ) : null}
                 </CardContent>
               </Card>
