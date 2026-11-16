@@ -54,6 +54,8 @@ describe("PatientExportDialog", () => {
     await userEvent.click(exportBtn());
     expect(screen.getByRole("alert")).toHaveTextContent("Escolha o motivo da exportação.");
     await userEvent.selectOptions(screen.getByLabelText("Motivo da exportação"), "backup");
+    // o aviso antigo some assim que a pessoa corrige (achado D70)
+    expect(screen.queryByRole("alert")).toBeNull();
     await userEvent.click(exportBtn());
     expect(screen.getByRole("alert")).toHaveTextContent(/mínimo de 5 letras/);
     await userEvent.type(screen.getByLabelText("Explique em poucas palavras"), "abc");
@@ -89,7 +91,7 @@ describe("PatientExportDialog", () => {
     expect(csv).not.toContain("Peso");
     expect(filename).toMatch(/^pacientes_vertexa_\d{4}-\d{2}-\d{2}\.csv$/);
     expect(mime).toMatch(/csv/);
-    expect(screen.getByText(/Registrado em Configurações › Auditoria de exportações/)).toBeInTheDocument();
+    expect(screen.getByText(/Registrado em Configurações › Exportações da base de pacientes/)).toBeInTheDocument();
   });
 
   it("se o servidor recusar (ex.: não é Gestor), mostra a mensagem e não baixa nada", async () => {

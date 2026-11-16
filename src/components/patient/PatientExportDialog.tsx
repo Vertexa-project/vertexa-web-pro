@@ -91,7 +91,7 @@ export function PatientExportDialog({ open, onOpenChange, clinicId, patientCount
                 {done.message}
               </p>
               <p className="text-sm text-muted-foreground">
-                Registrado em Configurações › Auditoria de exportações: quem, quando, motivo e quantidade — sem os dados.
+                Registrado em Configurações › Exportações da base de pacientes: quem, quando, motivo e quantidade — sem os dados.
               </p>
             </div>
           ) : (
@@ -111,7 +111,7 @@ export function PatientExportDialog({ open, onOpenChange, clinicId, patientCount
               </fieldset>
               <p className="text-sm text-muted-foreground">Só o papel Gestor exporta. {EXPORT_NOTE}</p>
               <Field label="Motivo da exportação" htmlFor="exp-kind">
-                <NativeSelect id="exp-kind" value={kind} onChange={(e) => setKind(e.target.value as ExportReasonKind | "")} aria-invalid={error !== null && !kind ? true : undefined}>
+                <NativeSelect id="exp-kind" value={kind} onChange={(e) => { setKind(e.target.value as ExportReasonKind | ""); setError(null); }} aria-invalid={error !== null && !kind ? true : undefined}>
                   <option value="">Escolha o motivo</option>
                   {EXPORT_REASONS.map((r) => (
                     <option key={r.value} value={r.value}>
@@ -126,7 +126,7 @@ export function PatientExportDialog({ open, onOpenChange, clinicId, patientCount
                   value={reason}
                   maxLength={EXPORT_REASON_MAX}
                   placeholder="Ex.: backup mensal da clínica"
-                  onChange={(e) => setReason(e.target.value)}
+                  onChange={(e) => { setReason(e.target.value); setError(null); }}
                 />
               </Field>
               <p className="text-sm text-warning-foreground dark:text-warning">O arquivo contém dados pessoais. Guarde em local seguro.</p>

@@ -36,7 +36,7 @@ export function PatientExportsAudit({ clinicId }: { clinicId: string | null }) {
           <History className="h-5 w-5" />
         </span>
         <div className="min-w-0 space-y-1">
-          <CardTitle className="text-base">Auditoria de exportações</CardTitle>
+          <CardTitle className="text-base">Exportações da base de pacientes</CardTitle>
           <CardDescription>Cada exportação da base fica registrada: quem, quando e por quê. Os dados exportados não ficam guardados aqui.</CardDescription>
         </div>
       </CardHeader>
