@@ -88,6 +88,10 @@ export interface WorkoutPlan {
   title: string;
   goal: string | null;
   created_at: string;
+  /** Redesign P6: rascunho não aparece no app do paciente. Plano antigo = false (publicado). */
+  is_draft?: boolean | null;
+  published_at?: string | null;
+  published_by?: string | null;
 }
 
 export interface Workout {

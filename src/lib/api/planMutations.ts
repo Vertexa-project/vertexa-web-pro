@@ -6,6 +6,10 @@ export interface WorkoutExerciseInput {
   sets: number | null;
   reps: number | null;
   load_kg: number | null;
+  /** Instrução do exercício (texto livre) que o paciente lê no app. */
+  notes?: string | null;
+  /** Intervalo entre séries, em segundos. */
+  rest_seconds?: number | null;
 }
 
 export interface WorkoutInput {
@@ -22,10 +26,13 @@ export interface SaveWorkoutPlanInput {
   title: string;
   goal: string | null;
   workouts: WorkoutInput[];
+  /** true = já salva publicada. Padrão: rascunho até a 1ª publicação; plano que o paciente já vê continua visível. */
+  publish?: boolean;
 }
 
 /**
  * Cria o plano de treino e SUBSTITUI o anterior do paciente (apenas 1 ativo na sprint).
+ * P6: usa save_workout_plan_v2 (a mesma gravação + estado de publicação + instrução/intervalo do exercício).
  * Escreve pela RPC SECURITY DEFINER `save_workout_plan` (WP-APP-1): o DELETE+INSERT vira
  * UMA transação atômica no servidor (erro no meio → plano antigo intacto; sem plano parcial)
  * e a autorização é revalidada via can_prescribe_for_patient (vínculo/admin). day_index/
@@ -33,7 +40,8 @@ export interface SaveWorkoutPlanInput {
  * o servidor resolve o autor pelo próprio chamador.
  */
 export async function saveWorkoutPlan(input: SaveWorkoutPlanInput): Promise<void> {
-  const { error } = await supabase.rpc("save_workout_plan", {
+  const { error } = await supabase.rpc("save_workout_plan_v2", {
+    p_publish: input.publish ?? false,
     p_patient_id: input.patientId,
     p_title: input.title,
     p_goal: input.goal,
@@ -48,6 +56,8 @@ export async function saveWorkoutPlan(input: SaveWorkoutPlanInput): Promise<void
         sets: ex.sets,
         reps: ex.reps,
         load_kg: ex.load_kg,
+        notes: ex.notes ?? null,
+        rest_seconds: ex.rest_seconds ?? null,
       })),
     })),
   });
