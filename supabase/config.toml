@@ -63,6 +63,10 @@ verify_jwt = true
 [functions.clinical-structure]
 verify_jwt = true
 
+# Redesign P3: Vertexa IA (painel lateral). Chamada pelo SPA autenticado; demo sem OPENAI_API_KEY.
+[functions.vertexa-ai]
+verify_jwt = true
+
 [functions.clinical-audio-purge]
 verify_jwt = true
 
