@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { isRemovedPatientProfile } from "@/lib/domain/patientDeletion";
 import { activeProfessionalsFromLinks } from "@/lib/domain/patientTeam";
 import type {
   Patient,
@@ -44,7 +45,7 @@ interface RawPatientListRow {
   current_weight: number | null;
   start_date: string | null;
   birth_date: string | null;
-  profile: Pick<Profile, "full_name" | "email" | "avatar_url" | "avatar_path"> | null;
+  profile: Pick<Profile, "full_name" | "email" | "avatar_url" | "avatar_path" | "status"> | null;
   adherence_snapshots: RawSnap[] | null;
   professional_patient_links: RawLink[] | null;
   activity_events: RawEvent[] | null;
@@ -86,7 +87,7 @@ export async function listPatients(): Promise<PatientListItem[]> {
     .from("patients")
     .select(
       `id, goal, current_weight, start_date, birth_date,
-       profile:profiles ( full_name, email, avatar_url, avatar_path ),
+       profile:profiles ( full_name, email, avatar_url, avatar_path, status ),
        adherence_snapshots ( score, level, status, weekly_completion_rate, calculated_at ),
        professional_patient_links ( status, professionals ( id, type, profile:profiles!professionals_profile_id_fkey ( full_name ) ) ),
        activity_events ( type, created_at ),
@@ -97,7 +98,9 @@ export async function listPatients(): Promise<PatientListItem[]> {
   if (error) throw error;
 
   const rows = (data ?? []) as unknown as RawPatientListRow[];
-  return rows.map((row) => {
+  // Paciente removido (exclusão de conta, anonimizado) não é paciente ativo: fora da lista,
+  // portanto fora de Pacientes, KPIs, Foco do dia, Para reativar e Pendências.
+  return rows.filter((row) => !isRemovedPatientProfile(row.profile)).map((row) => {
     const events = row.activity_events ?? [];
     const latestSnap =
       [...(row.adherence_snapshots ?? [])].sort((a, b) => byDateDesc(a.calculated_at, b.calculated_at))[0] ??
@@ -121,7 +124,9 @@ export async function listPatients(): Promise<PatientListItem[]> {
       current_weight: row.current_weight,
       start_date: row.start_date,
       birth_date: row.birth_date,
-      profile: row.profile ?? null,
+      profile: row.profile
+        ? { full_name: row.profile.full_name, email: row.profile.email, avatar_url: row.profile.avatar_url, avatar_path: row.profile.avatar_path }
+        : null,
       snapshot: latestSnap,
       professionals: mapProfessionals(row.professional_patient_links),
       lastActivityAt,

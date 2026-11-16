@@ -67,3 +67,21 @@ export const PATIENT_DELETE_GENERIC_ERROR = "Não foi possível excluir o cadast
 export function patientDeleteErrorMessage(err: unknown): string {
   return ERRORS[patientRegistrationErrorHint(err)] ?? PATIENT_DELETE_GENERIC_ERROR;
 }
+
+/**
+ * Paciente REMOVIDO pelo direito de exclusão de conta (migration 20261103090000,
+ * execute_account_deletion): o servidor mantém a linha, anonimiza o perfil
+ * (full_name='Paciente removido', email nulo) e marca profiles.status='inactive'.
+ * Sem coluna/flag própria, esse é o critério do servidor. 'inactive' só nasce dessa rotina
+ * (profiles.status documentado como active|pending), então qualquer um dos dois sinais basta.
+ * UMA regra: listPatients usa isto, e todas as telas (Pacientes, KPIs, Foco do dia,
+ * Para reativar, Pendências) leem da lista já filtrada.
+ */
+export const REMOVED_PATIENT_NAME = "Paciente removido";
+
+export function isRemovedPatientProfile(
+  profile: { full_name?: string | null; status?: string | null } | null | undefined,
+): boolean {
+  if (!profile) return false;
+  return profile.status === "inactive" || profile.full_name === REMOVED_PATIENT_NAME;
+}
