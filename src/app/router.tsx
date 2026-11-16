@@ -1,5 +1,11 @@
 import { lazy, Suspense } from "react";
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate, useParams } from "react-router-dom";
+
+/** Endereço em inglês digitado à mão (/patients) leva à tela certa em vez de "Página não encontrada". */
+function PatientsAlias() {
+  const { id } = useParams();
+  return <Navigate to={id ? `/pacientes/${id}` : "/pacientes"} replace />;
+}
 
 import { AppShell } from "@/layouts/AppShell";
 import { GestaoLayout } from "@/layouts/GestaoLayout";
@@ -258,6 +264,8 @@ export const router = createBrowserRouter(
           children: [
             { index: true, element: <DashboardPage /> },
             { path: "pacientes", element: <PatientsPage /> },
+            { path: "patients", element: <PatientsAlias /> },
+            { path: "patients/:id", element: <PatientsAlias /> },
             { path: "pacientes/:id", element: <PatientProfilePage /> },
             { path: "pacientes/:id/atendimento/:encounterId", element: <EncounterPage /> },
             { path: "jornada", element: <JourneyBoardPage /> },

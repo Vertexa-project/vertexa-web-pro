@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { hasClinicalAccess } from "@/lib/domain/vertexaAi";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Download, Eye, FileUp, Search, UserPlus, Users } from "lucide-react";
 
@@ -97,6 +98,8 @@ export function PatientsPage() {
   const { access } = useFinAccess(clinicId);
   const canImportPatients = isClinicAdmin;
   const canExportBase = canExportPatientBase(access) || isClinicAdmin;
+  // Exportar em lote = PDFs de prontuário: só quem abre dado clínico (Recepção/Financeiro/Estoquista não).
+  const canBatchReport = hasClinicalAccess(access.isAdmin || isClinicAdmin, access.roles.map((r) => r.role));
   const withoutProfessional = usePatientsWithoutActiveProfessional(clinicId, isClinicAdmin);
   const withoutProfessionalIds = useMemo(
     () => patientsWithoutProfessionalIds(withoutProfessional.data),
@@ -226,10 +229,12 @@ export function PatientsPage() {
         description="Acompanhe status, adesão e atividade dos seus pacientes."
         actions={
           <>
-            <Button variant="outline" onClick={() => navigate("/relatorios/lote")}>
-              <Download className="h-4 w-4" />
-              Exportar em lote
-            </Button>
+            {canBatchReport ? (
+              <Button variant="outline" onClick={() => navigate("/relatorios/lote")}>
+                <Download className="h-4 w-4" />
+                Exportar em lote
+              </Button>
+            ) : null}
             {canExportBase ? (
               <Button variant="outline" onClick={() => setExportOpen(true)}>
                 <Download className="h-4 w-4" />
