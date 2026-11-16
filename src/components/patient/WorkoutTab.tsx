@@ -7,6 +7,8 @@ import { ExerciseMedia } from "@/components/exercise/ExerciseMedia";
 import { GatedAction } from "./GatedAction";
 import { PublishWorkoutDialog } from "./PublishWorkoutDialog";
 import { SendToPatientDialog } from "./SendToPatientDialog";
+import { useSentNotice } from "@/hooks/useSentNotice";
+import { preparePlanPdf, warmPdfEngines } from "@/lib/pdf/preparePlanPdf";
 import { WorkoutPlanEditor } from "./WorkoutPlanEditor";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +33,7 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
   const [editing, setEditing] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sentNotice, showSentNotice] = useSentNotice();
   const { perms } = useDisciplinePermissions();
   const { data: professional } = useCurrentProfessional();
   const { data: myName } = useCurrentProfessionalName();
@@ -39,9 +42,18 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
   const state = publicationOf(data);
   const summary = data ? summarizePublish(data.workouts, (name, gif) => Boolean(gif) || Boolean(findLibraryExercise(library.index, name))) : null;
   const patientName = patient.profile?.full_name ?? "Paciente";
+  const prewarm = () => {
+    if (data) void preparePlanPdf("treino", data, { patientName, professionalName: myName ?? null }).catch(() => undefined);
+    else warmPdfEngines();
+  };
 
   return (
     <>
+      {sentNotice ? (
+        <p role="status" className="mb-3 text-sm text-success">
+          {sentNotice}
+        </p>
+      ) : null}
       <div className="mb-4">
         <DocImportSection patient={patient} kind="treino" />
       </div>
@@ -111,6 +123,9 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
                     variant="outline"
                     className="shrink-0"
                     onClick={() => setSending(true)}
+                    onPointerEnter={prewarm}
+                    onFocus={prewarm}
+                    onTouchStart={prewarm}
                   >
                     <Send className="h-4 w-4" />
                     Enviar ao paciente
@@ -155,7 +170,7 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
                             {(() => {
                               const match = findLibraryExercise(library.index, ex.name);
                               return match ? (
-                                <ExerciseMedia item={match} className="h-10 w-12 shrink-0 rounded-md" />
+                                <ExerciseMedia item={match} zoom className="h-10 w-12 shrink-0 rounded-md" />
                               ) : null;
                             })()}
                             <div className="min-w-0">
@@ -222,10 +237,8 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
             patientName={patientName}
             professionalId={professional?.id ?? null}
             planTitle={data.title}
-            build={async () => {
-              const { buildWorkoutPdf } = await import("@/lib/pdf/generatePlanPdf");
-              return buildWorkoutPdf(data, { patientName, professionalName: myName ?? null });
-            }}
+            build={() => preparePlanPdf("treino", data, { patientName, professionalName: myName ?? null })}
+            onSent={showSentNotice}
           />
         </>
       ) : null}

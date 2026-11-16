@@ -7,6 +7,8 @@ import { DocImportSection } from "./docimport/DocImportSection";
 import { GatedAction } from "./GatedAction";
 import { NutritionPlanEditor } from "./NutritionPlanEditor";
 import { SendToPatientDialog } from "./SendToPatientDialog";
+import { useSentNotice } from "@/hooks/useSentNotice";
+import { preparePlanPdf, warmPdfEngines } from "@/lib/pdf/preparePlanPdf";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNutritionPlan } from "@/hooks/usePlans";
 import { useDisciplinePermissions } from "@/hooks/useDisciplines";
@@ -20,15 +22,26 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
   const { data, isLoading, isError, refetch } = useNutritionPlan(patient.id);
   const [editing, setEditing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sentNotice, showSentNotice] = useSentNotice();
   const { perms } = useDisciplinePermissions();
   const { data: professional } = useCurrentProfessional();
   const { data: myName } = useCurrentProfessionalName();
   const canEdit = perms.canEditNutrition;
 
+  const prewarm = () => {
+    const who = { patientName: patient.profile?.full_name ?? "Paciente", professionalName: myName ?? null };
+    if (data) void preparePlanPdf("plano_alimentar", data, who).catch(() => undefined);
+    else warmPdfEngines();
+  };
   const totalKcal = data?.meals.reduce((sum, m) => sum + (m.calories ?? 0), 0) ?? 0;
 
   return (
     <>
+      {sentNotice ? (
+        <p role="status" className="mb-3 text-sm text-success">
+          {sentNotice}
+        </p>
+      ) : null}
       <div className="mb-4">
         <DocImportSection patient={patient} kind="dieta" />
       </div>
@@ -67,6 +80,9 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
                   variant="outline"
                   className="shrink-0"
                   onClick={() => setSending(true)}
+                    onPointerEnter={prewarm}
+                    onFocus={prewarm}
+                    onTouchStart={prewarm}
                 >
                   <Send className="h-4 w-4" />
                   Enviar ao paciente
@@ -131,10 +147,8 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
           patientName={patient.profile?.full_name ?? "Paciente"}
           professionalId={professional?.id ?? null}
           planTitle={data.title}
-          build={async () => {
-            const { buildNutritionPdf } = await import("@/lib/pdf/generatePlanPdf");
-            return buildNutritionPdf(data, { patientName: patient.profile?.full_name ?? "Paciente", professionalName: myName ?? null });
-          }}
+          build={() => preparePlanPdf("plano_alimentar", data, { patientName: patient.profile?.full_name ?? "Paciente", professionalName: myName ?? null })}
+          onSent={showSentNotice}
         />
       ) : null}
 

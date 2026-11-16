@@ -4,15 +4,16 @@
 import { useEffect, useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { preloadPdfRenderer } from "./pdfRenderer";
 
 const MAX_PAGES = 3;
 const RENDER_WIDTH = 900; // px do desenho; a imagem se ajusta à largura do cartão
 
-async function renderPages(bytes: ArrayBuffer): Promise<string[]> {
+async function renderPages(bytes: ArrayBuffer, onPage: (src: string) => void, isAlive: () => boolean): Promise<number> {
   const pdfjs = await preloadPdfRenderer();
   const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
-  const out: string[] = [];
+  let n0 = 0;
   try {
     for (let n = 1; n <= Math.min(doc.numPages, MAX_PAGES); n++) {
       const page = await doc.getPage(n);
@@ -24,12 +25,14 @@ async function renderPages(bytes: ArrayBuffer): Promise<string[]> {
       const ctx = canvas.getContext("2d");
       if (!ctx) break;
       await page.render({ canvasContext: ctx, viewport }).promise;
-      out.push(canvas.toDataURL("image/png"));
+      if (!isAlive()) break;
+      onPage(canvas.toDataURL("image/png")); // a 1ª página aparece sem esperar as outras
+      n0++;
     }
   } finally {
     void doc.destroy();
   }
-  return out;
+  return n0;
 }
 
 export function PdfPagesPreview({ bytes, totalHint }: { bytes: ArrayBuffer; totalHint?: string }) {
@@ -40,8 +43,8 @@ export function PdfPagesPreview({ bytes, totalHint }: { bytes: ArrayBuffer; tota
     let alive = true;
     setPages(null);
     setFailed(false);
-    renderPages(bytes)
-      .then((p) => { if (alive) (p.length ? setPages(p) : setFailed(true)); })
+    renderPages(bytes, (src) => { if (alive) setPages((prev) => [...(prev ?? []), src]); }, () => alive)
+      .then((n) => { if (alive && n === 0) setFailed(true); })
       .catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
   }, [bytes]);
@@ -56,9 +59,12 @@ export function PdfPagesPreview({ bytes, totalHint }: { bytes: ArrayBuffer; tota
   }
   if (!pages) {
     return (
-      <div role="status" className="flex h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        Preparando a prévia do documento…
+      <div role="status" className="space-y-2 p-3" data-testid="pdf-preview-loading">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          Preparando a prévia do documento…
+        </p>
+        <Skeleton className="h-48 w-full bg-white/60" />
       </div>
     );
   }

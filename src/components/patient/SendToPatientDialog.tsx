@@ -1,10 +1,11 @@
 // Enviar ao app do paciente (redesign P6): prévia do PDF com a marca da clínica e botão Enviar. Quem enviou e quando ficam
 // registrados (Documentos > "No app do paciente"); o paciente recebe um aviso e baixa em "Meus documentos" no app.
 import { useEffect, useState } from "react";
-import { CheckCircle2, Download, Loader2, Send } from "lucide-react";
+import { Download, Loader2, Send } from "lucide-react";
 
 import { PdfPagesPreview } from "./docimport/PdfPagesPreview";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSendPdf } from "@/hooks/useDeliveries";
 import { deliveryFileName, deliveryTitle, sendErrorMessage, type DeliveryKind } from "@/lib/domain/deliveries";
@@ -18,18 +19,19 @@ interface Props {
   patientName: string;
   professionalId: string | null;
   planTitle: string;
-  /** Gera o PDF (com a marca da clínica). Chamado ao abrir. */
+  /** Gera o PDF (com a marca da clínica). Chamado ao abrir; o mesmo arquivo serve à prévia e ao envio. */
   build: () => Promise<Blob>;
+  /** Chamado depois do envio: o diálogo já fechou e quem chamou mostra o aviso. */
+  onSent?: (message: string) => void;
 }
 
 const KIND_WORD = { treino: "treino", plano_alimentar: "plano alimentar" } as const;
 
-export function SendToPatientDialog({ open, onOpenChange, kind, patientId, patientName, professionalId, planTitle, build }: Props) {
+export function SendToPatientDialog({ open, onOpenChange, kind, patientId, patientName, professionalId, planTitle, build, onSent }: Props) {
   const [blob, setBlob] = useState<Blob | null>(null);
   const [bytes, setBytes] = useState<ArrayBuffer | null>(null);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
   const send = useSendPdf(patientId);
 
   useEffect(() => {
@@ -38,7 +40,6 @@ export function SendToPatientDialog({ open, onOpenChange, kind, patientId, patie
     setBlob(null);
     setBytes(null);
     setError(null);
-    setSent(false);
     setBuilding(true);
     build()
       .then(async (b) => {
@@ -82,7 +83,10 @@ export function SendToPatientDialog({ open, onOpenChange, kind, patientId, patie
     send.mutate(
       { patientId, professionalId, blob, fileName, kind, title: deliveryTitle(kind, planTitle) },
       {
-        onSuccess: () => setSent(true),
+        onSuccess: () => {
+          onSent?.(`Enviado. O ${KIND_WORD[kind]} já está no app do paciente e registrado em Documentos.`);
+          onOpenChange(false);
+        },
         onError: (e) => {
           captureException(e, { source: "delivery", scope: kind });
           setError(sendErrorMessage(e, kind));
@@ -102,19 +106,18 @@ export function SendToPatientDialog({ open, onOpenChange, kind, patientId, patie
         </DialogHeader>
         <DialogBody className="space-y-3">
           {building ? (
-            <div role="status" className="flex h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Montando o PDF…
+            <div role="status" aria-label="Montando o PDF" className="space-y-2 rounded-md border bg-muted/30 p-3" data-testid="pdf-building">
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Montando o PDF…
+              </p>
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
             </div>
           ) : bytes ? (
             <div className="relative max-h-[50vh] overflow-y-auto overflow-x-hidden rounded-md border bg-muted/30">
               <PdfPagesPreview bytes={bytes} />
             </div>
-          ) : null}
-          {sent ? (
-            <p className="flex items-start gap-2 text-sm text-success" role="status">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              Enviado. O {KIND_WORD[kind]} já está no app do paciente e registrado em Documentos.
-            </p>
           ) : null}
           {error ? (
             <p className="text-sm text-destructive" role="alert">
@@ -125,13 +128,13 @@ export function SendToPatientDialog({ open, onOpenChange, kind, patientId, patie
         </DialogBody>
         <DialogFooter className="flex-wrap gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={send.isPending}>
-            {sent ? "Fechar" : "Voltar"}
+            Voltar
           </Button>
           <Button variant="outline" onClick={download} disabled={!blob}>
             <Download className="h-4 w-4" aria-hidden />
             Baixar PDF
           </Button>
-          <Button onClick={handleSend} disabled={!blob || !professionalId || send.isPending || sent} aria-busy={send.isPending}>
+          <Button onClick={handleSend} disabled={!blob || !professionalId || send.isPending} aria-busy={send.isPending}>
             {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
             {send.isPending ? "Enviando…" : "Enviar ao app do paciente"}
           </Button>

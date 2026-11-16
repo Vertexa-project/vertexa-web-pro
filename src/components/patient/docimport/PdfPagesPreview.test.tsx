@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const pdf = vi.hoisted(() => ({ render: vi.fn() }));
@@ -25,7 +25,7 @@ describe("PdfPagesPreview — prévia do PDF sem iframe", () => {
     HTMLCanvasElement.prototype.toDataURL = vi.fn(() => "data:image/png;base64,AAA");
     render(<PdfPagesPreview bytes={new ArrayBuffer(8)} />);
     expect(await screen.findByAltText("Documento enviado, página 1")).toBeInTheDocument();
-    expect(screen.getAllByRole("img")).toHaveLength(3);
+    await waitFor(() => expect(screen.getAllByRole("img")).toHaveLength(3)); // a 1ª página aparece e as outras chegam em seguida
     expect(pdf.render).toHaveBeenCalledTimes(3);
     expect(document.querySelector("iframe")).toBeNull();
   });

@@ -5,6 +5,7 @@ import { NutritionPlanPdf, WorkoutPlanPdf, type NutritionPdfMeal, type PlanPdfCo
 import { registerReportFonts } from "./fonts";
 import { urlToDataUri } from "./images";
 import { clinicLogoUrl, getMyClinicBrand } from "@/lib/api/clinicBrand";
+import type { ClinicBrand } from "@/lib/domain/clinicBrand";
 import { pdfBrandOf } from "@/lib/domain/deliveries";
 import { todayIsoBR } from "@/lib/domain/stockMoves";
 import type { NutritionPlanFull, WorkoutPlanFull } from "@/types/db";
@@ -15,9 +16,42 @@ export interface PlanPdfInput {
   now?: Date;
 }
 
+// Marca e logo em cache: o logo é baixado uma vez só (o caminho muda quando a clínica troca o logo) e a marca vale 60 s.
+const BRAND_TTL_MS = 60_000;
+let brandCache: { at: number; value: Promise<ClinicBrand | null> } | null = null;
+const logoCache = new Map<string, Promise<string | null>>();
+
+function cachedBrand(): Promise<ClinicBrand | null> {
+  if (brandCache && Date.now() - brandCache.at < BRAND_TTL_MS) return brandCache.value;
+  const value = getMyClinicBrand().catch(() => null);
+  brandCache = { at: Date.now(), value };
+  return value;
+}
+
+function cachedLogo(path: string): Promise<string | null> {
+  const url = clinicLogoUrl(path);
+  const key = url ?? path;
+  let hit = logoCache.get(key);
+  if (!hit) {
+    hit = urlToDataUri(url).then((v) => {
+      if (!v) logoCache.delete(key); // falha não fica gravada
+      return v;
+    });
+    logoCache.set(key, hit);
+  }
+  return hit;
+}
+
+/** Aquece marca + logo + fontes (em paralelo) antes de o PDF ser pedido. */
+export async function warmPlanPdfContext(): Promise<void> {
+  registerReportFonts();
+  const raw = await cachedBrand();
+  if (raw?.logoPath) await cachedLogo(raw.logoPath);
+}
+
 async function loadContext(i: PlanPdfInput): Promise<PlanPdfContext> {
-  const raw = await getMyClinicBrand().catch(() => null);
-  const logoUri = raw?.logoPath ? await urlToDataUri(clinicLogoUrl(raw.logoPath)) : null;
+  const raw = await cachedBrand();
+  const logoUri = raw?.logoPath ? await cachedLogo(raw.logoPath) : null;
   const b = pdfBrandOf({ name: raw?.name, color: raw?.color, logoUri });
   return {
     brand: { logoUri: b.logoUri, color: b.color },
