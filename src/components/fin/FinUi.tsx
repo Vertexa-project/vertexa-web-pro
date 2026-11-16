@@ -111,7 +111,7 @@ export function MonthYearPicker({ id, value, onChange, disabled }: { id: string;
 /** Tabela dentro de um quadro com rolagem horizontal PRÓPRIA — a página nunca ganha barra lateral. */
 export function TableShell({ children, label }: { children: React.ReactNode; label: string }) {
   return (
-    <div className="min-w-0 max-w-full overflow-x-auto rounded-lg border bg-card">
+    <div className="relative min-w-0 max-w-full overflow-x-auto rounded-lg border bg-card">
       <table className="w-full text-left text-sm" aria-label={label}>{children}</table>
     </div>
   );

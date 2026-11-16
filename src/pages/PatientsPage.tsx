@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Download, Eye, Search, UserPlus, Users } from "lucide-react";
+import { Download, Eye, FileUp, Search, UserPlus, Users } from "lucide-react";
 
 import { ClinicCapacityNotice } from "@/components/billing/ClinicCapacityNotice";
 import { PageHeader } from "@/components/PageHeader";
@@ -9,6 +9,8 @@ import { ErrorState } from "@/components/feedback/ErrorState";
 import { ProfileAvatarUrlScope } from "@/components/avatar/ProfileAvatarUrlScope";
 import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { PatientCreateDialog } from "@/components/patient/PatientCreateDialog";
+import { PatientExportDialog } from "@/components/patient/PatientExportDialog";
+import { PatientImportDialog } from "@/components/patient/PatientImportDialog";
 import { TableSkeleton } from "@/components/skeletons/TableSkeleton";
 import { StatusBadge } from "@/components/status/StatusBadge";
 import { DataTable, type Column } from "@/components/data-table/DataTable";
@@ -24,10 +26,12 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCurrentProfessional } from "@/hooks/useCurrentProfessional";
+import { useFinAccess } from "@/hooks/useFin";
 import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import { useListPatients } from "@/hooks/usePatients";
 import { usePatientsWithoutActiveProfessional } from "@/hooks/usePatientTeam";
 import { formatPercent, formatRelative, professionalTypeLabel } from "@/lib/domain/format";
+import { canExportPatientBase } from "@/lib/domain/patientExport";
 import { matchesPatientSearch, normalizePatientSearchTerm } from "@/lib/domain/patientSearch";
 import { patientsWithoutProfessionalIds } from "@/lib/domain/patientTeam";
 import { statusLabel } from "@/lib/domain/vri";
@@ -89,6 +93,10 @@ export function PatientsPage() {
   const clinicId = me?.clinicId ?? null;
   const { isClinicAdmin } = useIsClinicAdmin(clinicId);
   const canCreatePatients = isClinicAdmin;
+  // Importar = mesma regra do cadastro manual (admin da clínica). Exportar = admin ou papel Gestor; o servidor decide de novo.
+  const { access } = useFinAccess(clinicId);
+  const canImportPatients = isClinicAdmin;
+  const canExportBase = canExportPatientBase(access) || isClinicAdmin;
   const withoutProfessional = usePatientsWithoutActiveProfessional(clinicId, isClinicAdmin);
   const withoutProfessionalIds = useMemo(
     () => patientsWithoutProfessionalIds(withoutProfessional.data),
@@ -100,6 +108,8 @@ export function PatientsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | PatientStatus>("all");
   const [professionalFilter, setProfessionalFilter] = useState<string>("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // Aviso vindo da ficha (ex.: "Cadastro excluído."). Lido uma vez e retirado do histórico para
   // não reaparecer em reload/voltar.
@@ -220,6 +230,18 @@ export function PatientsPage() {
               <Download className="h-4 w-4" />
               Exportar em lote
             </Button>
+            {canExportBase ? (
+              <Button variant="outline" onClick={() => setExportOpen(true)}>
+                <Download className="h-4 w-4" />
+                Exportar base
+              </Button>
+            ) : null}
+            {canImportPatients ? (
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <FileUp className="h-4 w-4" />
+                Importar pacientes
+              </Button>
+            ) : null}
             {canCreatePatients ? (
               <Button onClick={() => setCreateOpen(true)}>
                 <UserPlus className="h-4 w-4" />
@@ -322,6 +344,13 @@ export function PatientsPage() {
           />
         </ProfileAvatarUrlScope>
       )}
+
+      {canImportPatients && importOpen ? (
+        <PatientImportDialog open={importOpen} onOpenChange={setImportOpen} clinicId={clinicId} onDone={(msg) => setNotice(msg)} />
+      ) : null}
+      {canExportBase && exportOpen ? (
+        <PatientExportDialog open={exportOpen} onOpenChange={setExportOpen} clinicId={clinicId} patientCount={(data ?? []).length} />
+      ) : null}
 
       {canCreatePatients ? (
         <PatientCreateDialog

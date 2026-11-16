@@ -2,6 +2,9 @@
 export const qk = {
   exerciseLibrary: ["exerciseLibrary"] as const,
   patients: ["patients"] as const,
+  patientExports: (clinicId: string | null) => ["patients", "exports", clinicId] as const,
+  patientImportKeys: (clinicId: string | null) => ["patients", "importKeys", clinicId] as const,
+  patientImportOrigin: (id: string) => ["patient", id, "importOrigin"] as const,
   patient: (id: string) => ["patient", id] as const,
   patientTimeline: (id: string) => ["patient", id, "timeline"] as const,
   patientRegistrationAccess: (id: string) => ["patient", id, "registrationAccess"] as const,

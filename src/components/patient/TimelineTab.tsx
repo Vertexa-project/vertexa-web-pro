@@ -1,12 +1,14 @@
 import { useMemo } from "react";
-import { Clock, ListChecks } from "lucide-react";
+import { Clock, FileUp, ListChecks } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
 import { Card, CardContent } from "@/components/ui/card";
+import { usePatientImportOrigin } from "@/hooks/usePatientImportExport";
 import { usePatientTimeline } from "@/hooks/usePatientTimeline";
 import { activityEventDescription, activityEventMeta } from "@/lib/domain/activityEvents";
 import { dateTimeBR } from "@/lib/domain/clinicalDocs";
 import { formatRelative } from "@/lib/domain/format";
+import { importOriginLabel } from "@/lib/domain/patientImport";
 import { groupTimeline } from "@/lib/domain/timelineGroups";
 import type { BadgeTone } from "@/lib/domain/vri";
 import { cn } from "@/lib/utils";
@@ -27,12 +29,14 @@ const timeBR = (iso: string) =>
 export function TimelineTab({ patientId }: { patientId: string }) {
   const { data, isLoading, isError, refetch } = usePatientTimeline(patientId);
   const items = useMemo(() => groupTimeline(data ?? []), [data]);
+  // Origem do cadastro (só quem veio de importação por planilha): é o evento mais antigo da Timeline.
+  const origin = usePatientImportOrigin(patientId).data ?? null;
 
   return (
     <AsyncSection
       isLoading={isLoading}
       isError={isError}
-      isEmpty={!data || data.length === 0}
+      isEmpty={(!data || data.length === 0) && !origin}
       onRetry={() => refetch()}
       emptyIcon={Clock}
       emptyTitle="Sem atividades ainda"
@@ -77,6 +81,20 @@ export function TimelineTab({ patientId }: { patientId: string }) {
                 </li>
               );
             })}
+            {origin ? (
+              <li className="flex gap-4">
+                <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", toneBg.muted)}>
+                  <FileUp className="h-5 w-5" aria-hidden />
+                </div>
+                <div className="min-w-0">
+                  <p className="break-words font-medium text-foreground">{importOriginLabel(origin.source_filename)}</p>
+                  <p className="text-sm text-muted-foreground">Cadastro criado por importação de planilha.</p>
+                  <time dateTime={origin.imported_at} className="mt-0.5 block text-xs text-muted-foreground">
+                    {dateTimeBR(origin.imported_at)}
+                  </time>
+                </div>
+              </li>
+            ) : null}
           </ol>
         </CardContent>
       </Card>

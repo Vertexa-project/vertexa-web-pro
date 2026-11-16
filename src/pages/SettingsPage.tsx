@@ -6,6 +6,7 @@ import { Bell, Building2, CalendarDays, CreditCard, Monitor, Moon, ShieldCheck, 
 import { OwnAvatarControl } from "@/components/avatar/OwnAvatarControl";
 import { GoogleCalendarConnection } from "@/components/calendar/GoogleCalendarConnection";
 import { ClinicBrandRow } from "@/components/settings/ClinicBrandRow";
+import { PatientExportsAudit } from "@/components/settings/PatientExportsAudit";
 import { ClinicJoinCodeRow } from "@/components/settings/ClinicJoinCodeRow";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -322,6 +323,7 @@ export function SettingsPage() {
         </SectionCard>
       </div>
 
+      {isClinicAdmin ? <PatientExportsAudit clinicId={professional?.clinicId ?? null} /> : null}
     </div>
   );
 }

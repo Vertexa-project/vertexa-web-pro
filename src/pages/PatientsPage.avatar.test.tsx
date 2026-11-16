@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/hooks/useCurrentProfessional", () => ({
   useCurrentProfessional: () => ({ data: { id: "pr-1", clinicId: "c1" }, isLoading: false }),
 }));
+vi.mock("@/hooks/useFin", () => ({ useFinAccess: () => ({ access: { isAdmin: false, roles: [], can: {} }, isLoading: false }) }));
 vi.mock("@/hooks/useIsClinicAdmin", () => ({
   useIsClinicAdmin: () => ({ isClinicAdmin: false, isLoading: false, isError: false }),
 }));
