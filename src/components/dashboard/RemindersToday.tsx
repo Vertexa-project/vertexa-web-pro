@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOpenReminders } from "@/hooks/usePatientReminders";
-import { isoDateBRText, proReminderLines } from "@/lib/domain/patientReminders";
+import { proReminderLines } from "@/lib/domain/patientReminders";
 import { todayIsoBR } from "@/lib/domain/stockMoves";
 
 const MAX_LINES = 8;
@@ -18,7 +18,6 @@ export function RemindersToday({ enabled }: { enabled: boolean }) {
   const { data, isLoading, isError } = useOpenReminders(enabled);
   const today = todayIsoBR();
   const lines = useMemo(() => proReminderLines(data ?? [], today), [data, today]);
-  const dueByRow = useMemo(() => new Map((data ?? []).map((r) => [r.id, r.due_on])), [data]);
 
   if (!enabled) return null;
   return (
@@ -48,11 +47,12 @@ export function RemindersToday({ enabled }: { enabled: boolean }) {
                     <span className="min-w-0">
                       <span className="block break-words text-sm font-medium text-foreground">{l.patientName}</span>
                       <span className="block break-words text-xs text-muted-foreground">
-                        {l.headline} · {isoDateBRText(dueByRow.get(l.id) ?? "")}
+                        {l.summary}
                       </span>
+                      <span className="block text-xs text-muted-foreground">{l.dueText}</span>
                     </span>
                   </span>
-                  <Badge tone={l.overdue ? "destructive" : l.days === 0 ? "warning" : "muted"}>{l.when}</Badge>
+                  {l.overdue || l.days === 0 ? <Badge tone={l.overdue ? "destructive" : "warning"}>{l.overdue ? "Atrasado" : "Hoje"}</Badge> : null}
                 </button>
               </li>
             ))}

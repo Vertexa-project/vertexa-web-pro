@@ -80,6 +80,10 @@ describe("lembrete: mudou a data, muda o lembrete (sem duplicar)", () => {
     expect(l.map((x) => [x.id, x.headline, x.when, x.overdue])).toEqual([
       ["b", "Exame: Hemograma", "há 2 dias", true], ["c", "Retorno", "hoje", false], ["a", "Retorno", "em 3 dias", false],
     ]);
+    // o prazo junto do título ("Exame: Hemograma · em 5 dias"); a data pt-BR separada, para a linha de baixo
+    expect(l.map((x) => [x.summary, x.dueText])).toEqual([
+      ["Exame: Hemograma · há 2 dias", "14/11/2026"], ["Retorno · hoje", "16/11/2026"], ["Retorno · em 3 dias", "19/11/2026"],
+    ]);
   });
 });
 

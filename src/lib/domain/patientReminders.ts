@@ -145,6 +145,10 @@ export interface ProReminderLine {
   patientName: string;
   headline: string;
   when: string;
+  /** "Exame: Hemograma · em 5 dias" — o prazo fica junto do título; a data vai na linha de baixo. */
+  summary: string;
+  /** "21/11/2026" */
+  dueText: string;
   days: number;
   overdue: boolean;
 }
@@ -155,7 +159,7 @@ export function proReminderLines(rows: Array<ReminderRow & { patientName: string
     .filter((r) => proSees(r, todayIso))
     .map((r) => {
       const days = daysUntil(r.due_on, todayIso);
-      return { id: r.id, patientId: r.patient_id, patientName: r.patientName, headline: reminderHeadline(r), when: whenText(days), days, overdue: days < 0 };
+      return { id: r.id, patientId: r.patient_id, patientName: r.patientName, headline: reminderHeadline(r), when: whenText(days), summary: `${reminderHeadline(r)} · ${whenText(days)}`, dueText: isoDateBRText(r.due_on), days, overdue: days < 0 };
     })
     .sort((a, b) => a.days - b.days || a.patientName.localeCompare(b.patientName, "pt-BR"));
 }

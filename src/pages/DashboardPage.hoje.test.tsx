@@ -129,9 +129,9 @@ describe("Hoje no formato do protótipo", () => {
     const rows = within(card).getAllByRole("button");
     expect(rows.map((r) => r.textContent)).toEqual([expect.stringContaining("Bia Teste"), expect.stringContaining("Ana Teste")]);
     expect(within(card).queryByText("Longe Demais")).toBeNull();
-    expect(rows[0].textContent).toContain("Exame: Hemograma");
-    expect(rows[0].textContent).toContain("há 2 dias");
-    expect(rows[1].textContent).toContain("em 3 dias");
+    // o prazo fica na mesma linha do título; a data, na linha de baixo
+    expect(within(rows[0]).getByText("Exame: Hemograma · há 2 dias")).toBeTruthy();
+    expect(within(rows[1]).getByText("Retorno · em 3 dias")).toBeTruthy();
     expect(rows[1].textContent).toMatch(/\d{2}\/\d{2}\/\d{4}/);
     fireEvent.click(rows[1]);
     expect(screen.getByTestId("where").textContent).toBe("/pacientes/p-ana");
