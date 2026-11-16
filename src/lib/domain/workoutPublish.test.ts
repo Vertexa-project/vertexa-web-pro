@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { derivePermissions } from "./disciplines";
-import { canPublishWorkout, listLetters, publicationOf, publishErrorMessage, summarizePublish, visibleToPatient } from "./workoutPublish";
+import { canPublishWorkout, dayLetter, listLetters, publicationOf, publishErrorMessage, summarizePublish, visibleToPatient } from "./workoutPublish";
 
 describe("treino: publicado × rascunho", () => {
   it("plano que já existia (sem a marca) conta como publicado; só is_draft esconde", () => {
@@ -23,11 +23,22 @@ describe("treino: publicado × rascunho", () => {
       ],
       anim,
     );
-    expect(s).toEqual({ days: 2, dayLetters: ["A", "2"], exercises: 3, withAnimation: 2, withInstruction: 1, canPublish: true });
+    expect(s).toEqual({ days: 2, dayLetters: ["A", "B"], exercises: 3, withAnimation: 2, withInstruction: 1, canPublish: true });
     expect(summarizePublish([{ letter: "A", name: "A", workout_exercises: [] }], anim).canPublish).toBe(false);
     expect(listLetters(["A", "B", "C"])).toBe("A, B e C");
     expect(listLetters(["A", "B"])).toBe("A e B");
     expect(listLetters(["A"])).toBe("A");
+  });
+  it("treino sem letra recebe A, B… pela ordem no plano — nunca número ('Todos (1 e 2)')", () => {
+    const ex = [{ name: "Supino" }];
+    const s = summarizePublish([{ letter: null, name: "Peito", workout_exercises: ex }, { letter: " ", name: "Costas", workout_exercises: ex }], () => false);
+    expect(s.dayLetters).toEqual(["A", "B"]);
+    expect(listLetters(s.dayLetters)).toBe("A e B");
+    // dia vazio no meio não muda a letra dos outros
+    const t = summarizePublish([{ letter: null, name: "x", workout_exercises: ex }, { letter: null, name: "vazio", workout_exercises: [] }, { letter: null, name: "z", workout_exercises: ex }], () => false);
+    expect(t.dayLetters).toEqual(["A", "C"]);
+    expect(dayLetter("  D ", 0)).toBe("D");
+    expect(dayLetter(null, 27)).toBe("B1");
   });
   it("permissão: só quem edita treino (educador físico ou fisioterapeuta) publica", () => {
     expect(canPublishWorkout(derivePermissions(["educador_fisico"]))).toBe(true);

@@ -45,12 +45,20 @@ export interface PublishSummary {
   canPublish: boolean;
 }
 
+/** Letra do dia: a cadastrada; sem ela, A, B, C… pela ordem do treino no plano (nunca número). */
+export function dayLetter(letter: string | null | undefined, index: number): string {
+  const l = letter?.trim();
+  if (l) return l;
+  const n = Math.max(0, Math.floor(index));
+  return n < 26 ? String.fromCharCode(65 + n) : `${String.fromCharCode(65 + (n % 26))}${Math.floor(n / 26)}`;
+}
+
 /** Resumo mostrado antes de publicar: dias liberados e quantos exercícios têm animação e instrução. */
 export function summarizePublish(workouts: SummarisedWorkout[], hasAnimation: (name: string, gifUrl?: string | null) => boolean): PublishSummary {
   const all = workouts.flatMap((w) => w.workout_exercises);
   return {
     days: workouts.filter((w) => w.workout_exercises.length > 0).length,
-    dayLetters: workouts.filter((w) => w.workout_exercises.length > 0).map((w, i) => (w.letter?.trim() || String(i + 1))),
+    dayLetters: workouts.flatMap((w, i) => (w.workout_exercises.length > 0 ? [dayLetter(w.letter, i)] : [])),
     exercises: all.length,
     withAnimation: all.filter((e) => hasAnimation(e.name, e.gif_url)).length,
     withInstruction: all.filter((e) => Boolean(e.notes?.trim())).length,
