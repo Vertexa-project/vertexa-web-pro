@@ -36,13 +36,13 @@ export function MobileNav() {
           <Brand markClassName="h-8 w-8" />
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-3">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3" aria-label="Navegação principal">
           {visibleMainNav.map((item) => (
             <NavRow
               key={item.path}
               item={item}
               onNavigate={close}
-              badgeCount={item.path === "/mensagens" ? mentions?.total : undefined}
+              badgeCount={item.path === "/relacionamento" ? mentions?.total : undefined}
             />
           ))}
         </nav>

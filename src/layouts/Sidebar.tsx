@@ -8,12 +8,12 @@ export function Sidebar() {
   const { data: mentions } = useUnreadMentions();
   const visibleMainNav = useVisibleMainNav();
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
-      <div className="flex h-16 items-center px-5">
+    <aside className="hidden w-[212px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+      <div className="flex h-14 items-center px-4">
         <ClinicIdentity />
       </div>
 
-      <nav className="flex-1 space-y-0.5 px-3 py-2" aria-label="Navegação principal">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-2" aria-label="Navegação principal">
         <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Menu
         </p>
@@ -21,12 +21,12 @@ export function Sidebar() {
           <NavRow
             key={item.path}
             item={item}
-            badgeCount={item.path === "/mensagens" ? mentions?.total : undefined}
+            badgeCount={item.path === "/relacionamento" ? mentions?.total : undefined}
           />
         ))}
       </nav>
 
-      <div className="space-y-0.5 border-t border-sidebar-border px-3 py-3">
+      <div className="space-y-0.5 border-t border-sidebar-border px-2.5 py-3">
         {footerNav.map((item) => (
           <NavRow key={item.path} item={item} />
         ))}

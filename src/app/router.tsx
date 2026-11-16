@@ -2,6 +2,8 @@ import { lazy, Suspense } from "react";
 import { createBrowserRouter } from "react-router-dom";
 
 import { AppShell } from "@/layouts/AppShell";
+import { GestaoLayout } from "@/layouts/GestaoLayout";
+import { RelacionamentoLayout } from "@/layouts/RelacionamentoLayout";
 import { PlatformShell } from "@/layouts/PlatformShell";
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { AccessResolver } from "./AccessResolver";
@@ -23,6 +25,7 @@ const ExerciseLibraryPage = lazy(() =>
   import("@/pages/ExerciseLibraryPage").then((m) => ({ default: m.ExerciseLibraryPage })),
 );
 const DashboardPage = lazy(() => import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const AgendaPage = lazy(() => import("@/pages/AgendaPage").then((m) => ({ default: m.AgendaPage })));
 const PatientsPage = lazy(() => import("@/pages/PatientsPage").then((m) => ({ default: m.PatientsPage })));
 const EncounterPage = lazy(() => import("@/pages/EncounterPage").then((m) => ({ default: m.EncounterPage })));
 const PatientProfilePage = lazy(() =>
@@ -260,57 +263,74 @@ export const router = createBrowserRouter(
             { path: "jornada", element: <JourneyBoardPage /> },
             { path: "planos", element: <PlansPage /> },
             { path: "biblioteca", element: <ExerciseLibraryPage /> },
-            { path: "mensagens", element: <MessagesPage /> },
-            { path: "campanhas", element: <CampaignsPage /> },
-            { path: "gestao", element: <ManagementPage /> },
+            { path: "agenda", element: <AgendaPage /> },
             {
-              // Financeiro com abas: Mensalidades (a tela de sempre) e Cadastros (Entrega 1 do módulo Financeiro/Estoque).
-              path: "financeiro",
-              element: <FinanceLayout />,
+              // Relacionamento (redesign P2): sub-abas Mensagens e Campanhas. /mensagens e /campanhas (e
+              // /mensagens?patient=ID) seguem montadas com a mesma moldura — deep link não quebra.
+              element: <RelacionamentoLayout />,
               children: [
-                { index: true, element: <FinanceMensalidades /> },
-                { path: "painel", element: <DashboardTab /> },
-                { path: "vendas", element: <SalesTab /> },
-                { path: "atendimentos", element: <AppointmentsTab /> },
-                { path: "pacotes", element: <PatientPackagesTab /> },
-                {
-                  path: "repasse",
-                  element: <PayoutLayout />,
-                  children: [
-                    { index: true, element: <PayoutLinesTab /> },
-                    { path: "fechamento", element: <ClosingTab /> },
-                    { path: "meu-extrato", element: <MyStatementTab /> },
-                    { path: "regras", element: <PayoutRulesTab /> },
-                    { path: "simulador", element: <PayoutSimulatorTab /> },
-                  ],
-                },
-                { path: "titulos", element: <TitlesTab /> },
-                { path: "caixa", element: <CashTab /> },
-                {
-                  path: "cadastros",
-                  element: <CadastrosLayout />,
-                  children: [
-                    { path: "servicos", element: <ServicesTab /> },
-                    { path: "pacotes", element: <PackagesTab /> },
-                    { path: "profissionais", element: <ProfessionalsFinanceTab /> },
-                    { path: "meios-de-pagamento", element: <PaymentMethodsTab /> },
-                    { path: "impostos", element: <TaxSettingsTab /> },
-                    { path: "historico", element: <AuditTab /> },
-                  ],
-                },
+                { path: "relacionamento", element: <MessagesPage /> },
+                { path: "relacionamento/mensagens", element: <MessagesPage /> },
+                { path: "relacionamento/campanhas", element: <CampaignsPage /> },
+                { path: "mensagens", element: <MessagesPage /> },
+                { path: "campanhas", element: <CampaignsPage /> },
               ],
             },
-            { path: "documentos", element: <DocumentsPage /> },
-            { path: "estoque", element: <StockPage /> },
-            { path: "estoque/saldo", element: <StockBalanceTab /> },
-            { path: "estoque/entradas", element: <StockEntriesTab /> },
-            { path: "estoque/saidas", element: <StockExitsTab /> },
-            { path: "estoque/movimentacoes", element: <StockMovementsTab /> },
-            { path: "estoque/sem-saldo", element: <StockShortfallsTab /> },
-            { path: "estoque/inventario", element: <StockInventoryTab /> },
-            { path: "estoque/transferencias", element: <StockTransfersTab /> },
-            { path: "estoque/alertas", element: <StockAlertsTab /> },
-            { path: "estoque/relatorios", element: <StockReportsTab /> },
+            {
+              // Gestão (redesign P2): sub-abas Visão geral, Financeiro, Estoque, Documentos sobre as rotas de sempre.
+              element: <GestaoLayout />,
+              children: [
+                { path: "gestao", element: <ManagementPage /> },
+                {
+                  // Financeiro com abas: Mensalidades (a tela de sempre) e Cadastros (Entrega 1 do módulo Financeiro/Estoque).
+                  path: "financeiro",
+                  element: <FinanceLayout />,
+                  children: [
+                    { index: true, element: <FinanceMensalidades /> },
+                    { path: "painel", element: <DashboardTab /> },
+                    { path: "vendas", element: <SalesTab /> },
+                    { path: "atendimentos", element: <AppointmentsTab /> },
+                    { path: "pacotes", element: <PatientPackagesTab /> },
+                    {
+                      path: "repasse",
+                      element: <PayoutLayout />,
+                      children: [
+                        { index: true, element: <PayoutLinesTab /> },
+                        { path: "fechamento", element: <ClosingTab /> },
+                        { path: "meu-extrato", element: <MyStatementTab /> },
+                        { path: "regras", element: <PayoutRulesTab /> },
+                        { path: "simulador", element: <PayoutSimulatorTab /> },
+                      ],
+                    },
+                    { path: "titulos", element: <TitlesTab /> },
+                    { path: "caixa", element: <CashTab /> },
+                    {
+                      path: "cadastros",
+                      element: <CadastrosLayout />,
+                      children: [
+                        { path: "servicos", element: <ServicesTab /> },
+                        { path: "pacotes", element: <PackagesTab /> },
+                        { path: "profissionais", element: <ProfessionalsFinanceTab /> },
+                        { path: "meios-de-pagamento", element: <PaymentMethodsTab /> },
+                        { path: "impostos", element: <TaxSettingsTab /> },
+                        { path: "historico", element: <AuditTab /> },
+                      ],
+                    },
+                  ],
+                },
+                { path: "documentos", element: <DocumentsPage /> },
+                { path: "estoque", element: <StockPage /> },
+                { path: "estoque/saldo", element: <StockBalanceTab /> },
+                { path: "estoque/entradas", element: <StockEntriesTab /> },
+                { path: "estoque/saidas", element: <StockExitsTab /> },
+                { path: "estoque/movimentacoes", element: <StockMovementsTab /> },
+                { path: "estoque/sem-saldo", element: <StockShortfallsTab /> },
+                { path: "estoque/inventario", element: <StockInventoryTab /> },
+                { path: "estoque/transferencias", element: <StockTransfersTab /> },
+                { path: "estoque/alertas", element: <StockAlertsTab /> },
+                { path: "estoque/relatorios", element: <StockReportsTab /> },
+              ],
+            },
             { path: "retencao", element: <RetentionPage /> },
             { path: "configuracoes", element: <SettingsPage /> },
             { path: "configuracoes/faturamento", element: <BillingProfilePage /> },

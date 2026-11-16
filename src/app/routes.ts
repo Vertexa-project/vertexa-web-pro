@@ -1,17 +1,16 @@
 import {
-  Dumbbell,
-  FileText,
-  KanbanSquare,
-  LayoutDashboard,
-  Megaphone,
-  Package,
-  MessageSquare,
   BarChart3,
-  Wallet,
+  CalendarDays,
+  Dumbbell,
+  Home,
+  KanbanSquare,
+  MessageSquare,
   Settings,
   Users,
   type LucideIcon,
 } from "lucide-react";
+
+import { pathMatches } from "@/lib/domain/gestaoNav";
 
 export interface NavItem {
   path: string;
@@ -19,35 +18,41 @@ export interface NavItem {
   icon: LucideIcon;
   /** Item de roadmap: aparece com cadeado, desabilitado (não navega). */
   locked?: boolean;
-  /** Só administrador da clínica vê o item (o servidor também nega aos demais). */
-  adminOnly?: boolean;
+  /** Outros caminhos que mantêm o item ativo (rotas antigas continuam montadas: deep link não quebra). */
+  alsoActiveOn?: string[];
   /**
-   * Financeiro/Estoque (Entrega 1): além do admin, também aparece para quem tem papel adicional que alcança a área
-   * (matriz de papéis, escopo-v1 §3). Só decide o que MOSTRAR — o servidor recusa o resto.
+   * Item «Gestão»: agrupa Visão geral, Financeiro, Estoque e Documentos. Aparece para quem tem ao menos uma sub-aba
+   * (mesma regra de papéis de antes: admin da clínica ou papel que alcança a área) e navega para a primeira delas.
    */
-  finMenu?: "finance" | "stock" | "docs";
+  gestao?: boolean;
 }
 
-// Fonte única do sidebar (núcleo enxuto: tudo gira em torno do paciente).
-// Removidos da lateral (Review S4):
-//  - "Retenção": coortes agora vivem DENTRO do Dashboard (RetentionPanel reutilizável).
-//  - "Planos": não é módulo solto — os editores de treino/alimentar vivem na ficha do
-//    paciente (WorkoutTab/NutritionTab). As rotas /retencao e /planos seguem montadas em
-//    router.tsx (deep-link não quebra), apenas saem do menu.
+// Fonte única do menu (redesign P2 — ordem do guia, seção "Mapa do app"). Vertexa IA entra na parte 3.
+// As rotas /retencao, /planos, /mensagens, /campanhas, /financeiro/*, /estoque/*, /documentos seguem
+// montadas em router.tsx — só saíram do menu (deep link não quebra).
 export const mainNav: NavItem[] = [
-  { path: "/", label: "Dashboard", icon: LayoutDashboard },
+  { path: "/", label: "Hoje", icon: Home },
   { path: "/pacientes", label: "Pacientes", icon: Users },
+  { path: "/agenda", label: "Agenda", icon: CalendarDays },
   { path: "/jornada", label: "Jornada", icon: KanbanSquare },
+  { path: "/relacionamento", label: "Relacionamento", icon: MessageSquare, alsoActiveOn: ["/mensagens", "/campanhas"] },
+  {
+    path: "/gestao",
+    label: "Gestão",
+    icon: BarChart3,
+    gestao: true,
+    alsoActiveOn: ["/financeiro", "/estoque", "/documentos"],
+  },
   { path: "/biblioteca", label: "Biblioteca", icon: Dumbbell },
-  { path: "/mensagens", label: "Mensagens", icon: MessageSquare },
-  { path: "/campanhas", label: "Campanhas", icon: Megaphone },
-  { path: "/gestao", label: "Gestão", icon: BarChart3, adminOnly: true },
-  { path: "/financeiro", label: "Financeiro", icon: Wallet, adminOnly: true, finMenu: "finance" },
-  { path: "/estoque", label: "Estoque", icon: Package, adminOnly: true, finMenu: "stock" },
-  { path: "/documentos", label: "Documentos", icon: FileText, adminOnly: true, finMenu: "docs" },
   // "Modelos" (roadmap) fica FORA do menu até ficar pronto (redesign P1 · item 8).
 ];
 
 export const footerNav: NavItem[] = [
   { path: "/configuracoes", label: "Configurações", icon: Settings },
 ];
+
+/** O item está ativo para este caminho? (rota própria, sub-rotas ou rotas antigas agrupadas) */
+export function isNavActive(item: NavItem, pathname: string): boolean {
+  if (item.path === "/") return pathname === "/";
+  return [item.path, ...(item.alsoActiveOn ?? [])].some((p) => pathMatches(pathname, p));
+}
