@@ -9,6 +9,7 @@ import { EvolutionReportDoc, type EvolutionReportData } from "./EvolutionReport"
 import { registerReportFonts } from "./fonts";
 import { urlToDataUri } from "./images";
 import { loadReportBrand } from "./reportBrand";
+import { summarizeWeight } from "@/lib/domain/bodyMetrics";
 import { formatDate } from "@/lib/domain/format";
 import { buildPairs, POSE_LABEL } from "@/lib/domain/photoPose";
 import type { AdherenceSnapshot, BodyAssessment, PatientDetail, ProfessionalType, ProgressPhoto, WeightPoint } from "@/types/db";
@@ -57,6 +58,8 @@ export async function buildEvolutionReportData(input: EvolutionReportInput): Pro
     return t >= from.getTime() && t <= now.getTime() + 24 * 60 * 60 * 1000;
   };
 
+  // Fonte única do peso: série COMPLETA (não só o período) — igual às telas.
+  const weightSummary = summarizeWeight(input.weightSeries, input.patient);
   const weightPoints = input.weightSeries.filter((p) => inPeriod(p.date));
   const assessments = input.assessments.filter((a) => inPeriod(a.assessed_at)); // já vem asc
 
@@ -98,8 +101,8 @@ export async function buildEvolutionReportData(input: EvolutionReportInput): Pro
     brand: await loadReportBrand(),
     periodLabel,
     emittedAt: formatDate(now),
-    startWeight: input.patient.start_weight,
-    currentWeight: input.patient.current_weight,
+    startWeight: weightSummary.start,
+    currentWeight: weightSummary.current,
     targetWeight: input.patient.target_weight,
     adherence: input.adherence
       ? {

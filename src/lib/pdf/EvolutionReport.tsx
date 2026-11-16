@@ -26,7 +26,8 @@ import {
 } from "./primitives";
 import { WeightChartPdf } from "./WeightChartPdf";
 import { BRAND, STATUS, NEUTRAL, SP } from "./theme";
-import { formatWeight, professionalTypeLabel } from "@/lib/domain/format";
+import { computeBmi, normalizeHeightCm } from "@/lib/domain/bodyMetrics";
+import { formatBmi, formatWeight, professionalTypeLabel } from "@/lib/domain/format";
 import type { BodyAssessment, ProfessionalType, WeightPoint } from "@/types/db";
 import type { ReportBrand } from "./primitives";
 
@@ -53,11 +54,7 @@ export interface EvolutionReportData {
 }
 
 const num = (v: number, digits = 1) => v.toLocaleString("pt-BR", { maximumFractionDigits: digits });
-const imcOf = (weight: number | null | undefined, heightCm: number | null | undefined): number | null => {
-  if (weight == null || !heightCm) return null;
-  const h = heightCm / 100;
-  return weight / (h * h);
-};
+const imcOf = computeBmi; // altura normalizada (metros/cm) — fonte única em bodyMetrics
 
 /** Lê uma medida numérica do jsonb measurements (aceita number ou string numérica). */
 function measNum(meas: Record<string, unknown> | null | undefined, key: string): number | null {
@@ -154,8 +151,8 @@ function anthropometryRows(data: EvolutionReportData) {
     const imc1 = imcOf(w1, data.heightCm);
     rows.push({
       param: "IMC",
-      inicio: imc0 != null ? num(imc0) : "—",
-      atual: imc1 != null ? num(imc1) : "—",
+      inicio: imc0 != null ? formatBmi(imc0) : "—",
+      atual: imc1 != null ? formatBmi(imc1) : "—",
       variacao: hasTwoW && imc0 != null && imc1 != null ? <DeltaBadge value={imc1 - imc0} goodDirection="down" /> : dash,
     });
   }
@@ -190,7 +187,7 @@ export function EvolutionReportDoc({ data }: { data: EvolutionReportData }) {
     { label: "Profissional", value: professionalLabel },
     { label: "Clínica", value: data.clinicName },
     { label: "Período", value: data.periodLabel },
-    { label: "Altura", value: data.heightCm ? `${num(data.heightCm, 0)} cm` : "—" },
+    { label: "Altura", value: normalizeHeightCm(data.heightCm) != null ? `${num(normalizeHeightCm(data.heightCm) as number, 0)} cm` : "—" },
   ];
 
   const rows = anthropometryRows(data);

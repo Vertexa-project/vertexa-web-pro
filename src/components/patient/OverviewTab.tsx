@@ -7,6 +7,7 @@ import { WeeklyNoteCard } from "./WeeklyNoteCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLatestWeight } from "@/hooks/useBodyAssessments";
 import { useNutritionPlan, useWorkoutPlan } from "@/hooks/usePlans";
 import { formatPercent, formatWeight } from "@/lib/domain/format";
 import type { AdherenceSnapshot, PatientDetail } from "@/types/db";
@@ -29,6 +30,7 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 }
 
 export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) {
+  const latestWeight = useLatestWeight(patient);
   const workout = useWorkoutPlan(patient.id);
   const nutrition = useNutritionPlan(patient.id);
 
@@ -51,7 +53,7 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
         <SummaryCard label="Objetivo" value={patient.goal ?? "—"} />
         <SummaryCard
           label="Peso"
-          value={`${formatWeight(patient.current_weight)} → ${formatWeight(patient.target_weight)}`}
+          value={`${formatWeight(latestWeight.current)} → ${formatWeight(patient.target_weight)}`}
         />
         <SummaryCard label="Sequência" value={snapshot?.streak != null ? `${snapshot.streak} dias` : "—"} />
         <SummaryCard label="Adesão semanal" value={formatPercent(snapshot?.weekly_completion_rate)} />

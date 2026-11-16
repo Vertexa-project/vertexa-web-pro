@@ -21,13 +21,13 @@ export function formatRelative(value: string | Date): string {
 /** Ex.: "68,4 kg". */
 export function formatWeight(kg: number | null | undefined): string {
   if (kg == null) return "—";
-  return `${kg.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`;
+  return `${formatNumber(kg, 1)} kg`;
 }
 
 /** Ex.: "2,5 L". */
 export function formatLiters(value: number | null | undefined): string {
   if (value == null) return "—";
-  return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L`;
+  return `${formatNumber(value, 2)} L`;
 }
 
 /** Ex.: "80%". */
@@ -82,4 +82,23 @@ export function professionalTypeLabel(type: ProfessionalType): string {
     other: "Profissional",
   };
   return labels[type];
+}
+
+/** Número em pt-BR (vírgula decimal). `digits` = máximo de casas; `fixed` força as casas. Ex.: 0,25 · 24,7. */
+export function formatNumber(value: number | null | undefined, digits = 1, fixed = false): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: fixed ? digits : 0, maximumFractionDigits: digits }).format(value);
+}
+
+/** IMC com 1 casa e vírgula. Ex.: "27,3". */
+export function formatBmi(value: number | null | undefined): string {
+  return formatNumber(value, 1, true);
+}
+
+/** Variação de peso com sinal. Ex.: "+2,5 kg" / "−3 kg" / "0 kg". */
+export function formatWeightDelta(delta: number | null | undefined): string {
+  if (delta == null || !Number.isFinite(delta)) return "—";
+  const r = Math.round(delta * 10) / 10;
+  const sign = r > 0 ? "+" : r < 0 ? "−" : "";
+  return `${sign}${formatNumber(Math.abs(r), 1)} kg`;
 }

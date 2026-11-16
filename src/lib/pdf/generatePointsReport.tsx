@@ -10,6 +10,7 @@ import { pdf } from "@react-pdf/renderer";
 
 import { PointsReportDoc, type PointsReportData } from "./PointsReport";
 import { registerReportFonts } from "./fonts";
+import { summarizeWeight } from "@/lib/domain/bodyMetrics";
 import { formatDate } from "@/lib/domain/format";
 import type { AdherenceSnapshot, PatientDetail, ProfessionalType, WeightPoint } from "@/types/db";
 
@@ -73,6 +74,7 @@ export function buildPointsReportData(input: PointsReportInput): PointsReportDat
     return t >= from.getTime() && t <= now.getTime() + 24 * 60 * 60 * 1000;
   };
 
+  const weightSummary = summarizeWeight(input.weightSeries, input.patient);
   const weightPoints = input.weightSeries.filter((p) => inPeriod(p.date));
   const a = input.adherence;
   const periodLabel = from ? `${fmtShort(from)} – ${fmtShort(now)}` : "Todo o período";
@@ -96,8 +98,8 @@ export function buildPointsReportData(input: PointsReportInput): PointsReportDat
       : null,
     positiveFactors: a?.positive_factors ?? [],
     riskFactors: a?.risk_factors ?? [],
-    startWeight: input.patient.start_weight,
-    currentWeight: input.patient.current_weight,
+    startWeight: weightSummary.start,
+    currentWeight: weightSummary.current,
     targetWeight: input.patient.target_weight,
     weightPoints,
     motivationalMessage: motivationalMessage(a?.level),

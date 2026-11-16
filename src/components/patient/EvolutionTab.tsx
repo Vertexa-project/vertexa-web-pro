@@ -1,7 +1,8 @@
 import { ExportEvolutionButton } from "./ExportEvolutionButton";
 import { PhotosSection } from "./PhotosSection";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatWeight } from "@/lib/domain/format";
+import { useLatestWeight } from "@/hooks/useBodyAssessments";
+import { formatWeight, formatWeightDelta } from "@/lib/domain/format";
 import type { PatientDetail } from "@/types/db";
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
@@ -21,14 +22,9 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
  * (data retroativa) e classificar a posição. Bucket privado + signed URL.
  */
 export function EvolutionTab({ patient }: { patient: PatientDetail }) {
-  const start = patient.start_weight ?? null;
-  const current = patient.current_weight ?? null;
+  const { start, current, delta } = useLatestWeight(patient);
   const target = patient.target_weight ?? null;
-  const delta = start != null && current != null ? current - start : null;
-  const deltaLabel =
-    delta == null
-      ? "—"
-      : `${delta > 0 ? "+" : ""}${delta.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`;
+  const deltaLabel = formatWeightDelta(delta);
 
   return (
     <div className="space-y-6">

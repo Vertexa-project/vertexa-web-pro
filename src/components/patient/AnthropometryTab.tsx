@@ -14,9 +14,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useBodyAssessments, useWeightSeries } from "@/hooks/useBodyAssessments";
+import { useBodyAssessments, useLatestWeight, useWeightSeries } from "@/hooks/useBodyAssessments";
 import { useHydrationToday } from "@/hooks/useHydration";
-import { formatLiters, formatWeight } from "@/lib/domain/format";
+import { computeBmi } from "@/lib/domain/bodyMetrics";
+import { formatBmi, formatLiters, formatNumber, formatWeight } from "@/lib/domain/format";
 import type { PatientDetail } from "@/types/db";
 
 const METHOD_LABELS: Record<string, string> = {
@@ -71,13 +72,11 @@ export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
     [points, method],
   );
 
-  const latestPoint = points.length > 0 ? points[points.length - 1] : null;
   const latestAssessment =
     assessmentList.length > 0 ? assessmentList[assessmentList.length - 1] : null;
-  // "Peso atual" = última medição (qualquer origem); cai para o peso oficial do cadastro.
-  const currentWeight = latestPoint?.weight ?? patient.current_weight ?? null;
-  const heightM = patient.height_cm ? patient.height_cm / 100 : null;
-  const imc = currentWeight && heightM ? currentWeight / (heightM * heightM) : null;
+  // "Peso atual" = fonte única (última medida válida; fallback cadastro). IMC com altura normalizada.
+  const { current: currentWeight } = useLatestWeight(patient);
+  const imc = computeBmi(currentWeight, patient.height_cm);
   const bodyFat = latestAssessment?.body_fat_pct ?? null;
 
   return (
@@ -97,8 +96,8 @@ export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <MetricCard label="Peso atual" value={formatWeight(currentWeight)} />
           <MetricCard label="Meta" value={formatWeight(patient.target_weight)} />
-          <MetricCard label="IMC" value={imc ? imc.toFixed(1) : "—"} />
-          <MetricCard label="% Gordura" value={bodyFat != null ? `${bodyFat}%` : "—"} />
+          <MetricCard label="IMC" value={imc != null ? formatBmi(imc) : "—"} />
+          <MetricCard label="% Gordura" value={bodyFat != null ? `${formatNumber(Number(bodyFat), 1)}%` : "—"} />
         </div>
 
         <Card>

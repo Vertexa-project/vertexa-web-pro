@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -14,6 +15,7 @@ import {
 } from "@/lib/api/assessments";
 import type { PhotoPose } from "@/lib/domain/photoPose";
 import { getPendingWeights, getWeightSeries, reviewWeightLog } from "@/lib/api/weight";
+import { summarizeWeight } from "@/lib/domain/bodyMetrics";
 import { qk } from "@/lib/queryKeys";
 
 export const useBodyAssessments = (patientId: string) =>
@@ -38,6 +40,20 @@ export const useWeightSeries = (patientId: string) =>
     queryFn: () => getWeightSeries(patientId),
     enabled: Boolean(patientId),
   });
+
+/**
+ * FONTE ÚNICA do peso do paciente (Antropometria, Evolução, Visão geral): última medida válida
+ * da série; fallback no cadastro. Ver `summarizeWeight`.
+ */
+export function useLatestWeight(patient: { id: string; start_weight?: number | null; current_weight?: number | null }) {
+  const series = useWeightSeries(patient.id);
+  const summary = useMemo(
+    () => summarizeWeight(series.data, patient),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [series.data, patient.start_weight, patient.current_weight],
+  );
+  return { ...summary, isLoading: series.isLoading, isError: series.isError };
+}
 
 export const useProgressPhotos = (patientId: string) =>
   useQuery({
