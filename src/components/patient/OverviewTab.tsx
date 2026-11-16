@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, Dumbbell, Target, Utensils } from "lucide-
 
 import { ExportPointsButton } from "./ExportPointsButton";
 import { PatientTeamSection } from "./PatientTeamSection";
+import { RemindersCard } from "./RemindersCard";
 import { RiskSignalsPanel } from "./RiskSignalsPanel";
 import { WeeklyNoteCard } from "./WeeklyNoteCard";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import { useLatestWeight } from "@/hooks/useBodyAssessments";
 import { useNutritionPlan, useWorkoutPlan } from "@/hooks/usePlans";
 import { formatPercent, formatWeight } from "@/lib/domain/format";
 import { streakLabel } from "@/lib/domain/plural";
+import { publicationOf } from "@/lib/domain/workoutPublish";
 import type { AdherenceSnapshot, PatientDetail } from "@/types/db";
 
 interface OverviewTabProps {
@@ -60,6 +62,8 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
         <SummaryCard label="Adesão semanal" value={formatPercent(snapshot?.weekly_completion_rate)} />
       </div>
 
+      <RemindersCard patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
+
       <WeeklyNoteCard patientId={patient.id} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -95,8 +99,8 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
               <div className="flex items-center gap-2">
                 <Dumbbell className="h-4 w-4 text-muted-foreground" aria-hidden />
                 <span className="text-sm font-medium text-foreground">Treino</span>
-                <Badge tone={workout.data ? "success" : "muted"}>
-                  {workout.isLoading ? "…" : workout.data ? "Ativo" : "Pendente"}
+                <Badge tone={workout.data ? (publicationOf(workout.data) === "rascunho" ? "warning" : "success") : "muted"}>
+                  {workout.isLoading ? "…" : workout.data ? (publicationOf(workout.data) === "rascunho" ? "Rascunho" : "Ativo") : "Pendente"}
                 </Badge>
               </div>
               <Button

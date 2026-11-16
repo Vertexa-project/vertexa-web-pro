@@ -4,6 +4,7 @@ import { Activity, AlertTriangle, ArrowRight, ClipboardList, Gauge, Sparkles, Tr
 
 import { AdherenceChart } from "@/components/dashboard/AdherenceChart";
 import { AttentionRow } from "@/components/dashboard/AttentionRow";
+import { RemindersToday } from "@/components/dashboard/RemindersToday";
 import { TodayAgenda } from "@/components/dashboard/TodayAgenda";
 import { ScreenSuggestions } from "@/components/vertexa-ai/ScreenSuggestions";
 import { VertexaAiContext } from "@/components/vertexa-ai/vertexa-ai-context";
@@ -155,6 +156,8 @@ export function DashboardPage() {
               onCount={setAgendaCount}
             />
           </div>
+
+          <RemindersToday enabled={clinical} />
 
           {ai ? (
             <Card>
