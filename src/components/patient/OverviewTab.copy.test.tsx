@@ -5,6 +5,7 @@ vi.mock("./ExportPointsButton", () => ({ ExportPointsButton: () => null }));
 vi.mock("./PatientTeamSection", () => ({ PatientTeamSection: ({ patientSex }: { patientSex?: string | null }) => <h3>{patientSex === "masculino" ? "TEAM-MASC" : "TEAM-OTHER"}</h3> }));
 vi.mock("./RiskSignalsPanel", () => ({ RiskSignalsPanel: () => null }));
 vi.mock("./WeeklyNoteCard", () => ({ WeeklyNoteCard: () => null }));
+vi.mock("./RemindersCard", () => ({ RemindersCard: ({ patientName }: { patientName: string }) => <h3>LEMBRETES de {patientName}</h3> })); // tem teste próprio
 vi.mock("@/hooks/usePlans", () => ({ useWorkoutPlan: () => ({ data: null, isLoading: false }), useNutritionPlan: () => ({ data: null, isLoading: false }) }));
 vi.mock("@/hooks/useBodyAssessments", () => ({ useLatestWeight: () => ({ current: 117 }) }));
 
@@ -19,6 +20,10 @@ describe("OverviewTab: textos", () => {
     expect(screen.getByText("Sem sequência")).toBeInTheDocument();
     expect(screen.queryByText("0 dias")).toBeNull();
     expect(screen.getByText("117 kg → 100 kg")).toBeInTheDocument();
+  });
+  it("traz o cartão Exames e retornos com o nome do paciente", () => {
+    render(<OverviewTab patient={{ ...(base as object), profile: { full_name: "Mariana Teste" } } as never} snapshot={snap(1)} onGoToTab={() => {}} />);
+    expect(screen.getByText("LEMBRETES de Mariana Teste")).toBeInTheDocument();
   });
   it("1 dia no singular", () => {
     render(<OverviewTab patient={base} snapshot={snap(1)} onGoToTab={() => {}} />);
