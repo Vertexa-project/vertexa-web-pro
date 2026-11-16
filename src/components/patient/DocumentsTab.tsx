@@ -242,8 +242,8 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
           <div className="space-y-3">
             {(exams.data ?? []).map((doc) => (
               <Card key={doc.id}>
-                <CardHeader className="flex-row flex-wrap items-center justify-between space-y-0 gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
+                <CardHeader className="flex-row flex-wrap items-center justify-between space-y-0 gap-3" data-testid="doc-row">
+                  <div className="flex min-w-0 max-w-full items-center gap-3">
                     <span
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
                       aria-hidden
@@ -259,7 +259,7 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
                           {documentKindLabel(doc.kind)}
                         </Badge>
                       </div>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="break-words text-xs text-muted-foreground">
                         {uploaderLabel(doc)} · {formatDate(doc.uploaded_at)} ·{" "}
                         {formatFileSize(doc.file_size_bytes)}
                       </p>
@@ -271,7 +271,7 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
                       ) : null}
                     </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2" data-testid="doc-actions">
                   <Select
                     value={isDocumentKind(doc.kind) ? doc.kind : "other"}
                     onValueChange={(v) =>

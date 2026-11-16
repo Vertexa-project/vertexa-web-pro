@@ -35,4 +35,13 @@ describe("DocumentsTab: tipo do documento", () => {
     wrap();
     expect(await screen.findByRole("combobox", { name: /Tipo do documento Relatório de progresso/ })).toBeInTheDocument();
   });
+  it("celular (390 px): a coluna de botões do documento quebra linha e encolhe — não empurra 'Retirar do app' para fora da tela", async () => {
+    wrap();
+    await screen.findByRole("combobox", { name: /Tipo do documento Relatório de progresso/ });
+    const actions = screen.getAllByTestId("doc-actions")[0];
+    expect(actions.className).toContain("flex-wrap");
+    expect(actions.className).toContain("min-w-0");
+    expect(actions.className).not.toContain("shrink-0"); // shrink-0 + flex-wrap fazia a coluna passar da borda (right=413 em 390 px)
+    expect(screen.getAllByTestId("doc-row")[0].className).toContain("flex-wrap");
+  });
 });
