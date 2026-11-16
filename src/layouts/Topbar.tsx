@@ -39,7 +39,7 @@ export function Topbar() {
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border/70 bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-6">
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-4 md:px-[22px]">
       <MobileNav />
 
       {/* Marca só no mobile (no desktop ela vive na sidebar). */}

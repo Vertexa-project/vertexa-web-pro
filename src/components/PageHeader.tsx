@@ -15,9 +15,9 @@ export function PageHeader({ title, description, actions, className }: PageHeade
     <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between", className)}>
       <div className="flex items-start gap-3">
         {/* Spine laranja — assinatura estrutural (ecoa a barra do item de menu ativo). */}
-        <span className="mt-1 h-8 w-1 shrink-0 rounded-full bg-primary" aria-hidden />
+        <span className="mt-1 h-8 w-1 shrink-0 rounded-full bg-brand" aria-hidden />
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+          <h1 className="font-display text-2xl font-medium tracking-[-0.015em] text-foreground">{title}</h1>
           {description ? (
             <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           ) : null}

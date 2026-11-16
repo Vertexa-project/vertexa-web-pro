@@ -20,7 +20,11 @@ const config: Config = {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          // Texto laranja sobre tinta laranja suave (AA nos dois temas).
+          ink: "hsl(var(--primary-ink))",
         },
+        // Laranja de marca #FE4927: só acento não-textual (barra do menu, progresso).
+        brand: "hsl(var(--brand))",
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",
@@ -66,15 +70,16 @@ const config: Config = {
         },
       },
       borderRadius: {
+        // --radius 12px: lg=12 (campos/menus), md=10 (botão/campo do protótipo), sm=8 (chip).
+        xl: "calc(var(--radius) + 4px)", // 16px = cartão do protótipo
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        // Corpo/UI = Inter (neutra, legível). Display = Plus Jakarta Sans (títulos,
-        // números de métrica, wordmark) → personalidade tipográfica própria da marca.
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ['"Plus Jakarta Sans"', "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        // Redesign P2: Google Sans Flex (protótipo) em corpo e títulos; fallback Google Sans e fontes do sistema.
+        sans: ['"Google Sans Flex"', '"Google Sans"', "system-ui", "-apple-system", '"Segoe UI"', "Roboto", "sans-serif"],
+        display: ['"Google Sans Flex"', '"Google Sans"', "system-ui", "-apple-system", '"Segoe UI"', "Roboto", "sans-serif"],
       },
       boxShadow: {
         // NÃO sobrescrever 'sm' — shadcn/ui (TabsTrigger ativo, etc.) usa shadow-sm e o

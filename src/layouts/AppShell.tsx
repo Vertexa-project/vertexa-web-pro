@@ -14,7 +14,7 @@ export function AppShell() {
         <Topbar />
         <CommercialObserveBanner />
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-8">
+          <div className="mx-auto w-full max-w-7xl px-4 py-5 md:px-[22px] md:py-[22px]">
             <Suspense fallback={<LoadingState />}>
               <Outlet />
             </Suspense>
