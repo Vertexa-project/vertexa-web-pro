@@ -8,6 +8,7 @@
 import type { ReactNode } from "react";
 import { Document, Page, View, Text, Image, Svg, Path, StyleSheet } from "@react-pdf/renderer";
 
+import { vriLevelShortLabel } from "@/lib/domain/vri";
 import { BRAND, NEUTRAL, STATUS, FONT, PAGE, SP, RADIUS, vriColor } from "./theme";
 
 // ============================================================ STYLES
@@ -385,7 +386,7 @@ export function Chip({ label, color, tint, dotColor }: { label: string; color: s
 /** Badge de adesão (VRI) com cor por nível — reutiliza o vocabulário clínico. */
 export function VriBadge({ level }: { level: string | null | undefined }) {
   const c = vriColor(level);
-  const label = level ? level.charAt(0).toUpperCase() + level.slice(1) : "—";
+  const label = vriLevelShortLabel(level);
   return <Chip label={label} color={c.text} tint={c.tint} />;
 }
 

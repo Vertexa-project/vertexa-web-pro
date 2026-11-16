@@ -4,6 +4,17 @@
 import type { ReportExportResponse } from "@/lib/api/report";
 import { formatNumber } from "@/lib/domain/format";
 import { streakLabel } from "@/lib/domain/plural";
+import { methodLabel } from "@/lib/domain/anthropometry";
+import { vriLevelShortLabel } from "@/lib/domain/vri";
+import {
+  activityTypeLabel,
+  appointmentStatusLabel,
+  appointmentTypeLabel,
+  documentKindLabel,
+  muscleGroupLabelSafe,
+  muscleStatusLabelSafe,
+  weightSourceLabel,
+} from "@/lib/domain/reportLabels";
 
 export interface ReportColumn {
   key: string;
@@ -128,13 +139,13 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
   }
 
   if ("weight" in sec) {
-    const rows = arr(sec.weight).map((w) => ({ date: fmtD(w.measured_at), weight: num(w.weight_kg, " kg"), source: (w.source as string) || "—" }));
+    const rows = arr(sec.weight).map((w) => ({ date: fmtD(w.measured_at), weight: num(w.weight_kg, " kg"), source: weightSourceLabel(w.source as string) }));
     push(rows.length
       ? { key: "weight", title: "Peso", table: { columns: [{ key: "date", label: "Data" }, { key: "weight", label: "Peso", align: "right" }, { key: "source", label: "Origem" }], rows } }
       : { key: "weight", title: "Peso", emptyText: "Sem registros de peso no período." });
   }
   if ("anthropometry" in sec) {
-    const rows = arr(sec.anthropometry).map((a) => ({ date: fmtD(a.assessed_at), method: (a.method as string) || "—", weight: num(a.weight, " kg"), fat: num(a.body_fat_pct, "%") }));
+    const rows = arr(sec.anthropometry).map((a) => ({ date: fmtD(a.assessed_at), method: methodLabel(a.method as string), weight: num(a.weight, " kg"), fat: num(a.body_fat_pct, "%") }));
     push(rows.length
       ? { key: "anthropometry", title: "Antropometria e composição", table: { columns: [{ key: "date", label: "Data" }, { key: "method", label: "Método" }, { key: "weight", label: "Peso", align: "right" }, { key: "fat", label: "% Gordura", align: "right" }], rows } }
       : { key: "anthropometry", title: "Antropometria e composição", emptyText: "Sem avaliações no período." });
@@ -144,7 +155,7 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
     push(a
       ? { key: "adherence", title: "Adesão (VRI)", kpis: [
           { label: "Score", value: num(a.score) },
-          { label: "Nível", value: (a.level as string) || "—" },
+          { label: "Nível", value: vriLevelShortLabel(a.level as string) },
           { label: "Sequência", value: a.streak == null ? "—" : streakLabel(Number(a.streak)) },
           { label: "Conclusão semanal", value: num(a.weekly_completion_rate, "%") },
         ] }
@@ -156,7 +167,7 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
     push(wp
       ? { key: "workout_plan", title: `Plano de treino${wp.title ? ` — ${wp.title}` : ""}`, table: {
           columns: [{ key: "letter", label: "Dia" }, { key: "name", label: "Treino" }, { key: "muscle", label: "Grupo" }, { key: "ex", label: "Exercícios", align: "right" }],
-          rows: workouts.map((w) => ({ letter: (w.letter as string) || "—", name: (w.name as string) || "—", muscle: (w.primary_muscle_group as string) || "—", ex: String(arr(w.exercises).length) })),
+          rows: workouts.map((w) => ({ letter: (w.letter as string) || "—", name: (w.name as string) || "—", muscle: muscleGroupLabelSafe(w.primary_muscle_group as string), ex: String(arr(w.exercises).length) })),
         } }
       : { key: "workout_plan", title: "Plano de treino", emptyText: "Sem plano de treino ativo." });
   }
@@ -184,7 +195,7 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
       : { key: "supplements", title: "Suplementos e medicamentos", emptyText: "Sem suplementos ou medicamentos." });
   }
   if ("recovery" in sec) {
-    const rows = arr(sec.recovery).map((r) => ({ muscle: (r.muscle_group as string) || "—", status: (r.status as string) || "—", last: fmtD(r.last_trained_at) }));
+    const rows = arr(sec.recovery).map((r) => ({ muscle: muscleGroupLabelSafe(r.muscle_group as string), status: muscleStatusLabelSafe(r.status as string), last: fmtD(r.last_trained_at) }));
     push(rows.length
       ? { key: "recovery", title: "Recuperação muscular", table: { columns: [{ key: "muscle", label: "Grupo" }, { key: "status", label: "Estado" }, { key: "last", label: "Último treino" }], rows } }
       : { key: "recovery", title: "Recuperação muscular", emptyText: "Sem dados de recuperação." });
@@ -322,13 +333,13 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
   }
 
   if ("documents" in sec) {
-    const rows = arr(sec.documents).map((d) => ({ date: fmtD(d.uploaded_at), kind: (d.kind as string) || "—", title: (d.title as string) || "—" }));
+    const rows = arr(sec.documents).map((d) => ({ date: fmtD(d.uploaded_at), kind: documentKindLabel(d.kind as string), title: (d.title as string) || "—" }));
     push(rows.length
       ? { key: "documents", title: "Documentos", table: { columns: [{ key: "date", label: "Data" }, { key: "kind", label: "Tipo" }, { key: "title", label: "Título" }], rows } }
       : { key: "documents", title: "Documentos", emptyText: "Sem documentos no período." });
   }
   if ("appointments" in sec) {
-    const rows = arr(sec.appointments).map((a) => ({ date: fmtD(a.starts_at), title: (a.title as string) || "—", type: (a.type as string) || "—", status: (a.status as string) || "—" }));
+    const rows = arr(sec.appointments).map((a) => ({ date: fmtD(a.starts_at), title: (a.title as string) || "—", type: appointmentTypeLabel(a.type as string), status: appointmentStatusLabel(a.status as string) }));
     push(rows.length
       ? { key: "appointments", title: "Consultas", table: { columns: [{ key: "date", label: "Data" }, { key: "title", label: "Título" }, { key: "type", label: "Tipo" }, { key: "status", label: "Status" }], rows } }
       : { key: "appointments", title: "Consultas", emptyText: "Sem consultas no período." });
@@ -340,7 +351,7 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
       : { key: "achievements", title: "Conquistas", emptyText: "Sem conquistas no período." });
   }
   if ("timeline" in sec) {
-    const rows = arr(sec.timeline).map((t) => ({ date: fmtD(t.created_at), type: (t.type as string) || "—" }));
+    const rows = arr(sec.timeline).map((t) => ({ date: fmtD(t.created_at), type: activityTypeLabel(t.type as string) }));
     push(rows.length
       ? { key: "timeline", title: "Atividades", table: { columns: [{ key: "date", label: "Data" }, { key: "type", label: "Evento" }], rows } }
       : { key: "timeline", title: "Atividades", emptyText: "Sem atividades no período." });

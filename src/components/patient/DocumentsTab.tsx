@@ -23,6 +23,7 @@ import {
   MAX_DOCUMENT_SIZE_BYTES,
 } from "@/lib/api/documents";
 import { DOCUMENT_KIND_LABELS, inferDocumentKind, isDocumentKind } from "@/lib/domain/documentKind";
+import { documentKindLabel } from "@/lib/domain/reportLabels";
 import { formatDate, formatFileSize, formatNumber } from "@/lib/domain/format";
 import { isSafeDocumentUrl } from "@/lib/domain/safeUrl";
 import type { PatientDocumentKind, PatientDocumentView } from "@/types/db";
@@ -223,7 +224,7 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
                           {doc.title?.trim() || KIND_LABELS[doc.kind as PatientDocumentKind] || "Documento"}
                         </CardTitle>
                         <Badge tone="muted" className="shrink-0">
-                          {KIND_LABELS[doc.kind as PatientDocumentKind] ?? doc.kind}
+                          {documentKindLabel(doc.kind)}
                         </Badge>
                       </div>
                       <p className="truncate text-xs text-muted-foreground">

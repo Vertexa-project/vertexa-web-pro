@@ -49,8 +49,8 @@ describe("buildPatientReportModel — montagem do PDF a partir do JSON da RPC", 
     const m = buildPatientReportModel(rpc(), NOW);
     const weight = m.sections.find((s) => s.key === "weight");
     expect(weight?.table?.rows).toEqual([
-      { date: "01/05/2026", weight: "80 kg", source: "app" },
-      { date: "01/06/2026", weight: "78 kg", source: "app" },
+      { date: "01/05/2026", weight: "80 kg", source: "App do paciente" },
+      { date: "01/06/2026", weight: "78 kg", source: "App do paciente" },
     ]);
   });
 
@@ -59,7 +59,7 @@ describe("buildPatientReportModel — montagem do PDF a partir do JSON da RPC", 
     const adh = m.sections.find((s) => s.key === "adherence");
     expect(adh?.kpis).toEqual([
       { label: "Score", value: "82" },
-      { label: "Nível", value: "alto" },
+      { label: "Nível", value: "Alta" },
       { label: "Sequência", value: "12 dias" },
       { label: "Conclusão semanal", value: "90%" },
     ]);
@@ -116,7 +116,7 @@ describe("buildPatientReportModel — montagem do PDF a partir do JSON da RPC", 
       NOW,
     );
     expect(m.sections.find((s) => s.key === "workout_plan")?.table?.rows).toEqual([
-      { letter: "A", name: "Peito", muscle: "chest", ex: "2" },
+      { letter: "A", name: "Peito", muscle: "Peito", ex: "2" },
     ]);
     expect(m.sections.find((s) => s.key === "nutrition_plan")?.table?.rows).toEqual([
       { time: "08:00", name: "Café", cal: "400 kcal" },
@@ -339,5 +339,39 @@ describe("buildPatientReportModel — treino, água, suplementação e evoluçã
       "supplement_intakes",
       "recovery",
     ]);
+  });
+
+  it("nenhum enum cru em inglês no PDF completo (achado D57)", () => {
+    const m = withSections({
+      weight: [{ measured_at: "2026-06-01", weight_kg: 80, source: "web" }, { measured_at: "2026-06-02", weight_kg: 80, source: "xyz" }],
+      anthropometry: [{ assessed_at: "2026-06-01", method: "bioimpedance", weight: 80, body_fat_pct: 20 }, { assessed_at: "2026-06-02", method: "skinfold", weight: 80, body_fat_pct: 20 }],
+      adherence: { score: 70, level: "moderada", streak: 1, weekly_completion_rate: 50 },
+      workout_plan: { title: "T", workouts: [{ letter: "A", name: "X", primary_muscle_group: "abs", exercises: [] }, { letter: "B", name: "Y", primary_muscle_group: "biceps", exercises: [] }] },
+      recovery: [
+        { muscle_group: "abs", status: "weakened", last_trained_at: null },
+        { muscle_group: "lower_back", status: "fatigued", last_trained_at: null },
+        { muscle_group: "biceps", status: "recovering", last_trained_at: null },
+        { muscle_group: "chest", status: "recovered", last_trained_at: null },
+        { muscle_group: "lats", status: "neutral", last_trained_at: null },
+      ],
+      documents: [{ uploaded_at: "2026-06-01", kind: "exam", title: "a" }],
+      appointments: [{ starts_at: "2026-06-01", title: "a", type: "previsao_retorno", status: "desmarcado" }],
+      timeline: [{ created_at: "2026-06-01", type: "workout_checked" }, { created_at: "2026-06-01", type: "novo_tipo_qualquer" }],
+    });
+    const cell = (k: string) => m.sections.find((x) => x.key === k)?.table?.rows ?? [];
+    expect(cell("weight").map((r) => r.source)).toEqual(["Profissional", "—"]);
+    expect(cell("anthropometry").map((r) => r.method)).toEqual(["Bioimpedância", "Dobras cutâneas"]);
+    expect(m.sections.find((x) => x.key === "adherence")?.kpis?.[1].value).toBe("Moderada");
+    expect(cell("workout_plan").map((r) => r.muscle)).toEqual(["Abdômen", "Bíceps"]);
+    expect(cell("recovery").map((r) => [r.muscle, r.status])).toEqual([
+      ["Abdômen", "Enfraquecido"], ["Lombar", "Fadigado"], ["Bíceps", "Em recuperação"], ["Peito", "Recuperado"], ["Dorsais", "Neutro"],
+    ]);
+    expect(cell("documents")[0].kind).toBe("Exame");
+    expect(cell("appointments")[0]).toMatchObject({ type: "Previsão de retorno", status: "Desmarcado" });
+    expect(cell("timeline").map((r) => r.type)).toEqual(["Treino concluído", "Atividade registrada"]);
+    const all = JSON.stringify(m.sections);
+    for (const raw of ["weakened", "fatigued", "recovering", "bioimpedance", "skinfold", "abs", "biceps", "lower_back", "workout_checked", "previsao_retorno", "desmarcado"]) {
+      expect(all).not.toContain(`"${raw}"`);
+    }
   });
 });

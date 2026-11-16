@@ -71,3 +71,31 @@ export function statusLabel(status: PatientStatus): string {
   };
   return labels[status];
 }
+
+/**
+ * Rótulo curto pt-BR do nível de adesão para PDFs/chips (aceita as grafias do banco, inclusive
+ * "alto/média"). Valor desconhecido NUNCA vaza cru: devolve "—".
+ */
+export function vriLevelShortLabel(level: string | null | undefined): string {
+  switch ((level ?? "").toLowerCase()) {
+    case "alta":
+    case "alto":
+      return "Alta";
+    case "moderada":
+    case "moderado":
+    case "media":
+    case "média":
+      return "Moderada";
+    case "baixa":
+    case "baixo":
+      return "Baixa";
+    case "risco":
+    case "em_risco":
+      return "Em risco";
+    case "inativo":
+    case "inativa":
+      return "Inativo";
+    default:
+      return "—";
+  }
+}

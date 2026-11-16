@@ -115,7 +115,7 @@ function VriHero({ vri }: { vri: PointsReportData["vri"] }) {
   const score = vri?.score ?? null;
   const level = vri?.level ?? null;
   const c = vriColor(level);
-  const statusLabel = vri?.status ? (STATUS_LABEL[vri.status] ?? vri.status) : null;
+  const statusLabel = vri?.status ? (STATUS_LABEL[vri.status] ?? null) : null;
 
   return (
     <View style={h.hero}>

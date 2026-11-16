@@ -10,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWorkoutPlan } from "@/hooks/usePlans";
 import { useExerciseLibrary } from "@/hooks/useExerciseLibrary";
 import { findLibraryExercise } from "@/lib/domain/exerciseLibrary";
-import { formatWeight } from "@/lib/domain/format";
+import { formatNumber, formatWeight } from "@/lib/domain/format";
 import { formatReps, visibleColumns } from "@/lib/domain/workoutDisplay";
 import { muscleGroupLabel } from "@/lib/domain/muscleRecovery";
+import { muscleGroupLabelSafe } from "@/lib/domain/reportLabels";
 import { useDisciplinePermissions } from "@/hooks/useDisciplines";
 import { DISCIPLINE_REASON } from "@/lib/domain/disciplines";
 import type { PatientDetail } from "@/types/db";
@@ -80,7 +81,7 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
                   {w.name}
                 </CardTitle>
                 <span className="text-xs text-muted-foreground">
-                  {w.primary_muscle_group ?? ""}
+                  {w.primary_muscle_group ? muscleGroupLabelSafe(w.primary_muscle_group) : ""}
                   {w.estimated_minutes ? ` · ${w.estimated_minutes} min` : ""}
                 </span>
               </CardHeader>
@@ -109,7 +110,7 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {ex.sets ?? "—"} × {formatReps(ex.reps) ?? "—"}
+                          {ex.sets != null ? formatNumber(Number(ex.sets), 1) : "—"} × {formatReps(ex.reps) ?? "—"}
                         </td>
                         {cols.load ? (
                           <td className="px-4 py-3 text-muted-foreground">
