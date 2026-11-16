@@ -44,7 +44,11 @@ export function muscleStatusLabelSafe(s: string | null | undefined): string {
 export function muscleGroupLabelSafe(key: string | null | undefined): string {
   if (!key) return "—";
   const label = muscleGroupLabel(key);
-  return label === key ? "—" : label;
+  if (label !== key) return label;
+  // Texto livre do profissional (ex.: "peito", "braços") aparece como foi escrito; código cru (snake_case) não.
+  const t = key.trim();
+  if (!t || /_/.test(t)) return "—";
+  return t.charAt(0).toLocaleUpperCase("pt-BR") + t.slice(1);
 }
 
 export function activityTypeLabel(type: string | null | undefined): string {

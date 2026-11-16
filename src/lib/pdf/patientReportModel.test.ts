@@ -341,6 +341,13 @@ describe("buildPatientReportModel — treino, água, suplementação e evoluçã
     ]);
   });
 
+  it("grupo principal em português digitado pelo profissional aparece no PDF (achado D59)", () => {
+    const m = withSections({ workout_plan: { title: "T", workouts: [{ letter: "A", name: "Peito / Ombro", primary_muscle_group: "peito", exercises: [] }, { letter: "B", name: "X", primary_muscle_group: "braços", exercises: [] }] } });
+    const t = m.sections.find((x) => x.key === "workout_plan")?.table;
+    expect(t?.columns.map((c) => c.label)).toContain("Grupo");
+    expect(t?.rows.map((r) => r.muscle)).toEqual(["Peito", "Braços"]);
+  });
+
   it("grupo do treino vem dos exercícios quando o dia não tem grupo principal; coluna some sem dado (achado D58)", () => {
     const withEx = withSections({ workout_plan: { title: "T", workouts: [{ letter: "A", name: "X", primary_muscle_group: null, exercises: [{ muscle_groups: ["biceps"] }, { muscle_groups: ["triceps", "biceps"] }] }] } });
     const t1 = withEx.sections.find((x) => x.key === "workout_plan")?.table;

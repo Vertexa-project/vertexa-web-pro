@@ -9,6 +9,9 @@ describe("rótulos pt-BR de enums crus", () => {
     expect(muscleGroupLabelSafe("abs")).toBe("Abdômen");
     expect(muscleGroupLabelSafe("biceps")).toBe("Bíceps");
     expect(muscleGroupLabelSafe("unknown_group")).toBe("—");
+    // grupo principal digitado em português pelo profissional (achado D59)
+    expect(muscleGroupLabelSafe("peito")).toBe("Peito");
+    expect(muscleGroupLabelSafe("braços")).toBe("Braços");
     expect(muscleStatusLabelSafe("weakened")).toBe("Enfraquecido");
     expect(muscleStatusLabelSafe("zzz")).toBe("—");
     expect(weightSourceLabel("app")).toBe("App do paciente");
