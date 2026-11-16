@@ -11,6 +11,7 @@ import { useWorkoutPlan } from "@/hooks/usePlans";
 import { useExerciseLibrary } from "@/hooks/useExerciseLibrary";
 import { findLibraryExercise } from "@/lib/domain/exerciseLibrary";
 import { formatWeight } from "@/lib/domain/format";
+import { formatReps, visibleColumns } from "@/lib/domain/workoutDisplay";
 import { muscleGroupLabel } from "@/lib/domain/muscleRecovery";
 import { useDisciplinePermissions } from "@/hooks/useDisciplines";
 import { DISCIPLINE_REASON } from "@/lib/domain/disciplines";
@@ -65,7 +66,9 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
               </GatedAction>
             </div>
 
-          {data.workouts.map((w) => (
+          {data.workouts.map((w) => {
+            const cols = visibleColumns(w.workout_exercises);
+            return (
             <Card key={w.id}>
               <CardHeader className="flex-row items-center justify-between space-y-0">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -87,8 +90,8 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
                     <tr>
                       <th scope="col" className="px-6 py-2">Exercício</th>
                       <th scope="col" className="px-4 py-2">Séries × Reps</th>
-                      <th scope="col" className="px-4 py-2">Carga</th>
-                      <th scope="col" className="px-6 py-2">Grupos</th>
+                      {cols.load ? <th scope="col" className="px-4 py-2">Carga</th> : null}
+                      {cols.groups ? <th scope="col" className="px-6 py-2">Grupos</th> : null}
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -106,27 +109,32 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {ex.sets ?? "—"} × {ex.reps ?? "—"}
+                          {ex.sets ?? "—"} × {formatReps(ex.reps) ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {ex.load_kg != null ? formatWeight(ex.load_kg) : "—"}
-                        </td>
-                        <td className="px-6 py-3">
-                          <div className="flex flex-wrap gap-1">
-                            {(ex.muscle_groups ?? []).map((g) => (
-                              <Badge key={g} tone="muted">
-                                {muscleGroupLabel(g)}
-                              </Badge>
-                            ))}
-                          </div>
-                        </td>
+                        {cols.load ? (
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {ex.load_kg != null && ex.load_kg > 0 ? formatWeight(ex.load_kg) : "—"}
+                          </td>
+                        ) : null}
+                        {cols.groups ? (
+                          <td className="px-6 py-3">
+                            <div className="flex flex-wrap gap-1">
+                              {(ex.muscle_groups ?? []).map((g) => (
+                                <Badge key={g} tone="muted">
+                                  {muscleGroupLabel(g)}
+                                </Badge>
+                              ))}
+                            </div>
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       ) : null}
       </AsyncSection>

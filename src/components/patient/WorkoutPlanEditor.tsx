@@ -21,6 +21,7 @@ import { useExerciseLibrary } from "@/hooks/useExerciseLibrary";
 import { findLibraryExercise } from "@/lib/domain/exerciseLibrary";
 import { DISCIPLINE_REASON, isDisciplineDenied, writeDeniedMessage } from "@/lib/domain/disciplines";
 import { captureException } from "@/lib/observability/sentry";
+import { validateRepsInput } from "@/lib/domain/workoutDisplay";
 import type { SaveWorkoutPlanInput } from "@/lib/api/planMutations";
 import type { PatientDetail, WorkoutPlanFull } from "@/types/db";
 
@@ -120,6 +121,11 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
       setError("Adicione ao menos um treino com nome.");
       return;
     }
+    const badReps = workouts.flatMap((w) => w.exercises).filter((e) => e.name.trim()).find((e) => validateRepsInput(e.reps) !== null);
+    if (badReps) {
+      setError(`${badReps.name.trim()}: repetições devem ser um número inteiro maior que zero.`);
+      return;
+    }
     const input: SaveWorkoutPlanInput = {
       patientId: patient.id,
       professionalId: patient.professionals[0]?.id ?? null,
@@ -140,7 +146,7 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
               return findLibraryExercise(library.index, e.name)?.muscleGroups ?? [];
             })(),
             sets: e.sets ? Number(e.sets) : null,
-            reps: e.reps ? Number(e.reps) : null,
+            reps: e.reps ? Number(e.reps) : null, // já validado (inteiro ≥ 1)
             load_kg: e.load ? Number(e.load) : null,
           })),
       })),
@@ -274,6 +280,8 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
                       />
                       <Input
                         type="number"
+                        min={1}
+                        step={1}
                         value={ex.reps}
                         onChange={(e) => patchExercise(wi, ei, { reps: e.target.value })}
                         placeholder="Reps"
