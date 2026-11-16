@@ -87,10 +87,10 @@ export function AssessmentsSection({ patientId }: { patientId: string }) {
                 <thead>
                   <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <th className="py-2 pr-3 font-medium">Data</th>
-                    <th className="py-2 pr-3 font-medium">Método</th>
+                    <th className="hidden py-2 pr-3 font-medium sm:table-cell">Método</th>
                     <th className="py-2 pr-3 text-right font-medium">Peso</th>
                     <th className="py-2 pr-3 text-right font-medium">% Gordura</th>
-                    <th className="py-2 pr-3 font-medium">Circunferências (cm)</th>
+                    <th className="hidden py-2 pr-3 font-medium sm:table-cell">Circunferências (cm)</th>
                     <th className="py-2 text-right font-medium">
                       <span className="sr-only">Ações</span>
                     </th>
@@ -101,11 +101,18 @@ export function AssessmentsSection({ patientId }: { patientId: string }) {
                     const when = a.assessed_at ? formatDate(a.assessed_at) : "—";
                     return (
                       <tr key={a.id} className="border-b last:border-0">
-                        <td className="py-2 pr-3 whitespace-nowrap">{when}</td>
-                        <td className="py-2 pr-3">{methodLabel(a.method)}</td>
-                        <td className="py-2 pr-3 text-right">{a.weight != null ? formatWeight(Number(a.weight)) : "—"}</td>
-                        <td className="py-2 pr-3 text-right">{a.body_fat_pct != null ? `${formatNumber(Number(a.body_fat_pct), 1)}%` : "—"}</td>
-                        <td className="py-2 pr-3 text-muted-foreground">{measuresSummary(a)}</td>
+                        <td className="py-2 pr-3">
+                          <span className="whitespace-nowrap">{when}</span>
+                          {/* No celular, método e medidas vão embaixo da data (a tabela cabe sem rolar de lado). */}
+                          <span className="block text-xs text-muted-foreground sm:hidden">
+                            {methodLabel(a.method)}
+                            {measuresSummary(a) && measuresSummary(a) !== "—" ? ` · ${measuresSummary(a)}` : ""}
+                          </span>
+                        </td>
+                        <td className="hidden py-2 pr-3 sm:table-cell">{methodLabel(a.method)}</td>
+                        <td className="whitespace-nowrap py-2 pr-3 text-right">{a.weight != null ? formatWeight(Number(a.weight)) : "—"}</td>
+                        <td className="whitespace-nowrap py-2 pr-3 text-right">{a.body_fat_pct != null ? `${formatNumber(Number(a.body_fat_pct), 1)}%` : "—"}</td>
+                        <td className="hidden py-2 pr-3 text-muted-foreground sm:table-cell">{measuresSummary(a)}</td>
                         <td className="py-2 text-right whitespace-nowrap">
                           <Button
                             variant="ghost"

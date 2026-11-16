@@ -31,13 +31,17 @@ describe("AssessmentsSection", () => {
   it("mostra circunferências preenchidas", () => {
     h.data = [A("a", "2026-01-10", { measurements: { cintura: 84, braco: 31 } })];
     render(<AssessmentsSection patientId="p1" />);
-    expect(screen.getByText(/Cintura 84 · Braço 31/)).toBeTruthy();
+    // coluna no computador + linha embaixo da data no celular (sm:hidden): a tabela cabe em 390 px
+    const hits = screen.getAllByText(/Cintura 84 · Braço 31/);
+    expect(hits).toHaveLength(2);
+    expect(hits.some((el) => el.className.includes("sm:hidden"))).toBe(true);
+    expect(hits.some((el) => el.className.includes("sm:table-cell"))).toBe(true);
   });
   it("gordura e circunferências com vírgula decimal (achado D56)", () => {
     h.data = [A("a", "2026-01-10", { body_fat_pct: "26.8", measurements: { braco: 30.5, cintura: 82 } })];
     render(<AssessmentsSection patientId="p1" />);
     expect(screen.getByText("26,8%")).toBeTruthy();
-    expect(screen.getByText(/Cintura 82 · Braço 30,5/)).toBeTruthy();
+    expect(screen.getAllByText(/Cintura 82 · Braço 30,5/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/26\.8|30\.5/)).toBeNull();
   });
   it("excluir pede confirmação e só exclui ao confirmar", async () => {
