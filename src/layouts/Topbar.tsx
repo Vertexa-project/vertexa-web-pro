@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { VertexaAiButton } from "@/components/vertexa-ai/VertexaAiButton";
 import { MobileNav } from "./MobileNav";
 import { useIdentity } from "@/hooks/useIdentity";
 import { useMyProfileAvatar } from "@/hooks/useProfileAvatar";
@@ -50,6 +51,7 @@ export function Topbar() {
       {/* Busca global fica oculta até funcionar (redesign P1 · item 7). */}
 
       <div className="ml-auto flex items-center gap-1">
+        <VertexaAiButton variant="topbar" />
         <StaffNotificationsBell />
         <Button
           variant="ghost"

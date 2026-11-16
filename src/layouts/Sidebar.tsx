@@ -2,6 +2,7 @@ import { footerNav } from "@/app/routes";
 import { useVisibleMainNav } from "@/hooks/useVisibleNav";
 import { ClinicIdentity } from "@/components/ClinicIdentity";
 import { useUnreadMentions } from "@/hooks/useChat";
+import { VertexaAiButton } from "@/components/vertexa-ai/VertexaAiButton";
 import { NavRow } from "./NavRow";
 
 export function Sidebar() {
@@ -14,6 +15,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-2" aria-label="Navegação principal">
+        <VertexaAiButton variant="menu" />
         <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Menu
         </p>

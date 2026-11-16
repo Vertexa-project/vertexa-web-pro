@@ -7,7 +7,7 @@ const patients = vi.hoisted(() => ({
 }));
 vi.mock("@/hooks/usePatients", () => ({ useListPatients: () => ({ data: patients.list, isLoading: false, isError: false, refetch: vi.fn() }) }));
 vi.mock("@/hooks/useCurrentProfessional", () => ({ useCurrentProfessional: () => ({ data: null }), useCurrentProfessionalName: () => ({ data: "Dra. Ana" }) }));
-vi.mock("@/components/dashboard/AgendaCard", () => ({ AgendaCard: () => null }));
+vi.mock("@/components/dashboard/TodayAgenda", () => ({ TodayAgenda: () => null }));
 vi.mock("@/components/dashboard/AdherenceChart", () => ({ AdherenceChart: () => null }));
 
 import { DashboardPage } from "./DashboardPage";

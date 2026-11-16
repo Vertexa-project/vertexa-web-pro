@@ -27,7 +27,7 @@ export interface NavItem {
   gestao?: boolean;
 }
 
-// Fonte única do menu (redesign P2 — ordem do guia, seção "Mapa do app"). Vertexa IA entra na parte 3.
+// Fonte única do menu (redesign P2 — ordem do guia, seção "Mapa do app"). «Vertexa IA» não é rota: é o painel lateral (VertexaAiButton no topo do menu e na barra superior).
 // As rotas /retencao, /planos, /mensagens, /campanhas, /financeiro/*, /estoque/*, /documentos seguem
 // montadas em router.tsx — só saíram do menu (deep link não quebra).
 export const mainNav: NavItem[] = [

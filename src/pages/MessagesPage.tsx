@@ -32,6 +32,7 @@ import { mentionFailureMessage } from "@/lib/domain/chatMention";
 import { indexById, quotedPreview, resolveQuote } from "@/lib/domain/chatReply";
 import { mentionableProfessionals, mentionsProfile, namesByProfileId } from "@/lib/domain/chatTeam";
 import { formatRelative } from "@/lib/domain/format";
+import { clearMessageDraft, peekMessageDraft } from "@/lib/domain/vertexaAi";
 import {
   STAFF_ACCESS_REVOKED_DESCRIPTION,
   STAFF_ACCESS_REVOKED_TITLE,
@@ -44,7 +45,9 @@ function Thread({ patient }: { patient: PatientListItem }) {
   const sendMessage = useSendChatMessage(patient.id);
   const { data: mentions } = useUnreadMentions();
   const { mutate: markRead } = useMarkMentionsRead();
-  const [draft, setDraft] = useState("");
+  // Rascunho vindo da Vertexa IA ("Usar em Mensagens"): preenche o campo, nunca envia.
+  const [draft, setDraft] = useState(() => peekMessageDraft(patient.id));
+  useEffect(() => clearMessageDraft(patient.id), [patient.id]);
   const [file, setFile] = useState<File | null>(null);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
