@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 
-import { StatusBadge } from "@/components/status/StatusBadge";
+import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPercent, initials, professionalTypeLabel } from "@/lib/domain/format";
+import { focusOrder } from "@/lib/domain/attention";
 import { computePendencies } from "@/lib/domain/pendencies";
 import { cn } from "@/lib/utils";
 import type { PatientListItem } from "@/types/db";
@@ -61,9 +62,8 @@ export function RetentionPanel({
   onPatientClick: (patientId: string) => void;
 }) {
   const view = useMemo(() => {
-    const reactivate = patients
-      .filter((p) => p.snapshot?.status === "em_risco" || p.snapshot?.status === "atencao")
-      .sort((a, b) => (a.snapshot?.score ?? 0) - (b.snapshot?.score ?? 0));
+    // Mesma regra dos KPIs do Dashboard (lib/domain/attention).
+    const reactivate = focusOrder(patients);
 
     const pendentes = patients
       .map((p) => ({
@@ -109,12 +109,20 @@ export function RetentionPanel({
             {view.reactivate.length === 0 ? (
               <p className="text-sm text-muted-foreground">Ninguém em risco ou atenção no momento.</p>
             ) : (
-              view.reactivate.map((p) => (
+              view.reactivate.map(({ patient: p, attention }) => (
                 <PatientRow
                   key={p.id}
                   patient={p}
                   onClick={() => onPatientClick(p.id)}
-                  trailing={<StatusBadge status={p.snapshot?.status} score={p.snapshot?.score} />}
+                  trailing={
+                    <div className="flex flex-wrap gap-1">
+                      {attention.reasons.map((r) => (
+                        <Badge key={r.kind} tone={attention.level === "em_risco" ? "destructive" : "warning"}>
+                          {r.label}
+                        </Badge>
+                      ))}
+                    </div>
+                  }
                 />
               ))
             )}

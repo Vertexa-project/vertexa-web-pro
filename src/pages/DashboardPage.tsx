@@ -8,7 +8,7 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { RetentionPanel } from "@/components/retention/RetentionPanel";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageHeader } from "@/components/PageHeader";
-import { StatusBadge } from "@/components/status/StatusBadge";
+import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentProfessional, useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
 import { useListPatients } from "@/hooks/usePatients";
 import { formatDate, greeting, initials, shortName } from "@/lib/domain/format";
-import { hasPendency } from "@/lib/domain/pendencies";
+import { attentionKpis, focusAction, focusOrder, type PatientAttention } from "@/lib/domain/attention";
 import type { PatientListItem } from "@/types/db";
 
 function DashboardSkeleton() {
@@ -35,27 +35,27 @@ function DashboardSkeleton() {
   );
 }
 
-function FocusItem({ patient }: { patient: PatientListItem }) {
+function FocusItem({ patient, attention }: { patient: PatientListItem; attention: PatientAttention }) {
   const navigate = useNavigate();
   const name = patient.profile?.full_name ?? "Sem nome";
+  const action = focusAction(patient.id, attention.primary);
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3">
       <Avatar>
         <AvatarFallback>{initials(name)}</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-foreground">{name}</p>
-        <div className="mt-1">
-          <StatusBadge status={patient.snapshot?.status} score={patient.snapshot?.score} />
+        <div className="mt-1 flex flex-wrap gap-1">
+          {attention.reasons.map((r) => (
+            <Badge key={r.kind} tone={attention.level === "em_risco" ? "destructive" : "warning"}>
+              {r.label}
+            </Badge>
+          ))}
         </div>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        className="shrink-0"
-        onClick={() => navigate(`/pacientes/${patient.id}`)}
-      >
-        Tratar
+      <Button variant="outline" size="sm" className="shrink-0" onClick={() => navigate(action.to)}>
+        {action.label}
       </Button>
     </div>
   );
@@ -71,17 +71,11 @@ export function DashboardPage() {
 
   const stats = useMemo(() => {
     const list = data ?? [];
-    const emRisco = list.filter((p) => p.snapshot?.status === "em_risco").length;
-    const atencao = list.filter((p) => p.snapshot?.status === "atencao").length;
+    const { emRisco, atencao, pendencias } = attentionKpis(list);
     const rates = list.map((p) => p.snapshot?.weekly_completion_rate ?? 0);
     const adesaoMedia = rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length) : 0;
-    // Pendências = pacientes sem peso/foto/treino recente (regra pura compartilhada).
-    const pendencias = list.filter((p) =>
-      hasPendency({ lastWeightAt: p.lastWeightAt, lastPhotoAt: p.lastPhotoAt, lastWorkoutAt: p.lastWorkoutAt }),
-    ).length;
-    const foco = [...list]
-      .sort((a, b) => (a.snapshot?.score ?? 0) - (b.snapshot?.score ?? 0))
-      .slice(0, 3);
+    // KPIs e "Foco do dia" leem da MESMA regra (lib/domain/attention).
+    const foco = focusOrder(list).slice(0, 3);
     return { total: list.length, emRisco, atencao, adesaoMedia, pendencias, foco };
   }, [data]);
 
@@ -127,7 +121,7 @@ export function DashboardPage() {
                 {stats.foco.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Sem pacientes para priorizar.</p>
                 ) : (
-                  stats.foco.map((p) => <FocusItem key={p.id} patient={p} />)
+                  stats.foco.map((f) => <FocusItem key={f.patient.id} patient={f.patient} attention={f.attention} />)
                 )}
                 <Button
                   variant="ghost"

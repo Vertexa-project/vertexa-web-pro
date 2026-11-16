@@ -27,5 +27,5 @@ export function StatusBadge({ status, score }: StatusBadgeProps) {
     const level = vriLevelFromScore(score);
     return <Badge tone={vriToneFromLevel(level)}>{vriLevelLabel(level)}</Badge>;
   }
-  return <Badge tone="muted">Sem dados</Badge>;
+  return <Badge tone="muted">Aguardando 1º registro</Badge>;
 }
