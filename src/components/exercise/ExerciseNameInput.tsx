@@ -89,7 +89,7 @@ export function ExerciseNameInput({
                 i === active ? "bg-accent text-accent-foreground" : "text-foreground",
               )}
             >
-              <ExerciseMedia item={item} className="h-8 w-10 shrink-0 rounded" />
+              <ExerciseMedia item={item} lazy={false} zoom className="h-10 w-14 shrink-0 rounded" />
               <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
               <span className="shrink-0 text-xs text-muted-foreground">{item.groupLabel}</span>
             </li>

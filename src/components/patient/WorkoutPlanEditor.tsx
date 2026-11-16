@@ -263,6 +263,7 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
                         {match ? (
                           <ExerciseMedia
                             item={match}
+                            zoom
                             className="h-10 w-10 shrink-0 rounded-md"
                           />
                         ) : (
