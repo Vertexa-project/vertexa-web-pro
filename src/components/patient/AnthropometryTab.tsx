@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Droplet, Ruler } from "lucide-react";
 
 import { AssessmentsSection } from "./AssessmentsSection";
+import { DocImportSection } from "./docimport/DocImportSection";
 import { AsyncSection } from "./AsyncSection";
 import { WeightReviewCard } from "./WeightReviewCard";
 import { WeightChart } from "@/components/charts/WeightChart";
@@ -81,6 +82,7 @@ export function AnthropometryTab({ patient }: { patient: PatientDetail }) {
 
   return (
     <div className="space-y-6">
+    <DocImportSection patient={patient} kind="bioimpedancia" />
     <WeightReviewCard patientId={patient.id} />
     <AssessmentsSection patientId={patient.id} />
     <AsyncSection

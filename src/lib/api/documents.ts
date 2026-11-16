@@ -172,3 +172,56 @@ export async function updatePatientDocumentKind(id: string, kind: string): Promi
   const { error } = await supabase.from("patient_documents").update({ kind }).eq("id", id);
   if (error) throw error;
 }
+
+// ───────────────────────── Importação com Conferência (redesign P5)
+// A leitura precisa do ARQUIVO no bucket privado, mas o documento só vira registro em Documentos depois que o
+// profissional confirma. Por isso o envio do objeto e o registro da linha são passos separados (mesmas regras de
+// tipo/tamanho e mesma pasta {patient_id}/ do envio normal).
+
+/** Sobe só o objeto (sem linha em patient_documents). Devolve o caminho no bucket privado. */
+export async function uploadPatientDocumentObject(patientId: string, file: File): Promise<string> {
+  if (!patientId) throw new Error("Paciente não informado.");
+  if (!ALLOWED_DOCUMENT_MIME.includes(file.type as (typeof ALLOWED_DOCUMENT_MIME)[number])) {
+    throw new Error("Formato não suportado. Envie PDF, JPG, PNG ou WEBP.");
+  }
+  if (file.size > MAX_DOCUMENT_SIZE_BYTES) throw new Error("Arquivo muito grande. O limite é 15 MB.");
+  const path = `${patientId}/${Date.now()}.${extFor(file)}`;
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+export interface RegisterDocumentInput {
+  patientId: string;
+  path: string;
+  mime: string | null;
+  size: number | null;
+  kind: string;
+  title: string;
+  uploadedByProfessionalId: string | null;
+}
+
+/** Registra em Documentos um objeto que já está no bucket (depois da confirmação). */
+export async function registerPatientDocument(input: RegisterDocumentInput): Promise<PatientDocument> {
+  const { data, error } = await supabase
+    .from("patient_documents")
+    .insert({
+      patient_id: input.patientId,
+      uploaded_by_role: "professional",
+      uploaded_by_professional_id: input.uploadedByProfessionalId,
+      kind: input.kind,
+      title: input.title.trim() || null,
+      file_path: input.path,
+      mime_type: input.mime,
+      file_size_bytes: input.size,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as PatientDocument;
+}
+
+/** Melhor esforço: tira do bucket um arquivo que não virou documento (sem policy de DELETE, a função apaga ao descartar). */
+export async function removeDocumentObject(path: string): Promise<void> {
+  await supabase.storage.from(BUCKET).remove([path]).catch(() => undefined);
+}

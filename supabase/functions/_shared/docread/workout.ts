@@ -3,7 +3,7 @@ import { foldKeepLength, parseNumberBR } from "./numbers.ts";
 import { applyRules } from "./validate.ts";
 import type { ReadField, ReadGroup } from "./types.ts";
 
-const DAY_RE = /^(?:treino|dia)\s+([a-f]|\d{1,2})\b\s*[\-–:|]?\s*(.*)$/;
+const DAY_RE = /^(?:treino|dia)\s+([a-f]|\d{1,2})\b\s*[-–:|]?\s*(.*)$/;
 const SETS_REPS = /(\d{1,2})\s*(?:x|×|series?\s+de)\s*(\d{1,3})(?:\s*(?:-|–|a|ate)\s*(\d{1,3}))?(?:\s*(?:rep|repeticoes))?/;
 const LOAD = /(\d+(?:[.,]\d+)?)\s*kg\b/;
 const IGNORE = /^(?:obs|descanso|aquec|alongam|cardio|intervalo|orienta|assinatura|educador|crefito|cref|paciente|nome|data|documento)/;
@@ -28,12 +28,12 @@ export function extractWorkout(pages: string[]): { groups: ReadGroup[]; fields: 
         ex = 0;
         const id = `d${cur}`;
         const letter = /^[a-f]$/.test(dm[1]) ? dm[1].toUpperCase() : dm[1];
-        const sub = raw.slice(raw.length - dm[2].length).trim().replace(/^[\-–:|\s]+/, "");
+        const sub = raw.slice(raw.length - dm[2].length).trim().replace(/^[-–:|\s]+/, "");
         groups.push({ id, title: `Treino ${letter}`, subtitle: sub || null });
         continue;
       }
       if (cur < 0) continue;
-      const body = raw.replace(/^[\-–•*·▪]\s*/, "").replace(/^\d+[.)]\s+/, "");
+      const body = raw.replace(/^[-–•*·▪]\s*/, "").replace(/^\d+[.)]\s+/, "");
       const fb = foldKeepLength(body);
       const sr = SETS_REPS.exec(fb);
       if (!sr) {
@@ -41,7 +41,7 @@ export function extractWorkout(pages: string[]): { groups: ReadGroup[]; fields: 
         if (unrecognized.length < 10) unrecognized.push(clip(raw));
         continue;
       }
-      const name = body.slice(0, sr.index).replace(/[\-–|:·,\s]+$/, "").trim();
+      const name = body.slice(0, sr.index).replace(/[-–|:·,\s]+$/, "").trim();
       if (name.length < 2) { if (unrecognized.length < 10) unrecognized.push(clip(raw)); continue; }
       const gid = `d${cur}`, k = `${gid}.e${ex++}`;
       const common = { group: gid, unit: null as string | null, required: false, source: clip(raw), page: pi + 1 };

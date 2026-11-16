@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Pencil, Plus, Utensils } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
+import { DocImportSection } from "./docimport/DocImportSection";
 import { GatedAction } from "./GatedAction";
 import { NutritionPlanEditor } from "./NutritionPlanEditor";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,6 +23,9 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
 
   return (
     <>
+      <div className="mb-4">
+        <DocImportSection patient={patient} kind="dieta" />
+      </div>
       <AsyncSection
         isLoading={isLoading}
         isError={isError}

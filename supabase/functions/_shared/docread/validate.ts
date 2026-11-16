@@ -126,7 +126,7 @@ export function verifyAgainstText(fields: ReadField[], pages: string[]): ReadFie
 export function checkPatientName(pages: string[], patientName: string | null | undefined): string | null {
   if (!patientName) return null;
   const text = pages.join("\n");
-  const m = /(?:^|\n)\s*(?:nome(?: do paciente)?|paciente|cliente|name)\s*[:\-]\s*([^\n\d]{3,60})/i.exec(text);
+  const m = /(?:^|\n)\s*(?:nome(?: do paciente)?|paciente|cliente|name)\s*[:-]\s*([^\n\d]{3,60})/i.exec(text);
   if (!m) return null;
   const doc = stripAccents(m[1]).trim().split(/\s+/)[0];
   const mine = stripAccents(patientName).trim().split(/\s+/)[0];

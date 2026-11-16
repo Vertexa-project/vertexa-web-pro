@@ -35,7 +35,7 @@ function splitItems(s: string): string[] {
 interface ParsedItem { name: string; qty: string | null; uncertain: boolean; reason: string | null }
 
 function parseItem(rawIn: string): ParsedItem | null {
-  let raw = rawIn.replace(/^[\-–•*·▪]\s*/, "").replace(/^\d+[.)]\s+/, "").trim();
+  let raw = rawIn.replace(/^[-–•*·▪]\s*/, "").replace(/^\d+[.)]\s+/, "").trim();
   if (raw.length < 2) return null;
   let f = foldKeepLength(raw);
   let paren = "";
@@ -53,7 +53,7 @@ function parseItem(rawIn: string): ParsedItem | null {
     // "4 colheres de sopa de arroz": a unidade pode vir com "de sopa"
     qty = `${n != null ? String(n).replace(".", ",") : lead[1]} ${u}`.trim();
   } else {
-    const tail = new RegExp(String.raw`^(.+?)\s*[\-–:]\s*(\d+(?:[.,]\d+)?\s*${UNIT_WORDS})\s*$`).exec(f);
+    const tail = new RegExp(String.raw`^(.+?)\s*[-–:]\s*(\d+(?:[.,]\d+)?\s*${UNIT_WORDS})\s*$`).exec(f);
     if (tail) { name = raw.slice(0, tail[1].length).trim(); qty = raw.slice(raw.length - tail[2].length).trim(); }
     else if (FREE.test(f)) { name = raw.replace(/\s*(à|a)\s+vontade|\s*livre|\s*a gosto/i, "").trim() || raw; qty = "à vontade"; }
     else { name = raw; qty = null; }

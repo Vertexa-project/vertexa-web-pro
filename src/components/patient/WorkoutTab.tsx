@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Dumbbell, Pencil, Plus } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
+import { DocImportSection } from "./docimport/DocImportSection";
 import { ExerciseMedia } from "@/components/exercise/ExerciseMedia";
 import { GatedAction } from "./GatedAction";
 import { WorkoutPlanEditor } from "./WorkoutPlanEditor";
@@ -27,6 +28,9 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
 
   return (
     <>
+      <div className="mb-4">
+        <DocImportSection patient={patient} kind="treino" />
+      </div>
       <AsyncSection
         isLoading={isLoading}
         isError={isError}

@@ -16,6 +16,7 @@ import { openaiRead } from "../_shared/docread/openai.ts";
 import { isDocKind, type DocKind, type DocReadResult } from "../_shared/docread/types.ts";
 
 // deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
 const BUCKET = "patient-documents";
 const MAX_PAGES = 10;

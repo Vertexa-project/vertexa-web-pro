@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Série: última medida = 108 kg. Cadastro diz 117 (current_weight) — telas devem mostrar 108.
+vi.mock("./docimport/DocImportSection", () => ({ DocImportSection: () => null })); // importação com Conferência tem teste próprio
 vi.mock("@/lib/api/weight", () => ({
   getWeightSeries: vi.fn(async () => [
     { date: "2026-09-01T12:00:00Z", weight: 117, source: "app", method: null },

@@ -32,7 +32,7 @@ export function fmtNumberBR(n: number, digits = 1): string {
 export function parseDateBR(raw: string | null | undefined): string | null {
   const t = (raw ?? "").trim();
   let d: number, m: number, y: number;
-  let x = /^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2}|\d{4})$/.exec(t);
+  let x = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/.exec(t);
   if (x) {
     d = Number(x[1]); m = Number(x[2]); y = Number(x[3]);
     if (x[3].length === 2) y += 2000;
