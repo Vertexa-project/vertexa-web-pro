@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePendingWeights, useReviewWeight, useWeightSeries } from "@/hooks/useBodyAssessments";
 import { deltaLabel } from "@/lib/domain/weightReview";
-import { formatWeight } from "@/lib/domain/format";
+import { formatNumber, formatWeight } from "@/lib/domain/format";
 
 /** Pesos que o paciente confirmou apesar da variação >2 kg/dia. Até a equipe decidir, ficam fora do gráfico e do VRI. */
 export function WeightReviewCard({ patientId }: { patientId: string }) {
@@ -35,10 +35,10 @@ export function WeightReviewCard({ patientId }: { patientId: string }) {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={review.isPending} aria-label={`Aprovar peso ${w.weight_kg} kg`} onClick={() => review.mutate({ id: w.id, decision: "approved" })}>
+                <Button size="sm" variant="outline" disabled={review.isPending} aria-label={`Aprovar peso ${formatNumber(Number(w.weight_kg), 1)} kg`} onClick={() => review.mutate({ id: w.id, decision: "approved" })}>
                   <Check className="mr-1 h-4 w-4" /> Aprovar
                 </Button>
-                <Button size="sm" variant="outline" disabled={review.isPending} aria-label={`Recusar peso ${w.weight_kg} kg`} onClick={() => review.mutate({ id: w.id, decision: "rejected" })}>
+                <Button size="sm" variant="outline" disabled={review.isPending} aria-label={`Recusar peso ${formatNumber(Number(w.weight_kg), 1)} kg`} onClick={() => review.mutate({ id: w.id, decision: "rejected" })}>
                   <X className="mr-1 h-4 w-4" /> Recusar
                 </Button>
               </div>

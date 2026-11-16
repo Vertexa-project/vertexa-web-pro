@@ -23,7 +23,7 @@ import {
   MAX_DOCUMENT_SIZE_BYTES,
 } from "@/lib/api/documents";
 import { DOCUMENT_KIND_LABELS, inferDocumentKind, isDocumentKind } from "@/lib/domain/documentKind";
-import { formatDate, formatFileSize } from "@/lib/domain/format";
+import { formatDate, formatFileSize, formatNumber } from "@/lib/domain/format";
 import { isSafeDocumentUrl } from "@/lib/domain/safeUrl";
 import type { PatientDocumentKind, PatientDocumentView } from "@/types/db";
 
@@ -325,7 +325,7 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
                 </CardHeader>
                 {doc.body_fat_pct != null || doc.weight != null ? (
                   <CardContent className="flex gap-6 pt-0 text-sm text-muted-foreground">
-                    {doc.weight != null ? <span>Peso: {doc.weight} kg</span> : null}
+                    {doc.weight != null ? <span>Peso: {formatNumber(Number(doc.weight), 1)} kg</span> : null}
                     {doc.body_fat_pct != null ? <span>% Gordura: {doc.body_fat_pct}%</span> : null}
                   </CardContent>
                 ) : null}

@@ -8,7 +8,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { formatDate } from "@/lib/domain/format";
+import { formatDate, formatNumber } from "@/lib/domain/format";
 import type { WeightPoint } from "@/types/db";
 
 interface DotProps {
@@ -75,10 +75,11 @@ export function WeightChart({ points }: { points: WeightPoint[] }) {
           fontSize={12}
           stroke="hsl(var(--muted-foreground))"
           unit=" kg"
+          tickFormatter={(v: number) => formatNumber(Number(v), 1)}
           width={56}
         />
         <Tooltip
-          formatter={(value: number) => [`${value} kg`, "Peso"]}
+          formatter={(value: number) => [`${formatNumber(Number(value), 1)} kg`, "Peso"]}
           contentStyle={{
             background: "hsl(var(--popover))",
             border: "1px solid hsl(var(--border))",

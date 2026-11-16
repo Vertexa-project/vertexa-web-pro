@@ -146,7 +146,7 @@ describe("buildPatientReportModel — treino, água, suplementação e evoluçã
     expect(ev?.title).toBe("Evolução no período");
     expect(ev?.kpis).toEqual([
       { label: "Peso", value: "76 kg", sub: "−4 kg desde 80 kg" },
-      { label: "% Gordura", value: "27.5%", sub: "−2.5 p.p. desde 30%" },
+      { label: "% Gordura", value: "27,5%", sub: "−2,5 p.p. desde 30%" },
       { label: "Medições", value: "3 pesagens", sub: "2 avaliações" },
     ]);
     // a evolução abre o relatório, antes das tabelas de dados
@@ -214,7 +214,7 @@ describe("buildPatientReportModel — treino, água, suplementação e evoluçã
       { label: "Melhor dia", value: "3 L", sub: "02/06/2026" },
     ]);
     expect(h?.table?.rows).toEqual([
-      { week: "01/06", avg: "2.5 L", days: "2" },
+      { week: "01/06", avg: "2,5 L", days: "2" },
       { week: "08/06", avg: "1 L", days: "1" },
     ]);
   });
@@ -283,7 +283,7 @@ describe("buildPatientReportModel — treino, água, suplementação e evoluçã
       { label: "Qualidade média", value: "3", sub: "escala de 1 a 5" },
     ]);
     expect(x?.table?.rows).toEqual([
-      { week: "01/06", avg: "7.5 h", days: "2" },
+      { week: "01/06", avg: "7,5 h", days: "2" },
       { week: "08/06", avg: "6 h", days: "1" },
     ]);
   });

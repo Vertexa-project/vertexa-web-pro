@@ -2,6 +2,7 @@
 // A RPC é a ÚNICA fonte do pacote; aqui só formatamos para a casca (ReportShell/primitivos).
 // A4 (obrigatório): quando meta.truncated, expõe um aviso legível para o leitor do relatório.
 import type { ReportExportResponse } from "@/lib/api/report";
+import { formatNumber } from "@/lib/domain/format";
 import { streakLabel } from "@/lib/domain/plural";
 
 export interface ReportColumn {
@@ -46,7 +47,8 @@ function fmtD(s: unknown): string {
 }
 function num(v: unknown, suffix = ""): string {
   if (v == null || v === "") return "—";
-  return `${v}${suffix}`;
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  return `${Number.isFinite(n) ? formatNumber(n, 2) : String(v)}${suffix}`;
 }
 const arr = (v: unknown): Array<Record<string, unknown>> => (Array.isArray(v) ? (v as Array<Record<string, unknown>>) : []);
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -61,8 +63,8 @@ const toNum = (v: unknown): number | null => {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : null;
 };
-/** Número curto, sem zeros à toa: 2 → "2", 2.50 → "2.5" (mesmo separador do restante do PDF). */
-const dec = (n: number, digits = 1): string => String(Math.round(n * 10 ** digits) / 10 ** digits);
+/** Número curto pt-BR, sem zeros à toa: 2 → "2", 2.50 → "2,5" (vírgula decimal em todo o sistema). */
+const dec = (n: number, digits = 1): string => formatNumber(Math.round(n * 10 ** digits) / 10 ** digits, digits);
 const signed = (n: number, digits = 1): string => {
   const r = Math.round(n * 10 ** digits) / 10 ** digits;
   if (r === 0) return "sem variação";

@@ -1,3 +1,4 @@
+import { formatNumber } from "@/lib/domain/format";
 // Revisão de peso suspeito (PDF do Ernâni, tela 03). Entra na curva: ok (padrão) e approved.
 // pending (aguarda a equipe) e rejected ficam fora; linha antiga sem status conta como ok.
 export type WeightReviewStatus = "ok" | "pending" | "approved" | "rejected";
@@ -11,6 +12,6 @@ export function deltaLabel(prevKg: number | null, prevDate: string | null, kg: n
   if (prevKg == null) return "sem registro anterior";
   const d = Math.round((kg - prevKg) * 10) / 10;
   const sign = d > 0 ? "+" : d < 0 ? "−" : "";
-  const txt = `${sign}${Math.abs(d).toFixed(1).replace(".", ",")} kg`;
+  const txt = `${sign}${formatNumber(Math.abs(d), 1, true)} kg`;
   return prevDate ? `${txt} desde ${new Date(prevDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" })}` : txt;
 }
