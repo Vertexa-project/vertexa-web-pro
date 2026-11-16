@@ -7,7 +7,7 @@ export function detectIntent(message: string): Intent {
   const n = norm(message);
   if (/marc\w* .*pag|pagou|deu baixa|baixa.*(pagamento|titulo)|movimenta\w* caixa|lanca\w* (pagamento|venda)/.test(n)) return "pagamento";
   if (/diagnost|prescrev|prescri|receit\w* (um|uma|de)|qual (remedio|medicamento)|dose de|doenca (do|da)/.test(n)) return "diagnostico";
-  if (/financ|faturamento|receita do mes|atras\w* (de )?pagament|inadimpl|mensalidade|quanto (recebi|faturei)|cobranc|\\bmes\\b/.test(n)) return "financeiro";
+  if (/financ|faturamento|receita do mes|atras\w* (de )?pagament|inadimpl|mensalidade|quanto (recebi|faturei)|cobranc|\bmes\b/.test(n)) return "financeiro";
   if (/monta\w* .*(treino|dieta)|criar? .*(treino|dieta)|gera\w* .*(treino|dieta)|plano alimentar/.test(n)) return "treino";
   if (/sem registr|parad[oa]|sumid|nao registr/.test(n)) return "sem_registrar";
   if (/quem (eu )?(devo )?(ligar|chamar|precisa)|quem devo|meu dia|prioridade|foco|ligar hoje|preparar meu dia/.test(n)) return "quem_hoje";
