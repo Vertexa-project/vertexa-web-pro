@@ -66,6 +66,18 @@ describe("MessagesPage deep link", () => {
     expect(screen.getByRole("button", { name: /Marina Alves/i })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("rascunho da Vertexa IA preenche o campo de resposta, uma vez, sem enviar", () => {
+    sessionStorage.setItem("vertexa-ai:draft:pac-1", "Oi, Marina! Faz alguns dias.");
+    const view = render(
+      <MemoryRouter initialEntries={["/mensagens?patient=pac-1"]}>
+        <MessagesPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByDisplayValue("Oi, Marina! Faz alguns dias.")).toBeInTheDocument();
+    expect(sessionStorage.getItem("vertexa-ai:draft:pac-1")).toBeNull();
+    view.unmount();
+  });
+
   it("T17 — paciente fora do alcance → copy genérica, sem thread", () => {
     render(
       <MemoryRouter initialEntries={["/mensagens?patient=pac-revogado"]}>
