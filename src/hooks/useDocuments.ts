@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   listPatientDocuments,
+  updatePatientDocumentKind,
   uploadPatientDocument,
   type UploadPatientDocumentInput,
 } from "@/lib/api/documents";
@@ -28,5 +29,14 @@ export const useUploadPatientDocument = (patientId: string) => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.patientExams(patientId) });
     },
+  });
+};
+
+/** Troca o tipo de um documento enviado; recarrega a lista. */
+export const useUpdateDocumentKind = (patientId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; kind: string }) => updatePatientDocumentKind(v.id, v.kind),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.patientExams(patientId) }),
   });
 };

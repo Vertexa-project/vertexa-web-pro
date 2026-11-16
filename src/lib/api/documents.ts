@@ -165,3 +165,10 @@ export async function getDocumentSignedUrl(filePath: string): Promise<string> {
   if (!data?.signedUrl) throw new Error("Não foi possível gerar o link do documento.");
   return data.signedUrl;
 }
+
+/** Troca o tipo (exame/relatório/outro) de um documento já enviado. Só `kind` — RLS exige quem prescreve p/ o paciente. */
+export async function updatePatientDocumentKind(id: string, kind: string): Promise<void> {
+  if (!id) throw new Error("Documento não informado.");
+  const { error } = await supabase.from("patient_documents").update({ kind }).eq("id", id);
+  if (error) throw error;
+}

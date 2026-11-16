@@ -16,21 +16,19 @@ import {
 } from "@/components/ui/select";
 import { useCurrentProfessional } from "@/hooks/useCurrentProfessional";
 import { usePatientDocuments } from "@/hooks/useBodyAssessments";
-import { usePatientExams, useUploadPatientDocument } from "@/hooks/useDocuments";
+import { usePatientExams, useUpdateDocumentKind, useUploadPatientDocument } from "@/hooks/useDocuments";
 import {
   ALLOWED_DOCUMENT_MIME,
   getDocumentSignedUrl,
   MAX_DOCUMENT_SIZE_BYTES,
 } from "@/lib/api/documents";
+import { DOCUMENT_KIND_LABELS, inferDocumentKind, isDocumentKind } from "@/lib/domain/documentKind";
 import { formatDate, formatFileSize } from "@/lib/domain/format";
 import { isSafeDocumentUrl } from "@/lib/domain/safeUrl";
 import type { PatientDocumentKind, PatientDocumentView } from "@/types/db";
 
-const KIND_LABELS: Record<PatientDocumentKind, string> = {
-  exam: "Exame",
-  report: "Relatório",
-  other: "Outro",
-};
+const KIND_LABELS = DOCUMENT_KIND_LABELS;
+const AUTO_KIND = "auto"; // "Detectar pelo nome" (padrão)
 
 const ACCEPT_ATTR = ".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp";
 
@@ -64,10 +62,11 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
   const exams = usePatientExams(patientId);
   const legacy = usePatientDocuments(patientId);
   const upload = useUploadPatientDocument(patientId);
+  const updateKind = useUpdateDocumentKind(patientId);
   const { data: professional } = useCurrentProfessional();
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const [kind, setKind] = useState<PatientDocumentKind>("exam");
+  const [kind, setKind] = useState<PatientDocumentKind | typeof AUTO_KIND>(AUTO_KIND);
   const [notice, setNotice] = useState<{ tone: "error" | "success"; text: string } | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
 
@@ -99,7 +98,7 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
     try {
       await upload.mutateAsync({
         file,
-        kind,
+        kind: kind === AUTO_KIND ? inferDocumentKind(file.name) : kind,
         title: file.name,
         uploadedByRole: "professional",
         uploadedByProfessionalId: professional.id,
@@ -150,11 +149,12 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
               <Label htmlFor="doc-kind" className="text-xs text-muted-foreground">
                 Tipo
               </Label>
-              <Select value={kind} onValueChange={(v) => setKind(v as PatientDocumentKind)}>
+              <Select value={kind} onValueChange={(v) => setKind(v as PatientDocumentKind | typeof AUTO_KIND)}>
                 <SelectTrigger id="doc-kind" className="h-9 w-36" disabled={isUploading}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={AUTO_KIND}>Pelo nome do arquivo</SelectItem>
                   {(Object.keys(KIND_LABELS) as PatientDocumentKind[]).map((k) => (
                     <SelectItem key={k} value={k}>
                       {KIND_LABELS[k]}
@@ -209,7 +209,7 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
           <div className="space-y-3">
             {(exams.data ?? []).map((doc) => (
               <Card key={doc.id}>
-                <CardHeader className="flex-row items-center justify-between space-y-0 gap-3">
+                <CardHeader className="flex-row flex-wrap items-center justify-between space-y-0 gap-3">
                   <div className="flex min-w-0 items-center gap-3">
                     <span
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
@@ -232,6 +232,28 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
                       </p>
                     </div>
                   </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <Select
+                    value={isDocumentKind(doc.kind) ? doc.kind : "other"}
+                    onValueChange={(v) =>
+                      updateKind.mutate(
+                        { id: doc.id, kind: v },
+                        { onError: () => setNotice({ tone: "error", text: "Não foi possível trocar o tipo do documento." }) },
+                      )
+                    }
+                    disabled={updateKind.isPending}
+                  >
+                    <SelectTrigger className="h-8 w-32 text-xs" aria-label={`Tipo do documento ${doc.title?.trim() || ""}`.trim()}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(KIND_LABELS) as PatientDocumentKind[]).map((k) => (
+                        <SelectItem key={k} value={k}>
+                          {KIND_LABELS[k]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     variant="outline"
                     size="sm"
@@ -246,6 +268,7 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
                     )}
                     Abrir
                   </Button>
+                  </div>
                 </CardHeader>
               </Card>
             ))}
