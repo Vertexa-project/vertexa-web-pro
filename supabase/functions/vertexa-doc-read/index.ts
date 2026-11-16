@@ -196,6 +196,22 @@ Deno.serve(async (req: Request) => {
   }
 
   const readId = crypto.randomUUID();
+  // Limpeza em segundo plano: leitura dessa pessoa aberta há mais de 1 h e nunca decidida (navegador fechado no meio da
+  // Conferência) vira "descartado" sem autor (automático) e o arquivo solto sai do bucket — se não foi anexado em Documentos.
+  background((async () => {
+    const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { data: stale } = await admin.from("vertexa_doc_reads").select("id, doc_path")
+      .eq("uploaded_by", profileId).eq("status", "lido").lt("created_at", cutoff).limit(20);
+    if (!stale?.length) return;
+    const paths = (stale as Row[]).map((r) => String(r.doc_path));
+    const { data: used } = await admin.from("patient_documents").select("file_path").in("file_path", paths);
+    const keep = new Set(((used ?? []) as Row[]).map((d) => String(d.file_path)));
+    await admin.from("vertexa_doc_reads").update({ status: "descartado", resolved_at: new Date().toISOString() })
+      .in("id", (stale as Row[]).map((r) => r.id)).eq("status", "lido");
+    const loose = paths.filter((x) => !keep.has(x));
+    if (loose.length) await admin.storage.from(BUCKET).remove(loose);
+  })());
+
   // Rastro em segundo plano: a Conferência leva segundos até a decisão, e o "resolve" só existe depois dela.
   background(admin.from("vertexa_doc_reads").insert({
     id: readId, clinic_id: clinicId, patient_id: patientId, kind, mode: result.mode, status: "lido", uploaded_by: profileId, doc_path: path,

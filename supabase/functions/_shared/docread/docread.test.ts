@@ -337,6 +337,12 @@ describe("a função só lê: nunca grava na ficha (guarda estática)", () => {
     expect(deny).toBeLessThan(src.indexOf("blob.arrayBuffer()"));
     expect(deny).toBeLessThan(src.indexOf("readDemo(", deny - 1));
   });
+  it("limpeza de leitura abandonada: só da própria pessoa, só 'lido' antigo, e nunca apaga arquivo anexado em Documentos", () => {
+    const sweep = src.slice(src.indexOf("Limpeza em segundo plano"), src.indexOf("Rastro em segundo plano"));
+    expect(sweep).toMatch(/\.eq\("uploaded_by", profileId\)/);
+    expect(sweep).toMatch(/\.eq\("status", "lido"\)\.lt\("created_at", cutoff\)/);
+    expect(sweep).toMatch(/!keep\.has\(x\)/);
+  });
   it("o rastro não carrega valores lidos", () => {
     const insert = /from\("vertexa_doc_reads"\)\.insert\(\{[\s\S]*?\}\);/.exec(src)![0];
     expect(insert).not.toMatch(/result\.fields\s*[,.\]]\s*(map|value)|value:/);
