@@ -3,7 +3,6 @@ import {
   FileText,
   KanbanSquare,
   LayoutDashboard,
-  LayoutTemplate,
   Megaphone,
   Package,
   MessageSquare,
@@ -46,9 +45,7 @@ export const mainNav: NavItem[] = [
   { path: "/financeiro", label: "Financeiro", icon: Wallet, adminOnly: true, finMenu: "finance" },
   { path: "/estoque", label: "Estoque", icon: Package, adminOnly: true, finMenu: "stock" },
   { path: "/documentos", label: "Documentos", icon: FileText, adminOnly: true, finMenu: "docs" },
-  // Roadmap (não implementado): modelos de plano/treino/mensagem reutilizáveis.
-  // Aparece com cadeado para sinalizar o que vem, sem virar módulo solto.
-  { path: "/modelos", label: "Modelos", icon: LayoutTemplate, locked: true },
+  // "Modelos" (roadmap) fica FORA do menu até ficar pronto (redesign P1 · item 8).
 ];
 
 export const footerNav: NavItem[] = [

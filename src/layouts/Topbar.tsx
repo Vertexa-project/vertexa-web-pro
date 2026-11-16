@@ -1,11 +1,10 @@
 import { useNavigate } from "react-router-dom";
-import { CreditCard, LogOut, MessageCircle, Moon, Search, Settings, Sun } from "lucide-react";
+import { CreditCard, LogOut, MessageCircle, Moon, Settings, Sun } from "lucide-react";
 
 import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { ClinicIdentity } from "@/components/ClinicIdentity";
 import { StaffNotificationsBell } from "@/components/notifications/StaffNotificationsBell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,17 +47,7 @@ export function Topbar() {
         <ClinicIdentity compact markClassName="h-8 w-8" />
       </div>
 
-      <div className="relative hidden max-w-xs flex-1 sm:block">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-        <Input
-          type="search"
-          placeholder="Buscar (em breve)"
-          className="bg-muted/50 pl-9"
-          aria-label="Busca global (em breve)"
-          title="Busca global (em breve)"
-          disabled
-        />
-      </div>
+      {/* Busca global fica oculta até funcionar (redesign P1 · item 7). */}
 
       <div className="ml-auto flex items-center gap-1">
         <StaffNotificationsBell />

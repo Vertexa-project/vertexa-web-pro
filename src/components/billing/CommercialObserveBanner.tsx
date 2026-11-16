@@ -10,7 +10,8 @@ export function CommercialObserveBanner() {
   const access = useMyClinicCommercialAccess(clinicId, Boolean(clinicId));
   const { isClinicAdmin } = useIsClinicAdmin(clinicId);
 
-  if (access.data?.reason !== "OBSERVE_ONLY") return null;
+  // Faixa de contrato só para quem administra a clínica (dono/admin) — redesign P1 · item 7.
+  if (!isClinicAdmin || access.data?.reason !== "OBSERVE_ONLY") return null;
 
   return (
     <div
