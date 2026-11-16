@@ -326,7 +326,7 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
                 {doc.body_fat_pct != null || doc.weight != null ? (
                   <CardContent className="flex gap-6 pt-0 text-sm text-muted-foreground">
                     {doc.weight != null ? <span>Peso: {formatNumber(Number(doc.weight), 1)} kg</span> : null}
-                    {doc.body_fat_pct != null ? <span>% Gordura: {doc.body_fat_pct}%</span> : null}
+                    {doc.body_fat_pct != null ? <span>% Gordura: {formatNumber(Number(doc.body_fat_pct), 1)}%</span> : null}
                   </CardContent>
                 ) : null}
               </Card>
