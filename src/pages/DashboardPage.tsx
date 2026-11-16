@@ -3,19 +3,19 @@ import { useNavigate } from "react-router-dom";
 import { Activity, AlertTriangle, ArrowRight, ClipboardList, Gauge, TrendingUp, Users } from "lucide-react";
 
 import { AdherenceChart } from "@/components/dashboard/AdherenceChart";
+import { AttentionRow } from "@/components/dashboard/AttentionRow";
 import { AgendaCard } from "@/components/dashboard/AgendaCard";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RetentionPanel } from "@/components/retention/RetentionPanel";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentProfessional, useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
 import { useListPatients } from "@/hooks/usePatients";
-import { formatDate, greeting, initials, shortName } from "@/lib/domain/format";
+import { formatDate, greeting, shortName } from "@/lib/domain/format";
 import { attentionKpis, focusAction, focusOrder, type PatientAttention } from "@/lib/domain/attention";
 import type { PatientListItem } from "@/types/db";
 
@@ -37,27 +37,17 @@ function DashboardSkeleton() {
 
 function FocusItem({ patient, attention }: { patient: PatientListItem; attention: PatientAttention }) {
   const navigate = useNavigate();
-  const name = patient.profile?.full_name ?? "Sem nome";
-  const action = focusAction(patient.id, attention.primary);
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <Avatar>
-        <AvatarFallback>{initials(name)}</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-foreground">{name}</p>
-        <div className="mt-1 flex flex-wrap gap-1">
-          {attention.reasons.map((r) => (
-            <Badge key={r.kind} tone={attention.level === "em_risco" ? "destructive" : "warning"}>
-              {r.label}
-            </Badge>
-          ))}
-        </div>
-      </div>
-      <Button variant="outline" size="sm" className="shrink-0" onClick={() => navigate(action.to)}>
-        {action.label}
-      </Button>
-    </div>
+    <AttentionRow
+      name={patient.profile?.full_name ?? "Sem nome"}
+      badges={attention.reasons.map((r) => (
+        <Badge key={r.kind} className="whitespace-normal" tone={attention.level === "em_risco" ? "destructive" : "warning"}>
+          {r.label}
+        </Badge>
+      ))}
+      action={focusAction(patient.id, attention.primary)}
+      onAction={navigate}
+    />
   );
 }
 
@@ -160,7 +150,7 @@ export function DashboardPage() {
               /retencao (deep-link), agora sem item de menu lateral. */}
           <section className="space-y-4">
             <h2 className="text-lg font-semibold text-foreground">Retenção &amp; coortes</h2>
-            <RetentionPanel patients={data ?? []} onPatientClick={(patientId) => navigate(`/pacientes/${patientId}`)} />
+            <RetentionPanel patients={data ?? []} onNavigate={navigate} />
           </section>
         </>
       )}

@@ -1,11 +1,10 @@
 import { useMemo } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { AttentionRow } from "@/components/dashboard/AttentionRow";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatPercent, initials, professionalTypeLabel } from "@/lib/domain/format";
-import { focusOrder } from "@/lib/domain/attention";
+import { formatPercent, professionalTypeLabel } from "@/lib/domain/format";
+import { classifyPatient, focusAction, focusOrder, type AttentionReason } from "@/lib/domain/attention";
 import { computePendencies } from "@/lib/domain/pendencies";
 import { cn } from "@/lib/utils";
 import type { PatientListItem } from "@/types/db";
@@ -17,49 +16,23 @@ function adherenceBarColor(rate: number): string {
   return "bg-destructive";
 }
 
-function PatientRow({
-  patient,
-  onClick,
-  trailing,
-}: {
-  patient: PatientListItem;
-  onClick: () => void;
-  trailing?: React.ReactNode;
-}) {
-  const name = patient.profile?.full_name ?? "Sem nome";
-  return (
-    <div className="flex items-center gap-3">
-      <Avatar>
-        <AvatarFallback>{initials(name)}</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-foreground">{name}</p>
-        <div className="mt-1">{trailing}</div>
-      </div>
-      <Button
-        variant="outline"
-        size="sm"
-        className="shrink-0"
-        aria-label={`Tratar ${name}`}
-        onClick={onClick}
-      >
-        Tratar
-      </Button>
-    </div>
-  );
+/** Motivo de registro (não o de adesão) que move a ação da lista de pendências. */
+function pendencyReason(p: PatientListItem): AttentionReason | null {
+  const { reasons, primary } = classifyPatient(p);
+  return reasons.find((r) => r.kind !== "adherence_drop") ?? primary;
 }
 
 /**
  * Painel de retenção reutilizável (coortes). Vive no Dashboard (centro do produto) e
  * também na rota /retencao (deep-link). Recebe a lista de pacientes já carregada e um
- * callback de navegação — não busca dados por conta própria (DRY com quem o renderiza).
+ * callback de navegação (ação por motivo: lib/domain/attention.focusAction) — não busca dados por conta própria (DRY com quem o renderiza).
  */
 export function RetentionPanel({
   patients,
-  onPatientClick,
+  onNavigate,
 }: {
   patients: PatientListItem[];
-  onPatientClick: (patientId: string) => void;
+  onNavigate: (to: string) => void;
 }) {
   const view = useMemo(() => {
     // Mesma regra dos KPIs do Dashboard (lib/domain/attention).
@@ -110,19 +83,16 @@ export function RetentionPanel({
               <p className="text-sm text-muted-foreground">Ninguém em risco ou atenção no momento.</p>
             ) : (
               view.reactivate.map(({ patient: p, attention }) => (
-                <PatientRow
+                <AttentionRow
                   key={p.id}
-                  patient={p}
-                  onClick={() => onPatientClick(p.id)}
-                  trailing={
-                    <div className="flex flex-wrap gap-1">
-                      {attention.reasons.map((r) => (
-                        <Badge key={r.kind} tone={attention.level === "em_risco" ? "destructive" : "warning"}>
-                          {r.label}
-                        </Badge>
-                      ))}
-                    </div>
-                  }
+                  name={p.profile?.full_name ?? "Sem nome"}
+                  action={focusAction(p.id, attention.primary)}
+                  onAction={onNavigate}
+                  badges={attention.reasons.map((r) => (
+                    <Badge key={r.kind} className="whitespace-normal" tone={attention.level === "em_risco" ? "destructive" : "warning"}>
+                      {r.label}
+                    </Badge>
+                  ))}
                 />
               ))
             )}
@@ -140,22 +110,16 @@ export function RetentionPanel({
               </p>
             ) : (
               view.pendentes.map(({ patient, pend }) => (
-                <PatientRow
+                <AttentionRow
                   key={patient.id}
-                  patient={patient}
-                  onClick={() => onPatientClick(patient.id)}
-                  trailing={
-                    <div className="flex flex-wrap gap-1">
-                      {pend.labels.map((l) => (
-                        <span
-                          key={l}
-                          className="rounded-full bg-warning/15 px-2 py-0.5 text-xs text-warning-foreground"
-                        >
-                          {l}
-                        </span>
-                      ))}
-                    </div>
-                  }
+                  name={patient.profile?.full_name ?? "Sem nome"}
+                  action={focusAction(patient.id, pendencyReason(patient))}
+                  onAction={onNavigate}
+                  badges={pend.labels.map((l) => (
+                    <span key={l} className="rounded-full bg-warning/15 px-2 py-0.5 text-xs text-warning-foreground">
+                      {l}
+                    </span>
+                  ))}
                 />
               ))
             )}

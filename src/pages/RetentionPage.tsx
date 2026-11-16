@@ -55,7 +55,7 @@ export function RetentionPage() {
             <StatCard icon={Gauge} label="Adesão média" value={`${stats.adesaoMedia}%`} tone="success" />
           </div>
 
-          <RetentionPanel patients={data ?? []} onPatientClick={(id) => navigate(`/pacientes/${id}`)} />
+          <RetentionPanel patients={data ?? []} onNavigate={navigate} />
         </>
       )}
     </div>
