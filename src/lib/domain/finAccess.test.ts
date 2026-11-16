@@ -38,12 +38,12 @@ describe("visibilidade do menu pela matriz de papéis", () => {
   });
 });
 
-import { mainNav } from "@/app/routes";
-import { filterNav } from "@/hooks/useVisibleNav";
+import { gestaoTabs } from "@/lib/domain/gestaoNav";
 
 describe("menu lateral pela matriz de papéis", () => {
-  const paths = (a: ReturnType<typeof acc>, admin = false) => filterNav(mainNav, admin, a).map((i) => i.path);
-  it("financeiro vê Financeiro e Estoque, mas não Gestão", () => {
+  // Redesign P2: Financeiro/Estoque/Documentos são sub-abas de Gestão; a regra de quem vê é a mesma.
+  const paths = (a: ReturnType<typeof acc>, admin = false) => gestaoTabs(admin, a).map((t) => t.to);
+  it("financeiro vê Financeiro e Estoque, mas não a Visão geral de Gestão", () => {
     const p = paths(acc({ services_read: true, stock_items_read: true }));
     expect(p).toContain("/financeiro");
     expect(p).toContain("/estoque");

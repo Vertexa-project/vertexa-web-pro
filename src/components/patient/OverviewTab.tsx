@@ -127,7 +127,7 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
             </div>
             <div className="flex items-center gap-2 pt-1 text-sm text-muted-foreground">
               <Target className="h-4 w-4 shrink-0" aria-hidden />
-              Acompanhe a evolução na aba Antropometria.
+              Acompanhe a evolução em Evolução › Antropometria.
             </div>
           </CardContent>
         </Card>

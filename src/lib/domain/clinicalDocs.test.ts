@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { dateTimeBR, docErrorMessage, emptyDraft, formatCpf, isoDateBR, itemsForType, validateDraft, DEMO_BADGE, DEMO_NOTICE, DOC_TYPES } from "@/lib/domain/clinicalDocs";
 import { activityEventDescription, activityEventMeta } from "@/lib/domain/activityEvents";
-import { filterNav } from "@/hooks/useVisibleNav";
-import { mainNav } from "@/app/routes";
+import { gestaoTabs } from "@/lib/domain/gestaoNav";
 import { canSeeDocsMenu, rowToAccess } from "@/lib/domain/finAccess";
 
 const rx = { name: "Medicamento Fictício 10 mg", dose: "1 comprimido", posology: "1x ao dia", quantity: "30" };
@@ -71,7 +70,7 @@ describe("timeline do paciente", () => {
 });
 
 describe("menu Documentos por papel", () => {
-  const nav = (raw: Record<string, unknown>, admin = false) => filterNav(mainNav, admin, rowToAccess(raw)).some((i) => i.path === "/documentos");
+  const nav = (raw: Record<string, unknown>, admin = false) => gestaoTabs(admin, rowToAccess(raw)).some((t) => t.to === "/documentos");
   it("Admin, profissional e Recepção veem; Financeiro, Estoquista e Gestor sem vínculo clínico não", () => {
     expect(nav({ is_admin: true, can: {} }, true)).toBe(true);
     expect(nav({ can: { doc_list: true, doc_content: true } })).toBe(true);

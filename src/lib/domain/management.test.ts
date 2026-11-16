@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { filterNav } from "@/hooks/useVisibleNav";
 import { mainNav } from "@/app/routes";
+import { gestaoTabs } from "@/lib/domain/gestaoNav";
 import { idleLabel, loadShare, maxLoad, monthLabel, transferSummary, validateTransfer, type ProfessionalLoad } from "./management";
 
 const P = (patients: number): ProfessionalLoad => ({ professional_id: String(patients), name: "x", clinic_role: null, patients, em_risco: 0, atencao: 0, avg_adherence: null, idle: 0 });
@@ -30,12 +31,13 @@ describe("management domain", () => {
     expect(validateTransfer("a", "b", 0).ok).toBe(false);
     expect(validateTransfer("a", "b", 2).ok).toBe(true);
   });
-  it("menu: Gestão só para administrador", () => {
-    expect(filterNav(mainNav, false).map((i) => i.path)).not.toContain("/gestao");
-    expect(filterNav(mainNav, true).map((i) => i.path)).toContain("/gestao");
-    expect(filterNav(mainNav, true).map((i) => i.path)).toContain("/financeiro");
-    expect(filterNav(mainNav, false).map((i) => i.path)).not.toContain("/financeiro");
-    // Gestão, Financeiro, Estoque e Documentos (E9) são só do admin/papéis (Estoque entrou na Entrega 1 do módulo Financeiro/Estoque).
-    expect(filterNav(mainNav, false).length).toBe(mainNav.length - 4);
+  it("menu: Gestão só para administrador (ou quem tem papel que alcança uma sub-aba)", () => {
+    // Sem papel nenhum: o item Gestão some.
+    expect(filterNav(mainNav, false).some((i) => i.gestao)).toBe(false);
+    expect(filterNav(mainNav, false).length).toBe(mainNav.length - 1);
+    // Admin: Gestão aparece e abre na Visão geral; Financeiro/Estoque/Documentos viram sub-abas.
+    expect(filterNav(mainNav, true).find((i) => i.gestao)?.path).toBe("/gestao");
+    expect(gestaoTabs(true).map((t) => t.to)).toEqual(["/gestao", "/financeiro", "/estoque", "/documentos"]);
+    expect(gestaoTabs(false).map((t) => t.to)).not.toContain("/gestao");
   });
 });

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { NewDocumentButton } from "@/components/documents/NewDocumentButton";
 import { StartEncounterButton } from "@/components/clinical/StartEncounterButton";
@@ -28,20 +28,42 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdherenceSnapshot } from "@/hooks/useAdherenceSnapshot";
 import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
 import { usePatient } from "@/hooks/usePatients";
+import { PATIENT_TABS, resolvePatientTab, type PatientSubId, type PatientTabId } from "@/lib/domain/patientTabs";
 import { qk } from "@/lib/queryKeys";
+import { cn } from "@/lib/utils";
 
-const TABS = [
-  { value: "overview", label: "Visão geral" },
-  { value: "timeline", label: "Timeline" },
-  { value: "anthropometry", label: "Antropometria" },
-  { value: "evolution", label: "Evolução/Fotos" },
-  { value: "documents", label: "Documentos" },
-  { value: "prontuario", label: "Prontuário" },
-  { value: "nutrition", label: "Plano alimentar" },
-  { value: "supplements", label: "Suplementos" },
-  { value: "workout", label: "Treino" },
-  { value: "recovery", label: "Recuperação" },
-];
+/** Sub-abas (Radix Tabs: setas/Home/End/foco); quebram de linha no celular em vez de empurrar a página. */
+function SubTabs({
+  tab,
+  value,
+  onChange,
+  label,
+  children,
+}: {
+  tab: PatientTabId;
+  value: PatientSubId | null;
+  onChange: (sub: string) => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  const subs = PATIENT_TABS.find((t) => t.id === tab)?.subs ?? [];
+  return (
+    <Tabs value={value ?? subs[0]?.id} onValueChange={onChange}>
+      <TabsList aria-label={`Sub-abas de ${label}`} className="h-auto max-w-full flex-wrap justify-start gap-0.5 rounded-[10px] bg-muted p-[3px]">
+        {subs.map((s) => (
+          <TabsTrigger
+            key={s.id}
+            value={s.id}
+            className={cn("rounded-lg px-3 py-1.5 data-[state=active]:bg-card data-[state=active]:font-semibold")}
+          >
+            {s.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {children}
+    </Tabs>
+  );
+}
 
 function ProfileSkeleton() {
   return (
@@ -57,7 +79,22 @@ function ProfileSkeleton() {
 export function PatientProfilePage() {
   const navigate = useNavigate();
   const { id = "" } = useParams();
-  const [tab, setTab] = useState("overview");
+  // Aba/sub-aba vêm de ?tab= / ?sub= (valores antigos ou novos) e são espelhadas na URL (replace: não polui o histórico).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { tab, sub } = resolvePatientTab(searchParams.get("tab"), searchParams.get("sub"));
+  const goTo = (nextTab: string, nextSub?: string | null) => {
+    const next = resolvePatientTab(nextTab, nextSub);
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.set("tab", next.tab);
+        if (next.sub) p.set("sub", next.sub);
+        else p.delete("sub");
+        return p;
+      },
+      { replace: true },
+    );
+  };
 
   const [editOpen, setEditOpen] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
@@ -150,46 +187,59 @@ export function PatientProfilePage() {
         />
       ) : null}
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <div className="overflow-x-auto pb-1">
-          <TabsList className="w-max">
-            {TABS.map((t) => (
-              <TabsTrigger key={t.value} value={t.value}>
+      <Tabs value={tab} onValueChange={(v) => goTo(v)}>
+        <div className="overflow-x-auto border-b border-border">
+          <TabsList className="h-auto w-max gap-1 rounded-none bg-transparent p-0">
+            {PATIENT_TABS.map((t) => (
+              <TabsTrigger
+                key={t.id}
+                value={t.id}
+                className="-mb-px rounded-none border-b-2 border-transparent px-[13px] py-2 text-muted-foreground data-[state=active]:border-brand data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
                 {t.label}
               </TabsTrigger>
             ))}
           </TabsList>
         </div>
 
-        <TabsContent value="overview">
-          <OverviewTab patient={patient} snapshot={snapshot} onGoToTab={setTab} />
+        <TabsContent value="resumo">
+          {/* O Resumo abre outras abas pelos valores antigos (workout, nutrition…): goTo mapeia para aba + sub-aba. */}
+          <OverviewTab patient={patient} snapshot={snapshot} onGoToTab={(v) => goTo(v)} />
         </TabsContent>
         <TabsContent value="timeline">
           <TimelineTab patientId={patient.id} />
         </TabsContent>
-        <TabsContent value="anthropometry">
-          <AnthropometryTab patient={patient} />
-        </TabsContent>
-        <TabsContent value="evolution">
-          <EvolutionTab patient={patient} />
-        </TabsContent>
-        <TabsContent value="documents">
-          <DocumentsTab patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
-        </TabsContent>
         <TabsContent value="prontuario">
           <ClinicalRecordTab patientId={patient.id} />
         </TabsContent>
-        <TabsContent value="nutrition">
-          <NutritionTab patient={patient} />
+        <TabsContent value="planos">
+          <SubTabs tab="planos" value={sub} onChange={(v) => goTo("planos", v)} label="Planos">
+            <TabsContent value="alimentar">
+              <NutritionTab patient={patient} />
+            </TabsContent>
+            <TabsContent value="suplementos">
+              <SupplementsTab patient={patient} />
+            </TabsContent>
+            <TabsContent value="treino">
+              <WorkoutTab patient={patient} />
+            </TabsContent>
+          </SubTabs>
         </TabsContent>
-        <TabsContent value="supplements">
-          <SupplementsTab patient={patient} />
+        <TabsContent value="evolucao">
+          <SubTabs tab="evolucao" value={sub} onChange={(v) => goTo("evolucao", v)} label="Evolução">
+            <TabsContent value="antropometria">
+              <AnthropometryTab patient={patient} />
+            </TabsContent>
+            <TabsContent value="fotos">
+              <EvolutionTab patient={patient} />
+            </TabsContent>
+            <TabsContent value="recuperacao">
+              <RecoveryTab patientId={patient.id} />
+            </TabsContent>
+          </SubTabs>
         </TabsContent>
-        <TabsContent value="workout">
-          <WorkoutTab patient={patient} />
-        </TabsContent>
-        <TabsContent value="recovery">
-          <RecoveryTab patientId={patient.id} />
+        <TabsContent value="documentos">
+          <DocumentsTab patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
         </TabsContent>
       </Tabs>
     </div>
