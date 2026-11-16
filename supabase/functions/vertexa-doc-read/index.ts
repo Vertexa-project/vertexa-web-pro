@@ -42,40 +42,59 @@ async function pdfPages(bytes: Uint8Array): Promise<string[] | null> {
   }
 }
 
+/** verify_jwt=true: o gateway já validou a assinatura; aqui só lemos o `sub` (economiza uma ida ao Auth). */
+function jwtSub(token: string): string | null {
+  try {
+    const part = token.split(".")[1] ?? "";
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const p = JSON.parse(atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "=")));
+    return p?.role === "authenticated" && typeof p.sub === "string" ? p.sub : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+/** Grava em segundo plano sem segurar a resposta (desempenho). */
+function background(p: PromiseLike<unknown>): void {
+  // deno-lint-ignore no-explicit-any
+  const rt = (globalThis as any).EdgeRuntime;
+  const safe = Promise.resolve(p).catch((e) => console.error("vertexa-doc-read: segundo plano falhou", String(e)));
+  if (rt?.waitUntil) rt.waitUntil(safe);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
 
   const token = (req.headers.get("Authorization") ?? "").replace(/^bearer\s+/i, "").trim();
   if (!token) return jsonResponse({ error: "unauthenticated" }, 401);
-  const user = supabaseUser(req);
-  const [{ data: u }, body] = await Promise.all([user.auth.getUser(token), req.json().catch(() => null) as Promise<Row | null>]);
-  const uid = u.user?.id;
+  const uid = jwtSub(token);
   if (!uid) return jsonResponse({ error: "unauthenticated" }, 401);
+  const body = (await req.json().catch(() => null)) as Row | null;
   if (!body) return jsonResponse({ error: "invalid_body" }, 400);
+  // Aquecimento: a tela chama ao abrir o seletor de arquivo, para a leitura não pagar a partida da função.
+  if (body.action === "ping") return jsonResponse({ ok: true });
 
-  // ---- quem chama (RLS: só enxerga o que é dele)
-  const { data: pros } = await user.from("professionals")
-    .select("id, clinic_id, profile_id, profile:profiles!professionals_profile_id_fkey!inner ( auth_user_id )")
-    .eq("profile.auth_user_id", uid);
-  const me = (pros ?? []).find((p: Row) => p.clinic_id) as Row | undefined;
-  if (!me) return jsonResponse({ error: "forbidden" }, 403);
-  const clinicId = me.clinic_id as string;
-  const profileId = me.profile_id as string;
-
+  const user = supabaseUser(req);
   const admin = supabaseAdmin();
 
+  // ---- quem chama (RLS: só enxerga o que é dele), já com as disciplinas — uma ida só
+  const mePromise = user.from("professionals")
+    .select("id, clinic_id, profile_id, profile:profiles!professionals_profile_id_fkey!inner ( auth_user_id ), disciplines:professional_disciplines ( discipline )")
+    .eq("profile.auth_user_id", uid)
+    .then(({ data }) => (data ?? []).find((p: Row) => p.clinic_id) as Row | undefined);
+
   // Autorização comum: papel clínico (Recepção/Financeiro/Estoquista não), acesso ao paciente e disciplina que escreve aquele plano.
-  async function authorize(patientId: string, kind: DocKind): Promise<Response | null> {
-    const [{ data: acc }, chk, { data: discs }] = await Promise.all([
-      user.rpc("fin_my_access", { p_clinic: clinicId }),
-      user.rpc("vertexa_ai_can_access_patient", { p_patient: patientId }),
-      user.from("professional_disciplines").select("discipline").eq("professional_id", me!.id),
+  // O acesso ao paciente não depende de quem é o profissional: corre junto com a busca do profissional.
+  async function authorize(me: Row, patientId: string, kind: DocKind, chkP?: PromiseLike<{ data: unknown; error: unknown }>): Promise<Response | null> {
+    const [{ data: acc }, chk] = await Promise.all([
+      user.rpc("fin_my_access", { p_clinic: me.clinic_id }),
+      chkP ?? user.rpc("vertexa_ai_can_access_patient", { p_patient: patientId }),
     ]);
     const roles: string[] = ((acc?.roles ?? []) as Row[]).map((r) => String(r.role));
     if (!hasClinicalAccess(Boolean(acc?.is_admin), roles)) return jsonResponse({ error: "sem_acesso" }, 403);
     if (chk.error || chk.data !== true) return jsonResponse({ error: "sem_acesso" }, 403);
-    const mine = ((discs ?? []) as Row[]).map((d) => String(d.discipline));
+    const mine = ((me.disciplines ?? []) as Row[]).map((d) => String(d.discipline));
     if (!canReadDocFor(kind, mine)) return jsonResponse({ error: "sem_disciplina" }, 403);
     return null;
   }
@@ -85,12 +104,22 @@ Deno.serve(async (req: Request) => {
     const rid = String(body.read_id ?? "");
     const decision = body.decision === "confirmado" || body.decision === "descartado" ? (body.decision as string) : null;
     if (!UUID_RE.test(rid) || !decision) return jsonResponse({ error: "invalid_request" }, 400);
-    const { data: orig } = await admin.from("vertexa_doc_reads")
-      .select("id, clinic_id, patient_id, kind, status, doc_path, fields_total").eq("id", rid).maybeSingle();
-    if (!orig || orig.clinic_id !== clinicId) return jsonResponse({ error: "forbidden" }, 403);
+    // O rastro da leitura é gravado em segundo plano: numa decisão muito rápida ele pode ainda estar chegando (espera curta).
+    const loadOrig = async () => {
+      for (let i = 0; i < 4; i++) {
+        const { data } = await admin.from("vertexa_doc_reads").select("id, clinic_id, patient_id, kind, status, doc_path, fields_total").eq("id", rid).maybeSingle();
+        if (data) return data as Row;
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      return null;
+    };
+    const [me, orig] = await Promise.all([mePromise, loadOrig()]);
+    if (!me) return jsonResponse({ error: "forbidden" }, 403);
+    if (!orig || orig.clinic_id !== me.clinic_id) return jsonResponse({ error: "forbidden" }, 403);
     if (orig.status !== "lido") return jsonResponse({ error: "already_resolved" }, 409);
-    const denied = await authorize(orig.patient_id as string, orig.kind as DocKind);
+    const denied = await authorize(me, orig.patient_id as string, orig.kind as DocKind);
     if (denied) return denied;
+    const profileId = me.profile_id as string;
 
     const patch: Row = { status: decision, resolved_by: profileId, resolved_at: new Date().toISOString() };
     if (decision === "confirmado") {
@@ -107,7 +136,7 @@ Deno.serve(async (req: Request) => {
     if (error) return jsonResponse({ error: "trace_failed" }, 500);
     if (!upd?.length) return jsonResponse({ error: "already_resolved" }, 409);
     // Descartar não deixa arquivo solto no bucket (o usuário não tem DELETE; quem apaga é o serviço).
-    if (decision === "descartado") await admin.storage.from(BUCKET).remove([String(orig.doc_path)]).catch(() => undefined);
+    if (decision === "descartado") background(admin.storage.from(BUCKET).remove([String(orig.doc_path)]));
     return jsonResponse({ ok: true, traced: true });
   }
 
@@ -119,13 +148,17 @@ Deno.serve(async (req: Request) => {
   if (!UUID_RE.test(patientId) || !isDocKind(kind)) return jsonResponse({ error: "invalid_request" }, 400);
   if (!new RegExp(`^${patientId}/[A-Za-z0-9._-]{1,80}$`).test(path)) return jsonResponse({ error: "invalid_path" }, 400);
 
-  const denied = await authorize(patientId, kind);
+  // Tudo o que só depende do pedido corre junto; o arquivo baixado só é usado depois de autorizar.
+  // (os construtores do supabase-js só disparam no `then`: `.then((r) => r)` faz a consulta começar já)
+  const chkP = user.rpc("vertexa_ai_can_access_patient", { p_patient: patientId }).then((r) => r);
+  const dlP = user.storage.from(BUCKET).download(path);
+  const patP = user.from("patients").select("profile:profiles ( full_name )").eq("id", patientId).maybeSingle().then((r) => r);
+  const me = await mePromise;
+  if (!me) return jsonResponse({ error: "forbidden" }, 403);
+  const [denied, { data: blob, error: dlErr }, { data: pat }] = await Promise.all([authorize(me, patientId, kind, chkP), dlP, patP]);
   if (denied) return denied;
-
-  const [{ data: blob, error: dlErr }, { data: pat }] = await Promise.all([
-    user.storage.from(BUCKET).download(path),
-    user.from("patients").select("profile:profiles ( full_name )").eq("id", patientId).maybeSingle(),
-  ]);
+  const clinicId = me.clinic_id as string;
+  const profileId = me.profile_id as string;
   if (dlErr || !blob) return jsonResponse({ error: "file_not_found" }, 404);
   if (blob.size > MAX_FILE_BYTES) return jsonResponse({ error: "file_too_large" }, 413);
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -163,10 +196,10 @@ Deno.serve(async (req: Request) => {
   }
 
   const readId = crypto.randomUUID();
-  const { error: insErr } = await admin.from("vertexa_doc_reads").insert({
+  // Rastro em segundo plano: a Conferência leva segundos até a decisão, e o "resolve" só existe depois dela.
+  background(admin.from("vertexa_doc_reads").insert({
     id: readId, clinic_id: clinicId, patient_id: patientId, kind, mode: result.mode, status: "lido", uploaded_by: profileId, doc_path: path,
     fields_total: result.fields.length, fields_uncertain: result.fields.filter((f) => f.uncertain).length,
-  });
-  if (insErr) return jsonResponse({ error: "trace_failed" }, 500);
+  }).then(({ error }) => { if (error) throw new Error(error.code ?? "insert"); }));
   return jsonResponse({ mode: result.mode, read_id: readId, result });
 });

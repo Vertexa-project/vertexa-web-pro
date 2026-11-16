@@ -47,6 +47,7 @@ vi.mock("@/lib/api/documents", () => ({
 vi.mock("@/lib/api/docRead", () => ({
   readDocument: h.readDocument,
   resolveDocRead: h.resolveDocRead,
+  warmDocReader: () => undefined,
   friendlyDocReadError: (c: string) => `erro:${c}`,
 }));
 

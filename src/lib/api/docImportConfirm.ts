@@ -67,8 +67,9 @@ export const freshProgress = (): ConfirmProgress => ({ wrote: false, documentId:
 
 export interface ConfirmOutcome {
   documentId: string;
-  /** false = os dados e o documento foram salvos, mas o rastro não chegou (avisar sem desfazer). */
-  traced: boolean;
+  /** Rastro de quem confirmou, em segundo plano (a tela não espera por ele). false = os dados e o documento foram salvos,
+   *  mas o rastro não chegou (avisar sem desfazer). */
+  traced: Promise<boolean>;
 }
 
 export async function confirmImport(a: ConfirmArgs, progress: ConfirmProgress = freshProgress(), deps: ConfirmDeps = defaultDeps): Promise<ConfirmOutcome> {
@@ -106,12 +107,8 @@ export async function confirmImport(a: ConfirmArgs, progress: ConfirmProgress = 
     progress.documentId = doc.id;
   }
 
-  let traced = true;
-  try {
-    await deps.resolve(a.readId, "confirmado", { fieldsCorrected: correctedCount(a.result, a.state), documentId: progress.documentId });
-  } catch {
-    traced = false;
-  }
+  const traced = deps.resolve(a.readId, "confirmado", { fieldsCorrected: correctedCount(a.result, a.state), documentId: progress.documentId })
+    .then(() => true, () => false);
   return { documentId: progress.documentId, traced };
 }
 

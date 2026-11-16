@@ -219,8 +219,8 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
                       <FileText className="h-5 w-5" />
                     </span>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="truncate text-base">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <CardTitle className="min-w-0 break-words text-base">
                           {doc.title?.trim() || KIND_LABELS[doc.kind as PatientDocumentKind] || "Documento"}
                         </CardTitle>
                         <Badge tone="muted" className="shrink-0">

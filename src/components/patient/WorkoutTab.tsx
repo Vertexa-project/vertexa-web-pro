@@ -93,16 +93,16 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
                 <table className="w-full text-left text-sm">
                   <thead className="border-y bg-muted/40 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     <tr>
-                      <th scope="col" className="px-6 py-2">Exercício</th>
-                      <th scope="col" className="px-4 py-2">Séries × Reps</th>
-                      {cols.load ? <th scope="col" className="px-4 py-2">Carga</th> : null}
-                      {cols.groups ? <th scope="col" className="px-6 py-2">Grupos</th> : null}
+                      <th scope="col" className="px-3 py-2 sm:px-6">Exercício</th>
+                      <th scope="col" className="px-3 py-2 sm:px-4">Séries × Reps</th>
+                      {cols.load ? <th scope="col" className="hidden px-4 py-2 sm:table-cell">Carga</th> : null}
+                      {cols.groups ? <th scope="col" className="hidden px-6 py-2 sm:table-cell">Grupos</th> : null}
                     </tr>
                   </thead>
                   <tbody className="divide-y">
                     {w.workout_exercises.map((ex) => (
                       <tr key={ex.id}>
-                        <td className="px-6 py-3 font-medium text-foreground">
+                        <td className="px-3 py-3 font-medium text-foreground sm:px-6">
                           <div className="flex items-center gap-3">
                             {(() => {
                               const match = findLibraryExercise(library.index, ex.name);
@@ -110,19 +110,30 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
                                 <ExerciseMedia item={match} className="h-10 w-12 shrink-0 rounded-md" />
                               ) : null;
                             })()}
-                            <span>{ex.name}</span>
+                            <div className="min-w-0">
+                              <span>{ex.name}</span>
+                              {/* No celular, carga e grupos vão embaixo do nome (sem coluna cortada nem rolagem lateral). */}
+                              {(cols.load && ex.load_kg != null && ex.load_kg > 0) || (cols.groups && (ex.muscle_groups ?? []).length > 0) ? (
+                                <div className="mt-1 flex flex-wrap items-center gap-1 text-xs font-normal text-muted-foreground sm:hidden">
+                                  {cols.load && ex.load_kg != null && ex.load_kg > 0 ? <span>Carga {formatWeight(ex.load_kg)}</span> : null}
+                                  {cols.groups ? (ex.muscle_groups ?? []).map((g) => (
+                                    <Badge key={g} tone="muted">{muscleGroupLabel(g)}</Badge>
+                                  )) : null}
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">
+                        <td className="whitespace-nowrap px-3 py-3 text-muted-foreground sm:px-4">
                           {ex.sets != null ? formatNumber(Number(ex.sets), 1) : "—"} × {formatReps(ex.reps) ?? "—"}
                         </td>
                         {cols.load ? (
-                          <td className="px-4 py-3 text-muted-foreground">
+                          <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
                             {ex.load_kg != null && ex.load_kg > 0 ? formatWeight(ex.load_kg) : "—"}
                           </td>
                         ) : null}
                         {cols.groups ? (
-                          <td className="px-6 py-3">
+                          <td className="hidden px-6 py-3 sm:table-cell">
                             <div className="flex flex-wrap gap-1">
                               {(ex.muscle_groups ?? []).map((g) => (
                                 <Badge key={g} tone="muted">

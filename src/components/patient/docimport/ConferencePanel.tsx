@@ -9,6 +9,7 @@ import {
   type ConferenceState, type DocKind, type DocReadResult, type ReadField,
 } from "@/lib/domain/docImport";
 import { cn } from "@/lib/utils";
+import { PdfPagesPreview } from "./PdfPagesPreview";
 
 interface Props {
   kind: DocKind;
@@ -19,6 +20,8 @@ interface Props {
   fileName: string;
   previewUrl: string | null;
   isImage: boolean;
+  /** PDF enviado: a prévia é desenhada a partir destes bytes (o iframe de PDF falha no celular). */
+  pdfBytes?: ArrayBuffer | null;
   busy: boolean;
   error: string | null;
   /** Aviso fixo acima do rodapé (ex.: "o plano atual será substituído"). */
@@ -223,6 +226,8 @@ export function ConferencePanel(p: Props) {
             <div className="relative overflow-hidden rounded-md border bg-muted/30">
               {p.previewUrl && p.isImage ? (
                 <img src={p.previewUrl} alt="Documento enviado" className="max-h-[480px] w-full object-contain" />
+              ) : p.pdfBytes ? (
+                <PdfPagesPreview bytes={p.pdfBytes} />
               ) : p.previewUrl ? (
                 <iframe src={p.previewUrl} title="Documento enviado" className="h-72 w-full lg:h-[480px]" />
               ) : (

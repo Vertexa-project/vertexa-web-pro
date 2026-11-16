@@ -27,6 +27,9 @@ async function invokeFn<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
+/** Acorda a função antes da leitura (chamado ao abrir o seletor de arquivo); falha aqui não importa. */
+export const warmDocReader = () => { void invokeFn({ action: "ping" }).catch(() => undefined); };
+
 export const readDocument = (patientId: string, kind: DocKind, filePath: string) =>
   invokeFn<DocReadAnswer>({ action: "read", patient_id: patientId, kind, file_path: filePath });
 

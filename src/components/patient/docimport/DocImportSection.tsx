@@ -7,7 +7,7 @@ import { GatedAction } from "../GatedAction";
 import { useCurrentProfessional } from "@/hooks/useCurrentProfessional";
 import { useDisciplinePermissions } from "@/hooks/useDisciplines";
 import { useFinAccess } from "@/hooks/useFin";
-import { friendlyDocReadError, readDocument } from "@/lib/api/docRead";
+import { friendlyDocReadError, readDocument, warmDocReader } from "@/lib/api/docRead";
 import { confirmImport, ConferenceBlockedError, discardImport, freshProgress, ImportValidationError, type ConfirmProgress } from "@/lib/api/docImportConfirm";
 import { getDocumentSignedUrl, removeDocumentObject, uploadPatientDocumentObject } from "@/lib/api/documents";
 import { assessmentErrorMessage } from "@/lib/api/assessments";
@@ -31,6 +31,8 @@ interface Session {
   state: ConferenceState;
   previewUrl: string | null;
   isImage: boolean;
+  /** Bytes do PDF enviado, para desenhar a prévia sem depender do leitor de PDF do navegador. */
+  pdfBytes: ArrayBuffer | null;
 }
 
 const CONFIRM_LABEL: Record<DocKind, string> = {
@@ -82,12 +84,17 @@ export function DocImportSection({ patient, kind }: { patient: PatientDetail; ki
     try {
       const ready = await prepareImportFile(file);
       path = await uploadPatientDocumentObject(patient.id, ready);
-      const answer = await readDocument(patient.id, kind, path);
-      const previewUrl = await getDocumentSignedUrl(path).catch(() => null);
+      const isImage = ready.type.startsWith("image/");
+      // Leitura, link do documento e bytes da prévia correm juntos (cada um é independente).
+      const [answer, previewUrl, pdfBytes] = await Promise.all([
+        readDocument(patient.id, kind, path),
+        getDocumentSignedUrl(path).catch(() => null),
+        isImage || typeof ready.arrayBuffer !== "function" ? Promise.resolve(null) : ready.arrayBuffer().catch(() => null),
+      ]);
       progress.current = freshProgress();
       setSession({
         readId: answer.read_id, path, fileName: ready.name, mime: ready.type || null, size: ready.size,
-        result: answer.result, state: initConference(answer.result), previewUrl, isImage: ready.type.startsWith("image/"),
+        result: answer.result, state: initConference(answer.result), previewUrl, isImage, pdfBytes,
       });
     } catch (e) {
       if (path) void removeDocumentObject(path);
@@ -108,7 +115,8 @@ export function DocImportSection({ patient, kind }: { patient: PatientDetail; ki
         readId: session.readId, path: session.path, mime: session.mime, size: session.size,
         result: session.result, state: session.state, today,
       }, progress.current);
-      await Promise.all([
+      // Recarregar as listas não segura a tela: a mensagem de pronto aparece já.
+      void Promise.all([
         qc.invalidateQueries({ queryKey: qk.bodyAssessments(patient.id) }),
         qc.invalidateQueries({ queryKey: qk.weightSeries(patient.id) }),
         qc.invalidateQueries({ queryKey: qk.nutritionPlan(patient.id) }),
@@ -117,8 +125,9 @@ export function DocImportSection({ patient, kind }: { patient: PatientDetail; ki
         qc.invalidateQueries({ queryKey: qk.patientExams(patient.id) }),
         qc.invalidateQueries({ queryKey: qk.patientTimeline(patient.id) }),
       ]);
-      setDone(DONE_MESSAGE[kind] + (out.traced ? "" : " O registro de quem confirmou não chegou; avise o suporte."));
+      setDone(DONE_MESSAGE[kind]);
       setSession(null);
+      void out.traced.then((ok) => { if (!ok) setDone(DONE_MESSAGE[kind] + " O registro de quem confirmou não chegou; avise o suporte."); });
     } catch (e) {
       if (e instanceof ConferenceBlockedError || e instanceof ImportValidationError) setError(e.message);
       else if (isDisciplineDenied(e)) setError(writeDeniedMessage(e, DOC_KIND_SURFACE[kind]));
@@ -131,11 +140,11 @@ export function DocImportSection({ patient, kind }: { patient: PatientDetail; ki
 
   async function onDiscard() {
     if (!session) return;
-    setBusy(true);
-    await discardImport(session.readId, session.path);
+    // Fecha na hora: nada foi gravado na ficha; o rastro e a remoção do arquivo seguem em segundo plano.
+    const { readId, path } = session;
     setSession(null);
-    setBusy(false);
     setDone("Importação descartada. Nada foi salvo.");
+    void discardImport(readId, path);
   }
 
   const cachedPlan = kind === "dieta" ? qc.getQueryData(qk.nutritionPlan(patient.id)) : kind === "treino" ? qc.getQueryData(qk.workoutPlan(patient.id)) : null;
@@ -153,7 +162,7 @@ export function DocImportSection({ patient, kind }: { patient: PatientDetail; ki
           wrapperClassName="items-end"
           variant="outline"
           size="sm"
-          onClick={() => fileRef.current?.click()}
+          onClick={() => { warmDocReader(); fileRef.current?.click(); }}
         >
           {reading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <FileUp className="h-4 w-4" aria-hidden />}
           {IMPORT_BUTTON_LABEL[kind]}
@@ -170,7 +179,7 @@ export function DocImportSection({ patient, kind }: { patient: PatientDetail; ki
       {session ? (
         <ConferencePanel
           kind={kind} result={session.result} state={session.state} onChange={(s) => setSession((cur) => (cur ? { ...cur, state: s } : cur))}
-          today={today} fileName={session.fileName} previewUrl={session.previewUrl} isImage={session.isImage}
+          today={today} fileName={session.fileName} previewUrl={session.previewUrl} isImage={session.isImage} pdfBytes={session.pdfBytes}
           busy={busy} error={error} replaceWarning={replaceWarning} confirmLabel={CONFIRM_LABEL[kind]}
           onConfirm={() => void onConfirm()} onDiscard={() => void onDiscard()}
         />

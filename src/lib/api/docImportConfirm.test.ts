@@ -56,7 +56,8 @@ describe("confirmar importação", () => {
     expect(call[1]).toBe("confirmado");
     expect(call[2]).toEqual({ fieldsCorrected: 1, documentId: "doc-1" });
     expect(JSON.stringify(call)).not.toMatch(/70|26,8|51/);
-    expect(out).toEqual({ documentId: "doc-1", traced: true });
+    expect(out.documentId).toBe("doc-1");
+    await expect(out.traced).resolves.toBe(true);
   });
   it("dieta conferida grava pelo save do plano alimentar (não pelo de treino)", async () => {
     const d = mkDeps();
@@ -106,7 +107,7 @@ describe("confirmar importação", () => {
     const d = mkDeps();
     vi.mocked(d.resolve).mockRejectedValueOnce(new Error("x"));
     const out = await confirmImport(settle(base("treino", "treino-mariana-teste")), freshProgress(), d);
-    expect(out.traced).toBe(false);
+    await expect(out.traced).resolves.toBe(false);
   });
 });
 

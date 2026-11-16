@@ -323,12 +323,19 @@ describe("a função só lê: nunca grava na ficha (guarda estática)", () => {
   it("não toca em tabelas/RPCs clínicas de escrita", () => {
     expect(src).not.toMatch(/body_assessments|nutrition_plans|workout_plans|weight_logs|save_nutrition_plan|save_workout_plan|patient_documents"\)\s*\.(insert|update|upsert)/);
   });
-  it("recusa por papel, acesso ao paciente e disciplina ANTES de baixar o arquivo", () => {
+  it("recusa por papel, acesso ao paciente e disciplina ANTES de usar o arquivo (baixado só com o JWT do usuário)", () => {
     expect(src).toMatch(/hasClinicalAccess\(/);
     expect(src).toMatch(/vertexa_ai_can_access_patient/);
     expect(src).toMatch(/canReadDocFor\(/);
-    expect(src.indexOf("authorize(patientId, kind)")).toBeGreaterThan(0);
-    expect(src.indexOf("authorize(patientId, kind)")).toBeLessThan(src.indexOf(".download(path)"));
+    // o download corre junto da autorização (desempenho), mas pelo cliente do usuário (RLS do Storage), nunca pelo admin
+    expect(src).toMatch(/user\.storage\.from\(BUCKET\)\.download\(path\)/);
+    expect(src).not.toMatch(/admin\.storage\.from\(BUCKET\)\.download/);
+    const auth = src.indexOf("authorize(me, patientId, kind, chkP)");
+    const deny = src.indexOf("if (denied) return denied;", auth);
+    expect(auth).toBeGreaterThan(0);
+    expect(deny).toBeGreaterThan(auth);
+    expect(deny).toBeLessThan(src.indexOf("blob.arrayBuffer()"));
+    expect(deny).toBeLessThan(src.indexOf("readDemo(", deny - 1));
   });
   it("o rastro não carrega valores lidos", () => {
     const insert = /from\("vertexa_doc_reads"\)\.insert\(\{[\s\S]*?\}\);/.exec(src)![0];
