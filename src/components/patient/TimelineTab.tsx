@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 const toneBg: Record<BadgeTone, string> = {
   success: "bg-success/10 text-success",
-  warning: "bg-warning/15 text-warning-foreground",
+  warning: "bg-warning/15 text-warning-foreground dark:text-warning",
   destructive: "bg-destructive/10 text-destructive",
   info: "bg-info/10 text-info",
   primary: "bg-primary/10 text-primary",

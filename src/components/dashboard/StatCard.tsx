@@ -17,7 +17,7 @@ const toneClasses: Record<Tone, string> = {
   default: "bg-muted text-muted-foreground",
   primary: "bg-primary/10 text-primary",
   success: "bg-success/10 text-success",
-  warning: "bg-warning/15 text-warning-foreground",
+  warning: "bg-warning/15 text-warning-foreground dark:text-warning",
   destructive: "bg-destructive/10 text-destructive",
 };
 

@@ -1,12 +1,14 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({ getManagementOverview: vi.fn(), getProfessionalRoster: vi.fn(), transferPatients: vi.fn(), admin: true }));
 vi.mock("@/lib/api/management", () => api);
 vi.mock("@/hooks/useClinicBrand", () => ({ useClinicBrand: () => ({ data: { clinicId: "c1", name: "Clínica" } }) }));
+const fin = vi.hoisted(() => ({ access: { isAdmin: false, roles: [], can: {} } as Record<string, unknown> }));
+vi.mock("@/hooks/useFin", () => ({ useFinContext: () => ({ clinicId: "c1", access: fin.access, isLoading: false }) }));
 vi.mock("@/hooks/useIsClinicAdmin", () => ({ useIsClinicAdmin: () => ({ isClinicAdmin: api.admin, isLoading: false }) }));
 const { ManagementPage } = await import("./ManagementPage");
 
@@ -17,9 +19,10 @@ const OV = {
   new_by_month: [{ month: "2026-05", n: 0 }, { month: "2026-06", n: 1 }, { month: "2026-07", n: 2 }, { month: "2026-08", n: 4 }, { month: "2026-09", n: 1 }, { month: "2026-10", n: 3 }],
   stopped: [{ patient_id: "t9", name: "Paulo Parado", idle_days: 21, professionals: ["Ana Nutri"] }, { patient_id: "t8", name: "Sem Dono", idle_days: 9, professionals: [] }],
 };
-const renderPage = () => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><ManagementPage /></MemoryRouter></QueryClientProvider>);
+const renderPage = () => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={["/gestao"]}><Routes><Route path="/gestao" element={<ManagementPage />} /><Route path="/financeiro" element={<p>FINANCEIRO</p>} /></Routes></MemoryRouter></QueryClientProvider>);
 
 beforeEach(() => {
+  fin.access = { isAdmin: false, roles: [], can: {} };
   api.admin = true;
   api.getManagementOverview.mockReset().mockResolvedValue(OV);
   api.getProfessionalRoster.mockReset().mockResolvedValue([{ patient_id: "t1", full_name: "Pac Um", idle_days: 0 }, { patient_id: "t2", full_name: "Pac Dois", idle_days: 12 }]);
@@ -31,6 +34,13 @@ describe("ManagementPage", () => {
     api.admin = false;
     renderPage();
     expect(await screen.findByRole("note")).toBeTruthy();
+    expect(api.getManagementOverview).not.toHaveBeenCalled();
+  });
+  it("não-admin com papel financeiro que abre /gestao direto vai para a primeira sub-aba permitida (achado D62)", async () => {
+    api.admin = false;
+    fin.access = { isAdmin: true, roles: [], can: {} };
+    renderPage();
+    expect(await screen.findByText("FINANCEIRO")).toBeTruthy();
     expect(api.getManagementOverview).not.toHaveBeenCalled();
   });
   it("mostra carteira por profissional, parados e pacientes sem profissional", async () => {

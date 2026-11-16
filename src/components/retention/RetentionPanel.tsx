@@ -116,7 +116,7 @@ export function RetentionPanel({
                   action={focusAction(patient.id, pendencyReason(patient))}
                   onAction={onNavigate}
                   badges={pend.labels.map((l) => (
-                    <span key={l} className="rounded-full bg-warning/15 px-2 py-0.5 text-xs text-warning-foreground">
+                    <span key={l} className="rounded-full bg-warning/15 px-2 py-0.5 text-xs text-warning-foreground dark:text-warning">
                       {l}
                     </span>
                   ))}

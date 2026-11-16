@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { AlertTriangle, ArrowRightLeft, UserMinus, Users, UserX } from "lucide-react";
 
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -12,7 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useClinicBrand } from "@/hooks/useClinicBrand";
 import { useIsClinicAdmin } from "@/hooks/useIsClinicAdmin";
+import { useFinContext } from "@/hooks/useFin";
 import { useManagementOverview } from "@/hooks/useManagement";
+import { gestaoTabs } from "@/lib/domain/gestaoNav";
 import { idleLabel, loadShare, maxLoad, monthLabel } from "@/lib/domain/management";
 
 const IDLE_OPTIONS = [7, 14, 30] as const;
@@ -26,8 +28,12 @@ export function ManagementPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const overview = useManagementOverview(isClinicAdmin ? clinicId : null, idle);
   const o = overview.data;
+  const { access, isLoading: finLoading } = useFinContext();
 
-  if (!adminLoading && !isClinicAdmin) {
+  if (!adminLoading && !finLoading && !isClinicAdmin) {
+    // Quem não é admin mas alcança outra sub-aba de Gestão (Recepção, Financeiro…) cai nela, como pelo menu (achado D62).
+    const first = gestaoTabs(false, access)[0];
+    if (first) return <Navigate to={first.to} replace />;
     return (
       <div className="space-y-6">
         <PageHeader title="Gestão" description="Visão da clínica." />

@@ -162,6 +162,11 @@
     /* Fora do expediente (businessHours): sombreado SUTIL e quente (não berrante). */
     --fc-non-business-color: hsl(60 7% 95%);
   }
+  /* Tema escuro: fora do expediente e fundo neutro acompanham o escuro (achado D62). */
+  .dark .vtx-cal {
+    --fc-non-business-color: hsl(var(--muted) / 0.6);
+    --fc-neutral-bg-color: hsl(var(--muted));
+  }
   .vtx-cal .fc {
     font-size: 0.875rem;
   }

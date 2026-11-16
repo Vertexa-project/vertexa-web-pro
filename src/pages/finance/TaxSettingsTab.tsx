@@ -78,7 +78,7 @@ function TaxRatesCard({ clinicId, canWrite }: { clinicId: string; canWrite: bool
         {eNow ? <p className="text-lg font-semibold tabular-nums" data-testid="tax-headline">{taxRateHeadline(eNow, nowPeriod)}</p> : null}
         {noticeNow && canWrite ? (
           <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm font-medium" role="status" data-testid="tax-notice">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-foreground" aria-hidden />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-foreground dark:text-warning" aria-hidden />
             <span className="min-w-0 break-words">{noticeNow}</span>
           </div>
         ) : null}
@@ -92,7 +92,7 @@ function TaxRatesCard({ clinicId, canWrite }: { clinicId: string; canWrite: bool
               {eForm ? (
                 eForm.found && !eForm.inherited
                   ? <p className="text-sm text-muted-foreground">{periodLabel(period)} já tem alíquota própria: <strong className="tabular-nums text-foreground">{pctText(eForm.ratePct)}</strong>. Salvar troca o valor.</p>
-                  : <p className="break-words text-sm font-medium text-warning-foreground">{taxRateNotice(eForm, period)}</p>
+                  : <p className="break-words text-sm font-medium text-warning-foreground dark:text-warning">{taxRateNotice(eForm, period)}</p>
               ) : null}
             </div>
             <Field label="Abrangência" htmlFor="tax-unit">

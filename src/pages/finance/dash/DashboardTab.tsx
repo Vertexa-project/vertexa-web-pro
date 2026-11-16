@@ -35,7 +35,7 @@ function NumBtn({ children, label, onClick, className }: { children: React.React
 }
 
 type Tone = "default" | "success" | "warning" | "destructive";
-const toneBar: Record<Tone, string> = { default: "bg-muted text-muted-foreground", success: "bg-success/10 text-success", warning: "bg-warning/15 text-warning-foreground", destructive: "bg-destructive/10 text-destructive" };
+const toneBar: Record<Tone, string> = { default: "bg-muted text-muted-foreground", success: "bg-success/10 text-success", warning: "bg-warning/15 text-warning-foreground dark:text-warning", destructive: "bg-destructive/10 text-destructive" };
 
 function KpiCard({ icon: Icon, label, value, sub, tone = "default", onClick, ariaLabel }: {
   icon: LucideIcon; label: string; value: string; sub?: string; tone?: Tone; onClick: () => void; ariaLabel: string;

@@ -142,7 +142,7 @@ export function EncounterPage() {
       </div>
 
       {demo ? (
-        <p role="status" data-testid="demo-banner" className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/15 px-3 py-2 text-sm font-medium text-warning-foreground">
+        <p role="status" data-testid="demo-banner" className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/15 px-3 py-2 text-sm font-medium text-warning-foreground dark:text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> {DEMO_BANNER}
         </p>
       ) : null}
