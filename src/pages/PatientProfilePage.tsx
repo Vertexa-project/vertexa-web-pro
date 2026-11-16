@@ -188,7 +188,7 @@ export function PatientProfilePage() {
       ) : null}
 
       <Tabs value={tab} onValueChange={(v) => goTo(v)}>
-        <div className="overflow-x-auto border-b border-border">
+        <div className="relative overflow-x-auto border-b border-border">
           <TabsList className="h-auto w-max gap-1 rounded-none bg-transparent p-0">
             {PATIENT_TABS.map((t) => (
               <TabsTrigger

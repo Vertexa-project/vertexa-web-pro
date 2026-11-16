@@ -85,7 +85,7 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
                   {w.estimated_minutes ? ` · ${w.estimated_minutes} min` : ""}
                 </span>
               </CardHeader>
-              <CardContent className="overflow-x-auto p-0">
+              <CardContent className="relative overflow-x-auto p-0">
                 <table className="w-full text-left text-sm">
                   <thead className="border-y bg-muted/40 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     <tr>

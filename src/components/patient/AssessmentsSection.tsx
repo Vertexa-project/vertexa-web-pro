@@ -82,7 +82,7 @@ export function AssessmentsSection({ patientId }: { patientId: string }) {
               Nenhuma avaliação lançada. Adicione medidas atuais ou antigas do paciente, com a data em que foram tiradas.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">

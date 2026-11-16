@@ -149,7 +149,7 @@ export function ReportAuditPage() {
         emptyDescription="Nenhuma exportação registrada para os filtros escolhidos."
       >
         <Card>
-          <CardContent className="overflow-x-auto p-0">
+          <CardContent className="relative overflow-x-auto p-0">
             <table className="w-full text-sm">
               <thead className="border-b text-left text-xs uppercase text-muted-foreground">
                 <tr>

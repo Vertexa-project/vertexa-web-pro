@@ -158,7 +158,7 @@ export function PlatformBillingCommercialPage() {
             description="Os 50 slots ainda não foram usados. Cancelar uma clínica não libera slot."
           />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[36rem] text-left text-sm">
               <caption className="sr-only">Admissões Founder históricas</caption>
               <thead>

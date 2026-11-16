@@ -295,7 +295,7 @@ export function PlatformBillingReportsPage() {
             description="O zero aqui é ausência de pagamento recebido — não um plano inventado."
           />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[28rem] text-left text-sm">
               <caption className="sr-only">Recebido por plano no recorte</caption>
               <thead>
@@ -384,7 +384,7 @@ export function PlatformBillingReportsPage() {
             description="Inadimplência exige cobrança vencida. Pix recusado sozinho não aparece aqui."
           />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[32rem] text-left text-sm">
               <caption className="sr-only">Clínicas com cobrança vencida</caption>
               <thead>

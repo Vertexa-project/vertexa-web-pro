@@ -90,7 +90,7 @@ export function FinancePage() {
             {charges.isLoading ? <Skeleton className="h-24 w-full" /> : list.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma cobrança neste mês. Defina o valor dos pacientes abaixo para gerar as cobranças.</p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border">
+              <div className="relative overflow-x-auto rounded-lg border border-border">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50 text-left text-xs text-muted-foreground"><tr>
                     <th className="px-4 py-2 font-medium">Paciente</th><th className="px-4 py-2 font-medium">Vencimento</th><th className="px-4 py-2 font-medium">Valor</th><th className="px-4 py-2 font-medium">Situação</th><th className="px-4 py-2" />
