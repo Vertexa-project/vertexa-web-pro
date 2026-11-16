@@ -31,6 +31,10 @@ interface ExerciseForm {
   sets: string;
   reps: string;
   load: string;
+  /** Instrução do exercício (texto livre, o paciente lê no app). */
+  notes: string;
+  /** Intervalo em segundos. */
+  rest: string;
 }
 interface WorkoutForm {
   letter: string;
@@ -45,7 +49,7 @@ interface PlanForm {
   workouts: WorkoutForm[];
 }
 
-const emptyExercise = (): ExerciseForm => ({ name: "", muscleGroups: "", sets: "", reps: "", load: "" });
+const emptyExercise = (): ExerciseForm => ({ name: "", muscleGroups: "", sets: "", reps: "", load: "", notes: "", rest: "" });
 const emptyWorkout = (): WorkoutForm => ({ letter: "", name: "", muscle: "", minutes: "", exercises: [emptyExercise()] });
 
 function fromExisting(plan: WorkoutPlanFull | null): PlanForm {
@@ -65,6 +69,8 @@ function fromExisting(plan: WorkoutPlanFull | null): PlanForm {
             sets: ex.sets?.toString() ?? "",
             reps: ex.reps?.toString() ?? "",
             load: ex.load_kg?.toString() ?? "",
+            notes: ex.notes ?? "",
+            rest: ex.rest_seconds?.toString() ?? "",
           }))
         : [emptyExercise()],
     })),
@@ -148,6 +154,8 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
             sets: e.sets ? Number(e.sets) : null,
             reps: e.reps ? Number(e.reps) : null, // já validado (inteiro ≥ 1)
             load_kg: e.load ? Number(e.load) : null,
+            notes: e.notes.trim() || null,
+            rest_seconds: e.rest ? Number(e.rest) : null,
           })),
       })),
     };
@@ -170,7 +178,9 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
         <DialogHeader>
           <DialogTitle>{existing ? "Editar plano de treino" : "Novo plano de treino"}</DialogTitle>
           <DialogDescription>
-            O paciente verá este plano no app. Escolha o exercício pela lista da Biblioteca para ele ver a animação.
+            {existing && existing.is_draft !== true
+              ? "Este plano já está publicado: o que você salvar vale na hora para o paciente."
+              : "Salve como rascunho e use Publicar treino quando estiver pronto. Escolha o exercício pela lista da Biblioteca para o paciente ver a animação."}
           </DialogDescription>
         </DialogHeader>
 
@@ -294,6 +304,24 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
                         placeholder="Carga"
                         aria-label="Carga (kg)"
                       />
+                      <div className="grid gap-2 sm:col-span-4 sm:grid-cols-[minmax(0,1fr)_7rem]">
+                        <Input
+                          value={ex.notes}
+                          maxLength={500}
+                          onChange={(e) => patchExercise(wi, ei, { notes: e.target.value })}
+                          placeholder="Instrução para o paciente (opcional)"
+                          aria-label="Instrução do exercício"
+                        />
+                        <Input
+                          type="number"
+                          min={0}
+                          max={1800}
+                          value={ex.rest}
+                          onChange={(e) => patchExercise(wi, ei, { rest: e.target.value })}
+                          placeholder="Intervalo (s)"
+                          aria-label="Intervalo em segundos"
+                        />
+                      </div>
                     </div>
                     <Button
                       variant="ghost"

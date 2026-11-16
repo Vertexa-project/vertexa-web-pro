@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ExternalLink, FileText, Loader2, Upload } from "lucide-react";
+import { ExternalLink, FileText, Loader2, Send, Undo2, Upload } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
 import { ClinicalDocumentsPanel } from "@/components/documents/ClinicalDocumentsPanel";
@@ -17,6 +17,9 @@ import {
 import { useCurrentProfessional } from "@/hooks/useCurrentProfessional";
 import { usePatientDocuments } from "@/hooks/useBodyAssessments";
 import { usePatientExams, useUpdateDocumentKind, useUploadPatientDocument } from "@/hooks/useDocuments";
+import { useDeliveries, useRevokeDelivery, useSendDocument } from "@/hooks/useDeliveries";
+import { useDisciplinePermissions } from "@/hooks/useDisciplines";
+import { canSendKind, deliveryStatus, deliveryStatusText, sendErrorMessage, type DeliveryKind } from "@/lib/domain/deliveries";
 import {
   ALLOWED_DOCUMENT_MIME,
   getDocumentSignedUrl,
@@ -65,6 +68,35 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
   const upload = useUploadPatientDocument(patientId);
   const updateKind = useUpdateDocumentKind(patientId);
   const { data: professional } = useCurrentProfessional();
+  const deliveries = useDeliveries(patientId);
+  const sendDoc = useSendDocument(patientId);
+  const revoke = useRevokeDelivery(patientId);
+  const { perms } = useDisciplinePermissions();
+  const deliveryByDoc = new Map((deliveries.data ?? []).map((d) => [d.document_id, d]));
+  const [busyDoc, setBusyDoc] = useState<string | null>(null);
+
+  function sendToPatient(doc: PatientDocumentView) {
+    const kind: DeliveryKind = doc.kind === "report" ? "relatorio" : "documento";
+    setNotice(null);
+    setBusyDoc(doc.id);
+    sendDoc.mutate(
+      { documentId: doc.id, kind, title: doc.title?.trim() || documentKindLabel(doc.kind) },
+      {
+        onSuccess: () => setNotice({ tone: "success", text: "Enviado ao app do paciente." }),
+        onError: (e) => setNotice({ tone: "error", text: sendErrorMessage(e, kind) }),
+        onSettled: () => setBusyDoc(null),
+      },
+    );
+  }
+  function withdraw(deliveryId: string, docId: string) {
+    setNotice(null);
+    setBusyDoc(docId);
+    revoke.mutate(deliveryId, {
+      onSuccess: () => setNotice({ tone: "success", text: "Retirado do app do paciente." }),
+      onError: () => setNotice({ tone: "error", text: "Não foi possível retirar do app. Tente novamente." }),
+      onSettled: () => setBusyDoc(null),
+    });
+  }
 
   const inputRef = useRef<HTMLInputElement>(null);
   const [kind, setKind] = useState<PatientDocumentKind | typeof AUTO_KIND>(AUTO_KIND);
@@ -231,6 +263,12 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
                         {uploaderLabel(doc)} · {formatDate(doc.uploaded_at)} ·{" "}
                         {formatFileSize(doc.file_size_bytes)}
                       </p>
+                      {doc.uploaded_by_role === "professional" ? (
+                        <p className="text-xs text-muted-foreground">
+                          No app do paciente: {deliveryStatusText(deliveryByDoc.get(doc.id))}
+                          {deliveryByDoc.get(doc.id)?.sent_by_name ? ` · por ${deliveryByDoc.get(doc.id)?.sent_by_name}` : ""}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -269,6 +307,28 @@ export function DocumentsTab({ patientId, patientName }: { patientId: string; pa
                     )}
                     Abrir
                   </Button>
+                  {doc.uploaded_by_role === "professional"
+                    ? (() => {
+                        const d = deliveryByDoc.get(doc.id);
+                        const st = deliveryStatus(d);
+                        const kind: DeliveryKind = doc.kind === "report" ? "relatorio" : "documento";
+                        const allowed = canSendKind(kind, perms, Boolean(professional?.id));
+                        if (d && st !== "retirado") {
+                          return (
+                            <Button variant="outline" size="sm" className="shrink-0" disabled={busyDoc === doc.id} onClick={() => withdraw(d.id, doc.id)}>
+                              {busyDoc === doc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+                              Retirar do app
+                            </Button>
+                          );
+                        }
+                        return (
+                          <Button size="sm" className="shrink-0" disabled={!allowed || busyDoc === doc.id} onClick={() => sendToPatient(doc)}>
+                            {busyDoc === doc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                            {st === "retirado" ? "Enviar de novo" : "Enviar ao paciente"}
+                          </Button>
+                        );
+                      })()
+                    : null}
                   </div>
                 </CardHeader>
               </Card>

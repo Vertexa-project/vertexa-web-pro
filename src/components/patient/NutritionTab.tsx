@@ -1,14 +1,17 @@
 import { parseOptions } from "@/lib/domain/mealOptions";
 import { useState } from "react";
-import { Pencil, Plus, Utensils } from "lucide-react";
+import { Pencil, Plus, Send, Utensils } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
 import { DocImportSection } from "./docimport/DocImportSection";
 import { GatedAction } from "./GatedAction";
 import { NutritionPlanEditor } from "./NutritionPlanEditor";
+import { SendToPatientDialog } from "./SendToPatientDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNutritionPlan } from "@/hooks/usePlans";
 import { useDisciplinePermissions } from "@/hooks/useDisciplines";
+import { useCurrentProfessional, useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
+import { canSendKind, SEND_DENIED_REASON } from "@/lib/domain/deliveries";
 import { DISCIPLINE_REASON } from "@/lib/domain/disciplines";
 import { formatNumber } from "@/lib/domain/format";
 import type { PatientDetail } from "@/types/db";
@@ -16,7 +19,10 @@ import type { PatientDetail } from "@/types/db";
 export function NutritionTab({ patient }: { patient: PatientDetail }) {
   const { data, isLoading, isError, refetch } = useNutritionPlan(patient.id);
   const [editing, setEditing] = useState(false);
+  const [sending, setSending] = useState(false);
   const { perms } = useDisciplinePermissions();
+  const { data: professional } = useCurrentProfessional();
+  const { data: myName } = useCurrentProfessionalName();
   const canEdit = perms.canEditNutrition;
 
   const totalKcal = data?.meals.reduce((sum, m) => sum + (m.calories ?? 0), 0) ?? 0;
@@ -48,22 +54,35 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
       >
         {data ? (
           <div className="space-y-6">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">{data.title}</h2>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="break-words text-lg font-semibold text-foreground">{data.title}</h2>
                 <span className="text-sm text-muted-foreground">{formatNumber(totalKcal, 1)} kcal/dia</span>
               </div>
-              <GatedAction
-                canEdit={canEdit}
-                reason={DISCIPLINE_REASON.nutrition}
-                wrapperClassName="items-end"
-                variant="outline"
-                className="shrink-0"
-                onClick={() => setEditing(true)}
-              >
-                <Pencil className="h-4 w-4" />
-                Editar
-              </GatedAction>
+              <div className="flex flex-wrap items-start justify-end gap-2">
+                <GatedAction
+                  canEdit={canSendKind("plano_alimentar", perms, Boolean(professional?.id))}
+                  reason={SEND_DENIED_REASON.plano_alimentar}
+                  wrapperClassName="items-end"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => setSending(true)}
+                >
+                  <Send className="h-4 w-4" />
+                  Enviar ao paciente
+                </GatedAction>
+                <GatedAction
+                  canEdit={canEdit}
+                  reason={DISCIPLINE_REASON.nutrition}
+                  wrapperClassName="items-end"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => setEditing(true)}
+                >
+                  <Pencil className="h-4 w-4" />
+                  Editar
+                </GatedAction>
+              </div>
             </div>
 
           <div className="space-y-3">
@@ -102,6 +121,22 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
         </div>
       ) : null}
       </AsyncSection>
+
+      {data ? (
+        <SendToPatientDialog
+          open={sending}
+          onOpenChange={setSending}
+          kind="plano_alimentar"
+          patientId={patient.id}
+          patientName={patient.profile?.full_name ?? "Paciente"}
+          professionalId={professional?.id ?? null}
+          planTitle={data.title}
+          build={async () => {
+            const { buildNutritionPdf } = await import("@/lib/pdf/generatePlanPdf");
+            return buildNutritionPdf(data, { patientName: patient.profile?.full_name ?? "Paciente", professionalName: myName ?? null });
+          }}
+        />
+      ) : null}
 
       <NutritionPlanEditor
         patient={patient}

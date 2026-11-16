@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Dumbbell, Pencil, Plus } from "lucide-react";
+import { Dumbbell, Pencil, Plus, Rocket, Send } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
 import { DocImportSection } from "./docimport/DocImportSection";
 import { ExerciseMedia } from "@/components/exercise/ExerciseMedia";
 import { GatedAction } from "./GatedAction";
+import { PublishWorkoutDialog } from "./PublishWorkoutDialog";
+import { SendToPatientDialog } from "./SendToPatientDialog";
 import { WorkoutPlanEditor } from "./WorkoutPlanEditor";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,15 +18,27 @@ import { formatReps, visibleColumns } from "@/lib/domain/workoutDisplay";
 import { muscleGroupLabel } from "@/lib/domain/muscleRecovery";
 import { muscleGroupLabelSafe } from "@/lib/domain/reportLabels";
 import { useDisciplinePermissions } from "@/hooks/useDisciplines";
+import { useCurrentProfessional, useCurrentProfessionalName } from "@/hooks/useCurrentProfessional";
 import { DISCIPLINE_REASON } from "@/lib/domain/disciplines";
+import { canSendKind, SEND_DENIED_REASON } from "@/lib/domain/deliveries";
+import { canPublishWorkout, publicationOf, PUBLICATION_BADGE, summarizePublish } from "@/lib/domain/workoutPublish";
+import { isoDateBRText } from "@/lib/domain/patientReminders";
+import { todayIsoBR } from "@/lib/domain/stockMoves";
 import type { PatientDetail } from "@/types/db";
 
 export function WorkoutTab({ patient }: { patient: PatientDetail }) {
   const { data, isLoading, isError, refetch } = useWorkoutPlan(patient.id);
   const [editing, setEditing] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [sending, setSending] = useState(false);
   const { perms } = useDisciplinePermissions();
+  const { data: professional } = useCurrentProfessional();
+  const { data: myName } = useCurrentProfessionalName();
   const canEdit = perms.canEditWorkout;
   const library = useExerciseLibrary();
+  const state = publicationOf(data);
+  const summary = data ? summarizePublish(data.workouts, (name, gif) => Boolean(gif) || Boolean(findLibraryExercise(library.index, name))) : null;
+  const patientName = patient.profile?.full_name ?? "Paciente";
 
   return (
     <>
@@ -53,22 +67,56 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
       >
         {data ? (
           <div className="space-y-6">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">{data.title}</h2>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="min-w-0 break-words text-lg font-semibold text-foreground">{data.title}</h2>
+                  <Badge tone={state === "publicado" ? "success" : "warning"}>{PUBLICATION_BADGE[state]}</Badge>
+                </div>
                 {data.goal ? <span className="text-sm text-muted-foreground">{data.goal}</span> : null}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {state === "rascunho"
+                    ? "O paciente ainda não vê este treino no app. Publique para liberar todos os dias."
+                    : `Todos os dias liberados no app${data.published_at ? ` · publicado em ${isoDateBRText(todayIsoBR(new Date(data.published_at)))}` : ""}.`}
+                </p>
               </div>
-              <GatedAction
-                canEdit={canEdit}
-                reason={DISCIPLINE_REASON.workout}
-                wrapperClassName="items-end"
-                variant="outline"
-                className="shrink-0"
-                onClick={() => setEditing(true)}
-              >
-                <Pencil className="h-4 w-4" />
-                Editar
-              </GatedAction>
+              <div className="flex flex-wrap items-start justify-end gap-2">
+                <GatedAction
+                  canEdit={canEdit}
+                  reason={DISCIPLINE_REASON.workout}
+                  wrapperClassName="items-end"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => setEditing(true)}
+                >
+                  <Pencil className="h-4 w-4" />
+                  Editar
+                </GatedAction>
+                {state === "rascunho" ? (
+                  <GatedAction
+                    canEdit={canPublishWorkout(perms)}
+                    reason={DISCIPLINE_REASON.workout}
+                    wrapperClassName="items-end"
+                    className="shrink-0"
+                    onClick={() => setPublishing(true)}
+                  >
+                    <Rocket className="h-4 w-4" />
+                    Publicar treino
+                  </GatedAction>
+                ) : (
+                  <GatedAction
+                    canEdit={canSendKind("treino", perms, Boolean(professional?.id))}
+                    reason={SEND_DENIED_REASON.treino}
+                    wrapperClassName="items-end"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={() => setSending(true)}
+                  >
+                    <Send className="h-4 w-4" />
+                    Enviar ao paciente
+                  </GatedAction>
+                )}
+              </div>
             </div>
 
           {data.workouts.map((w) => {
@@ -112,6 +160,7 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
                             })()}
                             <div className="min-w-0">
                               <span>{ex.name}</span>
+                              {ex.notes?.trim() ? <p className="mt-0.5 text-xs font-normal text-muted-foreground">{ex.notes.trim()}</p> : null}
                               {/* No celular, carga e grupos vão embaixo do nome (sem coluna cortada nem rolagem lateral). */}
                               {(cols.load && ex.load_kg != null && ex.load_kg > 0) || (cols.groups && (ex.muscle_groups ?? []).length > 0) ? (
                                 <div className="mt-1 flex flex-wrap items-center gap-1 text-xs font-normal text-muted-foreground sm:hidden">
@@ -154,6 +203,32 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
         </div>
       ) : null}
       </AsyncSection>
+
+      {data && summary ? (
+        <>
+          <PublishWorkoutDialog
+            open={publishing}
+            onOpenChange={setPublishing}
+            patientId={patient.id}
+            patientName={patientName}
+            planId={data.id}
+            summary={summary}
+          />
+          <SendToPatientDialog
+            open={sending}
+            onOpenChange={setSending}
+            kind="treino"
+            patientId={patient.id}
+            patientName={patientName}
+            professionalId={professional?.id ?? null}
+            planTitle={data.title}
+            build={async () => {
+              const { buildWorkoutPdf } = await import("@/lib/pdf/generatePlanPdf");
+              return buildWorkoutPdf(data, { patientName, professionalName: myName ?? null });
+            }}
+          />
+        </>
+      ) : null}
 
       <WorkoutPlanEditor
         patient={patient}
