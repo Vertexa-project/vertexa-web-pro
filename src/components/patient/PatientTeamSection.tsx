@@ -51,6 +51,7 @@ import {
   sortPatientTeam,
   summarizePatientTeam,
 } from "@/lib/domain/patientTeam";
+import { patientTeamTitle, plural } from "@/lib/domain/plural";
 import { captureException } from "@/lib/observability/sentry";
 
 /**
@@ -68,6 +69,8 @@ interface PatientTeamSectionProps {
   patientId: string;
   /** patients.clinic_id — a clínica cujo admin pode gerenciar estes vínculos. */
   clinicId: string | null;
+  /** patients.sex — define "Equipe da paciente" (feminino) ou o título neutro. */
+  patientSex?: string | null;
 }
 
 type LinkAction = "deactivate" | "reactivate";
@@ -86,7 +89,7 @@ const ACTION_COPY: Record<
   deactivate: {
     title: (name) => `Desativar o vínculo de ${name}?`,
     description:
-      "Ao confirmar, esta pessoa perde o acesso aos dados da paciente e à conversa IMEDIATAMENTE. " +
+      "Ao confirmar, esta pessoa perde o acesso aos dados do paciente e à conversa IMEDIATAMENTE. " +
       "O histórico é preservado: a ficha, os registros e as mensagens já enviadas continuam no " +
       "sistema, com autoria. Você pode reativar o vínculo depois.",
     confirm: "Desativar vínculo",
@@ -95,7 +98,7 @@ const ACTION_COPY: Record<
   reactivate: {
     title: (name) => `Reativar o vínculo de ${name}?`,
     description:
-      "Ao confirmar, esta pessoa volta a ter acesso aos dados da paciente e à conversa " +
+      "Ao confirmar, esta pessoa volta a ter acesso aos dados do paciente e à conversa " +
       "IMEDIATAMENTE. O histórico permanece. Se a conversa já existir, ela volta à lista de " +
       "participantes na hora — o banco não cria canal só por reativar.",
     confirm: "Reativar vínculo",
@@ -190,7 +193,7 @@ function MemberRow({
   );
 }
 
-export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionProps) {
+export function PatientTeamSection({ patientId, clinicId, patientSex = null }: PatientTeamSectionProps) {
   const team = usePatientTeam(patientId);
   const { isClinicAdmin, isLoading: adminLoading } = useIsClinicAdmin(clinicId);
   const canManage = canManagePatientTeam({ isClinicAdmin, isLoading: adminLoading });
@@ -313,9 +316,9 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
     <ProfileAvatarUrlScope paths={avatarPaths}>
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center gap-2">
-        <CardTitle>Equipe da paciente</CardTitle>
-        {summary.active > 0 ? <Badge tone="success">{summary.active} ativo(s)</Badge> : null}
-        {summary.inactive > 0 ? <Badge tone="muted">{summary.inactive} inativo(s)</Badge> : null}
+        <CardTitle>{patientTeamTitle(patientSex)}</CardTitle>
+        {summary.active > 0 ? <Badge tone="success">{plural(summary.active, "ativo")}</Badge> : null}
+        {summary.inactive > 0 ? <Badge tone="muted">{plural(summary.inactive, "inativo")}</Badge> : null}
         {canManage ? (
           <Button size="sm" className="ml-auto" onClick={openAssign}>
             <Plus className="h-4 w-4" aria-hidden />
@@ -352,8 +355,8 @@ export function PatientTeamSection({ patientId, clinicId }: PatientTeamSectionPr
           emptyTitle="Nenhum profissional vinculado"
           emptyDescription={
             canManage
-              ? "Adicione profissionais da clínica à equipe desta paciente."
-              : "Quando um profissional for vinculado a esta paciente, ele aparece aqui."
+              ? "Adicione profissionais da clínica à equipe deste paciente."
+              : "Quando um profissional for vinculado a este paciente, ele aparece aqui."
           }
           emptyAction={
             canManage ? (

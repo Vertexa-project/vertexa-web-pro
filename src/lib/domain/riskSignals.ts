@@ -18,6 +18,7 @@
 //    meta" APENAS em dias COM registro (ausência de log ≠ "não bebeu" — não assumimos).
 //  - Foto ausente: reusa a política de pendências (30d). > `photoMissingHighDays` = alta.
 //  - Mobilidade: sem fonte (o app não registra) → sempre `available:false`.
+import { plural } from "@/lib/domain/plural";
 import { muscleGroupLabel } from "@/lib/domain/muscleRecovery";
 import { PENDENCY_THRESHOLDS } from "@/lib/domain/pendencies";
 import type { MuscleRecoveryState } from "@/types/db";
@@ -89,7 +90,7 @@ function muscleSignal(muscles: MuscleRecoveryState[], now: number): RiskSignal {
     active: true,
     severity: worst.days >= RISK_THRESHOLDS.muscleFatiguedHighDays ? "high" : "warn",
     since: worst.m.last_trained_at ?? undefined,
-    detail: `${sustained.length} grupo(s) ainda sinalizado(s) em fadiga além do normal: ${names}. Avaliar recuperação.`,
+    detail: `${sustained.length === 1 ? "1 grupo ainda sinalizado" : `${sustained.length} grupos ainda sinalizados`} em fadiga além do normal: ${names}. Avaliar recuperação.`,
   };
 }
 
@@ -109,12 +110,12 @@ function hydrationSignal(daily: DailyLiters[]): RiskSignal {
 
   // Nunca registrou nada na janela → engajamento/hidratação a verificar (não assumimos desidratação).
   if (logged.length === 0) {
-    return { ...base, active: true, severity: "warn", detail: `Sem registros de água nos últimos ${total} dias.` };
+    return { ...base, active: true, severity: "warn", detail: `Sem registros de água nos últimos ${plural(total, "dia")}.` };
   }
   // Dias COM registro abaixo da meta → sinal real de meta não batida.
   if (belowLogged > 0) {
     const metLogged = logged.length - belowLogged;
-    const suffix = noLog > 0 ? ` (+${noLog} dia(s) sem registro)` : "";
+    const suffix = noLog > 0 ? ` (+${plural(noLog, "dia")} sem registro)` : "";
     return {
       ...base,
       active: true,
@@ -123,7 +124,7 @@ function hydrationSignal(daily: DailyLiters[]): RiskSignal {
     };
   }
   // Todos os dias registrados bateram a meta.
-  const suffix = noLog > 0 ? `; ${noLog} dia(s) sem registro na janela.` : ".";
+  const suffix = noLog > 0 ? `; ${plural(noLog, "dia")} sem registro na janela.` : ".";
   return {
     ...base,
     active: false,
@@ -140,7 +141,7 @@ function photoSignal(lastPhotoAt: string | null, now: number): RiskSignal {
   // para o painel e o card de Pendências concordarem exatamente no limite (30/60 dias).
   const missing = elapsed == null || elapsed > RISK_THRESHOLDS.photoMissingDays * DAY;
   if (!missing) {
-    return { ...base, active: false, severity: "info", detail: `Última foto há ${days} dia(s).` };
+    return { ...base, active: false, severity: "info", detail: `Última foto há ${plural(days ?? 0, "dia")}.` };
   }
   const high = elapsed != null && elapsed > RISK_THRESHOLDS.photoMissingHighDays * DAY;
   return {
@@ -151,7 +152,7 @@ function photoSignal(lastPhotoAt: string | null, now: number): RiskSignal {
     detail:
       days == null
         ? "Nenhuma foto de progresso enviada."
-        : `Sem foto de progresso há ${days} dias (meta: a cada ${RISK_THRESHOLDS.photoMissingDays}).`,
+        : `Sem foto de progresso há ${plural(days, "dia")} (meta: a cada ${RISK_THRESHOLDS.photoMissingDays}).`,
   };
 }
 

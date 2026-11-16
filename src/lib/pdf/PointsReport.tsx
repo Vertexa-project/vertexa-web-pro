@@ -24,6 +24,7 @@ import {
 import { WeightChartPdf } from "./WeightChartPdf";
 import { BRAND, NEUTRAL, STATUS, SP, RADIUS, FONT, vriColor } from "./theme";
 import { formatWeight, formatPercent, professionalTypeLabel } from "@/lib/domain/format";
+import { streakLabel } from "@/lib/domain/plural";
 import type { ProfessionalType, WeightPoint } from "@/types/db";
 
 export interface PointsReportData {
@@ -135,7 +136,7 @@ function VriHero({ vri }: { vri: PointsReportData["vri"] }) {
         </View>
         <View style={h.heroStats}>
           <View style={h.heroStat}>
-            <Text style={h.heroStatValue}>{vri?.streak != null ? `${vri.streak} dias` : "—"}</Text>
+            <Text style={h.heroStatValue}>{streakLabel(vri?.streak)}</Text>
             <Text style={h.heroStatLabel}>Sequência ativa</Text>
           </View>
           <View>

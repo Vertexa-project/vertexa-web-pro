@@ -2,6 +2,7 @@
 // A RPC é a ÚNICA fonte do pacote; aqui só formatamos para a casca (ReportShell/primitivos).
 // A4 (obrigatório): quando meta.truncated, expõe um aviso legível para o leitor do relatório.
 import type { ReportExportResponse } from "@/lib/api/report";
+import { streakLabel } from "@/lib/domain/plural";
 
 export interface ReportColumn {
   key: string;
@@ -142,7 +143,7 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
       ? { key: "adherence", title: "Adesão (VRI)", kpis: [
           { label: "Score", value: num(a.score) },
           { label: "Nível", value: (a.level as string) || "—" },
-          { label: "Sequência", value: num(a.streak, " dias") },
+          { label: "Sequência", value: a.streak == null ? "—" : streakLabel(Number(a.streak)) },
           { label: "Conclusão semanal", value: num(a.weekly_completion_rate, "%") },
         ] }
       : { key: "adherence", title: "Adesão (VRI)", emptyText: "Sem snapshot de adesão." });

@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLatestWeight } from "@/hooks/useBodyAssessments";
 import { useNutritionPlan, useWorkoutPlan } from "@/hooks/usePlans";
 import { formatPercent, formatWeight } from "@/lib/domain/format";
+import { streakLabel } from "@/lib/domain/plural";
 import type { AdherenceSnapshot, PatientDetail } from "@/types/db";
 
 interface OverviewTabProps {
@@ -55,7 +56,7 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
           label="Peso"
           value={`${formatWeight(latestWeight.current)} → ${formatWeight(patient.target_weight)}`}
         />
-        <SummaryCard label="Sequência" value={snapshot?.streak != null ? `${snapshot.streak} dias` : "—"} />
+        <SummaryCard label="Sequência" value={streakLabel(snapshot?.streak)} />
         <SummaryCard label="Adesão semanal" value={formatPercent(snapshot?.weekly_completion_rate)} />
       </div>
 
@@ -137,7 +138,7 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
       {/* WP-2bi-UI — âncora da desativação de vínculo. Fica aqui, e não no header nem na tela de
           Equipe da clínica, porque o objeto é o VÍNCULO com ESTA paciente (não o membro da
           clínica) e é a única lista do produto que mostra vínculo inativo. */}
-      <PatientTeamSection patientId={patient.id} clinicId={patient.clinic_id ?? null} />
+      <PatientTeamSection patientId={patient.id} clinicId={patient.clinic_id ?? null} patientSex={patient.sex} />
     </div>
   );
 }

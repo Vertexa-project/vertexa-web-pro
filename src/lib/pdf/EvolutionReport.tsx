@@ -26,6 +26,7 @@ import {
 } from "./primitives";
 import { WeightChartPdf } from "./WeightChartPdf";
 import { BRAND, STATUS, NEUTRAL, SP } from "./theme";
+import { plural, streakLabel } from "@/lib/domain/plural";
 import { computeBmi, normalizeHeightCm } from "@/lib/domain/bodyMetrics";
 import { formatBmi, formatWeight, professionalTypeLabel } from "@/lib/domain/format";
 import type { BodyAssessment, ProfessionalType, WeightPoint } from "@/types/db";
@@ -97,7 +98,7 @@ function buildKpis(data: EvolutionReportData): Kpi[] {
     // "Objetivo" é texto: fonte menor (valueSize) p/ caber/quebrar sem cortar.
     { label: "Objetivo", value: data.goal ?? "—", valueSize: 12 },
     { label: "Peso atual · meta", value: pesoValue, sub: pesoSub },
-    { label: "Sequência", value: streak != null ? `${streak} dias` : "—", sub: "dias ativos no app" },
+    { label: "Sequência", value: streakLabel(streak), sub: "dias ativos no app" },
     { label: "Adesão (VRI)", value: score != null ? `${score}` : "—", sub: <VriBadge level={data.adherence?.level} /> },
   ];
 }
@@ -195,9 +196,9 @@ export function EvolutionReportDoc({ data }: { data: EvolutionReportData }) {
   const wpLast = data.weightPoints[data.weightPoints.length - 1]?.date ?? null;
   const anthroCaption =
     data.weightPoints.length > 0
-      ? `Peso: ${fmtShort(wpFirst)} a ${fmtShort(wpLast)} · ${data.weightPoints.length} registros · ${data.assessments.length} avaliação(ões) clínica(s)`
+      ? `Peso: ${fmtShort(wpFirst)} a ${fmtShort(wpLast)} · ${plural(data.weightPoints.length, "registro")} · ${plural(data.assessments.length, "avaliação clínica", "avaliações clínicas")}`
       : data.assessments.length > 0
-        ? `${data.assessments.length} avaliação(ões) clínica(s) no período`
+        ? `${plural(data.assessments.length, "avaliação clínica", "avaliações clínicas")} no período`
         : null;
 
   const photoPairs = (data.photos ?? []).filter((p) => p.beforeUri || p.afterUri);
