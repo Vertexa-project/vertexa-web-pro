@@ -159,3 +159,12 @@ export function proReminderLines(rows: Array<ReminderRow & { patientName: string
     })
     .sort((a, b) => a.days - b.days || a.patientName.localeCompare(b.patientName, "pt-BR"));
 }
+
+/** Campos do retorno no cadastro do paciente (formulário). */
+export interface ReturnReminderForm {
+  dueOn: string;
+  notify: boolean;
+  days: number;
+  message: string;
+}
+export const EMPTY_RETURN_REMINDER: ReturnReminderForm = { dueOn: "", notify: true, days: DEFAULT_NOTICE_DAYS.return, message: DEFAULT_TEMPLATES.return };

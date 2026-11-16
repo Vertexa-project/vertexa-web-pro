@@ -3,17 +3,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { DEFAULT_NOTICE_DAYS, DEFAULT_TEMPLATES, MAX_MESSAGE_LENGTH, NOTICE_OPTIONS, renderReminderMessage } from "@/lib/domain/patientReminders";
+import { MAX_MESSAGE_LENGTH, NOTICE_OPTIONS, renderReminderMessage, type ReturnReminderForm } from "@/lib/domain/patientReminders";
 import { todayIsoBR } from "@/lib/domain/stockMoves";
-
-export interface ReturnReminderForm {
-  dueOn: string;
-  notify: boolean;
-  days: number;
-  message: string;
-}
-
-export const EMPTY_RETURN_REMINDER: ReturnReminderForm = { dueOn: "", notify: true, days: DEFAULT_NOTICE_DAYS.return, message: DEFAULT_TEMPLATES.return };
 
 export function ReturnReminderFields({ value, onChange, patientName }: { value: ReturnReminderForm; onChange: (v: ReturnReminderForm) => void; patientName: string }) {
   const set = <K extends keyof ReturnReminderForm>(k: K, v: ReturnReminderForm[K]) => onChange({ ...value, [k]: v });

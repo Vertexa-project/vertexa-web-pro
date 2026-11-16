@@ -23,8 +23,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useCreatePatient } from "@/hooks/usePatients";
 import { upsertPatientReminder } from "@/lib/api/patientReminders";
-import { DEFAULT_TEMPLATES, validateReminderInput } from "@/lib/domain/patientReminders";
-import { EMPTY_RETURN_REMINDER, ReturnReminderFields, type ReturnReminderForm } from "./ReturnReminderFields";
+import { DEFAULT_TEMPLATES, EMPTY_RETURN_REMINDER, validateReminderInput, type ReturnReminderForm } from "@/lib/domain/patientReminders";
+import { ReturnReminderFields } from "./ReturnReminderFields";
 import { useCurrentProfessional } from "@/hooks/useCurrentProfessional";
 import type { CreatePatientInput } from "@/lib/api/patients";
 
