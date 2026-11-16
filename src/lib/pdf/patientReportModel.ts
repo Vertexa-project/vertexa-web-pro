@@ -164,10 +164,18 @@ export function buildPatientReportModel(rpc: ReportExportResponse, now: Date = n
   if ("workout_plan" in sec) {
     const wp = obj(sec.workout_plan);
     const workouts = arr(wp?.workouts);
+    // Grupo do dia: o principal gravado; sem ele, os grupos dos exercícios do dia. Coluna some se nenhum dia tiver grupo.
+    const groupOf = (w: Record<string, unknown>): string => {
+      if (w.primary_muscle_group) return muscleGroupLabelSafe(w.primary_muscle_group as string);
+      const keys = [...new Set(arr(w.exercises).flatMap((e) => (Array.isArray(e.muscle_groups) ? (e.muscle_groups as string[]) : [])))];
+      return keys.length ? keys.map((k) => muscleGroupLabelSafe(k)).join(", ") : "—";
+    };
+    const wRows = workouts.map((w) => ({ letter: (w.letter as string) || "—", name: (w.name as string) || "—", muscle: groupOf(w), ex: String(arr(w.exercises).length) }));
+    const hasGroup = wRows.some((r) => r.muscle !== "—");
     push(wp
       ? { key: "workout_plan", title: `Plano de treino${wp.title ? ` — ${wp.title}` : ""}`, table: {
-          columns: [{ key: "letter", label: "Dia" }, { key: "name", label: "Treino" }, { key: "muscle", label: "Grupo" }, { key: "ex", label: "Exercícios", align: "right" }],
-          rows: workouts.map((w) => ({ letter: (w.letter as string) || "—", name: (w.name as string) || "—", muscle: muscleGroupLabelSafe(w.primary_muscle_group as string), ex: String(arr(w.exercises).length) })),
+          columns: [{ key: "letter", label: "Dia" }, { key: "name", label: "Treino" }, ...(hasGroup ? [{ key: "muscle", label: "Grupo" }] : []), { key: "ex", label: "Exercícios", align: "right" as const }],
+          rows: wRows,
         } }
       : { key: "workout_plan", title: "Plano de treino", emptyText: "Sem plano de treino ativo." });
   }

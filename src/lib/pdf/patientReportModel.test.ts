@@ -341,6 +341,15 @@ describe("buildPatientReportModel — treino, água, suplementação e evoluçã
     ]);
   });
 
+  it("grupo do treino vem dos exercícios quando o dia não tem grupo principal; coluna some sem dado (achado D58)", () => {
+    const withEx = withSections({ workout_plan: { title: "T", workouts: [{ letter: "A", name: "X", primary_muscle_group: null, exercises: [{ muscle_groups: ["biceps"] }, { muscle_groups: ["triceps", "biceps"] }] }] } });
+    const t1 = withEx.sections.find((x) => x.key === "workout_plan")?.table;
+    expect(t1?.rows[0].muscle).toBe("Bíceps, Tríceps");
+    expect(t1?.columns.map((c) => c.label)).toContain("Grupo");
+    const none = withSections({ workout_plan: { title: "T", workouts: [{ letter: "A", name: "X", primary_muscle_group: null, exercises: [{}] }] } });
+    expect(none.sections.find((x) => x.key === "workout_plan")?.table?.columns.map((c) => c.label)).not.toContain("Grupo");
+  });
+
   it("nenhum enum cru em inglês no PDF completo (achado D57)", () => {
     const m = withSections({
       weight: [{ measured_at: "2026-06-01", weight_kg: 80, source: "web" }, { measured_at: "2026-06-02", weight_kg: 80, source: "xyz" }],
