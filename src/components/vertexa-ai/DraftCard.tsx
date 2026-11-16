@@ -4,7 +4,7 @@ import { Check, FileText, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { DraftAction, DraftView } from "@/lib/domain/vertexaAi";
-import { useLabel } from "@/lib/domain/vertexaAi";
+import { draftUseLabel } from "@/lib/domain/vertexaAi";
 import { cn } from "@/lib/utils";
 
 const STATUS_TEXT: Record<DraftView["status"], string> = {
@@ -74,7 +74,7 @@ export function DraftCard({
           ) : null}
           <Button size="sm" onClick={() => onAction("usar", status === "em_revisao" ? text : undefined)}>
             <Check className="h-4 w-4" aria-hidden />
-            {useLabel(draft)}
+            {draftUseLabel(draft)}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => onAction("descartar")}>
             <Trash2 className="h-4 w-4" aria-hidden />

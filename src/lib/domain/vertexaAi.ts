@@ -130,7 +130,7 @@ export function applyDraftAction(view: DraftView, action: DraftAction): { view: 
 }
 
 /** Rótulo do botão "Usar" por tipo (diz o que acontece de verdade). */
-export function useLabel(draft: AiDraft): string {
+export function draftUseLabel(draft: AiDraft): string {
   if (draft.kind === "mensagem") return "Usar em Mensagens";
   if (draft.kind === "resumo_retorno") return "Copiar resumo";
   return "Copiar lista";

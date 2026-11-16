@@ -1,6 +1,7 @@
 // Vertexa IA — adaptador OpenAI (só roda com o secret OPENAI_API_KEY; sem ele, modo demonstração).
 // Modelo: VERTEXA_AI_MODEL (padrão gpt-4.1-mini).
 import { REPLY_JSON_SCHEMA } from "./prompt.ts";
+import type { AiReply } from "./types.ts";
 
 export async function openaiReply(apiKey: string, system: string, user: string): Promise<unknown> {
   const model = Deno.env.get("VERTEXA_AI_MODEL") ?? "gpt-4.1-mini";
@@ -19,22 +20,27 @@ export async function openaiReply(apiKey: string, system: string, user: string):
   return JSON.parse(body.choices?.[0]?.message?.content ?? "null");
 }
 
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null;
+
 /** Normaliza a saída crua do modelo para AiReply (campos fora do formato viram null → inválida). */
-export function toAiReply(raw: unknown): import("./types.ts").AiReply | null {
-  const r = raw as { text?: unknown; items?: unknown; draft?: unknown } | null;
-  if (!r || typeof r.text !== "string" || !Array.isArray(r.items)) return null;
-  const items = r.items
-    .filter((i): i is { text: string; source: string; uncertain?: boolean } => typeof (i as any)?.text === "string" && typeof (i as any)?.source === "string")
-    .map((i) => ({ text: i.text, source: i.source, uncertain: Boolean(i.uncertain) }));
-  if (items.length !== r.items.length) return null;
-  let draft = null;
-  const d = r.draft as any;
-  if (d) {
-    if (!["mensagem", "resumo_retorno", "lista_ligacoes"].includes(d.kind) || typeof d.body !== "string" || typeof d.title !== "string" || !Array.isArray(d.fields)) return null;
-    draft = {
-      kind: d.kind, title: d.title, body: d.body, patientId: null, patientName: null,
-      fields: d.fields.map((f: any) => ({ label: String(f.label), value: String(f.value), source: String(f.source), uncertain: Boolean(f.uncertain) })),
-    };
+export function toAiReply(raw: unknown): AiReply | null {
+  if (!isObj(raw) || typeof raw.text !== "string" || !Array.isArray(raw.items)) return null;
+  const items: AiReply["items"] = [];
+  for (const i of raw.items) {
+    if (!isObj(i) || typeof i.text !== "string" || typeof i.source !== "string") return null;
+    items.push({ text: i.text, source: i.source, uncertain: Boolean(i.uncertain) });
   }
-  return { text: r.text, items, draft, actions: [], blocked: null };
+  let draft: AiReply["draft"] = null;
+  const d = raw.draft;
+  if (d) {
+    if (!isObj(d) || !["mensagem", "resumo_retorno", "lista_ligacoes"].includes(String(d.kind)) || typeof d.body !== "string" || typeof d.title !== "string" || !Array.isArray(d.fields)) return null;
+    const fields: NonNullable<AiReply["draft"]>["fields"] = [];
+    for (const f of d.fields) {
+      if (!isObj(f)) return null;
+      fields.push({ label: String(f.label), value: String(f.value), source: String(f.source), uncertain: Boolean(f.uncertain) });
+    }
+    draft = { kind: d.kind as NonNullable<AiReply["draft"]>["kind"], title: d.title, body: d.body, patientId: null, patientName: null, fields };
+  }
+  return { text: raw.text, items, draft, actions: [], blocked: null };
 }

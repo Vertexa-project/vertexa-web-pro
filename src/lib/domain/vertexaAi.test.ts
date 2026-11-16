@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { dayIsoBR, hojeSubtitle, timeBR, todayRangeBR } from "./hoje";
 import {
   applyDraftAction, assistantMessage, clearMessageDraft, contextLabel, greetingFor, hourBR, HISTORY_LIMIT, introMessage,
-  newDraftView, patchDraft, peekMessageDraft, pushMessage, screenFromLocation, stashMessageDraft, suggestionsFor, useLabel,
+  newDraftView, patchDraft, peekMessageDraft, pushMessage, screenFromLocation, stashMessageDraft, suggestionsFor, draftUseLabel,
   type ChatMessage,
 } from "./vertexaAi";
 import type { AiAskResult, AiDraft } from "@/types/vertexaAi";
@@ -72,8 +72,8 @@ describe("rascunho: nada é salvo sem confirmação", () => {
     expect([...tipos].sort()).toEqual(["copiar_e_abrir", "nenhum", "preencher_mensagem"]);
   });
   it("rótulo do botão diz o que acontece", () => {
-    expect(useLabel(msgDraft)).toBe("Usar em Mensagens");
-    expect(useLabel(resumo)).toBe("Copiar resumo");
+    expect(draftUseLabel(msgDraft)).toBe("Usar em Mensagens");
+    expect(draftUseLabel(resumo)).toBe("Copiar resumo");
   });
   it("entrega ao campo de resposta: lê sem apagar, apaga depois, uma vez", () => {
     const mem = new Map<string, string>();
