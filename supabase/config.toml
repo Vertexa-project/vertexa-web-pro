@@ -67,6 +67,10 @@ verify_jwt = true
 [functions.vertexa-ai]
 verify_jwt = true
 
+# Redesign P5: ler PDF/foto (bioimpedância, dieta, treino) para a Conferência. Demo sem OPENAI_API_KEY; só rascunho, nunca grava na ficha.
+[functions.vertexa-doc-read]
+verify_jwt = true
+
 [functions.clinical-audio-purge]
 verify_jwt = true
 
