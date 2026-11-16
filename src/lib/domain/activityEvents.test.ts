@@ -12,6 +12,6 @@ describe("esforço percebido do treino (PDF do Ernâni, tela 23)", () => {
   });
   it("não muda os tipos que já existiam", () => {
     expect(activityEventMeta("workout_checked").label).toBe("Treino concluído");
-    expect(activityEventDescription("hydration_logged", { liters: 0.25 })).toBe("0.25 L");
+    expect(activityEventDescription("hydration_logged", { liters: 0.25 })).toBe("0,25 L");
   });
 });

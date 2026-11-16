@@ -3,6 +3,9 @@ import {
   Activity,
   Camera,
   Droplet,
+  Smile,
+  Pill,
+  HeartPulse,
   FileText,
   FileX,
   Gauge,
@@ -14,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { DOC_TYPE_LABEL, type DocType } from "@/lib/domain/clinicalDocs";
+import { formatNumber } from "@/lib/domain/format";
 import type { BadgeTone } from "@/lib/domain/vri";
 
 export interface ActivityMeta {
@@ -36,6 +40,14 @@ export function activityEventMeta(type: string): ActivityMeta {
       return { label: "Sono registrado", icon: Moon, tone: "info" };
     case "workout_effort":
       return { label: "Esforço do treino", icon: Gauge, tone: "info" };
+    case "meal_logged":
+      return { label: "Refeição registrada", icon: Utensils, tone: "success" };
+    case "mood_logged":
+      return { label: "Humor registrado", icon: Smile, tone: "info" };
+    case "activity_logged":
+      return { label: "Atividade física registrada", icon: HeartPulse, tone: "success" };
+    case "supplement_checked":
+      return { label: "Suplemento tomado", icon: Pill, tone: "info" };
     case "meal_plan_viewed":
       return { label: "Plano alimentar visto", icon: Utensils, tone: "muted" };
     case "document_signed":
@@ -43,7 +55,8 @@ export function activityEventMeta(type: string): ActivityMeta {
     case "document_invalidated":
       return { label: "Documento invalidado", icon: FileX, tone: "destructive" };
     default:
-      return { label: type.replace(/_/g, " "), icon: Activity, tone: "muted" };
+      // Tipo novo/desconhecido: nunca mostrar o código em inglês.
+      return { label: "Atividade registrada", icon: Activity, tone: "muted" };
   }
 }
 
@@ -60,11 +73,11 @@ export function activityEventDescription(
       return Number.isInteger(e) && e >= 1 && e <= 10 ? `${e} de 10` : null;
     }
     case "weight_logged":
-      return payload.weight != null ? `${payload.weight} kg` : null;
+      return payload.weight != null && Number.isFinite(Number(payload.weight)) ? `${formatNumber(Number(payload.weight), 1)} kg` : null;
     case "hydration_logged": {
       // Chave canônica = `liters`; tolera o alias legado `amount` (ver CONTRATO_INTEGRACAO).
       const liters = payload.liters ?? payload.amount;
-      return liters != null ? `${liters} L` : null;
+      return liters != null && Number.isFinite(Number(liters)) ? `${formatNumber(Number(liters), 2)} L` : null;
     }
     case "document_signed":
     case "document_invalidated": {

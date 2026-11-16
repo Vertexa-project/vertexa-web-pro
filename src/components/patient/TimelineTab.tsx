@@ -1,4 +1,5 @@
-import { Clock } from "lucide-react";
+import { useMemo } from "react";
+import { Clock, ListChecks } from "lucide-react";
 
 import { AsyncSection } from "./AsyncSection";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,6 +7,7 @@ import { usePatientTimeline } from "@/hooks/usePatientTimeline";
 import { activityEventDescription, activityEventMeta } from "@/lib/domain/activityEvents";
 import { dateTimeBR } from "@/lib/domain/clinicalDocs";
 import { formatRelative } from "@/lib/domain/format";
+import { groupTimeline } from "@/lib/domain/timelineGroups";
 import type { BadgeTone } from "@/lib/domain/vri";
 import { cn } from "@/lib/utils";
 
@@ -18,8 +20,13 @@ const toneBg: Record<BadgeTone, string> = {
   muted: "bg-muted text-muted-foreground",
 };
 
+const dayBR = (day: string) => day.split("-").reverse().join("/");
+const timeBR = (iso: string) =>
+  new Date(iso).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+
 export function TimelineTab({ patientId }: { patientId: string }) {
   const { data, isLoading, isError, refetch } = usePatientTimeline(patientId);
+  const items = useMemo(() => groupTimeline(data ?? []), [data]);
 
   return (
     <AsyncSection
@@ -34,7 +41,24 @@ export function TimelineTab({ patientId }: { patientId: string }) {
       <Card>
         <CardContent className="p-6">
           <ol className="space-y-5">
-            {data?.map((ev) => {
+            {items.map((item) => {
+              if (item.kind === "habits") {
+                return (
+                  <li key={`habits-${item.day}`} className="flex gap-4">
+                    <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", toneBg.info)}>
+                      <ListChecks className="h-5 w-5" aria-hidden />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground">Hábitos do dia</p>
+                      <p className="text-sm text-muted-foreground">{item.summary}</p>
+                      <time dateTime={item.latestAt} className="mt-0.5 block text-xs text-muted-foreground">
+                        {dayBR(item.day)} · último registro {timeBR(item.latestAt)}
+                      </time>
+                    </div>
+                  </li>
+                );
+              }
+              const ev = item.event;
               const meta = activityEventMeta(ev.type);
               const desc = activityEventDescription(ev.type, ev.payload);
               const Icon = meta.icon;
