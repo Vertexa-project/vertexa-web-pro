@@ -34,4 +34,10 @@ describe("groupTimeline", () => {
     const items = groupTimeline([ev("hydration_logged", "2026-11-13T02:00:00Z", { liters: 0.25 }), ev("hydration_logged", "2026-11-13T15:00:00Z", { liters: 0.25 })]);
     expect(items.map((i) => i.kind === "habits" && i.day)).toEqual(["2026-11-13", "2026-11-12"]);
   });
+  it("registro de água sem quantidade diz isso (achado D56)", () => {
+    const items = groupTimeline([ev("hydration_logged", "2026-10-15T15:00:00Z", null)]);
+    const h = items[0];
+    expect(h.kind).toBe("habits");
+    if (h.kind === "habits") expect(h.summary).toBe("Água: 1 registro sem quantidade");
+  });
 });

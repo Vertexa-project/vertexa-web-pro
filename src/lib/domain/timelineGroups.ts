@@ -36,7 +36,7 @@ function summarize(events: ActivityEvent[]): string {
       return Number.isFinite(v) ? s + v : s;
     }, 0);
     const n = plural(water.length, "registro", "registros");
-    parts.push(liters > 0 ? `Água ${formatNumber(Math.round(liters * 100) / 100, 2)} L em ${n}` : `Água: ${n}`);
+    parts.push(liters > 0 ? `Água ${formatNumber(Math.round(liters * 100) / 100, 2)} L em ${n}` : `Água: ${n} sem quantidade`);
   }
   const meals = by("meal_logged");
   if (meals.length > 0) parts.push(`Refeições: ${plural(meals.length, "registrada", "registradas")}`);

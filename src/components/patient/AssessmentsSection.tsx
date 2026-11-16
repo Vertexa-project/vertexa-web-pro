@@ -17,12 +17,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBodyAssessments, useDeleteAssessment } from "@/hooks/useBodyAssessments";
 import { assessmentErrorMessage } from "@/lib/api/assessments";
 import { MEASURE_FIELDS, methodLabel } from "@/lib/domain/anthropometry";
-import { formatDate, formatWeight } from "@/lib/domain/format";
+import { formatDate, formatNumber, formatWeight } from "@/lib/domain/format";
 import type { BodyAssessment } from "@/types/db";
 
 function measuresSummary(a: BodyAssessment): string {
   const m = a.measurements ?? {};
-  const parts = MEASURE_FIELDS.filter((f) => typeof m[f.key] === "number" || (typeof m[f.key] === "string" && m[f.key] !== "")).map((f) => `${f.label} ${m[f.key]}`);
+  const parts = MEASURE_FIELDS.filter((f) => typeof m[f.key] === "number" || (typeof m[f.key] === "string" && m[f.key] !== "")).map((f) => {
+    const v = Number(String(m[f.key]).replace(",", "."));
+    return `${f.label} ${Number.isFinite(v) ? formatNumber(v, 1) : m[f.key]}`;
+  });
   return parts.length ? parts.join(" · ") : "—";
 }
 
@@ -101,7 +104,7 @@ export function AssessmentsSection({ patientId }: { patientId: string }) {
                         <td className="py-2 pr-3 whitespace-nowrap">{when}</td>
                         <td className="py-2 pr-3">{methodLabel(a.method)}</td>
                         <td className="py-2 pr-3 text-right">{a.weight != null ? formatWeight(Number(a.weight)) : "—"}</td>
-                        <td className="py-2 pr-3 text-right">{a.body_fat_pct != null ? `${a.body_fat_pct}%` : "—"}</td>
+                        <td className="py-2 pr-3 text-right">{a.body_fat_pct != null ? `${formatNumber(Number(a.body_fat_pct), 1)}%` : "—"}</td>
                         <td className="py-2 pr-3 text-muted-foreground">{measuresSummary(a)}</td>
                         <td className="py-2 text-right whitespace-nowrap">
                           <Button

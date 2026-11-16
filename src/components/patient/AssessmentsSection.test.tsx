@@ -33,6 +33,13 @@ describe("AssessmentsSection", () => {
     render(<AssessmentsSection patientId="p1" />);
     expect(screen.getByText(/Cintura 84 · Braço 31/)).toBeTruthy();
   });
+  it("gordura e circunferências com vírgula decimal (achado D56)", () => {
+    h.data = [A("a", "2026-01-10", { body_fat_pct: "26.8", measurements: { braco: 30.5, cintura: 82 } })];
+    render(<AssessmentsSection patientId="p1" />);
+    expect(screen.getByText("26,8%")).toBeTruthy();
+    expect(screen.getByText(/Cintura 82 · Braço 30,5/)).toBeTruthy();
+    expect(screen.queryByText(/26\.8|30\.5/)).toBeNull();
+  });
   it("excluir pede confirmação e só exclui ao confirmar", async () => {
     h.data = [A("a", "2026-01-10")];
     render(<AssessmentsSection patientId="p1" />);
