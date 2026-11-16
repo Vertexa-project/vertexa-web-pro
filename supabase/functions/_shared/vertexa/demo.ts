@@ -136,7 +136,7 @@ export function buildDemoReply(i: DemoInput): AiReply {
         actions: pid ? [{ label: "Abrir conversa", to: `/mensagens?patient=${pid}` }] : [],
       });
     }
-    const keys = ["peso", "meta", "imc", "adesao", "ultimo_registro", "objetivo", "motivos", "proximo"];
+    const keys = ["peso", "meta", "imc", "adesao", "ultimo_registro", "sinais", "objetivo", "motivos", "proximo"];
     const fields = keys.map((k) => get(patientFacts, k)).filter((f): f is Fact => Boolean(f)).map((f) => ({
       label: f.label, value: String(f.value), source: f.source, uncertain: f.uncertain,
     }));

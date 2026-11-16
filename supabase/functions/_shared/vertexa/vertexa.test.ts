@@ -121,7 +121,7 @@ describe("modo demonstração é determinístico e passa na validação", () => 
   });
   it("incerto vai marcado no resumo", () => {
     const r = buildDemoReply({ intent: "resumo_retorno", screen: hojeScreen, facts: [...facts, ...buildPatientFacts(novo, null, NOW)], patientFacts: buildPatientFacts(novo, null, NOW), patientDenied: false, clinical: true });
-    expect(r.draft?.fields.filter((f) => f.uncertain).map((f) => f.label)).toEqual(expect.arrayContaining(["Peso atual", "Adesão na semana", "Último registro", "Próximo compromisso"]));
+    expect(r.draft?.fields.filter((f) => f.uncertain).map((f) => f.label)).toEqual(expect.arrayContaining(["Peso atual", "Adesão na semana", "Último registro (peso, foto, treino ou app)", "Próximo compromisso"]));
   });
   it("pagamento: recusa e diz que não marca pagamento nem movimenta caixa", () => {
     const r = run("marca a Camila como paga");
@@ -183,4 +183,23 @@ describe("intenção", () => {
     ["Qual o diagnóstico dela?", "diagnostico"], ["Como está meu mês?", "financeiro"], ["Prepara o retorno", "resumo_retorno"],
     ["Escreve um lembrete", "rascunho_mensagem"], ["Quem está sem registrar?", "sem_registrar"], ["Monta um treino ABCD", "treino"],
   ])("%s → %s", (m, i) => expect(detectIntent(m)).toBe(i));
+});
+
+describe("achados D66", () => {
+  const scr: ScreenContext = { screen: "hoje", label: "Hoje", patientId: null, tab: null };
+  it("'Quem está sem registrar?' com 2+ pacientes passa na validação (contagem é fato do sistema)", () => {
+    const camila2 = P({ id: "44444444-4444-4444-8444-444444444444", name: "Bia Teste", lastWeightAt: d(20), lastPhotoAt: d(40), lastWorkoutAt: d(20), lastActivityAt: d(20) });
+    const facts = buildHojeFacts([camila, camila2, novo], [], NOW, true);
+    const reply = buildDemoReply({ intent: "sem_registrar", screen: scr, facts, patientFacts: null, patientDenied: false, clinical: true });
+    expect(reply.text).toMatch(/^3 pacientes estão/);
+    expect(facts.find((f) => f.key === "semreg_total")?.value).toBe(3);
+    expect(validateReply(reply, facts).ok).toBe(true);
+  });
+  it("resumo traz os mesmos Sinais recentes da ficha", () => {
+    const pf = buildPatientFacts(P({ riskFactors: ["5 dias sem interação", "Poucos treinos esta semana"] }), null, NOW);
+    expect(pf.find((f) => f.key === "sinais")?.value).toBe("5 dias sem interação; Poucos treinos esta semana");
+    const reply = buildDemoReply({ intent: "resumo_retorno", screen: { screen: "paciente", label: "Ficha", patientId: P({}).id, tab: null }, facts: pf, patientFacts: pf, patientDenied: false, clinical: true });
+    expect(reply.draft?.fields.some((f) => f.label === "Sinais recentes")).toBe(true);
+    expect(validateReply(reply, pf).ok).toBe(true);
+  });
 });

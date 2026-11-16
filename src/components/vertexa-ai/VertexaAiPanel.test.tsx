@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 
 const PID = "cc2a636b-aec9-4132-afe7-475d293d67de";
 const api = vi.hoisted(() => ({ ask: vi.fn(), resolve: vi.fn() }));
+vi.mock("@/hooks/useFin", () => ({ useFinContext: () => ({ clinicId: "c1", access: { isAdmin: true, roles: [], can: {} }, isLoading: false }) }));
 vi.mock("@/lib/api/vertexaAi", () => ({
   askVertexaAi: api.ask,
   resolveVertexaDraft: api.resolve,
@@ -74,7 +75,7 @@ describe("painel Vertexa IA", () => {
     expect(screen.getByText("Rascunho · nada foi salvo")).toBeTruthy();
     expect(screen.getAllByText(/fonte: /).length).toBeGreaterThanOrEqual(2);
     const uncertain = screen.getByText("Adesão: sem dado");
-    expect(uncertain.className).toMatch(/text-warning-foreground dark:text-warning/);
+    expect(uncertain.className).toMatch(/text-primary-ink/) // incerto em laranja (guia), não cinza;
     expect(screen.getAllByText("Modo demonstração").length).toBeGreaterThan(0);
     // histórico da sessão: pedido do usuário com a tela em que foi feito
     expect(screen.getByText("Em: Mariana Teste · Resumo")).toBeTruthy();

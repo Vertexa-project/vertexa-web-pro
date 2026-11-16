@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { dayIsoBR, hojeSubtitle, timeBR, todayRangeBR } from "./hoje";
 import {
   applyDraftAction, assistantMessage, clearMessageDraft, contextLabel, greetingFor, hourBR, HISTORY_LIMIT, introMessage,
-  newDraftView, patchDraft, peekMessageDraft, pushMessage, screenFromLocation, stashMessageDraft, suggestionsFor, draftUseLabel,
+  newDraftView, patchDraft, peekMessageDraft, pushMessage, screenFromLocation, stashMessageDraft, suggestionsFor, draftUseLabel, hasClinicalAccess,
   type ChatMessage,
 } from "./vertexaAi";
 import type { AiAskResult, AiDraft } from "@/types/vertexaAi";
@@ -31,6 +31,12 @@ describe("contexto por tela", () => {
   });
   it("sugestões dependem da tela: Hoje → quem ligar; ficha → resumo para o retorno", () => {
     expect(suggestionsFor(screenFromLocation("/"))).toContain("Quem eu devo ligar hoje?");
+    // Recepção/Financeiro/Estoquista: nada clínico (achado D67)
+    expect(suggestionsFor(screenFromLocation("/"), false)).toEqual(["Como está minha agenda de hoje?"]);
+    expect(hasClinicalAccess(false, ["recepcao"])).toBe(false);
+    expect(hasClinicalAccess(false, ["recepcao", "gestor"])).toBe(true);
+    expect(hasClinicalAccess(false, [])).toBe(true);
+    expect(hasClinicalAccess(true, ["financeiro"])).toBe(true);
     const ficha = suggestionsFor(screenFromLocation(`/pacientes/${PID}`));
     expect(ficha).toContain("Prepara o resumo para o retorno");
     expect(ficha).not.toContain("Quem eu devo ligar hoje?");

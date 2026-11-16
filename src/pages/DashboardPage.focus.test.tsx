@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 const patients = vi.hoisted(() => ({
   list: [] as unknown[],
 }));
+vi.mock("@/hooks/useFin", () => ({ useFinContext: () => ({ clinicId: "c1", access: { isAdmin: true, roles: [], can: {} }, isLoading: false }) }));
 vi.mock("@/hooks/usePatients", () => ({ useListPatients: () => ({ data: patients.list, isLoading: false, isError: false, refetch: vi.fn() }) }));
 vi.mock("@/hooks/useCurrentProfessional", () => ({ useCurrentProfessional: () => ({ data: null }), useCurrentProfessionalName: () => ({ data: "Dra. Ana" }) }));
 vi.mock("@/components/dashboard/TodayAgenda", () => ({ TodayAgenda: () => null }));

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
+vi.mock("@/hooks/useFin", () => ({ useFinContext: () => ({ clinicId: "c1", access: { isAdmin: true, roles: [], can: {} }, isLoading: false }) }));
 vi.mock("@/providers/auth-context", () => ({ useAuth: () => ({ signOut: vi.fn(), session: { user: { email: "a@b.c" } } }) }));
 vi.mock("@/providers/theme-context", () => ({ useTheme: () => ({ resolvedTheme: "light", toggleTheme: vi.fn() }) }));
 vi.mock("@/providers/role-context", () => ({ useRole: () => ({ roleLabel: "Admin" }) }));

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
 const hoisted = vi.hoisted(() => ({ list: [] as unknown[], openWith: vi.fn() }));
+vi.mock("@/hooks/useFin", () => ({ useFinContext: () => ({ clinicId: "c1", access: { isAdmin: true, roles: [], can: {} }, isLoading: false }) }));
 vi.mock("@/hooks/usePatients", () => ({ useListPatients: () => ({ data: hoisted.list, isLoading: false, isError: false, refetch: vi.fn() }) }));
 vi.mock("@/hooks/useCurrentProfessional", () => ({
   useCurrentProfessional: () => ({ data: { id: "pr1", clinicId: "c1" } }),

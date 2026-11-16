@@ -19,13 +19,19 @@ import { useIdentity } from "@/hooks/useIdentity";
 import { useMyProfileAvatar } from "@/hooks/useProfileAvatar";
 import { useAuth } from "@/providers/auth-context";
 import { useRole } from "@/providers/role-context";
+import { useFinContext } from "@/hooks/useFin";
+import { FIN_ROLE_LABEL } from "@/lib/domain/finAccess";
 import { useTheme } from "@/providers/theme-context";
 
 export function Topbar() {
   const navigate = useNavigate();
   const { signOut, session } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
-  const { roleLabel } = useRole();
+  const { roleLabel: baseRoleLabel, role } = useRole();
+  const { access } = useFinContext();
+  // Quem é só equipe (Recepção, Financeiro, Estoquista, Gestor) aparece com o papel dele, não "Profissional".
+  const staffRole = access.roles[0]?.role;
+  const roleLabel = role === "other" && staffRole ? FIN_ROLE_LABEL[staffRole] : baseRoleLabel;
   const identity = useIdentity();
   const myAvatar = useMyProfileAvatar(identity.actingProfileId);
 

@@ -21,7 +21,7 @@ function Bubble({ m }: { m: ChatMessage }) {
       <div
         className={cn(
           "max-w-[92%] break-words rounded-xl px-3 py-2 text-sm",
-          mine ? "bg-primary-ink text-primary-foreground" : m.error ? "bg-warning/15 text-warning-foreground dark:text-warning" : "bg-muted text-foreground",
+          mine ? "bg-primary-ink text-primary-foreground" : m.error ? "bg-warning/15 text-primary-ink" : "bg-muted text-foreground",
         )}
       >
         <p className="whitespace-pre-line">{m.text}</p>
@@ -29,8 +29,8 @@ function Bubble({ m }: { m: ChatMessage }) {
           <ul className="mt-2 space-y-1.5">
             {m.reply.items.map((it) => (
               <li key={`${it.text}:${it.source}`} className="break-words">
-                <span className={cn(it.uncertain && "font-medium text-warning-foreground dark:text-warning")}>{it.text}</span>
-                {it.uncertain ? <span className="ml-1 text-xs text-warning-foreground dark:text-warning">· conferir</span> : null}
+                <span className={cn(it.uncertain && "font-medium text-primary-ink")}>{it.text}</span>
+                {it.uncertain ? <span className="ml-1 text-xs text-primary-ink">· conferir</span> : null}
                 <span className="ml-1 text-xs text-muted-foreground">fonte: {it.source}</span>
               </li>
             ))}

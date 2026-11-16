@@ -24,7 +24,7 @@ type Row = Record<string, any>;
 
 const PATIENT_SELECT = `id, goal, current_weight, target_weight, height_cm,
   profile:profiles ( full_name, status ),
-  adherence_snapshots ( status, weekly_completion_rate, calculated_at ),
+  adherence_snapshots ( status, weekly_completion_rate, risk_factors, calculated_at ),
   activity_events ( type, created_at ),
   weight_logs ( weight_kg, measured_at, review_status ),
   progress_photos ( taken_at )`;
@@ -46,6 +46,7 @@ function toRawPatient(r: Row): RawPatient | null {
     targetWeight: r.target_weight ?? null,
     status: snaps[0]?.status ?? null,
     rate: snaps[0]?.weekly_completion_rate ?? null,
+    riskFactors: Array.isArray(snaps[0]?.risk_factors) ? snaps[0].risk_factors.map(String) : [],
     lastWeightAt: latest((r.weight_logs ?? []).map((w: Row) => w.measured_at)),
     lastPhotoAt: latest((r.progress_photos ?? []).map((p: Row) => p.taken_at)),
     lastWorkoutAt: latest(ev.filter((e) => e.type === "workout_checked").map((e) => e.created_at)),
@@ -76,10 +77,13 @@ Deno.serve(async (req: Request) => {
   if (!body) return jsonResponse({ error: "invalid_body" }, 400);
 
   // ---- identidade e clínica do chamador (RLS: só enxerga o que é dele)
-  const { data: prof } = await user.from("profiles").select("id").eq("auth_user_id", uid).maybeSingle();
-  if (!prof) return jsonResponse({ error: "forbidden" }, 403);
-  const { data: pros } = await user.from("professionals").select("id, clinic_id, type").eq("profile_id", prof.id);
+  // Perfil + vínculo numa ida só (desempenho, achado D66).
+  const { data: pros } = await user.from("professionals")
+    .select("id, clinic_id, type, profile_id, profile:profiles!professionals_profile_id_fkey!inner ( auth_user_id )")
+    .eq("profile.auth_user_id", uid);
   const me = (pros ?? []).find((p: Row) => p.clinic_id) as Row | undefined;
+  const prof = me ? { id: me.profile_id as string } : null;
+  if (!prof) return jsonResponse({ error: "forbidden" }, 403);
   if (!me) return jsonResponse({ error: "forbidden" }, 403);
   const clinicId = me.clinic_id as string;
 
@@ -180,11 +184,15 @@ Deno.serve(async (req: Request) => {
   // Rede de segurança: a saída do demo também passa pela validação.
   if (!validateReply(reply, facts).ok) reply = SAFE_FALLBACK;
 
-  const { data: ev, error: evErr } = await admin.from("vertexa_ai_events").insert({
-    clinic_id: clinicId, profile_id: prof.id, kind: "pedido", screen: screen.screen, patient_id: patientFacts?.[0]?.patientId ?? null,
+  // Rastro gravado sem segurar a resposta (desempenho): o id nasce aqui e a gravação termina em segundo plano.
+  const requestId = crypto.randomUUID();
+  const trace = admin.from("vertexa_ai_events").insert({
+    id: requestId, clinic_id: clinicId, profile_id: prof.id, kind: "pedido", screen: screen.screen, patient_id: patientFacts?.[0]?.patientId ?? null,
     mode, intent, draft_kind: reply.draft?.kind ?? null, blocked: reply.blocked,
-  }).select("id").single();
-  if (evErr) console.error("vertexa-ai: rastro não gravado", evErr.code);
+  }).then(({ error }) => { if (error) console.error("vertexa-ai: rastro não gravado", error.code); });
+  // deno-lint-ignore no-explicit-any
+  const rt = (globalThis as any).EdgeRuntime;
+  if (rt?.waitUntil) rt.waitUntil(trace); else await trace;
 
-  return jsonResponse({ mode, reply, request_id: ev?.id ?? null, traced: !evErr });
+  return jsonResponse({ mode, reply, request_id: requestId, traced: true });
 });

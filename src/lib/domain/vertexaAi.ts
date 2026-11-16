@@ -50,7 +50,9 @@ export function contextLabel(ctx: AiScreenContext, patientName?: string | null):
 }
 
 /** SugestoesDaTela: pedidos prontos que dependem da tela atual. */
-export function suggestionsFor(ctx: AiScreenContext): string[] {
+export function suggestionsFor(ctx: AiScreenContext, clinical = true): string[] {
+  // Recepção/Financeiro/Estoquista não abrem dado clínico: só o que a IA responde para eles.
+  if (!clinical) return ["Como está minha agenda de hoje?"];
   switch (ctx.screen) {
     case "hoje":
       return ["Quem eu devo ligar hoje?", "Como está minha agenda de hoje?", "Quem está sem registrar?"];
@@ -72,6 +74,14 @@ export function suggestionsFor(ctx: AiScreenContext): string[] {
 }
 
 /** Ações rápidas do painel (o que ela pode fazer nesta versão — sem criar treino/dieta, sem pagamento). */
+/** Mesma regra da função vertexa-ai (_shared/vertexa/access.ts): papel só de Recepção/Financeiro/Estoquista não abre dado clínico. */
+const NON_CLINICAL = new Set(["recepcao", "financeiro", "estoquista"]);
+export function hasClinicalAccess(isAdmin: boolean, staffRoles: string[]): boolean {
+  if (isAdmin) return true;
+  if (staffRoles.length === 0) return true;
+  return !staffRoles.every((r) => NON_CLINICAL.has(r));
+}
+
 export const QUICK_ACTIONS: Array<{ label: string; prompt: string }> = [
   { label: "Resumir o dia", prompt: "Quem precisa de mim hoje?" },
   { label: "Preparar retorno", prompt: "Prepara o resumo para o retorno" },

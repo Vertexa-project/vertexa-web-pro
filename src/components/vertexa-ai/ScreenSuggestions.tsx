@@ -1,4 +1,5 @@
-import { suggestionsFor } from "@/lib/domain/vertexaAi";
+import { useFinContext } from "@/hooks/useFin";
+import { hasClinicalAccess, suggestionsFor } from "@/lib/domain/vertexaAi";
 import type { AiScreenContext } from "@/types/vertexaAi";
 
 /** SugestoesDaTela: pedidos prontos que mudam conforme a tela (no Hoje "quem ligar", na ficha "resumo para o retorno"). */
@@ -11,9 +12,11 @@ export function ScreenSuggestions({
   onPick: (text: string) => void;
   disabled?: boolean;
 }) {
+  const { access } = useFinContext();
+  const clinical = hasClinicalAccess(access.isAdmin, access.roles.map((r) => r.role));
   return (
     <div className="flex flex-wrap gap-1.5" role="group" aria-label="Sugestões para esta tela">
-      {suggestionsFor(screen).map((s) => (
+      {suggestionsFor(screen, clinical).map((s) => (
         <button
           key={s}
           type="button"

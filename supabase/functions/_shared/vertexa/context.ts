@@ -14,6 +14,8 @@ export interface RawPatient {
   targetWeight: number | null;
   status: string | null;
   rate: number | null;
+  /** risk_factors do último cálculo de adesão (os "Sinais recentes" da ficha). */
+  riskFactors?: string[];
   lastWeightAt: string | null;
   lastPhotoAt: string | null;
   lastWorkoutAt: string | null;
@@ -99,8 +101,11 @@ export function buildHojeFacts(patients: RawPatient[], appts: RawAppointment[], 
       reason: r.a.reasons[0]?.kind ?? null,
     });
   }
-  for (const r of rows) {
-    if (r.a.since == null || r.a.since >= 8) {
+  const semreg = rows.filter((r) => r.a.since == null || r.a.since >= 8);
+  // Número que a resposta cita ("N pacientes estão…") precisa existir nos fatos (achado D66: virava resposta de segurança).
+  facts.push({ key: "semreg_total", label: "Pacientes sem registrar há mais de uma semana", value: semreg.length, source: "Adesão" });
+  for (const r of semreg) {
+    {
       facts.push({
         key: `semreg:${r.p.id}`,
         label: r.p.name ?? "Sem nome",
@@ -137,13 +142,15 @@ export function buildPatientFacts(p: RawPatient, nextAppt: RawAppointment | null
   );
   f.push({
     key: "ultimo_registro",
-    label: "Último registro",
+    label: "Último registro (peso, foto, treino ou app)",
     value: a.since == null ? "Ainda não registrou no app" : a.since === 0 ? "Hoje" : `Há ${a.since} ${a.since === 1 ? "dia" : "dias"}`,
     source: "App do paciente",
     uncertain: a.since == null,
     patientId: p.id,
     reason: a.reasons[0]?.kind ?? null,
   });
+  // Mesmos "Sinais recentes" da ficha (cálculo diário de adesão), para o resumo não mostrar um número e a ficha outro.
+  if (p.riskFactors?.length) f.push({ key: "sinais", label: "Sinais recentes", value: p.riskFactors.join("; "), source: "Sinais recentes da ficha", patientId: p.id });
   f.push({ key: "objetivo", label: "Objetivo", value: p.goal?.trim() || "Não informado", source: "Cadastro", uncertain: !p.goal?.trim(), patientId: p.id });
   if (a.reasons.length) f.push({ key: "motivos", label: "Motivos de atenção", value: a.reasons.map((r) => r.label).join("; "), source: "Foco do dia", patientId: p.id, reason: a.reasons[0].kind });
   f.push(

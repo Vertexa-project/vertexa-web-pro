@@ -35,7 +35,7 @@ export function DraftCard({
       <div className="flex flex-wrap items-center gap-2">
         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <p className="min-w-0 flex-1 break-words font-semibold text-foreground">{draft.title}</p>
-        <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning-foreground dark:text-warning">
+        <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-primary-ink">
           {STATUS_TEXT[status]}
         </span>
       </div>
@@ -46,10 +46,10 @@ export function DraftCard({
             <div key={`${f.label}:${f.value}`} className="min-w-0">
               <dt className="text-xs text-muted-foreground">{f.label}</dt>
               <dd className="break-words">
-                <span className={cn("font-medium", f.uncertain ? "text-warning-foreground dark:text-warning" : "text-foreground")}>
+                <span className={cn("font-medium", f.uncertain ? "text-primary-ink" : "text-foreground")}>
                   {f.value}
                 </span>
-                {f.uncertain ? <span className="ml-1 text-xs text-warning-foreground dark:text-warning">· conferir</span> : null}
+                {f.uncertain ? <span className="ml-1 text-xs text-primary-ink">· conferir</span> : null}
                 <span className="ml-1 text-xs text-muted-foreground">fonte: {f.source}</span>
               </dd>
             </div>

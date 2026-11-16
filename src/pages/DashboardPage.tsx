@@ -19,7 +19,8 @@ import { useCurrentProfessional, useCurrentProfessionalName } from "@/hooks/useC
 import { useListPatients } from "@/hooks/usePatients";
 import { greeting, shortName } from "@/lib/domain/format";
 import { hojeSubtitle, weekdayDateBR } from "@/lib/domain/hoje";
-import { hourBR } from "@/lib/domain/vertexaAi";
+import { hasClinicalAccess, hourBR } from "@/lib/domain/vertexaAi";
+import { useFinContext } from "@/hooks/useFin";
 import { attentionKpis, focusAction, focusOrder, type PatientAttention } from "@/lib/domain/attention";
 import type { PatientListItem } from "@/types/db";
 
@@ -64,6 +65,9 @@ export function DashboardPage() {
   const { data: professionalName } = useCurrentProfessionalName();
   const { data: professional } = useCurrentProfessional();
   const who = shortName(professionalName);
+  const { access, isLoading: finLoading } = useFinContext();
+  // Recepção/Financeiro/Estoquista não veem dado clínico: o Hoje deles mostra só a agenda (mesma regra da Vertexa IA).
+  const clinical = finLoading || hasClinicalAccess(access.isAdmin, access.roles.map((r) => r.role));
 
   const stats = useMemo(() => {
     const list = data ?? [];
@@ -79,7 +83,7 @@ export function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title={who ? `${greeting(hourBR(now))}, ${who}` : greeting(hourBR(now))}
-        description={hojeSubtitle(weekdayDateBR(now), agendaCount, isLoading || isError ? null : stats.emRisco + stats.atencao)}
+        description={hojeSubtitle(weekdayDateBR(now), agendaCount, !clinical || isLoading || isError ? null : stats.emRisco + stats.atencao)}
         actions={
           ai ? (
             <Button variant="outline" onClick={() => ai.openWith("Quem precisa de mim hoje?")}>
@@ -90,7 +94,13 @@ export function DashboardPage() {
         }
       />
 
-      {isLoading ? (
+      {!clinical ? (
+        <TodayAgenda
+          clinicId={professional?.clinicId ?? null}
+          professionalId={professional?.id ?? null}
+          onCount={setAgendaCount}
+        />
+      ) : isLoading ? (
         <DashboardSkeleton />
       ) : isError ? (
         <ErrorState onRetry={() => refetch()} />
