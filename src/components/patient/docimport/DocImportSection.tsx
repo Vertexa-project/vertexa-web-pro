@@ -3,6 +3,7 @@ import { FileUp, Loader2 } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { ConferencePanel } from "./ConferencePanel";
+import { preloadPdfRenderer } from "./pdfRenderer";
 import { GatedAction } from "../GatedAction";
 import { useCurrentProfessional } from "@/hooks/useCurrentProfessional";
 import { useDisciplinePermissions } from "@/hooks/useDisciplines";
@@ -162,7 +163,7 @@ export function DocImportSection({ patient, kind }: { patient: PatientDetail; ki
           wrapperClassName="items-end"
           variant="outline"
           size="sm"
-          onClick={() => { warmDocReader(); fileRef.current?.click(); }}
+          onClick={() => { warmDocReader(); void preloadPdfRenderer().catch(() => undefined); fileRef.current?.click(); }}
         >
           {reading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <FileUp className="h-4 w-4" aria-hidden />}
           {IMPORT_BUTTON_LABEL[kind]}

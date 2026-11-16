@@ -4,13 +4,13 @@
 import { useEffect, useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
 
+import { preloadPdfRenderer } from "./pdfRenderer";
+
 const MAX_PAGES = 3;
 const RENDER_WIDTH = 900; // px do desenho; a imagem se ajusta à largura do cartão
 
 async function renderPages(bytes: ArrayBuffer): Promise<string[]> {
-  const pdfjs = await import("pdfjs-dist");
-  const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-  pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+  const pdfjs = await preloadPdfRenderer();
   const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
   const out: string[] = [];
   try {
