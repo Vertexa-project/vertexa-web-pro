@@ -60,7 +60,8 @@ describe("Hoje no formato do protótipo", () => {
     ];
     renderHoje();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/^(Bom dia|Boa tarde|Boa noite), Dra\. Juliana$/);
-    expect(screen.getByText(/segunda-feira, \d+ de .+ · 2 compromissos · 2 pacientes precisam de você/)).toBeTruthy();
+    const weekday = new Date().toLocaleDateString("pt-BR", { weekday: "long", timeZone: "America/Sao_Paulo" });
+    expect(screen.getByText(new RegExp(`${weekday}, \\d+ de .+ · 2 compromissos · 2 pacientes precisam de você`))).toBeTruthy();
     for (const k of ["Pacientes ativos", "Em risco", "Em atenção", "Adesão média", "Com pendências"]) expect(screen.getByText(k)).toBeTruthy();
     for (const t of ["Foco do dia", "Agenda de hoje", "Para reativar", "Pendências de registro", "Vertexa IA sugere", "Adesão semanal por paciente"]) expect(screen.getAllByText(t).length).toBeGreaterThan(0);
   });

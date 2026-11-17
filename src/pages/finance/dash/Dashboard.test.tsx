@@ -152,7 +152,7 @@ describe("Financeiro › Painel", () => {
       await user.click(closeBtn(dlg));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     }
-  });
+  }, 20000); // abre 5 listas seguidas: sob carga da suíte inteira passa de 5 s
 
   it("ticket médio abre as vendas do cálculo e mostra total ÷ linhas", async () => {
     const user = userEvent.setup();
