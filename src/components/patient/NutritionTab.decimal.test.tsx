@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 const plan = vi.hoisted(() => ({ data: null as unknown, canNutri: true }));
+vi.mock("./AiFirstDraftSection", () => ({ AiFirstDraftSection: () => null })); // A8: tem teste próprio
 vi.mock("./docimport/DocImportSection", () => ({ DocImportSection: () => null })); // importação com Conferência tem teste próprio
 vi.mock("@/hooks/usePlans", () => ({ useNutritionPlan: () => ({ data: plan.data, isLoading: false, isError: false, refetch: vi.fn() }) }));
 vi.mock("@/hooks/useDisciplines", () => ({ useDisciplinePermissions: () => ({ perms: { canEditNutrition: plan.canNutri, canEditWorkout: false } }) }));

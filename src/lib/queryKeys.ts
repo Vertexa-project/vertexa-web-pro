@@ -12,6 +12,8 @@ export const qk = {
   patientReminders: (patientId: string) => ["patient", patientId, "reminders"] as const,
   clinicReminders: ["reminders", "clinic"] as const,
   patientDeliveries: (patientId: string) => ["patient", patientId, "deliveries"] as const,
+  aiPlanDraft: (patientId: string, kind: string) => ["patient", patientId, "aiPlanDraft", kind] as const,
+  planDraftConfig: (clinicId: string) => ["planDraftConfig", clinicId] as const,
   workoutPlan: (patientId: string) => ["patient", patientId, "workoutPlan"] as const,
   nutritionPlan: (patientId: string) => ["patient", patientId, "nutritionPlan"] as const,
   bodyAssessments: (patientId: string) => ["patient", patientId, "bodyAssessments"] as const,
