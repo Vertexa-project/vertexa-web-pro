@@ -3,6 +3,7 @@ import { Megaphone, Pencil, Send } from "lucide-react";
 
 import { BroadcastDialog } from "@/components/campaigns/BroadcastDialog";
 import { CampaignEditDialog } from "@/components/campaigns/CampaignEditDialog";
+import { ReengagementSection } from "@/components/campaigns/ReengagementSection";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { DataTable, type Column } from "@/components/data-table/DataTable";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -136,6 +137,8 @@ export function CampaignsPage() {
               })
             )}
           </section>
+
+          {clinicId ? <ReengagementSection clinicId={clinicId} isAdmin={isClinicAdmin} /> : null}
 
           <section aria-label="Disparos manuais" className="space-y-3">
             <h2 className="text-base font-semibold text-foreground">Disparos manuais</h2>
