@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, Dumbbell, Target, Utensils } from "lucide-
 
 import { ExportPointsButton } from "./ExportPointsButton";
 import { PatientTeamSection } from "./PatientTeamSection";
+import { MedicationCard } from "@/components/medication/MedicationCard";
 import { RemindersCard } from "./RemindersCard";
 import { RiskSignalsPanel } from "./RiskSignalsPanel";
 import { WeeklyNoteCard } from "./WeeklyNoteCard";
@@ -63,6 +64,8 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
       </div>
 
       <RemindersCard patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
+
+      <MedicationCard patientId={patient.id} />
 
       <WeeklyNoteCard patientId={patient.id} />
 
