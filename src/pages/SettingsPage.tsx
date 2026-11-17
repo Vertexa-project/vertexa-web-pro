@@ -9,6 +9,7 @@ import { ClinicBrandRow } from "@/components/settings/ClinicBrandRow";
 import { PatientExportsAudit } from "@/components/settings/PatientExportsAudit";
 import { RoutineSettingsCard } from "@/components/routine/RoutineSettingsCard";
 import { ClinicJoinCodeRow } from "@/components/settings/ClinicJoinCodeRow";
+import { MedicationReminderRow } from "@/components/settings/MedicationReminderRow";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -211,6 +212,11 @@ export function SettingsPage() {
               "Convidar profissional" (SoonButton), que prometia um e-mail que não existe. O envio
               por e-mail continua sendo outro WP — e vai apenas PRÉ-CRIAR um pedido já aprovado,
               reusando exatamente este fluxo. */}
+          {isClinicAdmin ? (
+            <SettingRow label="Lembrete de aplicação de medicação (app do paciente)">
+              <MedicationReminderRow clinicId={professional?.clinicId ?? null} />
+            </SettingRow>
+          ) : null}
           {isClinicAdmin ? (
             <SettingRow label="Código de acesso da equipe">
               <ClinicJoinCodeRow clinicId={professional?.clinicId ?? null} />

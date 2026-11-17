@@ -4,6 +4,7 @@ import { ExportPointsButton } from "./ExportPointsButton";
 import { PatientTeamSection } from "./PatientTeamSection";
 import { PreConsultaCard } from "./PreConsultaCard";
 import { ReengagementLine } from "./ReengagementLine";
+import { MedicationCard } from "@/components/medication/MedicationCard";
 import { RemindersCard } from "./RemindersCard";
 import { MissionCard, RoutineCard } from "@/components/routine/PatientRoutineCards";
 import { RiskSignalsPanel } from "./RiskSignalsPanel";
@@ -68,6 +69,8 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
       <PreConsultaCard patientId={patient.id} />
 
       <RemindersCard patientId={patient.id} patientName={patient.profile?.full_name ?? "Paciente"} />
+
+      <MedicationCard patientId={patient.id} />
 
       <WeeklyNoteCard patientId={patient.id} />
 
