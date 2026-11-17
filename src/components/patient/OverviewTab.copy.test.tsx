@@ -6,6 +6,7 @@ vi.mock("./PatientTeamSection", () => ({ PatientTeamSection: ({ patientSex }: { 
 vi.mock("./RiskSignalsPanel", () => ({ RiskSignalsPanel: () => null }));
 vi.mock("./WeeklyNoteCard", () => ({ WeeklyNoteCard: () => null }));
 vi.mock("./RemindersCard", () => ({ RemindersCard: ({ patientName }: { patientName: string }) => <h3>LEMBRETES de {patientName}</h3> })); // tem teste próprio
+vi.mock("@/components/routine/PatientRoutineCards", () => ({ RoutineCard: () => null, MissionCard: () => null })); // tem teste próprio (A4+A5)
 vi.mock("@/hooks/usePlans", () => ({ useWorkoutPlan: () => ({ data: null, isLoading: false }), useNutritionPlan: () => ({ data: null, isLoading: false }) }));
 vi.mock("@/hooks/useBodyAssessments", () => ({ useLatestWeight: () => ({ current: 117 }) }));
 

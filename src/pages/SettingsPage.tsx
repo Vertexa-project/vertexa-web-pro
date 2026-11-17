@@ -7,6 +7,7 @@ import { OwnAvatarControl } from "@/components/avatar/OwnAvatarControl";
 import { GoogleCalendarConnection } from "@/components/calendar/GoogleCalendarConnection";
 import { ClinicBrandRow } from "@/components/settings/ClinicBrandRow";
 import { PatientExportsAudit } from "@/components/settings/PatientExportsAudit";
+import { RoutineSettingsCard } from "@/components/routine/RoutineSettingsCard";
 import { ClinicJoinCodeRow } from "@/components/settings/ClinicJoinCodeRow";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -322,6 +323,8 @@ export function SettingsPage() {
           </SettingRow>
         </SectionCard>
       </div>
+
+      {isClinicAdmin ? <RoutineSettingsCard clinicId={professional?.clinicId ?? null} /> : null}
 
       {isClinicAdmin ? <PatientExportsAudit clinicId={professional?.clinicId ?? null} /> : null}
     </div>
