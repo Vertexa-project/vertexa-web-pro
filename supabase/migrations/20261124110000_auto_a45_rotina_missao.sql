@@ -359,7 +359,7 @@ begin
   if s.clinic_id is null or not s.mission_enabled then return jsonb_build_object('enabled', false, 'started', false); end if;
   select * into m from public.patient_missions where patient_id = p_patient_id;
   if m.patient_id is null then
-    select created_at into v_created from public.patients where id = p_patient_id;
+    select pr.created_at into v_created from public.patients pt join public.profiles pr on pr.id = pt.profile_id where pt.id = p_patient_id;
     -- começa sozinha para quem entrou DEPOIS de a clínica ligar a missão; os demais, só se o profissional iniciar
     if v_self and v_created >= coalesce(s.mission_enabled_at, 'infinity'::timestamptz) then
       insert into public.patient_missions (patient_id, clinic_id, started_on) values (p_patient_id, private.patient_clinic(p_patient_id), v_today)

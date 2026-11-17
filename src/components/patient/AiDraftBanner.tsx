@@ -9,8 +9,8 @@ export function AiDraftBanner({ draft, hasPublished }: { draft: AiPlanDraft; has
   return (
     <div className="space-y-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm" data-testid="ai-draft-banner">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="primary">
-          <Sparkles className="mr-1 h-3 w-3" aria-hidden />
+        <Badge tone="primary" className="h-auto max-w-full whitespace-normal text-left leading-snug">
+          <Sparkles className="mr-1 h-3 w-3 shrink-0" aria-hidden />
           {draftSeal(draft.mode)}
         </Badge>
         <span className="text-xs text-muted-foreground">Tipo: {draft.patient_type_label}</span>

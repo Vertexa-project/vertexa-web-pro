@@ -12,6 +12,8 @@ import { ClinicJoinCodeRow } from "@/components/settings/ClinicJoinCodeRow";
 import { MedicationReminderRow } from "@/components/settings/MedicationReminderRow";
 import { PlanDraftSettingsRow } from "@/components/settings/PlanDraftSettingsRow";
 import { PageHeader } from "@/components/PageHeader";
+import { useFinContext } from "@/hooks/useFin";
+import { FIN_ROLE_LABEL } from "@/lib/domain/finAccess";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,7 +99,11 @@ export function SettingsPage() {
   const { data: professionalName } = useCurrentProfessionalName();
   const { data: professional } = useCurrentProfessional();
   const myAvatar = useMyProfileAvatar(identity.actingProfileId);
-  const { roleLabel } = useRole(); // roleLabel: só DISPLAY. Autoridade de admin vem do sinal real abaixo.
+  const { roleLabel: baseRoleLabel, role } = useRole(); // roleLabel: só DISPLAY. Autoridade de admin vem do sinal real abaixo.
+  const { access: finAccess } = useFinContext();
+  // Igual ao topo: quem é só equipe (Recepção, Financeiro, Estoquista, Gestor) aparece com o papel dele.
+  const staffRole = finAccess.roles[0]?.role;
+  const roleLabel = role === "other" && staffRole ? FIN_ROLE_LABEL[staffRole] : baseRoleLabel;
   const { isClinicAdmin } = useIsClinicAdmin(professional?.clinicId ?? null);
   const clinic = useClinic(professional?.clinicId ?? null);
   const team = useClinicProfessionals(professional?.clinicId ?? null);

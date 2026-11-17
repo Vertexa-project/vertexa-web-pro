@@ -17,7 +17,14 @@ export const useListPatients = () =>
   useQuery({ queryKey: qk.patients, queryFn: listPatients });
 
 export const usePatient = (id: string) =>
-  useQuery({ queryKey: qk.patient(id), queryFn: () => getPatient(id), enabled: Boolean(id) });
+  useQuery({
+    queryKey: qk.patient(id),
+    queryFn: () => getPatient(id),
+    enabled: Boolean(id),
+    // Ficha que a regra de acesso não devolve (0 linhas, PGRST116) não muda tentando de novo:
+    // mostrar "Paciente não encontrado" na hora, em vez de esperar ~7 s de novas tentativas.
+    retry: (count, err) => (err as { code?: string } | null)?.code !== "PGRST116" && count < 2,
+  });
 
 /** Estado de acesso do paciente (admin-only). Só consulta quando `enabled` (diálogo aberto). */
 export const usePatientRegistrationAccess = (patientId: string, enabled: boolean) =>

@@ -35,14 +35,14 @@ export function ReengagementSection({ clinicId, isAdmin }: Props) {
       render: (r) => (
         <div>
           <span className="font-medium text-foreground">{r.full_name}</span>
-          <span className="block text-xs text-muted-foreground sm:hidden">{r.idle_days} dias sem interação</span>
+          <span className="block text-xs text-muted-foreground sm:hidden">{r.idle_days} {r.idle_days === 1 ? "dia" : "dias"} sem interação</span>
         </div>
       ),
     },
     { key: "state", header: "Situação", render: (r) => <Badge tone={STATE_TONE[r.state]}>{STATE_LABEL[r.state]}</Badge> },
     { key: "step", header: "Mensagem", render: (r) => (r.steps_sent > 0 ? `${r.steps_sent} de 3` : r.last_step ? `${r.last_step} de 3 (ciclo anterior)` : "—") },
     { key: "last", header: "Última", className: "hidden sm:table-cell", headerClassName: "hidden sm:table-cell", render: (r) => <span className="text-muted-foreground">{fmtDayMonth(r.last_sent_on)}</span> },
-    { key: "idle", header: "Sem interação", className: "hidden sm:table-cell", headerClassName: "hidden sm:table-cell", render: (r) => <span className="text-muted-foreground">{r.idle_days} dias</span> },
+    { key: "idle", header: "Sem interação", className: "hidden sm:table-cell", headerClassName: "hidden sm:table-cell", render: (r) => <span className="text-muted-foreground">{r.idle_days} {r.idle_days === 1 ? "dia" : "dias"}</span> },
   ];
 
   return (

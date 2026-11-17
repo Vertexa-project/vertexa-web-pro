@@ -74,7 +74,7 @@ export function AiFirstDraftSection({ patient, kind, existing }: Props) {
         <div className="space-y-3 rounded-lg border border-primary/40 bg-primary/5 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
-              <Badge tone="primary"><Sparkles className="mr-1 h-3 w-3" aria-hidden />{draftSeal(draft.mode)}</Badge>
+              <Badge tone="primary" className="h-auto max-w-full whitespace-normal text-left leading-snug"><Sparkles className="mr-1 h-3 w-3 shrink-0" aria-hidden />{draftSeal(draft.mode)}</Badge>
               <p className="text-sm font-medium text-foreground">{draft.payload.title}</p>
               <p className="text-xs text-muted-foreground">{draft.patient_type_label} · {summarizeDraft(draft)}</p>
               <p className="text-xs text-muted-foreground">O paciente não vê este rascunho. Ele só vê o que você publicar.</p>

@@ -22,6 +22,11 @@ export function useResolvePlanDraft(patientId: string, kind: PlanDraftKind) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (v: { draftId: string; decision: "usado" | "descartado" }) => resolvePlanDraft(v.draftId, v.decision),
+    // O rascunho sai da tela na hora (usado ou descartado); a busca depois confirma com o servidor.
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: qk.aiPlanDraft(patientId, kind) });
+      qc.setQueryData(qk.aiPlanDraft(patientId, kind), null);
+    },
     onSettled: () => { void qc.invalidateQueries({ queryKey: qk.aiPlanDraft(patientId, kind) }); },
   });
 }

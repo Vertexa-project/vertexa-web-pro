@@ -164,7 +164,7 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange, dra
 
           {form.meals.map((m, i) => (
             <div key={i} className="space-y-3 rounded-lg border p-4">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                 <Input
                   className="w-24"
                   value={m.time}
@@ -173,6 +173,7 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange, dra
                   aria-label="Horário"
                 />
                 <Input
+                  className="order-first min-w-0 basis-full sm:order-none sm:basis-auto sm:flex-1"
                   value={m.name}
                   onChange={(e) => patchMeal(i, { name: e.target.value })}
                   placeholder="Nome da refeição (ex.: Café da manhã)"
