@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   admin: true,
 }));
 vi.mock("@/lib/api/campaigns", () => api);
+vi.mock("@/components/campaigns/ReengagementSection", () => ({ ReengagementSection: () => null })); // tem teste próprio
 vi.mock("@/hooks/useClinicBrand", () => ({ useClinicBrand: () => ({ data: { clinicId: "c1", name: "Clínica" } }) }));
 vi.mock("@/hooks/useIsClinicAdmin", () => ({ useIsClinicAdmin: () => ({ isClinicAdmin: api.admin }) }));
 const { CampaignsPage } = await import("./CampaignsPage");

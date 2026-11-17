@@ -4,6 +4,7 @@ import { render, screen } from "@testing-library/react";
 vi.mock("./ExportPointsButton", () => ({ ExportPointsButton: () => null }));
 vi.mock("./PatientTeamSection", () => ({ PatientTeamSection: ({ patientSex }: { patientSex?: string | null }) => <h3>{patientSex === "masculino" ? "TEAM-MASC" : "TEAM-OTHER"}</h3> }));
 vi.mock("./RiskSignalsPanel", () => ({ RiskSignalsPanel: () => null }));
+vi.mock("./ReengagementLine", () => ({ ReengagementLine: () => null }));
 vi.mock("./WeeklyNoteCard", () => ({ WeeklyNoteCard: () => null }));
 vi.mock("./PreConsultaCard", () => ({ PreConsultaCard: () => <h3>PRE-CONSULTA</h3> })); // tem teste próprio
 vi.mock("./RemindersCard", () => ({ RemindersCard: ({ patientName }: { patientName: string }) => <h3>LEMBRETES de {patientName}</h3> })); // tem teste próprio

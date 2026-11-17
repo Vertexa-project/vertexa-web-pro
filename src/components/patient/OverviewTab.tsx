@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Dumbbell, Target, Utensils } from "lucide-
 import { ExportPointsButton } from "./ExportPointsButton";
 import { PatientTeamSection } from "./PatientTeamSection";
 import { PreConsultaCard } from "./PreConsultaCard";
+import { ReengagementLine } from "./ReengagementLine";
 import { RemindersCard } from "./RemindersCard";
 import { MissionCard, RoutineCard } from "@/components/routine/PatientRoutineCards";
 import { RiskSignalsPanel } from "./RiskSignalsPanel";
@@ -96,6 +97,7 @@ export function OverviewTab({ patient, snapshot, onGoToTab }: OverviewTabProps) 
                 <span className="text-muted-foreground">{p}</span>
               </div>
             ))}
+            <ReengagementLine patientId={patient.id} />
           </CardContent>
         </Card>
 
