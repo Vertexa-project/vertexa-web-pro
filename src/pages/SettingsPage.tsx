@@ -193,6 +193,13 @@ export function SettingsPage() {
             </SettingRow>
           ) : null}
           {isClinicAdmin ? (
+            <SettingRow label="Pré-consulta">
+              <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/pre-consulta")}>
+                Configurar
+              </Button>
+            </SettingRow>
+          ) : null}
+          {isClinicAdmin ? (
             <SettingRow label="Auditoria de PDFs de prontuário">
               <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/auditoria")}>
                 Ver registros

@@ -91,6 +91,9 @@ const JourneyBoardPage = lazy(() =>
 const JourneyColumnsAdminPage = lazy(() =>
   import("@/pages/JourneyColumnsAdminPage").then((m) => ({ default: m.JourneyColumnsAdminPage })),
 );
+const PreConsultaSettingsPage = lazy(() =>
+  import("@/pages/PreConsultaSettingsPage").then((m) => ({ default: m.PreConsultaSettingsPage })),
+);
 const BatchReportPage = lazy(() =>
   import("@/pages/BatchReportPage").then((m) => ({ default: m.BatchReportPage })),
 );
@@ -347,6 +350,7 @@ export const router = createBrowserRouter(
             { path: "configuracoes/disciplinas", element: <DisciplinesAdminPage /> },
             { path: "configuracoes/jornada", element: <JourneyColumnsAdminPage /> },
             { path: "configuracoes/auditoria", element: <ReportAuditPage /> },
+            { path: "configuracoes/pre-consulta", element: <PreConsultaSettingsPage /> },
             { path: "relatorios/lote", element: <BatchReportPage /> },
             { path: "*", element: <NotFoundPage /> },
           ],
