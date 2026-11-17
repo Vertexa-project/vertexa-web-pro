@@ -82,7 +82,34 @@ function mapProfessionals(links: RawLink[] | null): ProfessionalSummary[] {
   }));
 }
 
+/**
+ * Última mensagem do PACIENTE na conversa, por paciente (RPC patients_last_message_at, filtrada por
+ * acesso). Entra na "última atividade" para a lista concordar com o reengajamento (A6), que já conta
+ * a conversa como interação. Falha aqui não derruba a lista: fica só sem esse sinal.
+ */
+async function fetchLastPatientMessages(): Promise<Map<string, string>> {
+  try {
+    const { data, error } = await supabase.rpc("patients_last_message_at");
+    if (error || !Array.isArray(data)) return new Map();
+    return new Map((data as { patient_id: string; last_at: string }[]).map((r) => [r.patient_id, r.last_at]));
+  } catch {
+    return new Map();
+  }
+}
+
+/** Mais recente entre datas (nulos e inválidas ignoradas); compara pelo instante, não pelo texto. */
+export function latestOf(...dates: (string | null | undefined)[]): string | null {
+  let best: string | null = null;
+  let bestT = -Infinity;
+  for (const d of dates) {
+    const t = d ? Date.parse(d) : NaN;
+    if (!Number.isNaN(t) && t > bestT) { best = d as string; bestT = t; }
+  }
+  return best;
+}
+
 export async function listPatients(): Promise<PatientListItem[]> {
+  const lastMessagesP = fetchLastPatientMessages();
   const { data, error } = await supabase
     .from("patients")
     .select(
@@ -98,6 +125,7 @@ export async function listPatients(): Promise<PatientListItem[]> {
   if (error) throw error;
 
   const rows = (data ?? []) as unknown as RawPatientListRow[];
+  const lastMessages = await lastMessagesP;
   // Paciente removido (exclusão de conta, anonimizado) não é paciente ativo: fora da lista,
   // portanto fora de Pacientes, KPIs, Foco do dia, Para reativar e Pendências.
   return rows.filter((row) => !isRemovedPatientProfile(row.profile)).map((row) => {
@@ -105,7 +133,7 @@ export async function listPatients(): Promise<PatientListItem[]> {
     const latestSnap =
       [...(row.adherence_snapshots ?? [])].sort((a, b) => byDateDesc(a.calculated_at, b.calculated_at))[0] ??
       null;
-    const lastActivityAt =
+    const lastEventAt =
       [...events].sort((a, b) => byDateDesc(a.created_at, b.created_at))[0]?.created_at ?? null;
     // Recência por tipo → pendências. Peso = weight_logs (valor canônico); foto =
     // progress_photos; treino = activity_events(type='workout_checked').
@@ -118,6 +146,8 @@ export async function listPatients(): Promise<PatientListItem[]> {
       events
         .filter((e) => e.type === "workout_checked")
         .sort((a, b) => byDateDesc(a.created_at, b.created_at))[0]?.created_at ?? null;
+    // Última atividade = qualquer registro do paciente: evento do app, peso, foto ou mensagem na conversa.
+    const lastActivityAt = latestOf(lastEventAt, lastWeightAt, lastPhotoAt, lastMessages.get(row.id));
     return {
       id: row.id,
       goal: row.goal,
