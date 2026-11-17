@@ -23,6 +23,8 @@ import { DISCIPLINE_REASON, isDisciplineDenied, writeDeniedMessage } from "@/lib
 import { captureException } from "@/lib/observability/sentry";
 import { validateRepsInput } from "@/lib/domain/workoutDisplay";
 import type { SaveWorkoutPlanInput } from "@/lib/api/planMutations";
+import { AiDraftBanner } from "./AiDraftBanner";
+import { workoutFormFromPayload, type AiPlanDraft } from "@/lib/domain/planDraft";
 import type { PatientDetail, WorkoutPlanFull } from "@/types/db";
 
 interface ExerciseForm {
@@ -82,10 +84,17 @@ interface Props {
   existing: WorkoutPlanFull | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** A8: rascunho da Vertexa IA em revisão (pré-preenche o formulário; só vira treino quando o profissional salva). */
+  draft?: AiPlanDraft | null;
+  /** Chamado depois de salvar o treino com sucesso a partir do rascunho. */
+  onDraftSaved?: (draft: AiPlanDraft) => void;
 }
 
-export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Props) {
-  const [form, setForm] = useState<PlanForm>(() => fromExisting(existing));
+const initialForm = (existing: WorkoutPlanFull | null, draft: AiPlanDraft | null | undefined): PlanForm =>
+  draft && draft.payload.kind === "treino" ? workoutFormFromPayload(draft.payload) : fromExisting(existing);
+
+export function WorkoutPlanEditor({ patient, existing, open, onOpenChange, draft, onDraftSaved }: Props) {
+  const [form, setForm] = useState<PlanForm>(() => initialForm(existing, draft));
   const [error, setError] = useState<string | null>(null);
   const save = useSaveWorkoutPlan(patient.id);
   const { perms } = useDisciplinePermissions();
@@ -94,10 +103,10 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
 
   useEffect(() => {
     if (open) {
-      setForm(fromExisting(existing));
+      setForm(initialForm(existing, draft));
       setError(null);
     }
-  }, [open, existing]);
+  }, [open, existing, draft]);
 
   function patchWorkout(i: number, patch: Partial<WorkoutForm>) {
     setForm((f) => ({ ...f, workouts: f.workouts.map((w, idx) => (idx === i ? { ...w, ...patch } : w)) }));
@@ -160,7 +169,10 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
       })),
     };
     save.mutate(input, {
-      onSuccess: () => onOpenChange(false),
+      onSuccess: () => {
+        if (draft) onDraftSaved?.(draft);
+        onOpenChange(false);
+      },
       onError: (err) => {
         if (isDisciplineDenied(err)) {
           captureException(err, { source: "authz", scope: "workout" });
@@ -176,15 +188,20 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{existing ? "Editar plano de treino" : "Novo plano de treino"}</DialogTitle>
+          <DialogTitle>{draft ? "Revisar rascunho do treino" : existing ? "Editar plano de treino" : "Novo plano de treino"}</DialogTitle>
           <DialogDescription>
-            {existing && existing.is_draft !== true
+            {draft
+              ? existing && existing.is_draft !== true
+                ? "Já existe um treino publicado: ao salvar, este rascunho passa a valer na hora no lugar dele. Revise tudo antes."
+                : "Revise e ajuste. Ao salvar, o treino fica como rascunho; o paciente só vê depois de Publicar treino."
+              : existing && existing.is_draft !== true
               ? "Este plano já está publicado: o que você salvar vale na hora para o paciente."
               : "Salve como rascunho e use Publicar treino quando estiver pronto. Escolha o exercício pela lista da Biblioteca para o paciente ver a animação."}
           </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="space-y-5">
+          {draft ? <AiDraftBanner draft={draft} hasPublished={existing != null && existing.is_draft !== true} /> : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="wp-title">Título</Label>
@@ -376,7 +393,7 @@ export function WorkoutPlanEditor({ patient, existing, open, onOpenChange }: Pro
           </Button>
           <Button onClick={handleSave} disabled={!canEdit || save.isPending} aria-busy={save.isPending}>
             {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-            {save.isPending ? "Salvando…" : "Salvar plano"}
+            {save.isPending ? "Salvando…" : draft ? (existing && existing.is_draft !== true ? "Salvar e substituir o publicado" : "Salvar rascunho do treino") : "Salvar plano"}
           </Button>
         </DialogFooter>
       </DialogContent>

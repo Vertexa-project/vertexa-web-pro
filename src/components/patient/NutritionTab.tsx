@@ -2,6 +2,7 @@ import { parseOptions } from "@/lib/domain/mealOptions";
 import { useState } from "react";
 import { Pencil, Plus, Send, Utensils } from "lucide-react";
 
+import { AiFirstDraftSection } from "./AiFirstDraftSection";
 import { AsyncSection } from "./AsyncSection";
 import { DocImportSection } from "./docimport/DocImportSection";
 import { GatedAction } from "./GatedAction";
@@ -44,6 +45,9 @@ export function NutritionTab({ patient }: { patient: PatientDetail }) {
       ) : null}
       <div className="mb-4">
         <DocImportSection patient={patient} kind="dieta" />
+      </div>
+      <div className="mb-4">
+        <AiFirstDraftSection patient={patient} kind="dieta" existing={data ?? null} />
       </div>
       <AsyncSection
         isLoading={isLoading}

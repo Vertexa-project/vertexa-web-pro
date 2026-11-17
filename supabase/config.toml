@@ -71,6 +71,10 @@ verify_jwt = true
 [functions.vertexa-doc-read]
 verify_jwt = true
 
+# A8: primeira versão de dieta/treino pela Vertexa IA (rascunho em ai_plan_drafts; demo sem OPENAI_API_KEY).
+[functions.vertexa-plan-draft]
+verify_jwt = true
+
 [functions.clinical-audio-purge]
 verify_jwt = true
 

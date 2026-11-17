@@ -20,6 +20,8 @@ import { DISCIPLINE_REASON, isDisciplineDenied, writeDeniedMessage } from "@/lib
 import { captureException } from "@/lib/observability/sentry";
 import type { SaveNutritionPlanInput } from "@/lib/api/planMutations";
 import { MAX_ALTERNATIVES, kcalWarning, parseOptions } from "@/lib/domain/mealOptions";
+import { AiDraftBanner } from "./AiDraftBanner";
+import { nutritionFormFromPayload, type AiPlanDraft } from "@/lib/domain/planDraft";
 import type { NutritionPlanFull, PatientDetail } from "@/types/db";
 
 interface OptionForm {
@@ -61,10 +63,17 @@ interface Props {
   existing: NutritionPlanFull | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** A8: rascunho da Vertexa IA em revisão (pré-preenche o formulário; só vira plano quando o profissional salva). */
+  draft?: AiPlanDraft | null;
+  /** Chamado depois de salvar o plano com sucesso a partir do rascunho. */
+  onDraftSaved?: (draft: AiPlanDraft) => void;
 }
 
-export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: Props) {
-  const [form, setForm] = useState<PlanForm>(() => fromExisting(existing));
+const initialForm = (existing: NutritionPlanFull | null, draft: AiPlanDraft | null | undefined): PlanForm =>
+  draft && draft.payload.kind === "dieta" ? nutritionFormFromPayload(draft.payload) : fromExisting(existing);
+
+export function NutritionPlanEditor({ patient, existing, open, onOpenChange, draft, onDraftSaved }: Props) {
+  const [form, setForm] = useState<PlanForm>(() => initialForm(existing, draft));
   const [error, setError] = useState<string | null>(null);
   const save = useSaveNutritionPlan(patient.id);
   const { perms } = useDisciplinePermissions();
@@ -72,10 +81,10 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
 
   useEffect(() => {
     if (open) {
-      setForm(fromExisting(existing));
+      setForm(initialForm(existing, draft));
       setError(null);
     }
-  }, [open, existing]);
+  }, [open, existing, draft]);
 
   function patchMeal(i: number, patch: Partial<MealForm>) {
     setForm((f) => ({ ...f, meals: f.meals.map((m, idx) => (idx === i ? { ...m, ...patch } : m)) }));
@@ -114,7 +123,10 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
       })),
     };
     save.mutate(input, {
-      onSuccess: () => onOpenChange(false),
+      onSuccess: () => {
+        if (draft) onDraftSaved?.(draft);
+        onOpenChange(false);
+      },
       onError: (err) => {
         if (isDisciplineDenied(err)) {
           captureException(err, { source: "authz", scope: "nutrition" });
@@ -130,11 +142,14 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{existing ? "Editar plano alimentar" : "Novo plano alimentar"}</DialogTitle>
-          <DialogDescription>Um item por linha em cada refeição. O paciente verá no app.</DialogDescription>
+          <DialogTitle>{draft ? "Revisar rascunho do plano alimentar" : existing ? "Editar plano alimentar" : "Novo plano alimentar"}</DialogTitle>
+          <DialogDescription>
+            {draft ? "Revise tudo e ajuste. O paciente só vê o plano depois que você clicar em Publicar plano." : "Um item por linha em cada refeição. O paciente verá no app."}
+          </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="space-y-5">
+          {draft ? <AiDraftBanner draft={draft} hasPublished={existing != null} /> : null}
           <div className="space-y-2">
             <Label htmlFor="np-title">Título</Label>
             <Input
@@ -255,7 +270,7 @@ export function NutritionPlanEditor({ patient, existing, open, onOpenChange }: P
           </Button>
           <Button onClick={handleSave} disabled={!canEdit || save.isPending} aria-busy={save.isPending}>
             {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-            {save.isPending ? "Salvando…" : "Salvar plano"}
+            {save.isPending ? "Salvando…" : draft ? "Publicar plano" : "Salvar plano"}
           </Button>
         </DialogFooter>
       </DialogContent>

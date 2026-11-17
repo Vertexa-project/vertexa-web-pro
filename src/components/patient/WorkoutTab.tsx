@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Dumbbell, Pencil, Plus, Rocket, Send } from "lucide-react";
 
+import { AiFirstDraftSection } from "./AiFirstDraftSection";
 import { AsyncSection } from "./AsyncSection";
 import { DocImportSection } from "./docimport/DocImportSection";
 import { ExerciseMedia } from "@/components/exercise/ExerciseMedia";
@@ -56,6 +57,9 @@ export function WorkoutTab({ patient }: { patient: PatientDetail }) {
       ) : null}
       <div className="mb-4">
         <DocImportSection patient={patient} kind="treino" />
+      </div>
+      <div className="mb-4">
+        <AiFirstDraftSection patient={patient} kind="treino" existing={data ?? null} />
       </div>
       <AsyncSection
         isLoading={isLoading}

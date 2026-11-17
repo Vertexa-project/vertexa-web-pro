@@ -10,6 +10,7 @@ import { PatientExportsAudit } from "@/components/settings/PatientExportsAudit";
 import { RoutineSettingsCard } from "@/components/routine/RoutineSettingsCard";
 import { ClinicJoinCodeRow } from "@/components/settings/ClinicJoinCodeRow";
 import { MedicationReminderRow } from "@/components/settings/MedicationReminderRow";
+import { PlanDraftSettingsRow } from "@/components/settings/PlanDraftSettingsRow";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -199,6 +200,11 @@ export function SettingsPage() {
               <Button variant="outline" size="sm" onClick={() => navigate("/configuracoes/pre-consulta")}>
                 Configurar
               </Button>
+            </SettingRow>
+          ) : null}
+          {isClinicAdmin ? (
+            <SettingRow label="Tipos de paciente (Vertexa IA)">
+              <PlanDraftSettingsRow clinicId={professional?.clinicId ?? null} />
             </SettingRow>
           ) : null}
           {isClinicAdmin ? (
