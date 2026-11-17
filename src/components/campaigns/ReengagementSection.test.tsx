@@ -38,6 +38,13 @@ describe("ReengagementSection", () => {
     expect(within(hist).getByText("Teste")).toBeTruthy();
     expect(within(hist).getByText(/Mensagem 1 de 3/)).toBeTruthy();
   });
+  it("1 dia sem interação fica no singular (nunca '1 dias')", async () => {
+    wrap(<ReengagementSection clinicId="c1" isAdmin />);
+    const tbl = await screen.findByRole("table", { name: "Pacientes no reengajamento" });
+    expect(within(tbl).getAllByText(/^1 dia( sem interação)?$/).length).toBeGreaterThan(0);
+    expect(within(tbl).queryByText(/1 dias/)).toBeNull();
+    expect(within(tbl).getAllByText(/^7 dias( sem interação)?$/).length).toBeGreaterThan(0);
+  });
   it("admin liga a sequência (grava a configuração inteira com isActive=true)", async () => {
     wrap(<ReengagementSection clinicId="c1" isAdmin />);
     await userEvent.click(await screen.findByRole("switch", { name: "Ligar Reengajamento" }));
