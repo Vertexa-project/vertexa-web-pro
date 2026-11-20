@@ -33,6 +33,10 @@ vi.mock("@/hooks/usePlatformOnboarding", () => ({
   useSetClinicOnboardingPolicy: () => saveState,
 }));
 
+vi.mock("@/components/platform/OnboardingTutorialsCard", () => ({
+  OnboardingTutorialsCard: () => null,
+}));
+
 const { PlatformSettingsPage } = await import("./PlatformSettingsPage");
 
 beforeEach(() => {

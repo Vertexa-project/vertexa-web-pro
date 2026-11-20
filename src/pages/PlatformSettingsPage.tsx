@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageHeader } from "@/components/PageHeader";
+import { OnboardingTutorialsCard } from "@/components/platform/OnboardingTutorialsCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,7 +40,7 @@ export function PlatformSettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Configurações"
-        description="Política global de entrada de novas clínicas."
+        description="Entrada de novas clínicas e tutoriais do primeiro acesso."
       />
 
       {settings.isLoading ? <Skeleton className="h-64 w-full" /> : null}
@@ -109,6 +110,8 @@ export function PlatformSettingsPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      {access.isPlatformAdmin === true ? <OnboardingTutorialsCard enabled /> : null}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { CreditCard, LogOut, MessageCircle, Moon, Settings, Sun } from "lucide-react";
+import { CreditCard, LogOut, MessageCircle, Moon, PlayCircle, Settings, Sun } from "lucide-react";
 
 import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { ClinicIdentity } from "@/components/ClinicIdentity";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { VertexaAiButton } from "@/components/vertexa-ai/VertexaAiButton";
 import { MobileNav } from "./MobileNav";
+import { useOnboardingTutorialControls } from "@/components/onboarding/tutorialContext";
 import { useIdentity } from "@/hooks/useIdentity";
 import { useMyProfileAvatar } from "@/hooks/useProfileAvatar";
 import { useAuth } from "@/providers/auth-context";
@@ -33,6 +34,7 @@ export function Topbar() {
   const staffRole = access.roles[0]?.role;
   const roleLabel = role === "other" && staffRole ? FIN_ROLE_LABEL[staffRole] : baseRoleLabel;
   const identity = useIdentity();
+  const tutorial = useOnboardingTutorialControls();
   const myAvatar = useMyProfileAvatar(identity.actingProfileId);
 
   const userName =
@@ -103,6 +105,12 @@ export function Topbar() {
               <CreditCard />
               Assinatura
             </DropdownMenuItem>
+            {tutorial.available ? (
+              <DropdownMenuItem onClick={tutorial.open}>
+                <PlayCircle />
+                Tutorial do app
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem onClick={toggleTheme}>
               {resolvedTheme === "dark" ? <Sun /> : <Moon />}
               Modo {resolvedTheme === "dark" ? "claro" : "escuro"}
