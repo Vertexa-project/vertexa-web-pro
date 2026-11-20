@@ -46,9 +46,13 @@ values ('onboarding-tutorials', 'onboarding-tutorials', true, 52428800,
 on conflict (id) do nothing;
 
 -- Políticas usam a função pública (authenticated não executa private.is_platform_admin).
+drop policy if exists storage_onboarding_tutorials_select on storage.objects;
 drop policy if exists storage_onboarding_tutorials_insert on storage.objects;
 drop policy if exists storage_onboarding_tutorials_update on storage.objects;
 drop policy if exists storage_onboarding_tutorials_delete on storage.objects;
+-- select: o Storage exige leitura pela política para apagar/listar (o download público não usa).
+create policy storage_onboarding_tutorials_select on storage.objects for select to authenticated
+  using (bucket_id = 'onboarding-tutorials' and public.am_i_platform_admin());
 create policy storage_onboarding_tutorials_insert on storage.objects for insert to authenticated
   with check (bucket_id = 'onboarding-tutorials' and public.am_i_platform_admin());
 create policy storage_onboarding_tutorials_update on storage.objects for update to authenticated
