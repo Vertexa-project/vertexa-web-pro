@@ -17,7 +17,7 @@ function HelpHeader({ showNav }: { showNav: boolean }) {
   return (
     <header className="border-b border-border/70 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
       <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-3 px-4 md:px-6">
-        <Link to="/ajuda" className="flex min-w-0 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <Link to="/ajuda" aria-label="Início da Central de Ajuda" className="flex min-w-0 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <BrandMark className="h-8 w-8" />
           <span className="flex min-w-0 flex-col leading-tight">
             <span className="text-sm font-semibold tracking-tight">Vertexa</span>
@@ -47,10 +47,10 @@ function HelpHeader({ showNav }: { showNav: boolean }) {
           </nav>
         ) : null}
         <Button asChild variant="outline" size="sm" className="ml-auto shrink-0">
-          <Link to="/access">
+          <Link to="/access" aria-label="Voltar ao Vertexa">
             <ArrowLeft className="h-4 w-4" aria-hidden />
             <span className="hidden sm:inline">Voltar ao Vertexa</span>
-            <span className="sm:hidden">Vertexa</span>
+            <span className="sm:hidden" aria-hidden>Vertexa</span>
           </Link>
         </Button>
       </div>
