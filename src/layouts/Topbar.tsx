@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { CreditCard, LogOut, MessageCircle, Moon, PlayCircle, Settings, Sun } from "lucide-react";
+import { CreditCard, LogOut, MessageCircle, Moon, PlayCircle, Settings, Sun, LifeBuoy } from "lucide-react";
 
 import { ProfilePhoto } from "@/components/avatar/ProfilePhoto";
 import { ClinicIdentity } from "@/components/ClinicIdentity";
@@ -111,6 +111,10 @@ export function Topbar() {
                 Tutorial do app
               </DropdownMenuItem>
             ) : null}
+            <DropdownMenuItem onClick={() => navigate("/ajuda")}>
+              <LifeBuoy />
+              Ajuda e suporte
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={toggleTheme}>
               {resolvedTheme === "dark" ? <Sun /> : <Moon />}
               Modo {resolvedTheme === "dark" ? "claro" : "escuro"}

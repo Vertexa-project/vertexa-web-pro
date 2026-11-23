@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { useAmIPlatformAdmin } from "@/hooks/useAmIPlatformAdmin";
 import { resolvePlatformAdminAccess, resolvePostAuthDestination } from "@/lib/domain/platformAdmin";
+import { peekHelpReturn } from "@/lib/help/returnTo";
 
 import { PlatformAuthorityError } from "./PlatformAuthorityError";
 
@@ -32,5 +33,6 @@ export function AccessResolver() {
     return <PlatformAuthorityError onRetry={signal.refetch} />;
   }
 
-  return <Navigate to={destination.to} replace />;
+  // Quem tentou abrir a Central de Ajuda antes de entrar volta para ela (a Central confere o acesso).
+  return <Navigate to={peekHelpReturn() ?? destination.to} replace />;
 }

@@ -16,6 +16,7 @@ const NAV = [
   { to: "/platform/clinicas", label: "Clínicas", end: false },
   { to: "/platform/billing", label: "Faturamento", end: false },
   { to: "/platform/configuracoes", label: "Configurações", end: false },
+  { to: "/ajuda", label: "Central de Ajuda", end: false },
 ] as const;
 
 /**

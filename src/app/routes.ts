@@ -4,6 +4,7 @@ import {
   Dumbbell,
   Home,
   KanbanSquare,
+  LifeBuoy,
   MessageSquare,
   Settings,
   Users,
@@ -49,6 +50,8 @@ export const mainNav: NavItem[] = [
 
 export const footerNav: NavItem[] = [
   { path: "/configuracoes", label: "Configurações", icon: Settings },
+  // Central de Ajuda (cartão 1317): tutoriais e suporte, fora do AppShell.
+  { path: "/ajuda", label: "Ajuda e suporte", icon: LifeBuoy },
 ];
 
 /** O item está ativo para este caminho? (rota própria, sub-rotas ou rotas antigas agrupadas) */

@@ -23,7 +23,7 @@ describe("menu", () => {
 
   it("ordem do guia: Hoje, Pacientes, Agenda, Jornada, Relacionamento, Gestão, Biblioteca + Configurações no rodapé", () => {
     expect(labels(mainNav)).toEqual(["Hoje", "Pacientes", "Agenda", "Jornada", "Relacionamento", "Gestão", "Biblioteca"]);
-    expect(labels(footerNav)).toEqual(["Configurações"]);
+    expect(labels(footerNav)).toEqual(["Configurações", "Ajuda e suporte"]);
     expect(mainNav.map((i) => i.path).slice(0, 3)).toEqual(["/", "/pacientes", "/agenda"]);
     // Os itens antigos saíram do menu (as rotas seguem montadas): Dashboard, Mensagens, Campanhas, Financeiro, Estoque, Documentos.
     for (const old of ["Dashboard", "Mensagens", "Campanhas", "Financeiro", "Estoque", "Documentos"]) {

@@ -168,6 +168,11 @@ const PlatformCommercialAccessPage = lazy(() =>
     default: m.PlatformCommercialAccessPage,
   })),
 );
+const HelpLayout = lazy(() => import("@/pages/help/HelpLayout").then((m) => ({ default: m.HelpLayout })));
+const HelpHomePage = lazy(() => import("@/pages/help/HelpHomePage").then((m) => ({ default: m.HelpHomePage })));
+const HelpArticlePage = lazy(() =>
+  import("@/pages/help/HelpArticlePage").then((m) => ({ default: m.HelpArticlePage })),
+);
 const PlatformClinicBillingDetailPage = lazy(() =>
   import("@/pages/platform-billing/PlatformClinicBillingDetailPage").then((m) => ({
     default: m.PlatformClinicBillingDetailPage,
@@ -221,6 +226,20 @@ export const router = createBrowserRouter(
               <AccessResolver />
             </AuthGate>
           ),
+        },
+        {
+          // Central de Ajuda (cartão 1317): site de tutoriais e suporte com layout próprio.
+          // Entra quem assina (mesma regra comercial do sistema) e a equipe da plataforma.
+          path: "/ajuda",
+          element: (
+            <Suspense fallback={<LoadingState />}>
+              <HelpLayout />
+            </Suspense>
+          ),
+          children: [
+            { index: true, element: <HelpHomePage /> },
+            { path: "tutoriais/:slug", element: <HelpArticlePage /> },
+          ],
         },
         {
           // Área global read-only. NÃO é filha do AppShell clínico e NÃO exige membership.
