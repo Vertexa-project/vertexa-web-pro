@@ -18,7 +18,7 @@ const NAV = [
   { to: "/platform/billing", label: "Faturamento", end: false },
   { to: "/platform/suporte", label: "Suporte", end: false },
   { to: "/platform/configuracoes", label: "Configurações", end: false },
-  { to: "/ajuda", label: "Central de Ajuda", end: false },
+  { to: "/platform/ajuda", label: "Central de Ajuda", end: false },
 ] as const;
 
 /**

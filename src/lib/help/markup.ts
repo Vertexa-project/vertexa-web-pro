@@ -5,11 +5,19 @@
  */
 export type HelpBlock =
   | { kind: "heading"; text: string }
-  | { kind: "ordered"; items: string[] }
+  | { kind: "ordered"; items: string[]; start: number }
   | { kind: "bullets"; items: string[] }
-  | { kind: "paragraph"; text: string };
+  | { kind: "paragraph"; text: string }
+  | { kind: "image"; path: string };
 
-const ORDERED = /^\s*\d+[.)]\s+(.*)$/;
+/** Linha de imagem enviada pela Plataforma: [[imagem:images/arquivo.png]] */
+export const HELP_IMAGE_LINE = /^\s*\[\[imagem:(images\/[A-Za-z0-9._-]+)\]\]\s*$/;
+
+export function helpImageLine(path: string): string {
+  return `[[imagem:${path}]]`;
+}
+
+const ORDERED = /^\s*(\d+)[.)]\s+(.*)$/;
 const BULLET = /^\s*[-•*]\s+(.*)$/;
 const HEADING = /^\s*#{2,3}\s+(.*)$/;
 
@@ -26,19 +34,28 @@ export function parseHelpMarkup(body: string): HelpBlock[] {
       flushPara();
       continue;
     }
+    const img = HELP_IMAGE_LINE.exec(line);
+    if (img) {
+      flushPara();
+      blocks.push({ kind: "image", path: img[1] });
+      continue;
+    }
     const h = HEADING.exec(line);
     const o = ORDERED.exec(line);
     const b = BULLET.exec(line);
     if (h) {
       flushPara();
       blocks.push({ kind: "heading", text: h[1].trim() });
-    } else if (o || b) {
+    } else if (o) {
       flushPara();
-      const kind = o ? "ordered" : "bullets";
-      const text = (o ?? b)![1].trim();
       const last = blocks[blocks.length - 1];
-      if (last && last.kind === kind) last.items.push(text);
-      else blocks.push({ kind, items: [text] });
+      if (last && last.kind === "ordered") last.items.push(o[2].trim());
+      else blocks.push({ kind: "ordered", items: [o[2].trim()], start: Math.max(1, Number(o[1]) || 1) });
+    } else if (b) {
+      flushPara();
+      const last = blocks[blocks.length - 1];
+      if (last && last.kind === "bullets") last.items.push(b[1].trim());
+      else blocks.push({ kind: "bullets", items: [b[1].trim()] });
     } else {
       // Continuação de item de lista (linha recuada) ou parágrafo.
       const last = blocks[blocks.length - 1];
@@ -56,6 +73,7 @@ export function parseHelpMarkup(body: string): HelpBlock[] {
 /** Texto puro (para busca local e prévias): sem marcações. */
 export function helpPlainText(body: string): string {
   return body
+    .replace(/\[\[imagem:[^\]]*\]\]/g, "")
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/^\s*#{2,3}\s+/gm, "")
     .replace(/^\s*(\d+[.)]|[-•*])\s+/gm, "")

@@ -5,6 +5,7 @@ import { HelpMarkup } from "@/components/help/HelpMarkup";
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { Button } from "@/components/ui/button";
 import { useHelpArticle, useHelpCategories } from "@/hooks/useHelpCenter";
+import { helpMediaUrl } from "@/lib/api/helpAdmin";
 
 export function HelpArticlePage() {
   const { slug } = useParams<{ slug: string }>();
@@ -49,6 +50,16 @@ export function HelpArticlePage() {
       <article className="mt-4 rounded-2xl border border-border bg-card p-5 shadow-sm md:p-8">
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{a.title}</h1>
         {a.summary ? <p className="mt-2 text-muted-foreground">{a.summary}</p> : null}
+        {a.videoPath ? (
+          <video
+            src={helpMediaUrl(a.videoPath)}
+            controls
+            preload="metadata"
+            playsInline
+            className="mt-5 aspect-video w-full rounded-xl bg-black"
+            aria-label={`Vídeo: ${a.title}`}
+          />
+        ) : null}
         <div className="mt-6">
           <HelpMarkup body={a.body} />
         </div>

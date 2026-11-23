@@ -10,7 +10,7 @@ describe("parseHelpMarkup", () => {
     expect(blocks).toEqual([
       { kind: "paragraph", text: "Intro da tela. Continua." },
       { kind: "heading", text: "Como fazer" },
-      { kind: "ordered", items: ["Abra **Pacientes**.", 'Clique em "Novo paciente".'] },
+      { kind: "ordered", items: ["Abra **Pacientes**.", 'Clique em "Novo paciente".'], start: 1 },
       { kind: "bullets", items: ["Dica um", "Dica dois"] },
     ]);
   });
@@ -22,8 +22,22 @@ describe("parseHelpMarkup", () => {
 
   it("linha recuada continua o item anterior", () => {
     expect(parseHelpMarkup("1. Primeiro\n   com mais texto\n2. Segundo")).toEqual([
-      { kind: "ordered", items: ["Primeiro com mais texto", "Segundo"] },
+      { kind: "ordered", items: ["Primeiro com mais texto", "Segundo"], start: 1 },
     ]);
+  });
+});
+
+describe("imagem no meio dos passos", () => {
+  it("vira bloco de imagem e a numeração continua", () => {
+    expect(parseHelpMarkup("1. Um\n[[imagem:images/a-1.png]]\n2. Dois")).toEqual([
+      { kind: "ordered", items: ["Um"], start: 1 },
+      { kind: "image", path: "images/a-1.png" },
+      { kind: "ordered", items: ["Dois"], start: 2 },
+    ]);
+  });
+
+  it("caminho fora da pasta de imagens fica como texto", () => {
+    expect(parseHelpMarkup("[[imagem:../x.png]]")[0].kind).toBe("paragraph");
   });
 });
 

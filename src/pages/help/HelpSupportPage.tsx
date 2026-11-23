@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Loader2, MessageCircleQuestion } from "lucide-react";
+import { Loader2, Mail, MessageCircle, MessageCircleQuestion } from "lucide-react";
 
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { ImagePicker } from "@/components/support/SupportConversation";
@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useHelpSettings } from "@/hooks/useHelpAdmin";
 import { useHelpCenterAccess } from "@/hooks/useHelpCenter";
+import { formatWhatsapp, whatsappLink } from "@/lib/api/helpAdmin";
 import { useMySupportTickets, useOpenSupportTicket, useSupportClinics } from "@/hooks/useSupport";
 import { SUPPORT_CATEGORY_LABEL, validateSupportImage, type SupportCategory } from "@/lib/api/support";
 
@@ -115,6 +117,38 @@ function OpenTicketForm({ clinics }: { clinics: { clinicId: string; clinicName: 
   );
 }
 
+function SupportContact() {
+  const settings = useHelpSettings();
+  const s = settings.data;
+  if (!s) return null;
+  const wa = whatsappLink(s.supportWhatsapp);
+  if (!wa && !s.supportEmail) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+      <div className="min-w-0 flex-1 text-sm">
+        <p className="font-medium">Prefere falar direto?</p>
+        {s.supportHours ? <p className="text-muted-foreground">Atendimento: {s.supportHours}</p> : null}
+      </div>
+      {wa ? (
+        <Button asChild>
+          <a href={wa} target="_blank" rel="noreferrer">
+            <MessageCircle className="h-4 w-4" aria-hidden />
+            WhatsApp {formatWhatsapp(s.supportWhatsapp)}
+          </a>
+        </Button>
+      ) : null}
+      {s.supportEmail ? (
+        <Button asChild variant="outline">
+          <a href={`mailto:${s.supportEmail}`}>
+            <Mail className="h-4 w-4" aria-hidden />
+            {s.supportEmail}
+          </a>
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function HelpSupportPage() {
   const access = useHelpCenterAccess();
   const clinics = useSupportClinics();
@@ -137,6 +171,7 @@ export function HelpSupportPage() {
       </div>
 
       <div className="mt-6 space-y-8">
+        <SupportContact />
         {clinics.isLoading ? (
           <div className="flex justify-center py-10">
             <LoadingState />

@@ -181,6 +181,12 @@ const PlatformSupportPage = lazy(() =>
 const PlatformSupportTicketPage = lazy(() =>
   import("@/pages/PlatformSupportTicketPage").then((m) => ({ default: m.PlatformSupportTicketPage })),
 );
+const PlatformHelpPage = lazy(() =>
+  import("@/pages/platform-help/PlatformHelpPage").then((m) => ({ default: m.PlatformHelpPage })),
+);
+const PlatformHelpArticleEditor = lazy(() =>
+  import("@/pages/platform-help/PlatformHelpArticleEditor").then((m) => ({ default: m.PlatformHelpArticleEditor })),
+);
 const PlatformClinicBillingDetailPage = lazy(() =>
   import("@/pages/platform-billing/PlatformClinicBillingDetailPage").then((m) => ({
     default: m.PlatformClinicBillingDetailPage,
@@ -285,6 +291,8 @@ export const router = createBrowserRouter(
             { path: "configuracoes", element: <PlatformSettingsPage /> },
             { path: "suporte", element: <PlatformSupportPage /> },
             { path: "suporte/:id", element: <PlatformSupportTicketPage /> },
+            { path: "ajuda", element: <PlatformHelpPage /> },
+            { path: "ajuda/tutorial/:id", element: <PlatformHelpArticleEditor /> },
           ],
         },
         {

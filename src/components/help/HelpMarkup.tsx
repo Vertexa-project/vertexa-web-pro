@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { helpMediaUrl } from "@/lib/api/helpAdmin";
 import { parseHelpMarkup } from "@/lib/help/markup";
 
 function renderInline(text: string): ReactNode[] {
@@ -42,7 +43,7 @@ export function HelpMarkup({ body }: { body: string }) {
                       className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
                       aria-hidden
                     >
-                      {j + 1}
+                      {block.start + j}
                     </span>
                     <span className="min-w-0 flex-1">{renderInline(item)}</span>
                   </li>
@@ -56,6 +57,17 @@ export function HelpMarkup({ body }: { body: string }) {
                   <li key={j}>{renderInline(item)}</li>
                 ))}
               </ul>
+            );
+          case "image":
+            return (
+              <figure key={idx} className="overflow-hidden rounded-xl border border-border bg-muted/30">
+                <img
+                  src={helpMediaUrl(block.path)}
+                  alt="Imagem do tutorial"
+                  loading="lazy"
+                  className="mx-auto max-h-[480px] w-auto max-w-full object-contain"
+                />
+              </figure>
             );
           default:
             return <p key={idx}>{renderInline(block.text)}</p>;
