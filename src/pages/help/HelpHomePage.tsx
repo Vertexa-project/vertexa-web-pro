@@ -168,6 +168,14 @@ export function HelpHomePage() {
             ))}
           </div>
         )}
+        <div className="mt-8 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+          <p className="min-w-0 flex-1 text-sm">
+            <span className="font-medium">Não achou o que procurava?</span> Abra um chamado e a equipe Vertexa responde.
+          </p>
+          <Button asChild size="sm">
+            <Link to="/ajuda/suporte">Falar com o suporte</Link>
+          </Button>
+        </div>
       </div>
     </div>
   );

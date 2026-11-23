@@ -54,6 +54,15 @@ export function HelpArticlePage() {
         </div>
       </article>
 
+      <div className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-5 py-4">
+        <p className="min-w-0 flex-1 text-sm">
+          <span className="font-medium">Ainda com dúvida?</span> Fale com o suporte da Vertexa.
+        </p>
+        <Button asChild size="sm">
+          <Link to={`/ajuda/suporte?assunto=${encodeURIComponent(a.title)}`}>Abrir chamado</Link>
+        </Button>
+      </div>
+
       {siblings.length > 0 ? (
         <section className="mt-8" aria-labelledby="mais-tutoriais">
           <h2 id="mais-tutoriais" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">

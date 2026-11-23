@@ -173,6 +173,14 @@ const HelpHomePage = lazy(() => import("@/pages/help/HelpHomePage").then((m) => 
 const HelpArticlePage = lazy(() =>
   import("@/pages/help/HelpArticlePage").then((m) => ({ default: m.HelpArticlePage })),
 );
+const HelpSupportPage = lazy(() => import("@/pages/help/HelpSupportPage").then((m) => ({ default: m.HelpSupportPage })));
+const HelpTicketPage = lazy(() => import("@/pages/help/HelpTicketPage").then((m) => ({ default: m.HelpTicketPage })));
+const PlatformSupportPage = lazy(() =>
+  import("@/pages/PlatformSupportPage").then((m) => ({ default: m.PlatformSupportPage })),
+);
+const PlatformSupportTicketPage = lazy(() =>
+  import("@/pages/PlatformSupportTicketPage").then((m) => ({ default: m.PlatformSupportTicketPage })),
+);
 const PlatformClinicBillingDetailPage = lazy(() =>
   import("@/pages/platform-billing/PlatformClinicBillingDetailPage").then((m) => ({
     default: m.PlatformClinicBillingDetailPage,
@@ -239,6 +247,8 @@ export const router = createBrowserRouter(
           children: [
             { index: true, element: <HelpHomePage /> },
             { path: "tutoriais/:slug", element: <HelpArticlePage /> },
+            { path: "suporte", element: <HelpSupportPage /> },
+            { path: "suporte/:id", element: <HelpTicketPage /> },
           ],
         },
         {
@@ -273,6 +283,8 @@ export const router = createBrowserRouter(
               ],
             },
             { path: "configuracoes", element: <PlatformSettingsPage /> },
+            { path: "suporte", element: <PlatformSupportPage /> },
+            { path: "suporte/:id", element: <PlatformSupportTicketPage /> },
           ],
         },
         {

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/providers/auth-context";
 import { useAmIPlatformAdmin } from "@/hooks/useAmIPlatformAdmin";
 import { usePlatformOnboardingSettings } from "@/hooks/usePlatformOnboarding";
+import { usePlatformSupportCounts } from "@/hooks/useSupport";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -15,6 +16,7 @@ const NAV = [
   { to: "/platform/solicitacoes", label: "Solicitações", end: false },
   { to: "/platform/clinicas", label: "Clínicas", end: false },
   { to: "/platform/billing", label: "Faturamento", end: false },
+  { to: "/platform/suporte", label: "Suporte", end: false },
   { to: "/platform/configuracoes", label: "Configurações", end: false },
   { to: "/ajuda", label: "Central de Ajuda", end: false },
 ] as const;
@@ -29,6 +31,8 @@ export function PlatformShell() {
   const access = useAmIPlatformAdmin(true);
   const settings = usePlatformOnboardingSettings(access.isPlatformAdmin === true);
   const pending = settings.data?.pendingRequestCount ?? 0;
+  const support = usePlatformSupportCounts(access.isPlatformAdmin === true);
+  const supportOpen = support.data?.aberto ?? 0;
 
   async function handleSignOut() {
     await signOut();
@@ -70,6 +74,11 @@ export function PlatformShell() {
                 {item.to === "/platform/solicitacoes" && pending > 0 ? (
                   <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground">
                     {pending > 99 ? "99+" : pending}
+                  </span>
+                ) : null}
+                {item.to === "/platform/suporte" && supportOpen > 0 ? (
+                  <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground" aria-label={`${supportOpen} aguardando resposta`}>
+                    {supportOpen > 99 ? "99+" : supportOpen}
                   </span>
                 ) : null}
               </NavLink>

@@ -2,12 +2,14 @@ import { footerNav } from "@/app/routes";
 import { useVisibleMainNav } from "@/hooks/useVisibleNav";
 import { ClinicIdentity } from "@/components/ClinicIdentity";
 import { useUnreadMentions } from "@/hooks/useChat";
+import { useMySupportUnread } from "@/hooks/useSupport";
 import { VertexaAiButton } from "@/components/vertexa-ai/VertexaAiButton";
 import { NavRow } from "./NavRow";
 
 export function Sidebar() {
   const { data: mentions } = useUnreadMentions();
   const visibleMainNav = useVisibleMainNav();
+  const { data: supportUnread } = useMySupportUnread();
   return (
     <aside className="hidden w-[212px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex h-14 items-center px-4">
@@ -30,7 +32,7 @@ export function Sidebar() {
 
       <div className="space-y-0.5 border-t border-sidebar-border px-2.5 py-3">
         {footerNav.map((item) => (
-          <NavRow key={item.path} item={item} />
+          <NavRow key={item.path} item={item} badgeCount={item.path === "/ajuda" ? supportUnread : undefined} />
         ))}
       </div>
     </aside>

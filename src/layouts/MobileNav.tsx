@@ -13,6 +13,7 @@ import { footerNav } from "@/app/routes";
 import { useVisibleMainNav } from "@/hooks/useVisibleNav";
 import { Brand } from "@/components/Brand";
 import { useUnreadMentions } from "@/hooks/useChat";
+import { useMySupportUnread } from "@/hooks/useSupport";
 import { NavRow } from "./NavRow";
 
 export function MobileNav() {
@@ -20,6 +21,7 @@ export function MobileNav() {
   const close = () => setOpen(false);
   const { data: mentions } = useUnreadMentions();
   const visibleMainNav = useVisibleMainNav();
+  const { data: supportUnread } = useMySupportUnread();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -49,7 +51,12 @@ export function MobileNav() {
 
         <div className="space-y-1 border-t border-sidebar-border px-3 py-3">
           {footerNav.map((item) => (
-            <NavRow key={item.path} item={item} onNavigate={close} />
+            <NavRow
+              key={item.path}
+              item={item}
+              onNavigate={close}
+              badgeCount={item.path === "/ajuda" ? supportUnread : undefined}
+            />
           ))}
         </div>
       </SheetContent>

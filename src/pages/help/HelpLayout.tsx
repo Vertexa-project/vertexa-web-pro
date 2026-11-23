@@ -6,26 +6,33 @@ import { BrandMark } from "@/components/Brand";
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { Button } from "@/components/ui/button";
 import { useHelpCenterAccess } from "@/hooks/useHelpCenter";
+import { useMySupportUnread } from "@/hooks/useSupport";
 import { clearHelpReturn, rememberHelpReturn } from "@/lib/help/returnTo";
 import { cn } from "@/lib/utils";
 import { PASSWORD_RESET_PATH } from "@/lib/auth/passwordRecovery";
 import { useAuth } from "@/providers/auth-context";
 
-const NAV = [{ to: "/ajuda", label: "Tutoriais", end: false }] as const;
+const NAV = [
+  { to: "/ajuda", label: "Tutoriais", end: true, alsoActive: "/ajuda/tutoriais" },
+  { to: "/ajuda/suporte", label: "Suporte", end: false, alsoActive: null },
+] as const;
 
 function HelpHeader({ showNav }: { showNav: boolean }) {
+  const { pathname } = useLocation();
+  const unread = useMySupportUnread(showNav);
+  const unreadCount = unread.data ?? 0;
   return (
     <header className="border-b border-border/70 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
       <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-3 px-4 md:px-6">
         <Link to="/ajuda" aria-label="Início da Central de Ajuda" className="flex min-w-0 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <BrandMark className="h-8 w-8" />
-          <span className="flex min-w-0 flex-col leading-tight">
+          <span className="hidden min-w-0 flex-col leading-tight min-[420px]:flex">
             <span className="text-sm font-semibold tracking-tight">Vertexa</span>
             <span className="truncate text-xs text-muted-foreground">Central de Ajuda</span>
           </span>
         </Link>
         {showNav ? (
-          <nav aria-label="Central de Ajuda" className="ml-2 hidden sm:block">
+          <nav aria-label="Central de Ajuda" className="ml-1 min-w-0 sm:ml-2">
             <ul className="flex gap-1">
               {NAV.map((item) => (
                 <li key={item.to}>
@@ -34,12 +41,22 @@ function HelpHeader({ showNav }: { showNav: boolean }) {
                     end={item.end}
                     className={({ isActive }) =>
                       cn(
-                        "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                        isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors sm:px-3",
+                        isActive || (item.alsoActive && pathname.startsWith(item.alsoActive))
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )
                     }
                   >
                     {item.label}
+                    {item.to === "/ajuda/suporte" && unreadCount > 0 ? (
+                      <span
+                        className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground"
+                        aria-label={`${unreadCount} ${unreadCount === 1 ? "resposta nova" : "respostas novas"}`}
+                      >
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    ) : null}
                   </NavLink>
                 </li>
               ))}

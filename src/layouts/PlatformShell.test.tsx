@@ -29,6 +29,10 @@ vi.mock("@/hooks/usePlatformOnboarding", () => ({
   }),
 }));
 
+vi.mock("@/hooks/useSupport", () => ({
+  usePlatformSupportCounts: () => ({ data: { aberto: 2, respondido: 0, resolvido: 0, unread: 1 } }),
+}));
+
 const { PlatformShell } = await import("./PlatformShell");
 
 describe("PlatformShell", () => {
@@ -64,6 +68,8 @@ describe("PlatformShell", () => {
     expect(screen.getByRole("link", { name: "Clínicas" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Faturamento" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Configurações" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Suporte/ })).toHaveAttribute("href", "/platform/suporte");
+    expect(screen.getByLabelText("2 aguardando resposta")).toBeInTheDocument();
     expect(screen.queryByLabelText(/whatsapp/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/pacientes/i)).not.toBeInTheDocument();
   });
