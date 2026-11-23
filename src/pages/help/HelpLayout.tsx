@@ -111,7 +111,7 @@ export function HelpLayout() {
   const { isAuthenticated, loading, isPasswordRecovery } = useAuth();
   const location = useLocation();
   const access = useHelpCenterAccess(isAuthenticated);
-  const allowed = access.data?.allowed === true;
+  const allowed = isAuthenticated && access.data?.allowed === true;
 
   useEffect(() => {
     if (allowed) clearHelpReturn();
