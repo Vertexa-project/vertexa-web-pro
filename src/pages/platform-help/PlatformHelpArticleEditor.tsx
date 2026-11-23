@@ -9,21 +9,31 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAdminHelp, useSaveAdminArticle } from "@/hooks/useHelpAdmin";
-import { helpMediaUrl, uploadHelpMedia, type AdminHelpArticle } from "@/lib/api/helpAdmin";
+import { helpMediaUrl, nextArticlePosition, uploadHelpMedia, type AdminHelpArticle } from "@/lib/api/helpAdmin";
 import { helpImageLine } from "@/lib/help/markup";
 import { cn } from "@/lib/utils";
 
 const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
-function Editor({ article, categories }: { article: AdminHelpArticle | null; categories: { id: string; title: string }[] }) {
+function Editor({
+  article,
+  categories,
+  articles,
+}: {
+  article: AdminHelpArticle | null;
+  categories: { id: string; title: string }[];
+  articles: AdminHelpArticle[];
+}) {
   const navigate = useNavigate();
   const save = useSaveAdminArticle();
   const [categoryId, setCategoryId] = useState(article?.categoryId ?? categories[0]?.id ?? "");
   const [title, setTitle] = useState(article?.title ?? "");
   const [summary, setSummary] = useState(article?.summary ?? "");
   const [body, setBody] = useState(article?.body ?? "");
-  const [position, setPosition] = useState(String(article?.position ?? 1));
+  const [position, setPosition] = useState(
+    String(article?.position ?? nextArticlePosition(articles, article?.categoryId ?? categories[0]?.id ?? "")),
+  );
   const [published, setPublished] = useState(article?.isPublished ?? true);
   const [videoPath, setVideoPath] = useState<string | null>(article?.videoPath ?? null);
   const [busy, setBusy] = useState<null | "video" | "image">(null);
@@ -99,7 +109,10 @@ function Editor({ article, categories }: { article: AdminHelpArticle | null; cat
         </div>
         <div className="min-w-0 space-y-1.5">
           <Label htmlFor="art-category">Assunto</Label>
-          <select id="art-category" className={selectClass} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          <select id="art-category" className={selectClass} value={categoryId} onChange={(e) => {
+              setCategoryId(e.target.value);
+              if (!article) setPosition(String(nextArticlePosition(articles, e.target.value)));
+            }}>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.title}
@@ -226,7 +239,12 @@ export function PlatformHelpArticleEditor() {
       ) : !isNew && !article ? (
         <p className="text-sm text-muted-foreground">Tutorial não encontrado.</p>
       ) : (
-        <Editor key={article?.id ?? "novo"} article={article} categories={data.data?.categories ?? []} />
+        <Editor
+          key={article?.id ?? "novo"}
+          article={article}
+          categories={data.data?.categories ?? []}
+          articles={data.data?.articles ?? []}
+        />
       )}
     </div>
   );

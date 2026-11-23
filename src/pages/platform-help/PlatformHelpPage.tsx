@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ExternalLink, Eye, EyeOff, Loader2, Pencil, Plus, Video } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, Loader2, Pencil, Plus, Trash2, Video } from "lucide-react";
 
 import { LoadingState } from "@/components/feedback/LoadingState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAdminHelp, useHelpSettings, useSaveAdminCategory, useSaveHelpSettings } from "@/hooks/useHelpAdmin";
+import {
+  useAdminHelp,
+  useDeleteAdminCategory,
+  useHelpSettings,
+  useSaveAdminCategory,
+  useSaveHelpSettings,
+} from "@/hooks/useHelpAdmin";
 import { formatWhatsapp, type AdminHelpCategory } from "@/lib/api/helpAdmin";
 
 function errText(e: unknown): string {
@@ -81,6 +87,7 @@ function ContactCard() {
 
 function CategoryRow({ cat, count }: { cat: AdminHelpCategory; count: number }) {
   const save = useSaveAdminCategory();
+  const remove = useDeleteAdminCategory();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(cat.title);
   const [description, setDescription] = useState(cat.description);
@@ -97,6 +104,25 @@ function CategoryRow({ cat, count }: { cat: AdminHelpCategory; count: number }) 
           <Pencil className="h-4 w-4" aria-hidden />
           Editar assunto
         </Button>
+        {count === 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            disabled={remove.isPending}
+            aria-label={`Excluir assunto ${cat.title}`}
+            onClick={() => {
+              if (window.confirm(`Excluir o assunto “${cat.title}”? Ele não tem tutoriais.`)) {
+                remove.mutate(cat.id, { onError: () => setError("Não foi possível excluir. Tire os tutoriais do assunto antes.") });
+              }
+            }}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden />
+            Excluir assunto
+          </Button>
+        ) : null}
+        {error ? <p className="w-full text-sm text-destructive">{error}</p> : null}
       </div>
     );
   }
@@ -185,13 +211,14 @@ export function PlatformHelpPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
+        <div className="min-w-0 sm:flex-1">
           <h1 className="text-2xl font-semibold tracking-tight">Central de Ajuda</h1>
           <p className="text-sm text-muted-foreground">
             Tutoriais e contato do suporte que as clínicas assinantes veem em /ajuda.
           </p>
         </div>
+        <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline">
           <Link to="/ajuda">
             <ExternalLink className="h-4 w-4" aria-hidden />
@@ -204,6 +231,7 @@ export function PlatformHelpPage() {
             Novo tutorial
           </Link>
         </Button>
+        </div>
       </div>
 
       {saved ? (

@@ -55,7 +55,7 @@ export function PlatformShell() {
         aria-label="Área da plataforma"
         className="border-b border-border/70 bg-background px-4 md:px-8"
       >
-        <ul className="mx-auto flex w-full max-w-7xl gap-1 overflow-x-auto py-2">
+        <ul className="mx-auto flex w-full max-w-7xl flex-wrap gap-1 py-2">
           {NAV.map((item) => (
             <li key={item.to}>
               <NavLink

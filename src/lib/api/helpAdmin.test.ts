@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatWhatsapp, helpMediaError, mapAdminHelp, whatsappLink } from "./helpAdmin";
+import { formatWhatsapp, helpMediaError, mapAdminHelp, nextArticlePosition, whatsappLink } from "./helpAdmin";
 
 describe("WhatsApp do suporte", () => {
   it("link com DDI do Brasil quando falta", () => {
@@ -33,5 +33,17 @@ describe("mapAdminHelp", () => {
     });
     expect(d.categories[0].position).toBe(3);
     expect(d.articles[0].isPublished).toBe(false);
+  });
+});
+
+describe("nextArticlePosition", () => {
+  it("tutorial novo entra no fim do assunto", () => {
+    const arts = [
+      { categoryId: "agenda", position: 1 },
+      { categoryId: "agenda", position: 3 },
+      { categoryId: "pacientes", position: 9 },
+    ];
+    expect(nextArticlePosition(arts, "agenda")).toBe(4);
+    expect(nextArticlePosition(arts, "novo")).toBe(1);
   });
 });

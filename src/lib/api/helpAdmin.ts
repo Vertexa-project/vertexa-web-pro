@@ -158,6 +158,16 @@ export async function saveAdminCategory(input: {
   return String(data);
 }
 
+export async function deleteAdminCategory(id: string): Promise<void> {
+  const { error } = await supabase.rpc("platform_help_delete_category", { p_id: id });
+  if (error) throw error;
+}
+
+/** Próxima posição livre no assunto (para o tutorial novo entrar no fim). */
+export function nextArticlePosition(articles: Pick<AdminHelpArticle, "categoryId" | "position">[], categoryId: string): number {
+  return articles.filter((a) => a.categoryId === categoryId).reduce((m, a) => Math.max(m, a.position), 0) + 1;
+}
+
 export function helpMediaError(file: Pick<File, "size" | "type">, kind: "video" | "image"): string | null {
   if (kind === "video") {
     if (!HELP_VIDEO_TYPES.includes(file.type)) return "Envie um vídeo MP4, WebM ou MOV.";

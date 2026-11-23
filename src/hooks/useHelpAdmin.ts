@@ -4,6 +4,7 @@ import {
   getAdminHelp,
   getHelpSettings,
   saveAdminArticle,
+  deleteAdminCategory,
   saveAdminCategory,
   saveHelpSettings,
 } from "@/lib/api/helpAdmin";
@@ -43,4 +44,9 @@ export function useSaveAdminCategory() {
 export function useSaveHelpSettings() {
   const invalidate = useInvalidateHelp();
   return useMutation({ mutationFn: saveHelpSettings, onSuccess: invalidate });
+}
+
+export function useDeleteAdminCategory() {
+  const invalidate = useInvalidateHelp();
+  return useMutation({ mutationFn: deleteAdminCategory, onSuccess: invalidate });
 }
