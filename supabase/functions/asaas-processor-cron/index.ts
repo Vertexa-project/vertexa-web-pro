@@ -1,4 +1,4 @@
-// WP-ASAAS-04C — worker automático do processor financeiro (sandbox-only).
+// WP-ASAAS-04C — worker automático do processor financeiro (sandbox + Production, cartão 1568).
 // Caller = máquina. Auth oficial: withSupabase({ auth: "secret:asaas_processor_cron" }).
 // verify_jwt=false no config.toml NÃO torna a função pública — sem a named secret → 401.
 //
@@ -8,7 +8,10 @@ import { withSupabase } from "npm:@supabase/server@1.5.3";
 import {
   CRON_AUTH_MODE,
   ignoreCronRequestBody,
+  runAutomatedProductionDrain,
   runAutomatedSandboxDrain,
+  sumDrainResponses,
+  type MinimizedDrainResponse,
 } from "../_shared/asaas/cronDrain.ts";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -29,11 +32,20 @@ const handler = withSupabase({ auth: CRON_AUTH_MODE, cors: "disabled" }, async (
   }
   ignoreCronRequestBody(body);
 
-  const out = await runAutomatedSandboxDrain({
+  const sandbox = await runAutomatedSandboxDrain({
     adminClient: ctx.supabaseAdmin,
     environmentRaw: Deno.env.get("ASAAS_OUTBOUND_ENVIRONMENT"),
   });
-  return jsonResponse(out.status, out.body);
+  const production = await runAutomatedProductionDrain({ adminClient: ctx.supabaseAdmin });
+  if (!production) return jsonResponse(sandbox.status, sandbox.body);
+  if (sandbox.status !== 200 || production.status !== 200) {
+    const status = sandbox.status !== 200 && production.status !== 200 ? 502 : 207;
+    return jsonResponse(status, { sandbox: sandbox.body, production: production.body });
+  }
+  return jsonResponse(
+    200,
+    sumDrainResponses(sandbox.body as MinimizedDrainResponse, production.body as MinimizedDrainResponse),
+  );
 });
 
 Deno.serve(handler);

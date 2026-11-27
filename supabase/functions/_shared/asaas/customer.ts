@@ -15,6 +15,11 @@ export interface CustomerFixture {
   email: string;
   notificationDisabled: boolean;
   mobilePhone?: string;
+  phone?: string;
+  address?: string;
+  addressNumber?: string;
+  postalCode?: string;
+  province?: string;
 }
 
 export interface CustomerIdentitySource {
@@ -22,14 +27,85 @@ export interface CustomerIdentitySource {
   taxId: string;
   email: string;
   mobilePhone?: string | null;
+  billingAddress?: string | null;
+  billingAddressNumber?: string | null;
+  billingPostalCode?: string | null;
+  billingProvince?: string | null;
+}
+
+export interface AuthoritativeCustomerIdentity {
+  externalCustomerId: string;
+  normalizedTaxId: string;
+  name: string | null;
+  email: string | null;
+  mobilePhone: string | null;
+  phone: string | null;
+  address: string | null;
+  addressNumber: string | null;
+  postalCode: string | null;
+  province: string | null;
+  city: string | null;
+  cityName: string | null;
+  state: string | null;
+}
+
+export type AuthoritativeCustomerResult =
+  | { ok: true; customer: AuthoritativeCustomerIdentity }
+  | { ok: false; errorCode: string; retryable: boolean };
+
+export function normalizeCustomerTaxId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toUpperCase().replace(/[.\-/\s]/g, "");
+  return normalized || null;
+}
+
+function optionalText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function phoneDigits(value: unknown): string | null {
+  const text = optionalText(value);
+  return text ? text.replace(/\D/g, "") || null : null;
+}
+
+export function checkoutReadinessError(identity: CustomerIdentitySource): string | null {
+  if (!phoneDigits(identity.mobilePhone)) return "billing_phone_required";
+  if (!optionalText(identity.billingAddress)) return "billing_address_required";
+  if (!optionalText(identity.billingAddressNumber)) return "billing_address_number_required";
+  if (!normalizePostalCode(identity.billingPostalCode)) return "billing_postal_code_required";
+  if (!optionalText(identity.billingProvince)) return "billing_province_required";
+  return null;
+}
+
+function normalizePostalCode(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().replace(/[\s-]/g, "");
+  return /^\d{8}$/.test(normalized) ? normalized : null;
+}
+
+export function isCustomerCheckoutReady(customer: Pick<AuthoritativeCustomerIdentity, "phone" | "mobilePhone" | "address" | "addressNumber" | "postalCode" | "province" | "city">): boolean {
+  return Boolean(
+    phoneDigits(customer.phone ?? customer.mobilePhone) &&
+      optionalText(customer.address) &&
+      optionalText(customer.addressNumber) &&
+      normalizePostalCode(customer.postalCode) &&
+      optionalText(customer.province) &&
+      optionalText(customer.city),
+  );
 }
 
 /** Server-derived Asaas body. Browser never supplies these fields. */
 export function customerBodyFromIdentity(identity: CustomerIdentitySource): CustomerFixture {
   const name = identity.legalName.trim();
-  const cpfCnpj = identity.taxId.replace(/\D/g, "");
+  // The database already validates this source. Preserve alphanumeric CNPJ
+  // characters; removing them here would silently corrupt a valid document.
+  const cpfCnpj = normalizeCustomerTaxId(identity.taxId) ?? "";
   const email = identity.email.trim();
   const phone = identity.mobilePhone?.replace(/\D/g, "") ?? "";
+  const address = identity.billingAddress?.trim() ?? "";
+  const addressNumber = identity.billingAddressNumber?.trim() ?? "";
+  const postalCode = normalizePostalCode(identity.billingPostalCode) ?? "";
+  const province = identity.billingProvince?.trim() ?? "";
   if (!name || !cpfCnpj || !email) {
     throw new Error("identity_incomplete");
   }
@@ -38,7 +114,115 @@ export function customerBodyFromIdentity(identity: CustomerIdentitySource): Cust
     cpfCnpj,
     email,
     notificationDisabled: true,
-    ...(phone.length >= 10 ? { mobilePhone: phone } : {}),
+    ...(phone.length >= 10 ? { phone, mobilePhone: phone } : {}),
+    ...(address ? { address } : {}),
+    ...(addressNumber ? { addressNumber } : {}),
+    ...(postalCode ? { postalCode } : {}),
+    ...(province ? { province } : {}),
+  };
+}
+
+export function customerUpdatePayload(
+  fixture: CustomerFixture,
+  current: AuthoritativeCustomerIdentity,
+): Record<string, string> {
+  const payload: Record<string, string> = {};
+  if (optionalText(fixture.name) !== current.name) payload.name = fixture.name.trim();
+  if (optionalText(fixture.email)?.toLowerCase() !== current.email) payload.email = fixture.email.trim().toLowerCase();
+  const desiredPhone = phoneDigits(fixture.phone ?? fixture.mobilePhone);
+  if (desiredPhone && desiredPhone !== phoneDigits(current.phone)) {
+    payload.phone = desiredPhone;
+    payload.mobilePhone = desiredPhone;
+  }
+  const desiredAddress = optionalText(fixture.address);
+  if (desiredAddress && desiredAddress !== current.address) payload.address = desiredAddress;
+  const desiredAddressNumber = optionalText(fixture.addressNumber);
+  if (desiredAddressNumber && desiredAddressNumber !== current.addressNumber) {
+    payload.addressNumber = desiredAddressNumber;
+  }
+  const desiredPostalCode = normalizePostalCode(fixture.postalCode);
+  if (desiredPostalCode && desiredPostalCode !== normalizePostalCode(current.postalCode)) {
+    payload.postalCode = desiredPostalCode;
+  }
+  const desiredProvince = optionalText(fixture.province);
+  if (desiredProvince && desiredProvince !== current.province) payload.province = desiredProvince;
+  return payload;
+}
+
+/**
+ * Loads a provider customer by its exact ID after transaction correlation.
+ * It never searches or links by PII.
+ */
+export async function getAuthoritativeCustomerIdentity(params: {
+  creds: AsaasCredentials;
+  environment: AsaasEnvironment;
+  externalCustomerId: string;
+}): Promise<AuthoritativeCustomerResult> {
+  const externalCustomerId = params.externalCustomerId.trim();
+  if (!externalCustomerId) {
+    return { ok: false, errorCode: "provider_customer_ambiguous", retryable: false };
+  }
+
+  const result = await asaasFetch<{
+    id?: unknown;
+    cpfCnpj?: unknown;
+    name?: unknown;
+    email?: unknown;
+    mobilePhone?: unknown;
+    phone?: unknown;
+    address?: unknown;
+    addressNumber?: unknown;
+    postalCode?: unknown;
+    province?: unknown;
+    city?: unknown;
+    cityName?: unknown;
+    state?: unknown;
+  }>(
+    params.creds,
+    params.environment,
+    "GET",
+    `/customers/${encodeURIComponent(externalCustomerId)}`,
+  );
+
+  if (result.outcome === "unknown") {
+    return { ok: false, errorCode: "provider_customer_lookup_inconclusive", retryable: true };
+  }
+  if (result.outcome === "deterministic_rejection") {
+    if (result.status === 404) {
+      return { ok: false, errorCode: "provider_customer_not_found", retryable: false };
+    }
+    if (result.status === 401 || result.status === 403) {
+      return { ok: false, errorCode: "provider_auth_error", retryable: false };
+    }
+    if (result.category === "rate_limited") {
+      return { ok: false, errorCode: "rate_limited", retryable: true };
+    }
+    return { ok: false, errorCode: "provider_customer_lookup_rejected", retryable: false };
+  }
+
+  const customer = result.data;
+  const normalizedTaxId = normalizeCustomerTaxId(customer?.cpfCnpj);
+  if (!customer || customer.id !== externalCustomerId || !normalizedTaxId) {
+    return { ok: false, errorCode: "provider_customer_ambiguous", retryable: false };
+  }
+
+  return {
+    ok: true,
+    customer: {
+      externalCustomerId,
+      normalizedTaxId,
+      name: optionalText(customer.name),
+      email: optionalText(customer.email)?.toLowerCase() ?? null,
+      mobilePhone: optionalText(customer.mobilePhone ?? customer.phone)?.replace(/\D/g, "") || null,
+      phone: phoneDigits(customer.phone),
+      address: optionalText(customer.address),
+      addressNumber: optionalText(customer.addressNumber),
+      postalCode: normalizePostalCode(customer.postalCode),
+      province: optionalText(customer.province),
+      city: optionalText(customer.city),
+      cityName: optionalText(customer.cityName),
+      state: optionalText(customer.state),
+    },
   };
 }
 
@@ -89,10 +273,67 @@ export async function ensureCustomer(params: {
   billingAccountId: string;
   existingExternalCustomerId: string | null;
   fixture: CustomerFixture;
+  requireCheckoutReady?: boolean;
 }): Promise<EnsureCustomerResult> {
-  const { adminClient, environment, creds, billingAccountId, existingExternalCustomerId, fixture } = params;
+  const {
+    adminClient,
+    environment,
+    creds,
+    billingAccountId,
+    existingExternalCustomerId,
+    fixture,
+    requireCheckoutReady = false,
+  } = params;
 
   if (existingExternalCustomerId) {
+    const initial = await getAuthoritativeCustomerIdentity({ creds, environment, externalCustomerId: existingExternalCustomerId });
+    if (!initial.ok) return { ok: false, errorCode: initial.errorCode };
+    if (initial.customer.normalizedTaxId !== normalizeCustomerTaxId(fixture.cpfCnpj)) {
+      return { ok: false, errorCode: "provider_customer_identity_conflict" };
+    }
+
+    const update = customerUpdatePayload(fixture, initial.customer);
+    let authoritative = initial.customer;
+    if (Object.keys(update).length > 0) {
+      const updateResult = await asaasFetch<AsaasCustomer>(
+        creds,
+        environment,
+        "PUT",
+        `/customers/${encodeURIComponent(existingExternalCustomerId)}`,
+        update,
+      );
+      if (updateResult.outcome === "deterministic_rejection") {
+        return {
+          ok: false,
+          errorCode: updateResult.category === "rate_limited" ? "rate_limited" : "provider_customer_update_rejected",
+        };
+      }
+
+      // A PUT is idempotent, but a transport/5xx outcome is still reconciled
+      // through an exact-ID GET instead of assuming that the provider ignored it.
+      const readback = await getAuthoritativeCustomerIdentity({ creds, environment, externalCustomerId: existingExternalCustomerId });
+      if (!readback.ok) {
+        return {
+          ok: false,
+          errorCode: updateResult.outcome === "unknown"
+            ? "provider_customer_update_inconclusive"
+            : readback.errorCode,
+        };
+      }
+      authoritative = readback.customer;
+      if (authoritative.normalizedTaxId !== normalizeCustomerTaxId(fixture.cpfCnpj)) {
+        return { ok: false, errorCode: "provider_customer_identity_conflict" };
+      }
+    }
+
+    if (requireCheckoutReady && !isCustomerCheckoutReady(authoritative)) {
+      return {
+        ok: false,
+        errorCode: !optionalText(authoritative.city)
+          ? "provider_customer_city_missing"
+          : "provider_customer_not_checkout_ready",
+      };
+    }
     return { ok: true, externalCustomerId: existingExternalCustomerId };
   }
 
@@ -165,6 +406,9 @@ export async function ensureCustomer(params: {
     email: fixture.email,
     notificationDisabled: fixture.notificationDisabled,
     ...(fixture.mobilePhone ? { mobilePhone: fixture.mobilePhone } : {}),
+    ...(fixture.phone ? { phone: fixture.phone } : {}),
+    ...(fixture.address ? { address: fixture.address } : {}),
+    ...(fixture.addressNumber ? { addressNumber: fixture.addressNumber } : {}),
     externalReference,
   });
 
@@ -189,7 +433,27 @@ export async function ensureCustomer(params: {
     return { ok: false, errorCode: "outcome_unknown_requires_reconciliation" };
   }
 
-  return await completeCustomer(adminClient, operationId, extracted.externalCustomerId);
+  const completed = await completeCustomer(adminClient, operationId, extracted.externalCustomerId);
+  if (!completed.ok || !requireCheckoutReady) return completed;
+
+  const readback = await getAuthoritativeCustomerIdentity({
+    creds,
+    environment,
+    externalCustomerId: extracted.externalCustomerId,
+  });
+  if (!readback.ok) return { ok: false, errorCode: readback.errorCode };
+  if (readback.customer.normalizedTaxId !== normalizeCustomerTaxId(fixture.cpfCnpj)) {
+    return { ok: false, errorCode: "provider_customer_identity_conflict" };
+  }
+  if (!isCustomerCheckoutReady(readback.customer)) {
+    return {
+      ok: false,
+      errorCode: !optionalText(readback.customer.city)
+        ? "provider_customer_city_missing"
+        : "provider_customer_not_checkout_ready",
+    };
+  }
+  return completed;
 }
 
 async function completeCustomer(

@@ -101,6 +101,52 @@ export async function runAutomatedSandboxDrain(params: {
   }
 }
 
+/**
+ * Cartão 1568 — drenagem automática de Production. Só processa eventos que o asaas-webhook já
+ * autenticou pelo token de Production; o drain faz apenas GET no Asaas (snapshot) e aplica no ledger.
+ * Sem chave de Production configurada = não roda (skip silencioso), nunca cai para sandbox.
+ */
+export async function runAutomatedProductionDrain(params: {
+  adminClient: SupabaseClient;
+  creds?: AsaasCredentials | null;
+  drain?: typeof drainBillingEvents;
+}): Promise<{ status: number; body: MinimizedDrainResponse | { error: string } } | null> {
+  let credentials: AsaasCredentials | null = params.creds ?? null;
+  if (!credentials) {
+    try {
+      credentials = readAsaasCredentials("production");
+    } catch {
+      return null;
+    }
+  }
+  const drain = params.drain ?? drainBillingEvents;
+  try {
+    const result = await drain({
+      adminClient: params.adminClient,
+      environment: "production",
+      creds: credentials,
+      limit: CRON_DRAIN_LIMIT,
+    });
+    return { status: 200, body: minimizeDrainResponse(result) };
+  } catch {
+    return { status: 502, body: { error: "drain_failed" } };
+  }
+}
+
+export function sumDrainResponses(
+  a: MinimizedDrainResponse,
+  b: MinimizedDrainResponse,
+): MinimizedDrainResponse {
+  return {
+    claimed: a.claimed + b.claimed,
+    processed: a.processed + b.processed,
+    ignored: a.ignored + b.ignored,
+    failed: a.failed + b.failed,
+    voided: a.voided + b.voided,
+    skipped: a.skipped + b.skipped,
+  };
+}
+
 /** Contrato oficial withSupabase({ auth: "secret:asaas_processor_cron" }). Só fixtures nos testes. */
 export type PresentedCronCredential =
   | { kind: "none" }

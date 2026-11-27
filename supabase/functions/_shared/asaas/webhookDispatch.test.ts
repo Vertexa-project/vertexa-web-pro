@@ -19,6 +19,18 @@ function webhookRequest(token: string, environmentInBody?: string) {
 }
 
 describe("dispatchAsaasWebhook environment attribution", () => {
+  it("extracts hosted checkout correlation without retaining checkout URLs or card data", async () => {
+    const ingest = vi.fn(async () => ({ outcome: "inserted" }));
+    const req = new Request("https://example.test/asaas-webhook", {
+      method: "POST", headers: { "asaas-access-token": "sandbox-token" },
+      body: JSON.stringify({ id: "evt_checkout", event: "CHECKOUT_EXPIRED", checkout: { id: "co_1", externalReference: "vtx:hosted-card:opaque", link: "https://secret.test" } }),
+    });
+    await expect(dispatchAsaasWebhook(req, { sandboxToken: "sandbox-token", productionToken: "production-token", ingest })).resolves.toMatchObject({ status: 200 });
+    expect(ingest).toHaveBeenCalledWith(expect.objectContaining({
+      externalResourceType: "hosted_card_checkout", externalResourceId: "co_1",
+      providerFacts: { providerCheckoutId: "co_1", externalReference: "vtx:hosted-card:opaque" },
+    }));
+  });
   it("attributes sandbox from the matching token and ignores body environment", async () => {
     const ingest = vi.fn(async () => ({ outcome: "inserted" }));
     const res = await dispatchAsaasWebhook(webhookRequest("sandbox-token", "production"), {

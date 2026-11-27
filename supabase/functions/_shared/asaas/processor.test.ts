@@ -54,6 +54,10 @@ interface Cfg {
   applyAuthError?: unknown;
   applyEligibility?: unknown;
   applyInstruction?: unknown;
+  fallback?: unknown;
+  fallbackError?: unknown;
+  adoptionContext?: unknown;
+  adoptionContextError?: unknown;
 }
 
 function makeClient(cfg: Cfg) {
@@ -72,6 +76,13 @@ function makeClient(cfg: Cfg) {
         };
       case "apply_billing_payment_snapshot":
         return { data: cfg.apply ?? null, error: cfg.applyError ?? null };
+      case "load_hosted_card_customer_adoption_context":
+        return {
+          data: cfg.adoptionContext ?? { outcome: "ready", customer_adoption_required: false },
+          error: cfg.adoptionContextError ?? null,
+        };
+      case "apply_hosted_card_payment_with_customer_adoption":
+        return { data: cfg.fallback ?? null, error: cfg.fallbackError ?? null };
       case "apply_billing_pix_automatic_payment_snapshot":
         return { data: cfg.applyPix ?? null, error: cfg.applyPixError ?? null };
       case "handle_missing_payment_on_get":
@@ -171,6 +182,198 @@ describe("drainBillingEvents", () => {
     expect(result.ignored).toBe(1);
     expect(findCall(calls, "ignore_billing_provider_event")?.params.p_reason).toBe("ignored_unmanaged_resource");
     expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
+  });
+
+  it("R7: PAYMENT_CONFIRMED without a local subscription binds only through the authoritative checkout session", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent({ event_type: "PAYMENT_CONFIRMED" })],
+        resolve: { found: false },
+        fallback: { outcome: "applied", fallback: "checkout_session" },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_1",
+        customer: "cus_1",
+        subscription: "sub_1",
+        checkoutSession: "checkout_1",
+        status: "CONFIRMED",
+        value: 390,
+      }),
+    );
+    expect(result.processed).toBe(1);
+    const fallback = findCall(calls, "apply_hosted_card_payment_with_customer_adoption");
+    expect(fallback?.params).toMatchObject({
+      p_provider_checkout_id: "checkout_1",
+      p_external_subscription_id: "sub_1",
+      p_financial_state: "confirmed",
+      p_environment: "sandbox",
+    });
+    expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
+  });
+
+  it("R7: missing checkoutSession remains unmanaged and creates no fallback or financial apply", async () => {
+    const { result, calls } = await run(
+      { events: [makeEvent()], resolve: { found: false } },
+      async () => jsonResponse(200, { id: "pay_1", customer: "cus_1", subscription: "sub_1", status: "CONFIRMED", value: 390 }),
+    );
+    expect(result.ignored).toBe(1);
+    expect(names(calls)).not.toContain("apply_hosted_card_payment_with_customer_adoption");
+    expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
+  });
+
+  it("R7: conflicting checkout-session correlation fails closed without a financial apply", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent()],
+        resolve: { found: false },
+        fallback: { outcome: "provider_subscription_conflict" },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_1",
+        customer: "cus_1",
+        subscription: "sub_conflict",
+        checkoutSession: "checkout_conflict",
+        status: "CONFIRMED",
+        value: 390,
+      }),
+    );
+    expect(result.failed).toBe(1);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category).toBe("provider_subscription_conflict");
+    expect(names(calls)).not.toContain("apply_billing_payment_snapshot");
+  });
+
+  it("R10: NULL account customer adopts an authoritative identity-matched customer before financial apply", async () => {
+    const { result, calls, fetchSpy } = await run(
+      {
+        events: [makeEvent({ event_type: "PAYMENT_CONFIRMED" })],
+        resolve: { found: false },
+        adoptionContext: {
+          outcome: "customer_adoption_required",
+          customer_adoption_required: true,
+          canonical_tax_id: "12345678909",
+        },
+        fallback: { outcome: "applied", fallback: "checkout_customer_adoption" },
+      },
+      async (url) => String(url).includes("/customers/")
+        ? jsonResponse(200, { id: "cus_1", cpfCnpj: "123.456.789-09", name: "Redacted", email: "redacted@invalid" })
+        : jsonResponse(200, {
+          id: "pay_1", customer: "cus_1", subscription: "sub_1",
+          checkoutSession: "checkout_1", status: "CONFIRMED", value: 390,
+        }),
+    );
+    expect(result.processed).toBe(1);
+    expect(fetchSpy.mock.calls.filter(([url]) => String(url).includes("/customers/"))).toHaveLength(1);
+    const apply = findCall(calls, "apply_hosted_card_payment_with_customer_adoption");
+    expect(apply?.params).toMatchObject({
+      p_provider_checkout_id: "checkout_1",
+      p_external_customer_id: "cus_1",
+      p_provider_customer_tax_id: "12345678909",
+    });
+  });
+
+  it("R10: authoritative provider tax mismatch fails closed before the atomic RPC", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent()], resolve: { found: false },
+        adoptionContext: {
+          outcome: "customer_adoption_required",
+          customer_adoption_required: true,
+          canonical_tax_id: "12345678909",
+        },
+      },
+      async (url) => String(url).includes("/customers/")
+        ? jsonResponse(200, { id: "cus_1", cpfCnpj: "98765432100" })
+        : jsonResponse(200, {
+          id: "pay_1", customer: "cus_1", subscription: "sub_1",
+          checkoutSession: "checkout_1", status: "CONFIRMED", value: 390,
+        }),
+    );
+    expect(result.failed).toBe(1);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category).toBe("customer_identity_mismatch");
+    expect(names(calls)).not.toContain("apply_hosted_card_payment_with_customer_adoption");
+  });
+
+  it("R10: an existing different account customer fails customer_binding_conflict with no customer GET", async () => {
+    const { result, calls, fetchSpy } = await run(
+      {
+        events: [makeEvent()], resolve: { found: false },
+        adoptionContext: { outcome: "customer_binding_conflict" },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_1", customer: "cus_other", subscription: "sub_1",
+        checkoutSession: "checkout_1", status: "CONFIRMED", value: 390,
+      }),
+    );
+    expect(result.failed).toBe(1);
+    expect(fetchSpy.mock.calls.filter(([url]) => String(url).includes("/customers/"))).toHaveLength(0);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category).toBe("customer_binding_conflict");
+    expect(names(calls)).not.toContain("apply_hosted_card_payment_with_customer_adoption");
+  });
+
+  it.each([
+    "checkout_environment_mismatch",
+    "checkout_account_mismatch",
+    "checkout_contract_mismatch",
+    "checkout_subscription_conflict",
+  ])("R10: exact-correlation guard %s causes zero customer or financial writes", async (category) => {
+    const { result, calls, fetchSpy } = await run(
+      {
+        events: [makeEvent()], resolve: { found: false },
+        adoptionContext: { outcome: category },
+      },
+      async () => jsonResponse(200, {
+        id: "pay_1", customer: "cus_1", subscription: "sub_1",
+        checkoutSession: "checkout_1", status: "CONFIRMED", value: 390,
+      }),
+    );
+    expect(result.failed).toBe(1);
+    expect(fetchSpy.mock.calls.filter(([url]) => String(url).includes("/customers/"))).toHaveLength(0);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category).toBe(category);
+    expect(names(calls)).not.toContain("apply_hosted_card_payment_with_customer_adoption");
+  });
+
+  it("R10: authoritative customer 404 fails closed with no atomic write", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent()], resolve: { found: false },
+        adoptionContext: {
+          outcome: "customer_adoption_required",
+          customer_adoption_required: true,
+          canonical_tax_id: "12345678909",
+        },
+      },
+      async (url) => String(url).includes("/customers/")
+        ? status(404, { errors: [{ code: "not_found" }] })
+        : jsonResponse(200, {
+          id: "pay_1", customer: "cus_missing", subscription: "sub_1",
+          checkoutSession: "checkout_1", status: "CONFIRMED", value: 390,
+        }),
+    );
+    expect(result.failed).toBe(1);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category).toBe("provider_customer_not_found");
+    expect(names(calls)).not.toContain("apply_hosted_card_payment_with_customer_adoption");
+  });
+
+  it("R10: ambiguous authoritative customer shape fails closed", async () => {
+    const { result, calls } = await run(
+      {
+        events: [makeEvent()], resolve: { found: false },
+        adoptionContext: {
+          outcome: "customer_adoption_required",
+          customer_adoption_required: true,
+          canonical_tax_id: "12345678909",
+        },
+      },
+      async (url) => String(url).includes("/customers/")
+        ? jsonResponse(200, { id: "cus_different", cpfCnpj: "12345678909" })
+        : jsonResponse(200, {
+          id: "pay_1", customer: "cus_1", subscription: "sub_1",
+          checkoutSession: "checkout_1", status: "CONFIRMED", value: 390,
+        }),
+    );
+    expect(result.failed).toBe(1);
+    expect(findCall(calls, "fail_billing_provider_event")?.params.p_error_category).toBe("provider_customer_ambiguous");
+    expect(names(calls)).not.toContain("apply_hosted_card_payment_with_customer_adoption");
   });
 
   it("A04-30: customer mismatch -> failed customer_mismatch NON-retryable (backoff 0), ZERO apply", async () => {

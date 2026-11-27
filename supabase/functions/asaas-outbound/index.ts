@@ -19,6 +19,7 @@ import {
   type CustomerFixture,
 } from "../_shared/asaas/customer.ts";
 import { ensureSubscription, type SubscriptionFixture } from "../_shared/asaas/subscription.ts";
+import { createHostedCardCheckout, type HostedCardCheckoutIntent } from "../_shared/asaas/hostedCardCheckout.ts";
 import {
   listSubscriptionPayments,
   confirmSandboxPayment,
@@ -44,6 +45,8 @@ import {
   ENSURE_CUSTOMER_FROM_IDENTITY_ACTION,
   authorityForAction,
   parseEnsureCustomerFromIdentityRequest,
+  CREATE_HOSTED_CARD_CHECKOUT_ACTION,
+  parseCreateHostedCardCheckoutRequest,
   sanitizeClinicCustomerResponse,
   sanitizeClinicExecuteResponse,
 } from "../_shared/asaas/outboundAuthority.ts";
@@ -85,13 +88,50 @@ interface BillingAccountResult {
 
 interface ProviderCustomerContext {
   identity_complete?: boolean;
+  checkout_ready?: boolean;
+  checkout_readiness_error?: string | null;
   legal_name?: string | null;
   tax_id?: string | null;
   email?: string | null;
   mobile_phone?: string | null;
+  billing_address?: string | null;
+  billing_address_number?: string | null;
+  billing_postal_code?: string | null;
+  billing_province?: string | null;
   billing_account_id?: string | null;
   environment?: string | null;
   external_customer_id?: string | null;
+}
+
+function hostedIntentFromPrepared(raw: unknown): HostedCardCheckoutIntent | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const text = (key: string) => typeof value[key] === "string" && value[key].trim() ? value[key].trim() : null;
+  const environment = text("environment");
+  const status = text("status");
+  const currency = text("currency");
+  const price = value.price_cents;
+  if (
+    !text("attempt_id") || !text("billing_account_id") || !text("external_reference") || !text("plan_name") || !text("expires_at") ||
+    (environment !== "sandbox" && environment !== "production") || currency !== "BRL" ||
+    !Number.isSafeInteger(price) || price <= 0 || typeof value.can_create !== "boolean" ||
+    !["CREATING", "ACTIVE", "PAID", "CANCELED", "EXPIRED", "FAILED"].includes(status ?? "")
+  ) return null;
+  return {
+    attemptId: text("attempt_id")!,
+    billingAccountId: text("billing_account_id")!,
+    environment,
+    externalCustomerId: text("external_customer_id"),
+    externalReference: text("external_reference")!,
+    priceCents: price,
+    currency: "BRL",
+    planName: text("plan_name")!,
+    expiresAt: text("expires_at")!,
+    hostedUrl: text("hosted_url"),
+    providerCheckoutId: text("provider_checkout_id"),
+    canCreate: value.can_create,
+    status: status as HostedCardCheckoutIntent["status"],
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -202,6 +242,10 @@ Deno.serve(async (req: Request) => {
         taxId: ctx.tax_id ?? "",
         email: ctx.email ?? "",
         mobilePhone: ctx.mobile_phone,
+        billingAddress: ctx.billing_address,
+        billingAddressNumber: ctx.billing_address_number,
+        billingPostalCode: ctx.billing_postal_code,
+        billingProvince: ctx.billing_province,
       });
     } catch {
       return jsonResponse(409, { error: "identity_incomplete" });
@@ -226,6 +270,119 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(502, { error: "provider_error", category: result.errorCode });
     }
     return jsonResponse(200, sanitizeClinicCustomerResponse());
+  }
+
+  if (body.action === CREATE_HOSTED_CARD_CHECKOUT_ACTION) {
+    const parsed = parseCreateHostedCardCheckoutRequest(body);
+    if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+    const appBaseUrl = (Deno.env.get("VERTEXA_WEB_APP_URL") ?? "").trim();
+    if (!/^https:\/\/[^\s/]+(?:\/[^\s]*)?$/i.test(appBaseUrl)) {
+      return jsonResponse(503, { error: "checkout_callback_url_not_configured" });
+    }
+    const { data: clinicAdmin, error: clinicAdminError } = await userClient.rpc("am_i_clinic_admin", {
+      p_clinic: parsed.clinicId,
+    });
+    if (clinicAdminError) return jsonResponse(401, { error: "unauthorized" });
+    if (clinicAdmin !== true) return jsonResponse(403, { error: "forbidden" });
+
+    const adminClient = supabaseAdmin();
+    const { data: ctxRaw, error: ctxError } = await adminClient.rpc(
+      "billing_load_provider_customer_context_outbound",
+      { p_clinic_id: parsed.clinicId },
+    );
+    if (ctxError || !ctxRaw) return jsonResponse(409, { error: "identity_context_unavailable" });
+    const ctx = ctxRaw as ProviderCustomerContext;
+    if (ctx.identity_complete !== true) return jsonResponse(409, { error: "identity_incomplete" });
+    if (ctx.checkout_ready !== true) {
+      const readinessError = ctx.checkout_readiness_error;
+      const safeError = readinessError === "billing_phone_required" ||
+          readinessError === "billing_address_required" ||
+          readinessError === "billing_address_number_required" ||
+          readinessError === "billing_postal_code_required" ||
+          readinessError === "billing_province_required"
+        ? readinessError
+        : "identity_incomplete";
+      return jsonResponse(409, { error: safeError });
+    }
+    if (!ctx.billing_account_id) return jsonResponse(409, { error: "billing_account_unknown" });
+    const accountEnv = ctx.environment === "production" || ctx.environment === "sandbox" ? ctx.environment : null;
+    if (!accountEnv) return jsonResponse(409, { error: "invalid_operation_environment" });
+
+    // The local readiness gate runs before this RPC can reserve a new checkout
+    // attempt, so missing address data can never produce a provider request or
+    // leave an ambiguous creating attempt behind.
+    const { data: prepared, error: prepareError } = await userClient.rpc("prepare_my_clinic_hosted_card_checkout", {
+      p_clinic_id: parsed.clinicId,
+    });
+    if (prepareError) return jsonResponse(409, { error: "checkout_prepare_failed" });
+    const intent = hostedIntentFromPrepared(prepared);
+    if (!intent) return jsonResponse(409, { error: "checkout_prepare_invalid" });
+    if (ctx.billing_account_id !== intent.billingAccountId || accountEnv !== intent.environment) {
+      return jsonResponse(409, { error: "checkout_customer_context_mismatch" });
+    }
+
+    // Never create a new canonical customer behind an already-created legacy
+    // checkout. That checkout must be reconciled from authoritative facts.
+    if (intent.hostedUrl && intent.providerCheckoutId && !intent.externalCustomerId) {
+      return jsonResponse(409, { error: "checkout_customer_unbound_requires_reconciliation" });
+    }
+    if (!intent.canCreate || (intent.hostedUrl && intent.providerCheckoutId)) {
+      let existingCreds;
+      try {
+        existingCreds = credentialsForEnvironment(intent.environment);
+      } catch {
+        return jsonResponse(503, { error: "asaas_not_configured" });
+      }
+      const existing = await createHostedCardCheckout({ adminClient, creds: existingCreds, intent, appBaseUrl });
+      if (!existing.ok) return jsonResponse(502, { error: existing.errorCode });
+      return jsonResponse(200, { hostedUrl: existing.hostedUrl });
+    }
+
+    if (intent.environment === "production") {
+      const customerGate = await assertProductionProviderWriteForClinic(adminClient, parsed.clinicId, "ENSURE_CUSTOMER_FROM_IDENTITY");
+      if (!customerGate.ok) return jsonResponse(409, { error: customerGate.error });
+      const checkoutGate = await assertProductionProviderWriteForClinic(adminClient, parsed.clinicId, "HOSTED_CARD_CHECKOUT_CREATE");
+      if (!checkoutGate.ok) return jsonResponse(409, { error: checkoutGate.error });
+    }
+    let checkoutCreds;
+    try {
+      checkoutCreds = credentialsForEnvironment(intent.environment);
+    } catch {
+      return jsonResponse(503, { error: "asaas_not_configured" });
+    }
+
+    let identityBody: CustomerFixture;
+    try {
+      identityBody = customerBodyFromIdentity({
+        legalName: ctx.legal_name ?? "",
+        taxId: ctx.tax_id ?? "",
+        email: ctx.email ?? "",
+        mobilePhone: ctx.mobile_phone,
+        billingAddress: ctx.billing_address,
+        billingAddressNumber: ctx.billing_address_number,
+        billingPostalCode: ctx.billing_postal_code,
+        billingProvince: ctx.billing_province,
+      });
+    } catch {
+      return jsonResponse(409, { error: "identity_incomplete" });
+    }
+    const customer = await ensureCustomer({
+      adminClient,
+      environment: intent.environment,
+      creds: checkoutCreds,
+      billingAccountId: intent.billingAccountId,
+      existingExternalCustomerId: ctx.external_customer_id ?? null,
+      fixture: identityBody,
+      requireCheckoutReady: true,
+    });
+    if (!customer.ok || !customer.externalCustomerId) {
+      return jsonResponse(502, { error: "provider_error", category: customer.errorCode ?? "customer_not_ready" });
+    }
+    intent.externalCustomerId = customer.externalCustomerId;
+
+    const created = await createHostedCardCheckout({ adminClient, creds: checkoutCreds, intent, appBaseUrl });
+    if (!created.ok) return jsonResponse(502, { error: created.errorCode });
+    return jsonResponse(200, { hostedUrl: created.hostedUrl });
   }
 
   if (body.action === EXECUTE_PIX_AUTOMATIC_ACTION) {

@@ -5,9 +5,11 @@ import { fileURLToPath } from "node:url";
 
 import {
   ACTION_AUTHORITY,
+  CREATE_HOSTED_CARD_CHECKOUT_ACTION,
   ENSURE_CUSTOMER_FROM_IDENTITY_ACTION,
   hasForbiddenProductKeys,
   parseEnsureCustomerFromIdentityRequest,
+  parseCreateHostedCardCheckoutRequest,
   sanitizeClinicCustomerResponse,
   sanitizeClinicExecuteResponse,
 } from "./outboundAuthority.ts";
@@ -22,6 +24,20 @@ describe("outbound action authority", () => {
     expect(ACTION_AUTHORITY.reissue_pix_automatic_authorization).toBe("PA_ONLY");
     expect(ACTION_AUTHORITY.confirm_sandbox_payment).toBe("PA_ONLY");
     expect(ACTION_AUTHORITY.probe_pix_automatic_read).toBe("PA_ONLY");
+    expect(ACTION_AUTHORITY.create_hosted_card_checkout).toBe("CLINIC_ADMIN_OWN_CLINIC");
+  });
+
+  it("rejects browser price, provider, and expiry overrides on hosted card checkout", () => {
+    expect(parseCreateHostedCardCheckoutRequest({
+      action: CREATE_HOSTED_CARD_CHECKOUT_ACTION,
+      clinicId: "11111111-1111-4111-8111-111111111111",
+      valueCents: 1,
+    }).ok).toBe(false);
+    expect(parseCreateHostedCardCheckoutRequest({
+      action: CREATE_HOSTED_CARD_CHECKOUT_ACTION,
+      clinicId: "11111111-1111-4111-8111-111111111111",
+      minutesToExpire: 1,
+    }).ok).toBe(false);
   });
 
   it("rejects browser-supplied provider facts on the product customer action", () => {
@@ -69,8 +85,36 @@ describe("outbound action authority", () => {
       src.indexOf("if (body.action === EXECUTE_PIX_AUTOMATIC_ACTION)"),
     );
     expect(product).toContain("customerBodyFromIdentity");
+    expect(product).toContain("billingAddress: ctx.billing_address");
+    expect(product).toContain("billingAddressNumber: ctx.billing_address_number");
+    expect(product).toContain("billingPostalCode: ctx.billing_postal_code");
+    expect(product).toContain("billingProvince: ctx.billing_province");
+    expect(product).toContain("requireCheckoutReady: true");
     expect(product).not.toContain("CUSTOMER_FIXTURE");
     expect(src).toContain("am_i_clinic_admin");
     expect(hasForbiddenProductKeys({ fixture: true })).toBe(true);
+  });
+
+  it("blocks incomplete hosted-card identity before reserving an attempt or calling the provider", () => {
+    const src = readFileSync(resolve(here, "../../asaas-outbound/index.ts"), "utf8");
+    const hosted = src.slice(
+      src.indexOf("if (body.action === CREATE_HOSTED_CARD_CHECKOUT_ACTION)"),
+      src.indexOf("if (body.action === EXECUTE_PIX_AUTOMATIC_ACTION)"),
+    );
+    const readinessGate = hosted.indexOf("ctx.checkout_ready !== true");
+    const prepareAttempt = hosted.indexOf("prepare_my_clinic_hosted_card_checkout");
+    const ensure = hosted.indexOf("await ensureCustomer");
+    const firstCreateCheckout = hosted.indexOf("await createHostedCardCheckout");
+    const newAttemptCreateCheckout = hosted.lastIndexOf("await createHostedCardCheckout");
+    expect(readinessGate).toBeGreaterThan(-1);
+    expect(readinessGate).toBeLessThan(prepareAttempt);
+    expect(readinessGate).toBeLessThan(firstCreateCheckout);
+    expect(prepareAttempt).toBeLessThan(ensure);
+    expect(ensure).toBeLessThan(newAttemptCreateCheckout);
+    expect(hosted).toContain("billing_phone_required");
+    expect(hosted).toContain("billing_address_required");
+    expect(hosted).toContain("billing_address_number_required");
+    expect(hosted).toContain("billing_postal_code_required");
+    expect(hosted).toContain("billing_province_required");
   });
 });

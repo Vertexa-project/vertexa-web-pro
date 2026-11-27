@@ -72,6 +72,18 @@ export function extractResource(event, body) {
       return { type: "payment", id: payment.id.trim() };
     }
   }
+  if (typeof event === "string" && event.startsWith("CHECKOUT_")) {
+    const checkout = body && typeof body === "object" ? body.checkout : null;
+    if (checkout && typeof checkout === "object" && typeof checkout.id === "string" && checkout.id.trim()) {
+      return { type: "hosted_card_checkout", id: checkout.id.trim() };
+    }
+  }
+  if (event === "SUBSCRIPTION_CREATED") {
+    const subscription = body && typeof body === "object" ? body.subscription : null;
+    if (subscription && typeof subscription === "object" && typeof subscription.id === "string" && subscription.id.trim()) {
+      return { type: "subscription", id: subscription.id.trim() };
+    }
+  }
   if (event === "PIX_AUTOMATIC_RECURRING_ELIGIBILITY_UPDATED") {
     const account = body && typeof body === "object" ? body.account : null;
     if (account && typeof account === "object" && typeof account.id === "string" && account.id.trim()) {
@@ -114,6 +126,27 @@ function trimmed(value) {
 export function sanitizeProviderFacts(event, body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   const facts = {};
+
+  if (typeof event === "string" && event.startsWith("CHECKOUT_")) {
+    const checkout = body.checkout;
+    if (!checkout || typeof checkout !== "object") return null;
+    const id = trimmed(checkout.id);
+    const externalReference = trimmed(checkout.externalReference);
+    if (id) facts.providerCheckoutId = id;
+    if (externalReference) facts.externalReference = externalReference;
+    return Object.keys(facts).length ? facts : null;
+  }
+  if (event === "SUBSCRIPTION_CREATED") {
+    const subscription = body.subscription;
+    if (!subscription || typeof subscription !== "object") return null;
+    const id = trimmed(subscription.id);
+    const checkoutId = trimmed(subscription.checkout) || trimmed(subscription.checkoutId);
+    const externalReference = trimmed(subscription.externalReference);
+    if (id) facts.providerSubscriptionId = id;
+    if (checkoutId) facts.providerCheckoutId = checkoutId;
+    if (externalReference) facts.externalReference = externalReference;
+    return Object.keys(facts).length ? facts : null;
+  }
 
   if (event === "PIX_AUTOMATIC_RECURRING_ELIGIBILITY_UPDATED") {
     const status = trimmed(body.eligibility && body.eligibility.status);

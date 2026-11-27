@@ -12,7 +12,9 @@ import {
   ignoreCronRequestBody,
   minimizeDrainResponse,
   resolveCronAutomationEnvironment,
+  runAutomatedProductionDrain,
   runAutomatedSandboxDrain,
+  sumDrainResponses,
 } from "./cronDrain.ts";
 import type { DrainResult } from "./processor.ts";
 
@@ -152,5 +154,37 @@ describe("A04C cron drain body / environment", () => {
     });
     expect(assertMinimizedResponse(minimized)).toBe(true);
     expect(JSON.stringify(minimized)).not.toContain("evt_secret");
+  });
+});
+
+describe("1568 cron drain de Production", () => {
+  it("drena Production com o ambiente fixo, limite fixo e resposta só com totais", async () => {
+    const drain = vi.fn(async () => ({ ...emptyDrain(), claimed: 1, processed: 1 }));
+    const out = await runAutomatedProductionDrain({ adminClient: fakeAdmin, creds: fakeCreds, drain });
+    expect(out).not.toBeNull();
+    expect(out!.status).toBe(200);
+    expect(drain).toHaveBeenCalledWith(expect.objectContaining({ environment: "production", limit: CRON_DRAIN_LIMIT }));
+    expect(assertMinimizedResponse(out!.body as Record<string, unknown>)).toBe(true);
+  });
+
+  it("sem chave de Production não roda e não cai para sandbox", async () => {
+    const drain = vi.fn(async () => emptyDrain());
+    const out = await runAutomatedProductionDrain({ adminClient: fakeAdmin, drain });
+    expect(out).toBeNull();
+    expect(drain).not.toHaveBeenCalled();
+  });
+
+  it("falha do drain de Production devolve 502 sem detalhes", async () => {
+    const drain = vi.fn(async () => {
+      throw new Error("boom pay_secret");
+    });
+    const out = await runAutomatedProductionDrain({ adminClient: fakeAdmin, creds: fakeCreds, drain });
+    expect(out).toEqual({ status: 502, body: { error: "drain_failed" } });
+  });
+
+  it("soma os totais dos dois ambientes", () => {
+    const a = { claimed: 1, processed: 1, ignored: 0, failed: 0, voided: 0, skipped: 0 };
+    const b = { claimed: 2, processed: 1, ignored: 1, failed: 0, voided: 0, skipped: 0 };
+    expect(sumDrainResponses(a, b)).toEqual({ claimed: 3, processed: 2, ignored: 1, failed: 0, voided: 0, skipped: 0 });
   });
 });

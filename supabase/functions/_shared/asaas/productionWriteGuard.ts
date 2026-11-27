@@ -14,7 +14,7 @@ export function assertSandboxFixtureEnvironment(
 export async function assertProductionProviderWriteForAccount(
   adminClient: SupabaseClient,
   billingAccountId: string,
-  operationType: "ENSURE_CUSTOMER_FROM_IDENTITY" | "PIX_AUTOMATIC_CREATE",
+  operationType: "ENSURE_CUSTOMER_FROM_IDENTITY" | "PIX_AUTOMATIC_CREATE" | "HOSTED_CARD_CHECKOUT_CREATE",
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data, error } = await adminClient.rpc("assert_billing_production_provider_write_for_account", {
     p_billing_account_id: billingAccountId,
@@ -30,7 +30,7 @@ export async function assertProductionProviderWriteForAccount(
 export async function assertProductionProviderWriteForClinic(
   adminClient: SupabaseClient,
   clinicId: string,
-  operationType: "ENSURE_CUSTOMER_FROM_IDENTITY" | "PIX_AUTOMATIC_CREATE",
+  operationType: "ENSURE_CUSTOMER_FROM_IDENTITY" | "PIX_AUTOMATIC_CREATE" | "HOSTED_CARD_CHECKOUT_CREATE",
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data, error } = await adminClient.rpc("assert_billing_production_provider_write", {
     p_clinic_id: clinicId,
