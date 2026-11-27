@@ -18,6 +18,7 @@ import {
   type TransientPixQr,
 } from "@/lib/domain/billingPixCheckout";
 import { captureException } from "@/lib/observability/sentry";
+import { formatBRL } from "@/lib/domain/finance";
 
 function pixErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : "";
@@ -176,6 +177,11 @@ export function BillingPixCheckoutPanel({
               </div>
             )}
           </div>
+          {view.commercialContract ? (
+            <p className="text-center text-sm font-medium">
+              {view.commercialContract.planDisplayName} · {formatBRL(view.commercialContract.priceCents)}/mês
+            </p>
+          ) : null}
           <p className="text-sm text-muted-foreground">{PIX_BANK_COPY}</p>
           <Button variant="secondary" onClick={() => void copyPayload()}>
             {copied ? "Código copiado" : "Copiar Pix Copia e Cola"}

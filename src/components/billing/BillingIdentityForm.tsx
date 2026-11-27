@@ -41,7 +41,9 @@ export function BillingIdentityForm({
     setEmail(identity.email ?? "");
     setPhone(identity.mobilePhone ?? "");
     setEditing(!identity.exists);
-  }, [identity]);
+    // Só quando os dados salvos mudam de fato: um refetch com o mesmo conteúdo não pode fechar a edição.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity?.exists, identity?.legalName, identity?.taxId, identity?.email, identity?.mobilePhone]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -185,11 +187,20 @@ export function BillingIdentityForm({
 
       <div className="flex flex-wrap gap-2">
         {showMasked ? (
-          <Button type="button" variant="outline" onClick={() => setEditing(true)}>
+          <Button
+            key="editar"
+            type="button"
+            variant="outline"
+            onClick={(e) => {
+              e.preventDefault();
+              setSaved(false);
+              setEditing(true);
+            }}
+          >
             Editar
           </Button>
         ) : (
-          <Button type="submit" disabled={busy}>
+          <Button key="salvar" type="submit" disabled={busy}>
             {save.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
