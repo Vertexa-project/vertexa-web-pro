@@ -37,10 +37,12 @@ vi.mock("@/hooks/useBillingCheckout", () => ({
   }),
 }));
 const ensureMock = vi.fn(async () => ({}));
+const prepareMock = vi.fn(async () => ({ operationId: "op1" }));
+const executeMock = vi.fn(async () => ({ qrAvailable: false }));
 vi.mock("@/hooks/useBillingPixCheckout", () => ({
   useEnsureClinicCustomerFromIdentity: () => ({ mutateAsync: ensureMock, isPending: false }),
-  usePrepareClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useExecuteClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  usePrepareClinicPixAuthorization: () => ({ mutateAsync: prepareMock, isPending: false }),
+  useExecuteClinicPixAuthorization: () => ({ mutateAsync: executeMock, isPending: false }),
   useReissueClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock("@/lib/observability/sentry", () => ({ captureException: vi.fn() }));
@@ -50,6 +52,8 @@ const { BillingPixCheckoutPanel } = await import("./BillingPixCheckoutPanel");
 describe("BillingPixCheckoutPanel", () => {
   beforeEach(() => {
     ensureMock.mockClear();
+    prepareMock.mockClear();
+    executeMock.mockClear();
     current.checkout = {
       ...current.checkout,
       pixAuthorizationStatus: null,
@@ -97,5 +101,17 @@ describe("BillingPixCheckoutPanel", () => {
     await user.click(screen.getByRole("button", { name: /configurar pix automático/i }));
     await user.click(screen.getByRole("button", { name: /gerar autorização pix/i }));
     expect(ensureMock).not.toHaveBeenCalled();
+  });
+
+  it("prepara ao abrir a confirmação e o clique só cria a autorização (cartão 1568)", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<BillingPixCheckoutPanel clinicId="c1" checkout={current.checkout} />);
+    expect(prepareMock).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /configurar pix automático/i }));
+    await vi.waitFor(() => expect(prepareMock).toHaveBeenCalledTimes(1));
+    expect(executeMock).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /gerar autorização pix/i }));
+    await vi.waitFor(() => expect(executeMock).toHaveBeenCalledWith("op1"));
+    expect(prepareMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -85,20 +85,38 @@ export function BillingPixCheckoutPanel({
     return customerReady.current;
   }
 
+  // Preparar é só local (sem chamada ao Asaas) e repetir devolve o mesmo pedido: já fica pronto
+  // enquanto a pessoa lê a confirmação, e o clique só cria a autorização no Asaas.
+  const preparedOp = useRef<Promise<string> | null>(null);
+  function prepareOnce(): Promise<string> {
+    if (!preparedOp.current) {
+      preparedOp.current = ensureCustomerOnce()
+        .then(() => prepare.mutateAsync())
+        .then((prepared) => {
+          if (!prepared.operationId) throw new Error("prepare_missing_operation");
+          return prepared.operationId;
+        })
+        .catch((err: unknown) => {
+          preparedOp.current = null;
+          throw err;
+        });
+    }
+    return preparedOp.current;
+  }
+
   useEffect(() => {
-    if (!confirming || customerBound) return;
-    ensureCustomerOnce().catch(() => undefined);
+    if (!confirming) return;
+    prepareOnce().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [confirming, customerBound]);
+  }, [confirming]);
 
   async function startAuthorization() {
     setBusy(true);
     setError(null);
     try {
-      await ensureCustomerOnce();
-      const prepared = await prepare.mutateAsync();
-      if (!prepared.operationId) throw new Error("prepare_missing_operation");
-      const executed = await execute.mutateAsync(prepared.operationId);
+      const operationId = await prepareOnce();
+      preparedOp.current = null;
+      const executed = await execute.mutateAsync(operationId);
       if (executed.qrAvailable && executed.immediateQrCode?.payload) {
         setSessionQr(executed.immediateQrCode);
       } else {
