@@ -41,6 +41,8 @@ export function useCreateClinicCommercialContract(clinicId: string | null) {
       qc.invalidateQueries({ queryKey: qk.clinicBillingPayments(clinicId ?? "none") });
       qc.invalidateQueries({ queryKey: qk.clinicBillingTimeline(clinicId ?? "none") });
       qc.invalidateQueries({ queryKey: qk.sellableBillingPlans() });
+      // Faixa "ainda não tem contrato" no topo do app lê o acesso comercial (cartão 1568).
+      qc.invalidateQueries({ queryKey: qk.clinicCommercialAccess(clinicId ?? "none") });
     },
   });
 }
