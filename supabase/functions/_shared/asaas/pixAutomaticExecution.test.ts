@@ -456,7 +456,7 @@ describe("executePreparedPixAutomaticAuthorization", () => {
       if (name === "reserve_billing_outbound_operation") {
         return { data: { outcome: "reserved", operation_id: operationId }, error: null };
       }
-      if (name === "fail_billing_outbound_operation") return { data: { outcome: "failed" }, error: null };
+      if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") return { data: { outcome: "failed" }, error: null };
       throw new Error(`RPC inesperada: ${name}`);
     });
     const out = await executePreparedPixAutomaticAuthorization({
@@ -509,7 +509,7 @@ describe("executePreparedPixAutomaticAuthorization", () => {
       if (name === "reserve_billing_outbound_operation") {
         return { data: { outcome: "reserved", operation_id: operationId }, error: null };
       }
-      if (name === "fail_billing_outbound_operation") return { data: { outcome: "failed" }, error: null };
+      if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") return { data: { outcome: "failed" }, error: null };
       throw new Error(`RPC inesperada: ${name}`);
     });
     const out = await executePreparedPixAutomaticAuthorization({
@@ -532,7 +532,7 @@ describe("executePreparedPixAutomaticAuthorization", () => {
         if (name === "reserve_billing_outbound_operation") {
           return { data: { outcome: "reserved", operation_id: operationId }, error: null };
         }
-        if (name === "fail_billing_outbound_operation") return { data: { outcome: "failed" }, error: null };
+        if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") return { data: { outcome: "failed" }, error: null };
         throw new Error(`RPC inesperada: ${name}`);
       });
       const out = await executePreparedPixAutomaticAuthorization({
@@ -568,7 +568,7 @@ describe("executePreparedPixAutomaticAuthorization", () => {
           error: null,
         };
       }
-      if (name === "fail_billing_outbound_operation") return { data: { outcome: "failed" }, error: null };
+      if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") return { data: { outcome: "failed" }, error: null };
       if (name === "complete_billing_pix_automatic_authorization_operation") {
         return {
           data: { outcome: "completed", provider_authorization_id: "auth_1", provider_status: "CREATED" },
@@ -619,7 +619,7 @@ describe("executePreparedPixAutomaticAuthorization", () => {
           error: null,
         };
       }
-      if (name === "fail_billing_outbound_operation") return { data: { outcome: "failed" }, error: null };
+      if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") return { data: { outcome: "failed" }, error: null };
       throw new Error(`RPC inesperada: ${name}`);
     });
     await executePreparedPixAutomaticAuthorization({
@@ -665,7 +665,7 @@ describe("executePreparedPixAutomaticAuthorization", () => {
           error: null,
         };
       }
-      if (name === "fail_billing_outbound_operation") return { data: { outcome: "failed" }, error: null };
+      if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") return { data: { outcome: "failed" }, error: null };
       throw new Error(`RPC inesperada: ${name}`);
     });
     await executePreparedPixAutomaticAuthorization({

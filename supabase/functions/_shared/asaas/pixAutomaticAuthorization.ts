@@ -46,6 +46,25 @@ interface ReserveOutcome {
   attempt_count?: number;
   external_object_id?: string | null;
   last_error_category?: string | null;
+  provider_write_window_at?: string | null;
+}
+
+/**
+ * Intervalo de segurança depois de uma escrita sem resultado conhecido (timeout/5xx/linha
+ * pendente abandonada). Passado esse tempo, uma requisição ao Asaas já terminou de um jeito ou de
+ * outro (a Edge Function morre bem antes) e a listagem por contractId é prova de ausência: só
+ * então um novo POST é seguro. Antes disso, a clínica recebe "tente de novo em alguns minutos".
+ */
+export const PIX_AUTHORIZATION_RETRY_WINDOW_MS = 3 * 60 * 1000;
+
+export function isProviderWriteWindowClosed(
+  windowAt: string | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!windowAt) return false;
+  const at = Date.parse(windowAt);
+  if (!Number.isFinite(at)) return false;
+  return nowMs - at >= PIX_AUTHORIZATION_RETRY_WINDOW_MS;
 }
 
 /**
@@ -163,8 +182,20 @@ export async function ensurePixAutomaticAuthorization(params: {
         qrUnavailableReason: QR_UNAVAILABLE_CREATE_RESPONSE_NOT_AVAILABLE,
       });
     }
-    // 0 resultados: só POST de novo se a tentativa anterior foi rejeição determinística.
-    if (isOutcomeUnknownCategory(reserve.last_error_category)) {
+    // 0 resultados: POST de novo se a tentativa anterior foi rejeição determinística, ou se a
+    // escrita sem resultado já saiu do intervalo de segurança (a busca acima prova a ausência).
+    if (
+      isOutcomeUnknownCategory(reserve.last_error_category) &&
+      !isProviderWriteWindowClosed(reserve.provider_write_window_at)
+    ) {
+      if (reserve.outcome === "claimed_for_retry") {
+        // Devolve a operação a "falhou" com a mesma causa; o relógio do intervalo não reinicia.
+        await failOperation(
+          adminClient,
+          operationId,
+          reserve.last_error_category || "reconciliation_retry_later",
+        );
+      }
       return { ok: false, errorCode: "BLOCKED_AMBIGUOUS_CREATE_RECONCILIATION" };
     }
     canPost = true;
@@ -193,13 +224,13 @@ export async function ensurePixAutomaticAuthorization(params: {
     return { ok: false, errorCode: "provider_rejected" };
   }
   if (createRes.outcome === "unknown" || !createRes.data) {
-    await failOperation(adminClient, operationId, createRes.category);
+    await failAfterUnknownWrite(adminClient, operationId, createRes.category);
     return { ok: false, errorCode: "outcome_unknown_requires_reconciliation" };
   }
 
   const extracted = extractAuthorizationFacts(createRes.data, expected);
   if (!extracted.ok) {
-    await failOperation(adminClient, operationId, extracted.reason);
+    await failAfterUnknownWrite(adminClient, operationId, extracted.reason);
     return { ok: false, errorCode: "outcome_unknown_requires_reconciliation" };
   }
 
@@ -269,6 +300,17 @@ async function completeAuthorization(
       ? { immediateQrCode: handoff.immediateQrCode }
       : { qrUnavailableReason: handoff.qrUnavailableReason }),
   };
+}
+
+async function failAfterUnknownWrite(
+  adminClient: SupabaseClient,
+  operationId: string,
+  category: string,
+): Promise<void> {
+  await adminClient.rpc("fail_billing_outbound_operation_after_unknown_write", {
+    p_operation_id: operationId,
+    p_error_category: category,
+  });
 }
 
 async function failOperation(adminClient: SupabaseClient, operationId: string, category: string): Promise<void> {

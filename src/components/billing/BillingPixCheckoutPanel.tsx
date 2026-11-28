@@ -31,6 +31,13 @@ function pixErrorMessage(error: unknown): string {
   if (message.includes("BILLING_REISSUE_NOT_REFUSED")) {
     return "Só é possível gerar uma nova autorização depois de uma recusa.";
   }
+  if (
+    message.includes("outcome_unknown") ||
+    message.includes("BLOCKED_AMBIGUOUS") ||
+    message.includes("reconciliation")
+  ) {
+    return "O Asaas demorou para responder e o Pix ainda não foi gerado. Aguarde 3 minutos e clique de novo. Não haverá cobrança em dobro.";
+  }
   return "Não foi possível continuar o Pix Automático agora. Tente novamente em instantes.";
 }
 

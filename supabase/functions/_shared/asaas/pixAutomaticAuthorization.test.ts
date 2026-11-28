@@ -2,6 +2,8 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import {
   ensurePixAutomaticAuthorization,
   isPixAutomaticPreparedFirstWrite,
+  isProviderWriteWindowClosed,
+  PIX_AUTHORIZATION_RETRY_WINDOW_MS,
 } from "./pixAutomaticAuthorization.ts";
 import type { AsaasCredentials, AsaasEnvironment } from "./client.ts";
 import { parseAsaasDateTime } from "./pixAutomatic.ts";
@@ -231,7 +233,7 @@ describe("ensurePixAutomaticAuthorization", () => {
           error: null,
         };
       }
-      if (name === "fail_billing_outbound_operation") {
+      if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") {
         return { data: { outcome: "failed" }, error: null };
       }
       if (name === "complete_billing_pix_automatic_authorization_operation") {
@@ -294,7 +296,7 @@ describe("ensurePixAutomaticAuthorization", () => {
           error: null,
         };
       }
-      if (name === "fail_billing_outbound_operation") {
+      if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") {
         return { data: { outcome: "failed" }, error: null };
       }
       throw new Error(`RPC inesperada: ${name}`);
@@ -348,7 +350,7 @@ describe("ensurePixAutomaticAuthorization", () => {
           error: null,
         };
       }
-      if (name === "fail_billing_outbound_operation") {
+      if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") {
         return { data: { outcome: "failed" }, error: null };
       }
       throw new Error(`RPC inesperada: ${name}`);
@@ -540,7 +542,7 @@ describe("ensurePixAutomaticAuthorization", () => {
           error: null,
         };
       }
-      if (name === "fail_billing_outbound_operation") {
+      if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") {
         return { data: { outcome: "failed" }, error: null };
       }
       throw new Error(`RPC inesperada: ${name}`);
@@ -598,7 +600,7 @@ describe("ensurePixAutomaticAuthorization", () => {
           error: null,
         };
       }
-      if (name === "fail_billing_outbound_operation") {
+      if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") {
         return { data: { outcome: "failed" }, error: null };
       }
       throw new Error(`RPC inesperada: ${name}`);
@@ -685,5 +687,144 @@ describe("ensurePixAutomaticAuthorization", () => {
     });
     expect(result.handoffKind).toBe("already_completed_without_qr");
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("saída depois de timeout do Asaas (cartão 1568, D108)", () => {
+  const qrBody = {
+    id: "auth_2",
+    status: "CREATED",
+    customerId: "cus_1",
+    contractId,
+    value: 390,
+    payload: "00020126QR2",
+    encodedImage: "iVBORw0KGgoQR2",
+    immediateQrCode: { conciliationIdentifier: "ASAAS2", expirationDate: "2026-11-28 12:00:00" },
+  };
+
+  function adminFor(reserveSecond: Record<string, unknown>) {
+    let reserveCalls = 0;
+    return makeAdminClient(async (name) => {
+      if (name === "reserve_billing_outbound_operation") {
+        reserveCalls += 1;
+        if (reserveCalls === 1) return { data: { outcome: "reserved", operation_id: "op1" }, error: null };
+        return { data: { operation_id: "op1", ...reserveSecond }, error: null };
+      }
+      if (name === "fail_billing_outbound_operation" || name === "fail_billing_outbound_operation_after_unknown_write") {
+        return { data: { outcome: "failed" }, error: null };
+      }
+      if (name === "complete_billing_pix_automatic_authorization_operation") {
+        return { data: { outcome: "completed", provider_authorization_id: "auth_2", provider_status: "CREATED" }, error: null };
+      }
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+  }
+
+  function timeoutThenQrFetch() {
+    let posts = 0;
+    return vi.fn(async (_url: string, init?: RequestInit) => {
+      if ((init?.method ?? "GET") === "POST") {
+        posts += 1;
+        if (posts === 1) throw Object.assign(new Error("aborted"), { name: "AbortError" });
+        return jsonResponse(200, qrBody);
+      }
+      return jsonResponse(200, { data: [], hasMore: false });
+    });
+  }
+
+  const longAgo = () => new Date(Date.now() - PIX_AUTHORIZATION_RETRY_WINDOW_MS - 1000).toISOString();
+  const justNow = () => new Date(Date.now() - 30_000).toISOString();
+
+  it("timeout marca a janela da escrita incerta com a RPC própria", async () => {
+    vi.stubGlobal("fetch", timeoutThenQrFetch());
+    const { adminClient, calls } = adminFor({});
+    const first = await ensurePixAutomaticAuthorization({ adminClient: adminClient as never, environment, creds, intent: intent() });
+    expect(first.errorCode).toBe("outcome_unknown_requires_reconciliation");
+    const names = calls.map((c) => c.name);
+    expect(names).toContain("fail_billing_outbound_operation_after_unknown_write");
+    expect(names).not.toContain("fail_billing_outbound_operation");
+  });
+
+  it("passado o intervalo e sem nada no Asaas, tenta de novo uma vez e devolve o QR", async () => {
+    const fetchSpy = timeoutThenQrFetch();
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = adminFor({
+      outcome: "claimed_for_retry",
+      attempt_count: 3,
+      last_error_category: "network_timeout",
+      provider_write_window_at: longAgo(),
+    });
+    await ensurePixAutomaticAuthorization({ adminClient: adminClient as never, environment, creds, intent: intent() });
+    const retry = await ensurePixAutomaticAuthorization({ adminClient: adminClient as never, environment, creds, intent: intent() });
+    expect(retry.ok).toBe(true);
+    expect(retry.handoffKind).toBe("fresh_create_with_qr");
+    expect(retry.immediateQrCode?.payload).toBe("00020126QR2");
+    const methods = fetchSpy.mock.calls.map((c) => c[1]?.method ?? "GET");
+    expect(methods).toEqual(["POST", "GET", "POST"]);
+  });
+
+  it("dentro do intervalo não posta de novo e devolve a operação a falhou com a mesma causa", async () => {
+    const fetchSpy = timeoutThenQrFetch();
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient, calls } = adminFor({
+      outcome: "claimed_for_retry",
+      attempt_count: 3,
+      last_error_category: "network_timeout",
+      provider_write_window_at: justNow(),
+    });
+    await ensurePixAutomaticAuthorization({ adminClient: adminClient as never, environment, creds, intent: intent() });
+    const retry = await ensurePixAutomaticAuthorization({ adminClient: adminClient as never, environment, creds, intent: intent() });
+    expect(retry.errorCode).toBe("BLOCKED_AMBIGUOUS_CREATE_RECONCILIATION");
+    expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(1);
+    const refail = calls.filter((c) => c.name === "fail_billing_outbound_operation");
+    expect(refail).toHaveLength(1);
+    expect((refail[0].params as { p_error_category: string }).p_error_category).toBe("network_timeout");
+  });
+
+  it("linha pendente recente (outra tentativa em voo) não posta nem mexe na operação", async () => {
+    const fetchSpy = timeoutThenQrFetch();
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient, calls } = adminFor({
+      outcome: "in_flight_retry",
+      attempt_count: 3,
+      last_error_category: null,
+      provider_write_window_at: justNow(),
+    });
+    await ensurePixAutomaticAuthorization({ adminClient: adminClient as never, environment, creds, intent: intent() });
+    const before = calls.length;
+    const retry = await ensurePixAutomaticAuthorization({ adminClient: adminClient as never, environment, creds, intent: intent() });
+    expect(retry.errorCode).toBe("BLOCKED_AMBIGUOUS_CREATE_RECONCILIATION");
+    expect(fetchSpy.mock.calls.filter((c) => (c[1]?.method ?? "GET") === "POST")).toHaveLength(1);
+    expect(calls.slice(before).map((c) => c.name)).toEqual(["reserve_billing_outbound_operation"]);
+  });
+
+  it("passado o intervalo, se o Asaas mostra a autorização, reconcilia sem novo POST", async () => {
+    let posts = 0;
+    const fetchSpy = vi.fn(async (_url: string, init?: RequestInit) => {
+      if ((init?.method ?? "GET") === "POST") {
+        posts += 1;
+        throw Object.assign(new Error("aborted"), { name: "AbortError" });
+      }
+      return jsonResponse(200, { data: [{ id: "auth_2", status: "CREATED", customerId: "cus_1", contractId, value: 390 }], hasMore: false });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const { adminClient } = adminFor({
+      outcome: "claimed_for_retry",
+      attempt_count: 3,
+      last_error_category: "network_timeout",
+      provider_write_window_at: longAgo(),
+    });
+    await ensurePixAutomaticAuthorization({ adminClient: adminClient as never, environment, creds, intent: intent() });
+    const retry = await ensurePixAutomaticAuthorization({ adminClient: adminClient as never, environment, creds, intent: intent() });
+    expect(retry.handoffKind).toBe("reconciled_existing_without_qr");
+    expect(posts).toBe(1);
+  });
+
+  it("isProviderWriteWindowClosed: sem data ou data inválida mantém fechado o novo POST", () => {
+    const now = Date.parse("2026-11-28T12:00:00Z");
+    expect(isProviderWriteWindowClosed(null, now)).toBe(false);
+    expect(isProviderWriteWindowClosed("lixo", now)).toBe(false);
+    expect(isProviderWriteWindowClosed("2026-11-28T11:58:00Z", now)).toBe(false);
+    expect(isProviderWriteWindowClosed("2026-11-28T11:57:00Z", now)).toBe(true);
   });
 });

@@ -411,11 +411,21 @@ export async function findAuthorizationByContractId(
   return { outcome: "lookup_failed", category: "reconciliation_lookup_scan_capped" };
 }
 
+/** O Asaas às vezes passa de 10 s ao criar a autorização (cartão 1568, D108). */
+const CREATE_AUTHORIZATION_TIMEOUT_MS = 20_000;
+
 export async function createPixAutomaticAuthorization(
   creds: AsaasCredentials,
   environment: AsaasEnvironment,
   input: CreatePixAutomaticAuthorizationInput,
 ) {
   const payload = buildCreatePixAutomaticAuthorizationPayload(input);
-  return asaasFetch<unknown>(creds, environment, "POST", PIX_AUTOMATIC_AUTHORIZATIONS_PATH, payload);
+  return asaasFetch<unknown>(
+    creds,
+    environment,
+    "POST",
+    PIX_AUTOMATIC_AUTHORIZATIONS_PATH,
+    payload,
+    CREATE_AUTHORIZATION_TIMEOUT_MS,
+  );
 }
