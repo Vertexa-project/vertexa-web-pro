@@ -340,8 +340,12 @@ export async function executePreparedPixAutomaticAuthorization(params: {
   configuredEnvironmentRaw: string | undefined;
   operationId: string;
   creds?: AsaasCredentials;
+  /** Fatos já lidos pelo chamador para a mesma operação (evita reler; cartão 1568). */
+  preloaded?: { ok: true; facts: PreparedPixAutomaticFacts };
 }): Promise<ExecutionBridgeResult> {
-  const loaded = await loadPreparedPixAutomaticAuthorization(params.adminClient, params.operationId);
+  const loaded = params.preloaded && params.preloaded.facts.operationId === params.operationId
+    ? params.preloaded
+    : await loadPreparedPixAutomaticAuthorization(params.adminClient, params.operationId);
   if (!loaded.ok) {
     const status = loaded.error === "operation_not_found" ? 404 : 409;
     return { ok: false, status, body: { error: loaded.error } };

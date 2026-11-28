@@ -34,6 +34,7 @@ import {
   loadPreparedPixAutomaticAuthorization,
   parseExecutePixAutomaticRequest,
   probePixAutomaticRead,
+  type PreparedPixAutomaticFacts,
 } from "../_shared/asaas/pixAutomaticExecution.ts";
 import {
   REISSUE_PIX_AUTOMATIC_ACTION,
@@ -392,6 +393,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const adminClient = supabaseAdmin();
+    let preloaded: { ok: true; facts: PreparedPixAutomaticFacts } | undefined;
     if (!isPlatformAdmin) {
       const loaded = await loadPreparedPixAutomaticAuthorization(adminClient, parsed.operationId);
       if (!loaded.ok) {
@@ -403,12 +405,14 @@ Deno.serve(async (req: Request) => {
       );
       if (ownsError) return jsonResponse(401, { error: "unauthorized" });
       if (ownsAccount !== true) return jsonResponse(403, { error: "forbidden" });
+      preloaded = loaded;
     }
 
     const executed = await executePreparedPixAutomaticAuthorization({
       adminClient,
       configuredEnvironmentRaw: Deno.env.get("ASAAS_OUTBOUND_ENVIRONMENT"),
       operationId: parsed.operationId,
+      preloaded,
     });
     if (!isPlatformAdmin && executed.ok) {
       return jsonResponse(executed.status, sanitizeClinicExecuteResponse(executed.body as Record<string, unknown>));

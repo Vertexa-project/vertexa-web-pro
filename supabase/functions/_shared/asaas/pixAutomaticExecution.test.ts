@@ -330,6 +330,32 @@ describe("executePreparedPixAutomaticAuthorization", () => {
     expect(JSON.stringify(calls.find((c) => c.name.startsWith("complete"))?.params)).not.toContain("00020126");
   });
 
+  it("reuses facts already loaded by the caller (no second load RPC; cartão 1568)", async () => {
+    vi.stubGlobal("fetch", mockCreateSuccess());
+    const { adminClient, calls } = makeAdminClient(async (name) => {
+      if (name === "reserve_billing_outbound_operation") {
+        return { data: { outcome: "reserved", operation_id: operationId }, error: null };
+      }
+      if (name === "complete_billing_pix_automatic_authorization_operation") {
+        return { data: { outcome: "completed", provider_authorization_id: "auth_1", provider_status: "CREATED" }, error: null };
+      }
+      if (name === LOAD_PREPARED_PIX_AUTOMATIC_RPC) return { data: prepared, error: null };
+      throw new Error(`RPC inesperada: ${name}`);
+    });
+    const loaded = await loadPreparedPixAutomaticAuthorization(adminClient as never, operationId);
+    expect(loaded.ok).toBe(true);
+    calls.length = 0;
+    const out = await executePreparedPixAutomaticAuthorization({
+      adminClient: adminClient as never,
+      configuredEnvironmentRaw: "sandbox",
+      operationId,
+      creds: { apiKey: "fake-...al", baseUrl: "https://api-sandbox.asaas.test/v3" },
+      preloaded: loaded as never,
+    });
+    expect(out.ok).toBe(true);
+    expect(calls.map((c) => c.name)).not.toContain(LOAD_PREPARED_PIX_AUTOMATIC_RPC);
+  });
+
   it("customer prerequisite blocks POST", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
