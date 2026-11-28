@@ -36,8 +36,9 @@ vi.mock("@/hooks/useBillingCheckout", () => ({
     refetch: vi.fn(),
   }),
 }));
+const ensureMock = vi.fn(async () => ({}));
 vi.mock("@/hooks/useBillingPixCheckout", () => ({
-  useEnsureClinicCustomerFromIdentity: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useEnsureClinicCustomerFromIdentity: () => ({ mutateAsync: ensureMock, isPending: false }),
   usePrepareClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useExecuteClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useReissueClinicPixAuthorization: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -48,6 +49,7 @@ const { BillingPixCheckoutPanel } = await import("./BillingPixCheckoutPanel");
 
 describe("BillingPixCheckoutPanel", () => {
   beforeEach(() => {
+    ensureMock.mockClear();
     current.checkout = {
       ...current.checkout,
       pixAuthorizationStatus: null,
@@ -76,5 +78,24 @@ describe("BillingPixCheckoutPanel", () => {
     render(<BillingPixCheckoutPanel clinicId="c1" checkout={current.checkout} />);
     expect(screen.getByText(/autorização criada \/ aguardando conclusão/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /gerar novo qr/i })).not.toBeInTheDocument();
+  });
+
+  it("cria o cliente no Asaas ao abrir a confirmação, uma vez só (cartão 1568)", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<BillingPixCheckoutPanel clinicId="c1" checkout={current.checkout} />);
+    expect(ensureMock).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /configurar pix automático/i }));
+    expect(ensureMock).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: /gerar autorização pix/i }));
+    expect(ensureMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("não chama o Asaas para o cliente quando ele já existe", async () => {
+    current.checkout = { ...current.checkout, providerCustomerBound: true };
+    const user = userEvent.setup({ delay: null });
+    render(<BillingPixCheckoutPanel clinicId="c1" checkout={current.checkout} />);
+    await user.click(screen.getByRole("button", { name: /configurar pix automático/i }));
+    await user.click(screen.getByRole("button", { name: /gerar autorização pix/i }));
+    expect(ensureMock).not.toHaveBeenCalled();
   });
 });

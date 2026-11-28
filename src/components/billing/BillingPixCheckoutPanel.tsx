@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -70,11 +70,32 @@ export function BillingPixCheckoutPanel({
     return () => window.clearInterval(id);
   }, [surface, live]);
 
+  // Cliente no Asaas é criado logo que a pessoa abre a confirmação (cartão 1568): o clique em
+  // "Gerar autorização Pix" fica só com preparar + criar a autorização, sem esperar duas chamadas ao Asaas.
+  const customerReady = useRef<Promise<unknown> | null>(null);
+  const customerBound = view.providerCustomerBound === true;
+  function ensureCustomerOnce(): Promise<unknown> {
+    if (customerBound) return Promise.resolve();
+    if (!customerReady.current) {
+      customerReady.current = ensureCustomer.mutateAsync().catch((err: unknown) => {
+        customerReady.current = null;
+        throw err;
+      });
+    }
+    return customerReady.current;
+  }
+
+  useEffect(() => {
+    if (!confirming || customerBound) return;
+    ensureCustomerOnce().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirming, customerBound]);
+
   async function startAuthorization() {
     setBusy(true);
     setError(null);
     try {
-      await ensureCustomer.mutateAsync();
+      await ensureCustomerOnce();
       const prepared = await prepare.mutateAsync();
       if (!prepared.operationId) throw new Error("prepare_missing_operation");
       const executed = await execute.mutateAsync(prepared.operationId);
