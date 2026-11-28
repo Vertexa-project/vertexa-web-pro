@@ -55,7 +55,8 @@ export function resolvePixCheckoutSurface(input: {
   const next = input.checkout.pixNextAction;
   if (status === "ACTIVE") return "active";
   if (status === "REFUSED" || next === "reissue") return "refused";
-  if (status === "CREATED" && input.sessionQr) return "qr";
+  // QR recém-gerado aparece na hora, sem esperar a releitura do estado (cartão 1568).
+  if (input.sessionQr) return "qr";
   if (status === "CREATED") return "awaiting";
   if (!input.checkout.identityComplete) return "identity";
   if (input.confirming) return "confirm";

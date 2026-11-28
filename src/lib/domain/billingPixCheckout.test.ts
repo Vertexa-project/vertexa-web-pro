@@ -60,6 +60,11 @@ describe("billingPixCheckout domain", () => {
       sessionQr: null,
       confirming: false,
     })).toBe("awaiting");
+    expect(resolvePixCheckoutSurface({
+      checkout: checkout({ pixAuthorizationStatus: null }),
+      sessionQr: { payload: "000201", expirationDate: null },
+      confirming: false,
+    })).toBe("qr");
     expect(PIX_RELOAD_COPY.title).toMatch(/autorização criada/i);
     expect(PIX_BANK_COPY).toMatch(/não pede senha/i);
     expect(PIX_BANK_COPY).not.toMatch(/nubank|itaú|itau/i);
